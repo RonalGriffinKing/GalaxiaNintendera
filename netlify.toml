@@ -3,7 +3,7 @@
   publish = "dist"
 
 [build.environment]
-  SECRETS_SCAN_OMIT_KEYS = "VITE_YOUTUBE_CHANNEL_ID,VITE_SOCKET_URL"
+  SECRETS_SCAN_OMIT_KEYS = "VITE_YOUTUBE_CHANNEL_ID,VITE_SOCKET_URL,VITE_YOUTUBE_HANDLE"
 
 [[redirects]]
   from = "/*"
