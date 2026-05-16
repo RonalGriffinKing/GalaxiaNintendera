@@ -12,6 +12,8 @@ dist
 dist-ssr
 dist.zip
 .netlify
+.restore-backups
+.vite
 *.local
 .env
 .env.*
