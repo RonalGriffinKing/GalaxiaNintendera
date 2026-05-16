@@ -1,0 +1,28 @@
+{
+  "name": "widgetdreams",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "firebase": "^12.12.1",
+    "html-to-image": "^1.11.13",
+    "jszip": "^3.10.1",
+    "socket.io-client": "^4.8.3",
+    "tmi.js": "^1.8.5",
+    "vue": "^3.5.32",
+    "vue-router": "^5.0.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.4",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.10",
+    "tailwindcss": "^4.2.4",
+    "vite": "^8.0.10"
+  }
+}
