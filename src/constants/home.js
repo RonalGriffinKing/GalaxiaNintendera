@@ -1,0 +1,3 @@
+export const HOME_POSTS_PER_PAGE = 3
+export const HOME_HERO_SLIDE_DURATION = 10000
+export const HOME_LATEST_SLIDE_DURATION = 9000

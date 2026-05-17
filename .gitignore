@@ -29,3 +29,9 @@ dist.zip
 *.njsproj
 *.sln
 *.sw?
+
+# Zaemit AI tool config (auto-generated)
+.mcp.json
+
+*storybook.log
+storybook-static

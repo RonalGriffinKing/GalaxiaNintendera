@@ -1,11 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import Home from '@/features/public/pages/Home.vue'
-import PublicLayout from '@/shared/layouts/PublicLayout.vue'
-import Editor from '@/features/overlay/pages/Editor.vue'
-import OverlayView from '@/features/overlay/pages/OverlayView.vue'
-import Login from '@/features/auth/pages/Login.vue'
-import Dashboard from '@/features/admin/pages/Dashboard.vue'
+import Home from '@/pages/HomePage.vue'
+import PublicLayout from '@/components/shared/PublicLayout.vue'
+import Editor from '@/pages/OverlayEditorPage.vue'
+import OverlayView from '@/pages/OverlayViewPage.vue'
+import Login from '@/pages/LoginPage.vue'
+import Dashboard from '@/pages/DashboardPage.vue'
 import { auth, db } from '@/firebase'
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
@@ -19,67 +19,67 @@ const routes = [
       {
         path: 'noticias',
         name: 'news',
-        component: () => import('@/features/public/pages/CategoryView.vue')
+        component: () => import('@/pages/CategoryPage.vue')
       },
       {
         path: 'rumores',
         name: 'rumors',
-        component: () => import('@/features/public/pages/CategoryView.vue')
+        component: () => import('@/pages/CategoryPage.vue')
       },
       {
         path: 'guias',
         name: 'guides',
-        component: () => import('@/features/public/pages/CategoryView.vue')
+        component: () => import('@/pages/CategoryPage.vue')
       },
       {
         path: 'comunidad',
         name: 'community',
-        component: () => import('@/features/public/pages/CommunityPage.vue')
+        component: () => import('@/pages/CommunityPage.vue')
       },
       {
         path: 'eventos',
         name: 'events',
-        component: () => import('@/features/public/pages/EventsPage.vue')
+        component: () => import('@/pages/EventsPage.vue')
       },
       {
         path: 'post/:id',
-        component: () => import('@/features/public/pages/PostView.vue')
+        component: () => import('@/pages/PostPage.vue')
       },
       {
         path: 'perfil/:uid',
         name: 'profile',
-        component: () => import('@/features/public/pages/ProfileView.vue')
+        component: () => import('@/pages/ProfilePage.vue')
       },
       {
         path: 'categoria/:category',
         name: 'category',
-        component: () => import('@/features/public/pages/CategoryView.vue')
+        component: () => import('@/pages/CategoryPage.vue')
       },
       {
         path: 'mis-favoritos',
-        component: () => import('@/features/account/pages/WorkspacePage.vue'),
+        component: () => import('@/pages/WorkspacePage.vue'),
         props: { panel: 'favorites' }
       },
       {
         path: 'admin/posts',
-        component: () => import('@/features/account/pages/WorkspacePage.vue'),
+        component: () => import('@/pages/WorkspacePage.vue'),
         props: { panel: 'posts' },
         meta: { publisherOnly: true, workspace: true }
       },
       {
         path: 'admin/post-share/:id',
-        component: () => import('@/features/admin/pages/PostShareView.vue'),
+        component: () => import('@/pages/PostSharePage.vue'),
         meta: { publisherOnly: true }
       },
       {
         path: 'admin/users',
-        component: () => import('@/features/account/pages/WorkspacePage.vue'),
+        component: () => import('@/pages/WorkspacePage.vue'),
         props: { panel: 'users' },
         meta: { adminOnly: true, workspace: true }
       },
       {
         path: 'admin/overlays',
-        component: () => import('@/features/account/pages/WorkspacePage.vue'),
+        component: () => import('@/pages/WorkspacePage.vue'),
         props: { panel: 'overlays' },
         meta: { adminOnly: true, workspace: true }
       }

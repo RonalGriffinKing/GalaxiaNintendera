@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import GalaxyLoader from '@/shared/components/GalaxyLoader.vue'
+import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
 
 const router = useRouter()
 const isRouteLoading = ref(false)
