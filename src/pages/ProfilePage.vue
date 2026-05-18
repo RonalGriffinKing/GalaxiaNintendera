@@ -1448,6 +1448,7 @@ onUnmounted(() => {
         @save-profile="saveProfile"
         @toggle-test-mode="toggleIconTestMode"
         @choose-icon="chooseIconCard"
+        @open-icon-detail="openIconDetailFromCollection"
         @change-mobile-page="changeMobileIconPage"
         @confirm-purchase="(event) => confirmRedeem ? confirmUnlockIcon() : equipPreviewIcon(event)"
         @upload-icon="openIconUpload"
