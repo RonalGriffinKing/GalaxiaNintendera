@@ -79,7 +79,7 @@ const emit = defineEmits(['open-community', 'open-item'])
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 28px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
-  overflow: hidden;
+  overflow: visible;
   padding: 18px;
 }
 
@@ -99,6 +99,7 @@ const emit = defineEmits(['open-community', 'open-item'])
   align-items: center;
   display: flex;
   font-size: 21px;
+  font-weight: 950;
   gap: 10px;
 }
 
@@ -135,6 +136,7 @@ const emit = defineEmits(['open-community', 'open-item'])
 
 .media-hero-card h3 {
   font-size: clamp(24px, 3vw, 38px);
+  font-weight: 950;
   line-height: 1;
   margin-top: 18px;
   max-width: 620px;
@@ -188,6 +190,7 @@ const emit = defineEmits(['open-community', 'open-item'])
 .media-list {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .media-row {
@@ -232,6 +235,8 @@ const emit = defineEmits(['open-community', 'open-item'])
 @media (max-width: 680px) {
   .community-stories-panel {
     border-radius: 22px;
+    margin-inline: -2px;
+    overflow: hidden;
     padding: 14px;
   }
 
@@ -241,7 +246,59 @@ const emit = defineEmits(['open-community', 'open-item'])
   }
 
   .media-chip-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    gap: 10px;
+    margin-inline: -14px;
+    overflow-x: auto;
+    padding: 0 14px 4px;
+    scroll-padding: 14px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .media-chip-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .media-chip-grid button {
+    flex: 0 0 112px;
+    min-height: 40px;
+    scroll-snap-align: start;
+  }
+
+  .media-hero-card {
+    min-height: 0;
+    padding: 18px;
+  }
+
+  .media-hero-card h3 {
+    font-size: clamp(22px, 7vw, 30px);
+    margin-top: 14px;
+  }
+
+  .media-hero-card p {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .media-list {
+    display: flex;
+    gap: 10px;
+    margin-inline: -14px;
+    overflow-x: auto;
+    padding: 0 14px 4px;
+    scroll-padding: 14px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .media-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .media-row {
+    flex: 0 0 min(82vw, 310px);
+    scroll-snap-align: start;
   }
 }
 </style>

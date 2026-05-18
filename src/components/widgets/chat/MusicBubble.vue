@@ -23,6 +23,9 @@ let dockObserver = null
 let soundcloudWidget = null
 let lastCommunityPromptKey = ''
 let trackPillTimer = null
+let previousBodyOverflow = ''
+let previousBodyOverscroll = ''
+let previousHtmlOverflow = ''
 
 const SOUNDCLOUD_API =
   'https://w.soundcloud.com/player/api.js'
@@ -302,7 +305,7 @@ const showTrackPillBriefly = () => {
 }
 
 const handleExternalPanelOpen = (event) => {
-  if (['chat', 'mascot'].includes(event.detail?.source)) {
+  if (['chat', 'community'].includes(event.detail?.source)) {
     suppressTrackPillOnce.value = true
     trackPillVisible.value = false
     open.value = false
@@ -360,6 +363,21 @@ const updateDockPosition = () => {
   )
 }
 
+const lockPageScroll = () => {
+  previousBodyOverflow = document.body.style.overflow
+  previousBodyOverscroll = document.body.style.overscrollBehavior
+  previousHtmlOverflow = document.documentElement.style.overflow
+  document.body.style.overflow = 'hidden'
+  document.body.style.overscrollBehavior = 'none'
+  document.documentElement.style.overflow = 'hidden'
+}
+
+const unlockPageScroll = () => {
+  document.body.style.overflow = previousBodyOverflow
+  document.body.style.overscrollBehavior = previousBodyOverscroll
+  document.documentElement.style.overflow = previousHtmlOverflow
+}
+
 onMounted(() => {
   dockObserver = new MutationObserver(
     updateDockPosition
@@ -386,10 +404,12 @@ onUnmounted(() => {
   window.removeEventListener('community-music-context', handleCommunityContext)
   window.removeEventListener('music-page-context', handlePageContext)
   window.removeEventListener('floating-panel-opened', handleExternalPanelOpen)
+  if (open.value) unlockPageScroll()
 })
 
 watch(open, (isOpen) => {
   if (!isOpen) {
+    unlockPageScroll()
     if (suppressTrackPillOnce.value) {
       suppressTrackPillOnce.value = false
       return
@@ -402,6 +422,7 @@ watch(open, (isOpen) => {
   window.dispatchEvent(new CustomEvent('floating-panel-opened', {
     detail: { source: 'music' }
   }))
+  lockPageScroll()
 })
 </script>
 
@@ -586,17 +607,17 @@ watch(open, (isOpen) => {
 .music-track-pill {
   align-items: flex-start;
   background:
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) padding-box,
+    linear-gradient(180deg, rgba(11, 16, 38, 0.98), rgba(24, 16, 50, 0.98)) padding-box,
     linear-gradient(135deg, #22d3ee, #a855f7, #ec4899, #facc15) border-box;
   border: 2px solid transparent;
   border-radius: 18px;
   bottom: calc(var(--galaxy-dock-bottom, 22px) + 76px);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.78),
+    0 0 0 1px rgba(216, 180, 254, 0.22),
     0 0 22px rgba(34, 211, 238, 0.26),
     0 0 34px rgba(236, 72, 153, 0.24),
     0 20px 52px rgba(15, 23, 42, 0.3);
-  color: #111827;
+  color: #ffffff;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -613,7 +634,7 @@ watch(open, (isOpen) => {
 }
 
 .music-track-pill::after {
-  background: #ffffff;
+  background: rgba(24, 16, 50, 0.98);
   border-bottom: 2px solid rgba(236, 72, 153, 0.55);
   border-right: 2px solid rgba(34, 211, 238, 0.45);
   bottom: -8px;
@@ -636,7 +657,7 @@ watch(open, (isOpen) => {
 }
 
 .music-track-artist {
-  color: #64748b;
+  color: #c4b5fd;
   font-size: 10px;
   font-weight: 800;
   max-width: 100%;
@@ -669,11 +690,13 @@ watch(open, (isOpen) => {
 /* PANEL */
 
 .music-bubble-panel {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(124, 58, 237, 0.2), transparent 34%),
+    linear-gradient(145deg, rgba(11, 16, 38, 0.98), rgba(24, 16, 50, 0.98));
+  border: 1px solid rgba(216, 180, 254, 0.22);
   border-radius: 16px;
   box-shadow: 0 28px 80px rgba(15, 23, 42, 0.24);
-  color: #111827;
+  color: #ffffff;
   display: flex;
   flex-direction: column;
   width: min(640px, calc(100vw - 28px));
@@ -716,7 +739,7 @@ watch(open, (isOpen) => {
 
 .music-bubble-head {
   align-items: center;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   display: flex;
   justify-content: space-between;
   gap: 10px;
@@ -745,7 +768,7 @@ watch(open, (isOpen) => {
 }
 
 .music-bubble-title strong {
-  color: #111827;
+  color: #ffffff;
   display: block;
   font-size: 14px;
   font-weight: 900;
@@ -753,7 +776,7 @@ watch(open, (isOpen) => {
 }
 
 .music-bubble-title span {
-  color: #64748b;
+  color: #c4b5fd;
   display: block;
   font-size: 11px;
   font-weight: 800;
@@ -762,10 +785,10 @@ watch(open, (isOpen) => {
 
 .panel-close-btn {
   align-items: center;
-  background: #f1f5f9;
-  border: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  color: #475569;
+  color: #e2e8f0;
   display: flex;
   font-size: 20px;
   font-weight: 700;
@@ -776,8 +799,8 @@ watch(open, (isOpen) => {
 }
 
 .panel-close-btn:hover {
-  background: #f5f3ff;
-  color: #7c3aed;
+  background: rgba(168, 85, 247, 0.22);
+  color: #ffffff;
 }
 
 .music-bubble-body {
@@ -798,8 +821,8 @@ watch(open, (isOpen) => {
   flex: 1;
   overflow: hidden;
   border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: rgba(5, 8, 22, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .music-player-controls {
@@ -810,10 +833,10 @@ watch(open, (isOpen) => {
 
 .music-player-controls button {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
-  color: #475569;
+  color: #e2e8f0;
   display: flex;
   justify-content: center;
   gap: 6px;
@@ -824,9 +847,9 @@ watch(open, (isOpen) => {
 }
 
 .music-player-controls button:hover {
-  background: #f5f3ff;
-  border-color: #ddd6fe;
-  color: #7c3aed;
+  background: rgba(168, 85, 247, 0.2);
+  border-color: rgba(216, 180, 254, 0.34);
+  color: #ffffff;
 }
 
 .music-player-controls button.active {
@@ -853,7 +876,10 @@ watch(open, (isOpen) => {
 }
 
 .music-confirm-card {
-  background: #ffffff;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(124, 58, 237, 0.22), transparent 36%),
+    linear-gradient(145deg, rgba(11, 16, 38, 0.98), rgba(24, 16, 50, 0.98));
+  border: 1px solid rgba(216, 180, 254, 0.22);
   border-radius: 22px;
   box-shadow: 0 28px 70px rgba(15, 23, 42, 0.22);
   max-width: 360px;
@@ -865,7 +891,7 @@ watch(open, (isOpen) => {
 
 .music-confirm-icon {
   align-items: center;
-  background: #f3e8ff;
+  background: rgba(168, 85, 247, 0.18);
   border-radius: 999px;
   color: #7c3aed;
   display: flex;
@@ -876,13 +902,13 @@ watch(open, (isOpen) => {
 }
 
 .music-confirm-card h2 {
-  color: #111827;
+  color: #ffffff;
   font-size: 18px;
   font-weight: 900;
 }
 
 .music-confirm-card p {
-  color: #64748b;
+  color: #cbd5e1;
   font-size: 12px;
   font-weight: 700;
   line-height: 1.5;
@@ -890,7 +916,7 @@ watch(open, (isOpen) => {
 }
 
 .music-confirm-card p strong {
-  color: #111827;
+  color: #ffffff;
 }
 
 .music-confirm-card small {
@@ -918,8 +944,8 @@ watch(open, (isOpen) => {
 }
 
 .music-cancel {
-  background: #f1f5f9;
-  color: #64748b;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
 }
 
 .music-confirm {
@@ -961,20 +987,23 @@ watch(open, (isOpen) => {
   }
 
   .music-bubble-panel {
-    bottom: calc(var(--mobile-bottom-nav-height, 82px) + 12px + env(safe-area-inset-bottom));
-    height: auto;
-    left: 10px;
+    border: 0;
+    border-radius: 0;
+    bottom: 0;
+    height: 100dvh;
+    left: 0;
     max-height: none;
     overflow-y: auto;
-    right: 10px;
-    top: calc(var(--public-nav-offset, 72px) + 10px);
+    right: 0;
+    top: 0;
     transform-origin: bottom right;
-    width: auto;
+    width: 100vw;
+    z-index: 2200;
   }
 
   .music-bubble-panel.raised,
   .music-bubble-panel.community {
-    bottom: calc(var(--mobile-bottom-nav-height, 82px) + 12px + env(safe-area-inset-bottom));
+    bottom: 0;
   }
 
   .music-bubble-panel.open {
@@ -992,9 +1021,9 @@ watch(open, (isOpen) => {
 
 @media (max-width: 420px) {
   .music-bubble-panel {
-    left: 6px;
-    right: 6px;
-    top: calc(var(--public-nav-offset, 72px) + 8px);
+    left: 0;
+    right: 0;
+    top: 0;
   }
 }
 </style>

@@ -15,7 +15,8 @@ import {
   where
 } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
-import { resolveProfileIcon } from '@/services/profileProgress'
+import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
+import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
 const open = ref(false)
 const currentUser = ref(auth.currentUser)
@@ -27,6 +28,7 @@ const liveMessages = ref([])
 const liveChatInfo = ref({ active: false })
 const liveGoals = ref([])
 const draft = ref('')
+const replyTarget = ref(null)
 const isSending = ref(false)
 const isClearing = ref(false)
 const chatError = ref('')
@@ -51,6 +53,7 @@ let inboxReady = false
 let previousLastMessageIds = new Map()
 let previousBodyOverflow = ''
 let previousBodyOverscroll = ''
+let previousHtmlOverflow = ''
 const LIVE_CHAT_ID = 'galaxia-oficial'
 
 const canUseChat = computed(() => (
@@ -122,16 +125,14 @@ const subscribeUsers = () => {
 }
 
 const profileIcon = (user) => resolveProfileIcon(user)
+const profileIconEffect = (user) => resolveProfileIconMeta(user)
 
 const openChat = async (user = null) => {
   if (!canUseChat.value) return
   open.value = true
-  chatMode.value = user?.mode === 'live' ? 'live' : 'direct'
+  chatMode.value = 'direct'
 
-  if (isLiveChat.value) {
-    activeUser.value = null
-    subscribeLiveMessages()
-  } else if (user?.id) {
+  if (user?.id) {
     const liveUser = users.value.find(item => item.id === user.id)
     selectUser(liveUser || user)
   } else if (!activeUser.value && firstUnreadUser.value) {
@@ -144,7 +145,7 @@ const closeChat = () => {
 }
 
 const handleExternalPanelOpen = (event) => {
-  if (['music', 'mascot'].includes(event.detail?.source)) {
+  if (['music', 'community'].includes(event.detail?.source)) {
     open.value = false
   }
 }
@@ -153,6 +154,7 @@ const backToUsers = () => {
   activeUser.value = null
   chatMode.value = 'direct'
   draft.value = ''
+  replyTarget.value = null
   unsubscribeMessages?.()
   messages.value = []
 }
@@ -161,19 +163,18 @@ const selectUser = (user) => {
   chatMode.value = 'direct'
   activeUser.value = user
   draft.value = ''
+  replyTarget.value = null
   chatError.value = ''
   subscribeMessages()
 }
 
-const openLiveChat = () => {
-  chatMode.value = 'live'
-  activeUser.value = null
-  draft.value = ''
-  chatError.value = ''
-  open.value = true
-  unsubscribeMessages?.()
-  messages.value = []
-  subscribeLiveMessages()
+const setReplyTarget = (message) => {
+  if (!message || isLiveChat.value) return
+  replyTarget.value = message
+}
+
+const clearReplyTarget = () => {
+  replyTarget.value = null
 }
 
 const scrollToLatestMessage = (behavior = 'auto') => {
@@ -345,6 +346,7 @@ const sendMessage = async () => {
     }, { merge: true })
 
     draft.value = ''
+    replyTarget.value = null
   } catch (error) {
     console.error(error)
     chatError.value = 'No se pudo enviar. Revisa permisos o intenta abrir de nuevo el chat.'
@@ -581,10 +583,6 @@ const handleOpenRequest = async (event) => {
   await openChat(event.detail)
 }
 
-const handleOpenLiveRequest = async () => {
-  await openChat({ mode: 'live' })
-}
-
 const updateDockPosition = () => {
   dockRaised.value = Boolean(
     document.querySelector('.user-panel, .panel, .animate-slide-left')
@@ -598,21 +596,26 @@ const updateViewportVars = () => {
   const keyboardOffset = viewport
     ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
     : 0
+  const keyboardOpen = keyboardOffset > 40
 
   document.documentElement.style.setProperty('--direct-chat-vvh', `${Math.round(height)}px`)
   document.documentElement.style.setProperty('--direct-chat-keyboard', `${Math.round(keyboardOffset)}px`)
+  document.documentElement.classList.toggle('direct-chat-keyboard-open', keyboardOpen)
 }
 
 const lockPageScroll = () => {
   previousBodyOverflow = document.body.style.overflow
   previousBodyOverscroll = document.body.style.overscrollBehavior
+  previousHtmlOverflow = document.documentElement.style.overflow
   document.body.style.overflow = 'hidden'
   document.body.style.overscrollBehavior = 'none'
+  document.documentElement.style.overflow = 'hidden'
 }
 
 const unlockPageScroll = () => {
   document.body.style.overflow = previousBodyOverflow
   document.body.style.overscrollBehavior = previousBodyOverscroll
+  document.documentElement.style.overflow = previousHtmlOverflow
 }
 
 watch(open, async (isOpen) => {
@@ -673,7 +676,6 @@ onMounted(() => {
   })
 
   window.addEventListener('open-direct-chat', handleOpenRequest)
-  window.addEventListener('open-live-chat', handleOpenLiveRequest)
   window.addEventListener('floating-panel-opened', handleExternalPanelOpen)
   window.addEventListener('beforeunload', () => {
     touchPresence(false)
@@ -702,7 +704,6 @@ onUnmounted(() => {
   unsubscribeUsers?.()
   stopPresence()
   window.removeEventListener('open-direct-chat', handleOpenRequest)
-  window.removeEventListener('open-live-chat', handleOpenLiveRequest)
   window.removeEventListener('floating-panel-opened', handleExternalPanelOpen)
   window.removeEventListener('resize', updateViewportVars)
   window.visualViewport?.removeEventListener('resize', updateViewportVars)
@@ -712,6 +713,7 @@ onUnmounted(() => {
   document.body.classList.remove('direct-chat-available')
   document.documentElement.style.removeProperty('--direct-chat-vvh')
   document.documentElement.style.removeProperty('--direct-chat-keyboard')
+  document.documentElement.classList.remove('direct-chat-keyboard-open')
 })
 </script>
 
@@ -746,17 +748,17 @@ onUnmounted(() => {
         </button>
 
           <div class="direct-chat-title" :class="{ active: activeUser || isLiveChat }">
-            <img v-if="activeUser && profileIcon(activeUser)" :src="profileIcon(activeUser)" alt="" class="direct-chat-title-avatar profile-icon-img" />
-            <span v-else-if="activeUser" class="direct-chat-title-avatar">
-              {{ (activeUser.name || activeUser.email || 'U').charAt(0).toUpperCase() }}
-            </span>
-            <span v-else-if="isLiveChat" class="direct-chat-title-avatar live">
-              <i class="fas fa-tower-broadcast"></i>
-            </span>
+            <ProfileAvatar
+              v-if="activeUser"
+              class="direct-chat-title-avatar"
+              :src="profileIcon(activeUser)"
+              :alt="activeUser.name || activeUser.email || 'Usuario'"
+              :label="activeUser.name || activeUser.email || 'Usuario'"
+              :effect="profileIconEffect(activeUser)"
+            />
             <div>
-              <strong>{{ isLiveChat ? 'Chat en live' : (activeUser ? (activeUser.name || activeUser.email || 'Usuario') : 'Mensajes') }}</strong>
-              <span v-if="isLiveChat">{{ liveChatActive ? 'Conversacion visible para todos' : 'Disponible cuando inicia el live' }}</span>
-              <span v-else-if="activeUser">Chat privado - {{ activeUserStatus }}</span>
+              <strong>{{ activeUser ? (activeUser.name || activeUser.email || 'Usuario') : 'Mensajes' }}</strong>
+              <span v-if="activeUser">Chat privado - {{ activeUserStatus }}</span>
               <span v-else>Elige una persona</span>
             </div>
           </div>
@@ -778,28 +780,19 @@ onUnmounted(() => {
       <div class="direct-chat-body" :class="{ 'has-active-chat': activeUser || isLiveChat }">
         <aside class="direct-chat-users">
           <button
-            class="live-chat-entry"
-            :class="{ active: isLiveChat }"
-            type="button"
-            @click="openLiveChat"
-          >
-            <span><i class="fas fa-tower-broadcast"></i></span>
-            <div>
-              <strong>Chat en live</strong>
-              <small>Todos los mensajes del directo</small>
-            </div>
-            <i class="fas fa-chevron-right user-arrow"></i>
-          </button>
-
-          <button
             v-for="user in users"
             :key="user.id"
             :class="{ active: activeUser?.id === user.id, unread: unreadForUser(user) }"
             type="button"
             @click="selectUser(user)"
           >
-            <img v-if="profileIcon(user)" :src="profileIcon(user)" alt="" class="profile-icon-img" />
-            <span v-else>{{ (user.name || user.email || 'U').charAt(0).toUpperCase() }}</span>
+            <ProfileAvatar
+              class="direct-user-avatar"
+              :src="profileIcon(user)"
+              :alt="user.name || user.email || 'Usuario'"
+              :label="user.name || user.email || 'Usuario'"
+              :effect="profileIconEffect(user)"
+            />
             <div>
               <strong>{{ user.name || user.email || 'Usuario' }}</strong>
               <small :class="{ online: getOnlineLabel(user) === 'En linea' }">
@@ -826,12 +819,16 @@ onUnmounted(() => {
               v-for="message in visibleMessages"
               :key="message.id"
               :class="{ mine: message.authorId === currentUser?.uid }"
+              @click="setReplyTarget(message)"
             >
               <small>
                 {{ message.author }} - {{ formatTime(message.createdAt) }}
                 <span v-if="messageStatus(message)"> - {{ messageStatus(message) }}</span>
               </small>
               <p>{{ message.body }}</p>
+              <button v-if="!isLiveChat" type="button" class="direct-reply-action" @click.stop="setReplyTarget(message)">
+                Responder
+              </button>
             </article>
 
             <div v-if="!visibleMessages.length" class="direct-chat-empty">
@@ -843,7 +840,21 @@ onUnmounted(() => {
             Selecciona un usuario para enviar un mensaje privado.
           </div>
 
-          <form class="direct-chat-composer" :class="{ 'has-live-like': isLiveChat && currentLiveGoal }" @submit.prevent="sendMessage">
+          <div v-if="replyTarget && activeUser && !isLiveChat" class="direct-reply-bar">
+            <span class="direct-reply-avatar">
+              <img v-if="replyTarget.authorImage" :src="replyTarget.authorImage" alt="" />
+              <b v-else>{{ (replyTarget.author || 'U').charAt(0).toUpperCase() }}</b>
+            </span>
+            <div>
+              <strong>Respondiendo a {{ replyTarget.author || 'Usuario' }}</strong>
+              <small>{{ replyTarget.body }}</small>
+            </div>
+            <button type="button" aria-label="Cancelar respuesta" @click="clearReplyTarget">
+              <i class="fas fa-xmark"></i>
+            </button>
+          </div>
+
+          <form class="direct-chat-composer" :class="{ 'has-live-like': isLiveChat && currentLiveGoal, 'has-reply': replyTarget && !isLiveChat }" @submit.prevent="sendMessage">
             <p v-if="chatError" class="direct-chat-error">{{ chatError }}</p>
             <input
               v-model="draft"
@@ -958,19 +969,10 @@ onUnmounted(() => {
 }
 
 .direct-chat-title-avatar {
-  align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border-radius: 999px;
-  color: #ffffff;
+  --avatar-size: 38px;
+  --avatar-border: 2px;
   display: none;
   flex: 0 0 auto;
-  font-size: 12px;
-  font-weight: 950;
-  height: 38px;
-  justify-content: center;
-  object-fit: cover;
-  overflow: hidden;
-  width: 38px;
 }
 
 .direct-chat-title-avatar.live {
@@ -1070,39 +1072,14 @@ onUnmounted(() => {
   background: #f5f3ff;
 }
 
-.direct-chat-users .live-chat-entry {
-  background: linear-gradient(135deg, #fff1f2, #f5f3ff);
-  border: 1px solid #ede9fe;
-}
-
-.direct-chat-users .live-chat-entry span {
-  background: linear-gradient(135deg, #ef4444, #ec4899);
-  color: #ffffff;
-}
-
-.direct-chat-users .live-chat-entry small {
-  color: #7c3aed;
-}
-
 .direct-chat-users button.unread {
   background: #fff7ed;
   box-shadow: inset 3px 0 0 #f59e0b;
 }
 
-.direct-chat-users img,
-.direct-chat-users span {
-  align-items: center;
-  background: #ffffff;
-  border-radius: 999px;
-  color: #7c3aed;
-  display: flex;
-  font-size: 12px;
-  font-weight: 900;
-  height: 42px;
-  justify-content: center;
-  object-fit: cover;
-  overflow: hidden;
-  width: 42px;
+.direct-user-avatar {
+  --avatar-size: 42px;
+  --avatar-border: 2px;
 }
 
 .direct-chat-users strong {
@@ -1262,6 +1239,82 @@ onUnmounted(() => {
   overflow-wrap: anywhere;
 }
 
+.direct-reply-action {
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 900;
+  margin-top: 6px;
+}
+
+.direct-reply-bar {
+  align-items: center;
+  background: #f8fafc;
+  border-top: 1px solid #e5e7eb;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  padding: 10px 12px;
+  position: sticky;
+  bottom: 62px;
+  z-index: 5;
+}
+
+.direct-reply-avatar {
+  align-items: center;
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
+  border-radius: 999px;
+  color: #ffffff;
+  display: flex;
+  height: 34px;
+  justify-content: center;
+  overflow: hidden;
+  width: 34px;
+}
+
+.direct-reply-avatar img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.direct-reply-avatar b {
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.direct-reply-bar div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.direct-reply-bar strong {
+  color: #111827;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.direct-reply-bar small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.direct-reply-bar button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  color: #64748b;
+  display: flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
 .direct-chat-empty {
   align-self: center;
   color: #64748b;
@@ -1369,48 +1422,53 @@ onUnmounted(() => {
   }
 
   .direct-chat-panel {
-    bottom: max(92px, calc(var(--direct-chat-keyboard, 0px) + 92px + env(safe-area-inset-bottom)));
-    height: auto;
-    left: 10px;
+    border: 0;
+    border-radius: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: var(--direct-chat-vvh, 100dvh);
+    left: 0;
     max-height: none;
-    right: 10px;
-    top: calc(var(--public-nav-offset, 72px) + 10px);
-    width: auto;
+    right: 0;
+    top: 0;
+    width: 100vw;
+    z-index: 2200;
   }
 
   .direct-chat-panel.has-active-chat {
-    height: auto;
+    height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
 
   .direct-chat-panel.is-live-chat.has-active-chat {
-    height: auto;
+    height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
 
   .direct-chat-panel.raised {
-    bottom: max(92px, calc(var(--direct-chat-keyboard, 0px) + 92px + env(safe-area-inset-bottom)));
+    bottom: 0;
   }
 
   .direct-chat-panel.community {
-    bottom: max(92px, calc(var(--direct-chat-keyboard, 0px) + 92px + env(safe-area-inset-bottom)));
-    height: auto;
+    bottom: 0;
+    height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
 
   .direct-chat-panel.community.is-live-chat {
-    height: auto;
+    height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
 
   :global(body.community-quick-nav-active) .direct-chat-panel {
-    bottom: max(92px, calc(var(--direct-chat-keyboard, 0px) + 92px + env(safe-area-inset-bottom)));
-    height: auto;
+    bottom: 0;
+    height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
 
   :global(body.community-quick-nav-active) .direct-chat-panel.is-live-chat {
-    height: auto;
+    height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
 
@@ -1423,8 +1481,12 @@ onUnmounted(() => {
   }
 
   .direct-chat-head {
+    background: #ffffff;
     min-height: 64px;
     padding: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 12;
   }
 
   .direct-chat-title-avatar {
@@ -1448,7 +1510,7 @@ onUnmounted(() => {
   .direct-chat-body {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 1fr);
-    height: calc(100% - 65px);
+    height: auto;
     min-height: 0;
     overflow: hidden;
   }
@@ -1477,8 +1539,11 @@ onUnmounted(() => {
   }
 
   .direct-chat-room {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto auto;
     height: 100%;
     min-height: 0;
+    overflow: hidden;
   }
 
   .direct-chat-body:not(.has-active-chat) .direct-chat-room {
@@ -1491,8 +1556,29 @@ onUnmounted(() => {
     overscroll-behavior: contain;
   }
 
+  .direct-reply-bar {
+    bottom: calc(58px + env(safe-area-inset-bottom));
+    position: sticky;
+    z-index: 8;
+  }
+
+  .direct-chat-composer {
+    background: #ffffff;
+    bottom: 0;
+    position: sticky;
+    z-index: 9;
+  }
+
   .direct-chat-composer {
     padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  :global(html.direct-chat-keyboard-open) .direct-chat-composer {
+    padding-bottom: 10px;
+  }
+
+  :global(html.direct-chat-keyboard-open) .direct-reply-bar {
+    bottom: 58px;
   }
 
   .direct-live-goal-chip {
@@ -1504,39 +1590,35 @@ onUnmounted(() => {
 
 @media (max-width: 420px) {
   .direct-chat-panel {
-    left: 6px;
-    right: 6px;
-    top: calc(var(--public-nav-offset, 72px) + 8px);
+    left: 0;
+    right: 0;
+    top: 0;
   }
 
   .direct-chat-panel.has-active-chat {
-    height: auto;
+    height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
 
   .direct-chat-panel.is-live-chat.has-active-chat {
-    height: auto;
+    height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
 
   .direct-chat-panel.community,
   .direct-chat-panel.community.has-active-chat {
-    height: auto;
+    height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
 
   .direct-chat-panel.community.is-live-chat,
   .direct-chat-panel.community.is-live-chat.has-active-chat {
-    height: auto;
+    height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
 
   :global(body.global-live-expanded) .direct-chat-panel.is-live-chat.has-active-chat {
     top: calc(var(--public-nav-offset, 72px) + 44dvh + 16px);
-  }
-
-  .direct-chat-body {
-    height: calc(100% - 57px);
   }
 
   .direct-clear-btn,
@@ -1557,6 +1639,10 @@ onUnmounted(() => {
     padding-bottom: max(10px, env(safe-area-inset-bottom));
   }
 
+  :global(html.direct-chat-keyboard-open) .direct-chat-composer {
+    padding-bottom: 10px;
+  }
+
   .direct-chat-composer.has-live-like {
     grid-template-columns: minmax(0, 1fr) 40px 40px;
   }
@@ -1564,5 +1650,91 @@ onUnmounted(() => {
   .direct-chat-composer button {
     height: 40px;
   }
+}
+
+.direct-chat-panel {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(124, 58, 237, 0.2), transparent 34%),
+    linear-gradient(145deg, rgba(11, 16, 38, 0.98), rgba(24, 16, 50, 0.98));
+  border-color: rgba(216, 180, 254, 0.22);
+  color: #ffffff;
+}
+
+.direct-chat-head {
+  background: transparent !important;
+  border-bottom-color: rgba(148, 163, 184, 0.16);
+}
+
+.direct-clear-btn,
+.direct-back-btn,
+.direct-reply-bar button {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+}
+
+.direct-chat-head span,
+.direct-chat-users small,
+.direct-message-list small,
+.direct-reply-bar small {
+  color: #c4b5fd;
+}
+
+.direct-chat-users {
+  border-right-color: rgba(148, 163, 184, 0.16);
+}
+
+.direct-chat-users button.active,
+.direct-chat-users button:hover {
+  background: rgba(168, 85, 247, 0.16);
+}
+
+.direct-chat-users button.unread {
+  background: rgba(250, 204, 21, 0.12);
+}
+
+.direct-chat-users strong,
+.direct-live-goal-chip strong,
+.direct-reply-bar strong {
+  color: #ffffff;
+}
+
+.direct-live-goal-chip {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(236, 72, 153, 0.16));
+  border-bottom-color: rgba(216, 180, 254, 0.18);
+}
+
+.direct-message-list article {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.direct-message-list article.mine {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.72), rgba(236, 72, 153, 0.42));
+  border-color: rgba(216, 180, 254, 0.28);
+}
+
+.direct-message-list p {
+  color: #e2e8f0;
+}
+
+.direct-reply-bar,
+.direct-chat-composer {
+  background: rgba(5, 8, 22, 0.92) !important;
+  border-top-color: rgba(148, 163, 184, 0.16);
+}
+
+.direct-chat-empty {
+  color: #cbd5e1;
+}
+
+.direct-chat-composer input {
+  background: rgba(5, 8, 22, 0.72);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: #ffffff;
+}
+
+.direct-chat-composer input::placeholder {
+  color: #94a3b8;
 }
 </style>

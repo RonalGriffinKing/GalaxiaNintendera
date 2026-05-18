@@ -3,8 +3,9 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, getDocs } from "firebase/firestore"
 import { auth, db } from "@/firebase"
-import { resolveProfileIcon } from '@/services/profileProgress'
+import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { categoryIcon, loadPostCategories, normalizeCategory as normalize, postCategoryLabels, postMatchesCategory } from '@/services/postCategories'
+import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -187,6 +188,10 @@ const authorIcon = (post) => {
   const profile = authorProfile(post)
   return post.authorId ? resolveProfileIcon(profile) : ''
 }
+const authorIconMeta = (post) => {
+  const profile = authorProfile(post)
+  return post.authorId ? resolveProfileIconMeta(profile) : {}
+}
 
 const loadAuthorProfiles = async (sourcePosts = posts.value) => {
   const ids = [...new Set(sourcePosts.map(post => post.authorId).filter(Boolean))]
@@ -299,10 +304,13 @@ watch(() => route.fullPath, () => {
               <div v-else class="post-placeholder"></div>
 
               <div class="listing-author-overlay">
-                <span>
-                  <img v-if="authorIcon(post)" :src="authorIcon(post)" alt="" />
-                  <b v-else>{{ (post.authorName || 'R').charAt(0).toUpperCase() }}</b>
-                </span>
+                <ProfileAvatar
+                  class="listing-author-avatar"
+                  :src="authorIcon(post)"
+                  :alt="post.authorName || 'Redactor'"
+                  :label="post.authorName || 'Redactor'"
+                  :effect="authorIconMeta(post)"
+                />
                 <div>
                   <strong>{{ post.authorName || 'Redactor' }}</strong>
                   <small>{{ formatAgo(post.createdAt) }}</small>
@@ -322,8 +330,13 @@ watch(() => route.fullPath, () => {
                 <p v-if="pageConfig.type === 'news'">{{ post.content }}</p>
                 <div class="post-mobile-meta">
                   <span>
-                    <img v-if="authorIcon(post)" :src="authorIcon(post)" alt="" />
-                    <b v-else>{{ (post.authorName || 'R').charAt(0).toUpperCase() }}</b>
+                    <ProfileAvatar
+                      class="listing-author-avatar"
+                      :src="authorIcon(post)"
+                      :alt="post.authorName || 'Redactor'"
+                      :label="post.authorName || 'Redactor'"
+                      :effect="authorIconMeta(post)"
+                    />
                     <strong>{{ post.authorName || 'Redactor' }}</strong>
                   </span>
                   <small>{{ formatAgo(post.createdAt) }}</small>
@@ -749,7 +762,7 @@ watch(() => route.fullPath, () => {
   width: 204px;
 }
 
-.listing-author-overlay > span {
+.listing-author-overlay > span:not(.listing-author-avatar) {
   align-items: center;
   background: linear-gradient(135deg, #7c3aed, #ec4899);
   border: 2px solid rgba(255, 255, 255, 0.82);
@@ -1026,7 +1039,7 @@ watch(() => route.fullPath, () => {
     padding: 5px 10px 5px 5px;
   }
 
-  .listing-author-overlay > span {
+  .listing-author-overlay > span:not(.listing-author-avatar) {
     height: 28px;
     width: 28px;
   }
@@ -1382,7 +1395,7 @@ watch(() => route.fullPath, () => {
   right: auto;
 }
 
-.news-row.analysis .listing-author-overlay > span {
+.news-row.analysis .listing-author-overlay > span:not(.listing-author-avatar) {
   height: 34px;
   width: 34px;
 }
@@ -1820,8 +1833,8 @@ watch(() => route.fullPath, () => {
     z-index: 5;
   }
 
-  .listing-author-overlay > span,
-  .news-row.analysis .listing-author-overlay > span {
+  .listing-author-overlay > span:not(.listing-author-avatar),
+  .news-row.analysis .listing-author-overlay > span:not(.listing-author-avatar) {
     height: 32px;
     width: 32px;
   }
@@ -2017,10 +2030,26 @@ watch(() => route.fullPath, () => {
   max-width: min(260px, 100%);
 }
 
-.news-row .listing-author-overlay > span,
-.news-row.analysis .listing-author-overlay > span {
+.news-row .listing-author-overlay > .listing-author-avatar,
+.news-row.analysis .listing-author-overlay > .listing-author-avatar {
+  --avatar-size: 32px;
+  --avatar-border: 2px;
+  background: transparent;
+  border: 0;
+  height: var(--avatar-size);
+  overflow: visible;
+  width: var(--avatar-size);
+}
+
+.news-row .listing-author-overlay > span:not(.listing-author-avatar),
+.news-row.analysis .listing-author-overlay > span:not(.listing-author-avatar) {
   height: 28px;
   width: 28px;
+}
+
+.post-mobile-meta .listing-author-avatar {
+  --avatar-size: 34px;
+  --avatar-border: 2px;
 }
 
 .news-row .listing-author-overlay strong,

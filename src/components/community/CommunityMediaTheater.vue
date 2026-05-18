@@ -153,6 +153,7 @@ const emit = defineEmits([
               />
               <button type="submit" :disabled="!featuredYoutubeVideo || !videoChatDraft.trim()">
                 <i class="fas fa-paper-plane"></i>
+                <span>Enviar</span>
               </button>
             </form>
           </aside>
@@ -276,7 +277,6 @@ const emit = defineEmits([
   text-align: left;
   top: 14px;
   z-index: 3;
-  pointer-events: none;
 }
 
 .official-live-goal-overlay span {
@@ -511,7 +511,12 @@ const emit = defineEmits([
   border-radius: 14px;
   color: #ffffff;
   display: flex;
+  gap: 8px;
   justify-content: center;
+}
+
+.video-chat-form button span {
+  display: none;
 }
 
 .video-chat-form button:disabled {
@@ -528,18 +533,12 @@ const emit = defineEmits([
 }
 
 @media (max-width: 780px) {
-  .video-chat-panel {
-    min-height: 420px;
-  }
-
-  .video-chat-list {
-    min-height: 260px;
-  }
-
   .media-theater {
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100svh;
     left: 0;
     max-width: 100dvw;
-    padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+    padding: max(8px, env(safe-area-inset-top)) 8px max(10px, env(safe-area-inset-bottom));
     right: 0;
     width: 100dvw;
   }
@@ -560,18 +559,21 @@ const emit = defineEmits([
   .media-theater-body {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: hidden;
     padding-bottom: 4px;
   }
 
   .media-theater-player {
     border-radius: 14px;
-    max-height: 36dvh;
+    max-height: none;
     max-width: 100%;
   }
 
   .media-theater-chat {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     max-height: none;
     max-width: 100%;
     min-height: 0;
@@ -580,20 +582,77 @@ const emit = defineEmits([
 
   .media-theater-chat .video-chat-list {
     min-height: 0;
+    overscroll-behavior: contain;
     width: 100%;
   }
 
+  .media-theater-chat .video-chat-form {
+    background: rgba(8, 12, 30, 0.98);
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    position: relative;
+  }
+
+  .media-theater-chat .video-chat-form button {
+    min-height: 42px;
+    padding: 0 14px;
+  }
+
+  .media-theater-chat .video-chat-form button span {
+    display: inline;
+    font-size: 12px;
+    font-weight: 950;
+  }
+
   .official-live-goal-overlay {
-    grid-template-columns: 26px minmax(0, 1fr);
-    left: 10px;
-    max-width: min(280px, calc(100% - 20px));
-    min-height: 38px;
+    border-radius: 14px;
+    gap: 6px 8px;
+    grid-template-columns: 24px minmax(0, 1fr);
+    left: 8px;
+    max-width: min(260px, calc(100% - 16px));
+    min-height: 34px;
+    padding: 5px 9px 6px 5px;
     right: auto;
-    top: 10px;
+    top: 8px;
+  }
+
+  .official-live-goal-overlay span {
+    height: 24px;
+    width: 24px;
+  }
+
+  .official-live-goal-overlay strong {
+    font-size: 11px;
+  }
+
+  .official-live-goal-overlay em {
+    font-size: 10px;
   }
 
   .official-live-goal-overlay em {
     grid-column: 2;
+  }
+}
+
+@media (max-width: 420px) {
+  .theater-goal-overlay {
+    position: static;
+    margin: 8px;
+    max-width: calc(100% - 16px);
+  }
+
+  .media-theater-player {
+    aspect-ratio: auto;
+    background: transparent;
+    display: grid;
+    overflow: visible;
+  }
+
+  .media-theater-player iframe {
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 14px;
+    height: auto;
   }
 }
 </style>

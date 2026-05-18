@@ -29,9 +29,12 @@ const emptyForm = () => ({
 
 const form = ref(emptyForm())
 const isSaving = ref(false)
+const showAllCommunities = ref(false)
 
 const eventTypes = ['Direct', 'Live', 'Torneo', 'Anuncio', 'Comunidad', 'Podcast']
 const isEditing = computed(() => Boolean(props.event?.id))
+const visibleCommunities = computed(() => showAllCommunities.value ? props.communities : props.communities.slice(0, 5))
+const hasMoreCommunities = computed(() => props.communities.length > 5)
 
 const toInputDateTime = (value) => {
   const time = typeof value === 'number' ? value : value?.toDate?.().getTime?.() || new Date(value || '').getTime()
@@ -155,7 +158,7 @@ const saveEvent = async () => {
               <span>Comunidades relacionadas</span>
               <div>
                 <button
-                  v-for="community in communities"
+                  v-for="community in visibleCommunities"
                   :key="community.id"
                   type="button"
                   :class="{ active: form.communityIds.includes(community.id) }"
@@ -166,6 +169,15 @@ const saveEvent = async () => {
                   <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
                   <i v-else class="fas fa-users"></i>
                   {{ community.name }}
+                </button>
+                <button
+                  v-if="hasMoreCommunities"
+                  type="button"
+                  class="more-communities-btn"
+                  @click="showAllCommunities = !showAllCommunities"
+                >
+                  <i class="fas fa-search"></i>
+                  {{ showAllCommunities ? 'Ver menos' : 'Ver mas comunidades' }}
                 </button>
               </div>
             </div>
@@ -190,7 +202,7 @@ const saveEvent = async () => {
   display: flex;
   inset: 0;
   justify-content: center;
-  padding: 20px;
+  padding: 28px;
   position: fixed;
   z-index: 4300;
 }
@@ -210,12 +222,13 @@ const saveEvent = async () => {
   border-radius: 22px;
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
   color: #ffffff;
-  max-height: min(86dvh, 820px);
-  max-width: 760px;
-  overflow: auto;
-  padding: 20px;
+  max-height: min(88dvh, 820px);
+  max-width: min(980px, calc(100vw - 56px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 24px;
   position: relative;
-  width: min(760px, 100%);
+  width: min(980px, 100%);
 }
 
 .event-editor-card header {
@@ -224,19 +237,25 @@ const saveEvent = async () => {
   gap: 6px;
   grid-template-columns: minmax(0, 1fr) 42px;
   margin-bottom: 18px;
+  min-width: 0;
 }
 
 .event-editor-card header span {
   color: #c084fc;
   font-size: 12px;
   font-weight: 950;
+  grid-column: 1;
   text-transform: uppercase;
 }
 
 .event-editor-card h2 {
   font-size: clamp(24px, 5vw, 38px);
   font-weight: 950;
+  grid-column: 1;
   line-height: 1;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .event-editor-card header button {
@@ -244,6 +263,8 @@ const saveEvent = async () => {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   display: flex;
+  grid-column: 2;
+  grid-row: 1 / span 2;
   height: 42px;
   justify-content: center;
   width: 42px;
@@ -279,6 +300,7 @@ const saveEvent = async () => {
 }
 
 .event-editor-card textarea {
+  min-height: 128px;
   padding: 12px 14px;
   resize: vertical;
 }
@@ -319,6 +341,13 @@ const saveEvent = async () => {
   border-color: rgba(216, 180, 254, 0.45);
 }
 
+.event-community-picker .more-communities-btn {
+  background: rgba(168, 85, 247, 0.16);
+  border-color: rgba(216, 180, 254, 0.28);
+  color: #f5d0fe;
+  padding-left: 12px;
+}
+
 .event-community-picker img,
 .event-community-picker i {
   border-radius: 999px;
@@ -328,10 +357,12 @@ const saveEvent = async () => {
 }
 
 .event-editor-card footer {
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
   display: flex;
   gap: 10px;
   justify-content: flex-end;
   margin-top: 6px;
+  padding-top: 14px;
 }
 
 .event-editor-card footer button {
@@ -366,14 +397,15 @@ const saveEvent = async () => {
 
 @media (max-width: 680px) {
   .event-editor-modal {
-    align-items: stretch;
-    padding: 0;
+    align-items: center;
+    padding: 16px 0;
   }
 
   .event-editor-card {
-    border-radius: 0;
-    max-height: 100dvh;
+    border-radius: 22px;
+    max-height: calc(100dvh - 32px);
     padding: calc(18px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
+    width: min(92vw, 520px);
   }
 
   .event-editor-grid {
@@ -383,6 +415,47 @@ const saveEvent = async () => {
   .event-editor-card footer {
     display: grid;
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 760px) {
+  .event-editor-card form {
+    align-items: start;
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+  }
+
+  .event-editor-card form > label:first-child,
+  .event-editor-grid,
+  .event-community-picker,
+  .event-editor-card footer {
+    grid-column: 1 / -1;
+  }
+
+  .event-editor-card form > label:nth-of-type(2) {
+    grid-column: 1;
+    grid-row: 3 / span 2;
+    height: 100%;
+  }
+
+  .event-editor-card form > label:nth-of-type(2) textarea {
+    min-height: 100%;
+  }
+
+  .event-editor-card form > label:nth-of-type(3) {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .event-editor-card form > label:nth-of-type(4) {
+    grid-column: 2;
+    grid-row: 4;
+  }
+
+  .event-community-picker > div {
+    max-height: 124px;
+    overflow-y: auto;
+    padding-right: 4px;
   }
 }
 </style>

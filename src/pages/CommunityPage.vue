@@ -7,6 +7,10 @@ import { auth, db } from '@/firebase'
 import CommunityPanel from '@/components/community/CommunityPanel.vue'
 import CommunityGuestLanding from '@/components/community/CommunityGuestLanding.vue'
 
+defineOptions({
+  name: 'CommunityPage'
+})
+
 const router = useRouter()
 const route = useRoute()
 const selectedCommunityId = computed(() => route.query.id || '')
@@ -127,19 +131,17 @@ onUnmounted(() => {
 
 .community-member-page :deep(.community-admin-toolbar),
 .community-member-page :deep(.composer),
-.community-member-page :deep(.thread-card),
 .community-member-page :deep(.side-box),
 .community-member-page :deep(.community-empty) {
-  background:
-    linear-gradient(135deg, rgba(12, 16, 38, 0.9), rgba(22, 15, 48, 0.82)) !important;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.26);
-  color: #f8fafc;
+  background: #ffffff !important;
+  border: 1px solid rgba(226, 232, 240, 0.94);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.08);
+  color: #111827;
 }
 
 .community-member-page :deep(.community-admin-toolbar),
 .community-member-page :deep(.side-box) {
-  backdrop-filter: blur(18px);
+  backdrop-filter: none;
 }
 
 .community-member-page :deep(.community-admin-toolbar span),
@@ -153,26 +155,21 @@ onUnmounted(() => {
 
 .community-member-page :deep(.community-admin-toolbar h2),
 .community-member-page :deep(.threads-title h2),
-.community-member-page :deep(.thread-card h2),
-.community-member-page :deep(.thread-meta strong),
 .community-member-page :deep(.comment-meta strong),
 .community-member-page :deep(.user-row strong),
 .community-member-page :deep(.galaxy-copy h1),
 .community-member-page :deep(.discover-head h2) {
-  color: #ffffff;
+  color: #111827;
 }
 
 .community-member-page :deep(.community-admin-toolbar p),
 .community-member-page :deep(.threads-title p),
-.community-member-page :deep(.thread-card p),
-.community-member-page :deep(.thread-meta),
-.community-member-page :deep(.thread-footer button),
 .community-member-page :deep(.user-row p),
 .community-member-page :deep(.side-box p),
 .community-member-page :deep(.rules-box ol),
 .community-member-page :deep(.trend-box span),
 .community-member-page :deep(.community-empty) {
-  color: #b8c1d8;
+  color: #64748b;
 }
 
 .community-member-page :deep(.community-stage) {
@@ -180,6 +177,100 @@ onUnmounted(() => {
   grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
   margin: 0 auto;
   width: 100%;
+}
+
+.community-member-page :deep(.thread-card) {
+  background: rgba(9, 11, 30, 0.78) !important;
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+  color: #f8fafc;
+}
+
+.community-member-page :deep(.thread-card h2),
+.community-member-page :deep(.thread-card .thread-meta strong) {
+  color: #ffffff;
+}
+
+.community-member-page :deep(.thread-card p) {
+  color: #dbeafe;
+}
+
+.community-member-page :deep(.thread-card .thread-meta),
+.community-member-page :deep(.thread-card .thread-footer button) {
+  color: #94a3b8;
+}
+
+.community-member-page :deep(.thread-card .thread-chat) {
+  background:
+    radial-gradient(circle at 14% 0%, rgba(124, 58, 237, 0.18), transparent 36%),
+    rgba(5, 8, 22, 0.72) !important;
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+.community-member-page :deep(.thread-card .comment-row) {
+  background: transparent !important;
+  border-color: rgba(148, 163, 184, 0.12);
+}
+
+.community-member-page :deep(.thread-card .comment-meta strong) {
+  color: #ffffff;
+}
+
+.community-member-page :deep(.thread-card .comment-row p) {
+  color: #e2e8f0;
+}
+
+.community-member-page :deep(.galaxy-hero .galaxy-copy h1),
+.community-member-page :deep(.galaxy-hero .galaxy-copy p) {
+  color: #ffffff !important;
+}
+
+.community-member-page :deep(.galaxy-hero .galaxy-copy span) {
+  color: #d8b4fe !important;
+}
+
+.community-member-page :deep(.community-side .side-box) {
+  background:
+    radial-gradient(circle at 16% 0%, rgba(124, 58, 237, 0.2), transparent 34%),
+    rgba(8, 12, 30, 0.78) !important;
+  border-color: rgba(216, 180, 254, 0.18);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+  color: #f8fafc;
+}
+
+.community-member-page :deep(.community-side .side-box h2),
+.community-member-page :deep(.community-side .side-box h3),
+.community-member-page :deep(.community-side .side-box strong) {
+  color: #ffffff;
+}
+
+.community-member-page :deep(.community-side .side-box p),
+.community-member-page :deep(.community-side .side-box small),
+.community-member-page :deep(.community-side .side-box li),
+.community-member-page :deep(.community-side .side-box span) {
+  color: #cbd5e1;
+}
+
+.community-member-page :deep(.community-side .live-goal-card) {
+  background: #f8fafc !important;
+  border-color: rgba(216, 180, 254, 0.24);
+  color: #111827;
+}
+
+.community-member-page :deep(.community-side .live-goal-card strong),
+.community-member-page :deep(.community-side .live-goal-card h3) {
+  color: #111827;
+}
+
+.community-member-page :deep(.community-side .live-goal-card p),
+.community-member-page :deep(.community-side .live-goal-card small),
+.community-member-page :deep(.community-side .live-goal-card span) {
+  color: #64748b;
+}
+
+.community-member-page :deep(.community-side .live-goal-orb i),
+.community-member-page :deep(.community-side .live-goal-like-btn i) {
+  color: #ffffff;
 }
 
 .community-member-page :deep(.community-thread-composer) {
@@ -211,11 +302,11 @@ onUnmounted(() => {
 
 .community-member-page :deep(.community-rail-card) {
   align-items: stretch;
-  backdrop-filter: blur(18px);
-  background: rgba(8, 12, 30, 0.9) !important;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  backdrop-filter: none;
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid rgba(226, 232, 240, 0.94);
   border-radius: 28px;
-  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.26);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12);
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -232,47 +323,46 @@ onUnmounted(() => {
 .community-member-page :deep(.composer-body textarea),
 .community-member-page :deep(.thread-chat),
 .community-member-page :deep(.reply-box) {
-  background: rgba(8, 12, 30, 0.86) !important;
-  border-color: rgba(148, 163, 184, 0.18);
-  color: #e5e7eb;
+  background: #ffffff !important;
+  border-color: #e5e7eb;
+  color: #64748b;
 }
 
 .community-member-page :deep(.reply-box input) {
   background: transparent !important;
   border: 0 !important;
-  color: #f8fafc;
+  color: #111827;
 }
 
 .community-member-page :deep(.empty-chat) {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border-color: rgba(148, 163, 184, 0.18);
-  color: #b8c1d8;
+  background: #ffffff !important;
+  border-color: #cbd5e1;
+  color: #64748b;
 }
 
 .community-member-page :deep(.miiverse-composer) {
-  background:
-    linear-gradient(135deg, rgba(12, 16, 38, 0.94), rgba(22, 15, 48, 0.88)) !important;
-  border-color: rgba(148, 163, 184, 0.18);
+  background: #ffffff !important;
+  border-color: #e5e7eb;
   overflow: hidden;
 }
 
 .community-member-page :deep(.miiverse-composer .composer-body textarea) {
   background: transparent !important;
   border: 0;
-  color: #f8fafc;
+  color: #111827;
   font-size: 18px;
   min-height: 102px;
   padding: 8px 0 14px;
 }
 
 .community-member-page :deep(.miiverse-composer .composer-body textarea::placeholder) {
-  color: #aeb8cf;
+  color: #94a3b8;
 }
 
 .community-member-page :deep(.community-empty-threads) {
   background:
-    radial-gradient(circle at 50% 18%, rgba(168, 85, 247, 0.2), transparent 30%),
-    linear-gradient(135deg, rgba(12, 16, 38, 0.94), rgba(22, 15, 48, 0.9)) !important;
+    radial-gradient(circle at 50% 18%, rgba(168, 85, 247, 0.1), transparent 30%),
+    #ffffff !important;
 }
 
 .community-member-page :deep(.community-empty-threads.with-background) {
@@ -288,9 +378,9 @@ onUnmounted(() => {
 }
 
 .community-member-page :deep(.rail-create-btn) {
-  background: rgba(8, 12, 30, 0.9) !important;
-  border-color: rgba(148, 163, 184, 0.18);
-  color: #ffffff;
+  background: #ffffff !important;
+  border-color: #e5e7eb;
+  color: #7c3aed;
 }
 
 .community-member-page :deep(.rail-create-btn),
@@ -314,10 +404,10 @@ onUnmounted(() => {
 .community-member-page :deep(.community-switcher button.active),
 .community-member-page :deep(.topic-tabs button.active),
 .community-member-page :deep(.topic-tabs button:hover) {
-  background: rgba(124, 58, 237, 0.42) !important;
-  border-color: rgba(168, 85, 247, 0.68);
+  background: #f3e8ff !important;
+  border-color: #d8b4fe;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16);
-  color: #ffffff;
+  color: #7c3aed;
 }
 
 .community-member-page :deep(.galaxy-hero) {
@@ -393,8 +483,8 @@ onUnmounted(() => {
 }
 
 .community-member-page :deep(.thread-footer span) {
-  background: rgba(124, 58, 237, 0.18);
-  color: #d8b4fe;
+  background: #eef2ff;
+  color: #4f46e5;
 }
 
 .community-member-page :deep(.live-pill) {
@@ -403,8 +493,7 @@ onUnmounted(() => {
 }
 
 .community-member-page :deep(.setup-only) {
-  background:
-    linear-gradient(135deg, rgba(16, 24, 44, 0.96), rgba(36, 14, 70, 0.88));
+  background: #ffffff;
 }
 
 .community-content-enter-active,
@@ -437,7 +526,7 @@ onUnmounted(() => {
 
 @media (max-width: 780px) {
   .community-member-page {
-    padding: 78px 10px calc(126px + env(safe-area-inset-bottom));
+    padding: var(--public-page-top-mobile, 78px) 10px calc(126px + env(safe-area-inset-bottom));
   }
 
   .community-member-page :deep(.community-panel) {

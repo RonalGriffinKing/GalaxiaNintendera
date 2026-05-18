@@ -19,6 +19,7 @@ import {
   loadUploadedProfileIcons,
   redeemIcon,
   resolveProfileIcon,
+  resolveProfileIconMeta,
   updateProfileIcon
 } from '@/services/profileProgress'
 import { ACHIEVEMENT_TYPES, PROFILE_ICON_FILTERS } from '@/constants/profile'
@@ -75,7 +76,9 @@ const uploadIconDraft = ref({
   name: '',
   saga: 'Kirby',
   cost: ICON_COST,
-  visible: true
+  visible: true,
+  special: false,
+  effectColor: '#a855f7'
 })
 const mobileEditorTab = ref('details')
 const mobileIconPage = ref(0)
@@ -121,6 +124,10 @@ const profileIcon = computed(() => {
     selectedIcon: selectedId
   })
 })
+const profileIconMeta = computed(() => resolveProfileIconMeta({
+  ...profile.value,
+  selectedIcon: isOwnProfile.value ? pendingSelectedIcon.value || profile.value?.selectedIcon : profile.value?.selectedIcon
+}))
 const profileActiveMonths = computed(() => {
   const value = profile.value?.createdAt || profile.value?.joinedAt
   if (!value) return 0
@@ -170,25 +177,45 @@ const achievementRoadmap = computed(() => managedAchievements.value.map((achieve
 }))
 const isCreatorProfile = computed(() => ['admin', 'publisher'].includes(profile.value?.role))
 const allProfileIcons = computed(() => {
-  const managedIcons = isAdminOwnProfile.value
-    ? customIcons.value
-    : customIcons.value.filter(icon => icon.visible && !icon.archived)
-  return [...kirbyIcons, ...managedIcons]
+  const managedById = new Map(customIcons.value.map(icon => [icon.id, icon]))
+  const builtInIcons = kirbyIcons.map((icon) => {
+    const saved = managedById.get(icon.id)
+    managedById.delete(icon.id)
+
+    return {
+      ...icon,
+      ...saved,
+      src: icon.src,
+      sourcePath: icon.sourcePath,
+      builtIn: true,
+      local: true,
+      visible: saved ? Boolean(saved.visible) : true,
+      archived: saved ? Boolean(saved.archived) : false,
+      special: saved ? Boolean(saved.special) : Boolean(icon.special),
+      effectColor: saved?.effectColor || icon.effectColor || '#a855f7'
+    }
+  })
+  const managedIcons = [...managedById.values()]
+  const icons = [...builtInIcons, ...managedIcons]
+
+  return isAdminOwnProfile.value
+    ? icons
+    : icons.filter(icon => icon.visible && !icon.archived)
 })
-const manageableProfileIcons = computed(() => customIcons.value.filter(icon => icon.local || !icon.builtIn))
+const manageableProfileIcons = computed(() => allProfileIcons.value)
 const redeemedProfileIcons = computed(() => allProfileIcons.value.filter(icon => unlockedIcons.value.includes(icon.id)))
 const visibleProfileIcons = computed(() => redeemedProfileIcons.value.slice(0, 8))
 const iconFilters = computed(() => {
   const dynamic = allProfileIcons.value.map(icon => iconSaga(icon)).filter(Boolean)
-  return ['Todos', ...new Set([...PROFILE_ICON_FILTERS, ...dynamic])]
+  return ['Todos', 'Especiales', ...new Set([...PROFILE_ICON_FILTERS, ...dynamic])]
 })
-const iconSaga = (icon) => icon.id?.startsWith('kirby') ? 'Kirby' : icon.saga || 'Especiales'
+const iconSaga = (icon) => icon.saga || 'Especiales'
 const iconCost = (icon) => Math.max(0, Number(icon?.cost ?? ICON_COST))
 const filteredIconCatalog = computed(() => {
   const search = normalizeText(iconSearch.value)
   return allProfileIcons.value.filter(icon => {
-    const matchesFilter = iconFilter.value === 'Todos' || iconSaga(icon) === iconFilter.value
-    const matchesSearch = !search || normalizeText(`${icon.name} ${iconSaga(icon)}`).includes(search)
+    const matchesFilter = iconFilter.value === 'Todos' || (iconFilter.value === 'Especiales' ? icon.special : iconSaga(icon) === iconFilter.value)
+    const matchesSearch = !search || normalizeText(`${icon.name} ${iconSaga(icon)} ${icon.special ? 'especial' : ''}`).includes(search)
     return matchesFilter && matchesSearch
   })
 })
@@ -623,13 +650,25 @@ const closeIconCollection = () => {
   iconCollectionOpen.value = false
 }
 
+const openIconDetailFromCollection = async (icon) => {
+  if (!icon?.id) return
+  previewIconId.value = icon.id
+  iconCollectionOpen.value = false
+  iconPanelOpen.value = true
+  mobileEditorTab.value = 'icons'
+  iconSearch.value = ''
+  iconFilter.value = icon.special ? 'Especiales' : iconSaga(icon)
+  mobileIconPage.value = 0
+  await nextTick()
+}
+
 const openIconUpload = (icon = null) => {
   if (!isAdminOwnProfile.value) return
   uploadIconMessage.value = ''
   resetUploadIconForm()
-  const editableIcon = icon && !icon.builtIn ? icon : manageableProfileIcons.value[0]
+  const editableIcon = icon || manageableProfileIcons.value[0]
   if (!editableIcon) {
-    uploadIconMessage.value = 'Crea carpetas en src/iconos/profileIcons, por ejemplo src/iconos/profileIcons/Mario/icon_01.png.'
+    uploadIconMessage.value = 'No hay iconos cargados para gestionar.'
     iconUploadOpen.value = true
     return
   }
@@ -639,7 +678,9 @@ const openIconUpload = (icon = null) => {
     name: editableIcon.name,
     saga: iconSaga(editableIcon),
     cost: iconCost(editableIcon),
-    visible: Boolean(editableIcon.visible && !editableIcon.archived)
+    visible: Boolean(editableIcon.visible && !editableIcon.archived),
+    special: Boolean(editableIcon.special),
+    effectColor: editableIcon.effectColor || '#a855f7'
   }
   iconUploadOpen.value = true
 }
@@ -658,7 +699,9 @@ const resetUploadIconForm = () => {
     name: '',
     saga: iconFilter.value !== 'Todos' ? iconFilter.value : 'Kirby',
     cost: ICON_COST,
-    visible: true
+    visible: true,
+    special: false,
+    effectColor: '#a855f7'
   }
 }
 
@@ -670,7 +713,9 @@ const selectManagedIcon = (icon) => {
     name: icon.name,
     saga: iconSaga(icon),
     cost: iconCost(icon),
-    visible: Boolean(icon.visible && !icon.archived)
+    visible: Boolean(icon.visible && !icon.archived),
+    special: Boolean(icon.special),
+    effectColor: icon.effectColor || '#a855f7'
   }
   uploadIconMessage.value = ''
 }
@@ -707,12 +752,37 @@ const saveUploadedIcon = async () => {
       saga: uploadIconDraft.value.saga,
       cost: uploadIconDraft.value.cost,
       visible: uploadIconDraft.value.visible,
+      special: uploadIconDraft.value.special,
+      effectColor: uploadIconDraft.value.effectColor,
       sourcePath: icon.sourcePath,
       src: icon.src
     })
-    customIcons.value = customIcons.value.map(item => (
-      item.id === icon.id ? { ...item, ...saved } : item
-    ))
+    const updatedIcon = { ...icon, ...saved, src: icon.src, sourcePath: icon.sourcePath }
+    customIcons.value = customIcons.value.some(item => item.id === icon.id)
+      ? customIcons.value.map(item => (item.id === icon.id ? { ...item, ...updatedIcon } : item))
+      : [...customIcons.value, updatedIcon]
+    if (profile.value?.selectedIcon === icon.id) {
+      const selectedIconEffect = {
+        special: Boolean(updatedIcon.special),
+        effectColor: updatedIcon.effectColor || '#a855f7',
+        saga: iconSaga(updatedIcon)
+      }
+      await updateDoc(doc(db, 'users', profileId.value), {
+        selectedIconEffect,
+        updatedAt: Date.now()
+      })
+      profile.value = {
+        ...profile.value,
+        selectedIconEffect,
+        updatedAt: Date.now()
+      }
+      window.dispatchEvent(new CustomEvent('galaxy-profile-updated', {
+        detail: {
+          uid: profileId.value,
+          profile: profile.value
+        }
+      }))
+    }
     previewIconId.value = icon.id
     iconFilter.value = saved.saga
     iconSearch.value = ''
@@ -835,7 +905,12 @@ const confirmUnlockIcon = async () => {
       stars: displayStars.value,
       unlockedIcons: unlockedIcons.value,
       cost: iconCost(icon),
-      iconUrl: icon.builtIn ? '' : icon.src
+      iconUrl: icon.builtIn ? '' : icon.src,
+      iconEffect: {
+        special: Boolean(icon.special),
+        effectColor: icon.effectColor || '#a855f7',
+        saga: iconSaga(icon)
+      }
     })
     profile.value = {
       ...profile.value,
@@ -843,9 +918,20 @@ const confirmUnlockIcon = async () => {
       unlockedIcons: [...unlockedIcons.value, icon.id],
       selectedIcon: icon.id,
       selectedIconUrl: icon.builtIn ? '' : icon.src,
+      selectedIconEffect: {
+        special: Boolean(icon.special),
+        effectColor: icon.effectColor || '#a855f7',
+        saga: iconSaga(icon)
+      },
       updatedAt: Date.now()
     }
     pendingSelectedIcon.value = icon.id
+    window.dispatchEvent(new CustomEvent('galaxy-profile-updated', {
+      detail: {
+        uid: profileId.value,
+        profile: profile.value
+      }
+    }))
     redeemingIcon.value = ''
     unlockBurst.value = icon.id
     setTimeout(() => {
@@ -910,20 +996,38 @@ const selectIcon = async (iconId) => {
   message.value = ''
   const selectedCatalogIcon = allProfileIcons.value.find(icon => icon.id === iconId)
   const selectedIconUrl = selectedCatalogIcon?.builtIn ? '' : selectedCatalogIcon?.src || ''
+  const selectedIconEffect = {
+    special: Boolean(selectedCatalogIcon?.special),
+    effectColor: selectedCatalogIcon?.effectColor || '#a855f7',
+    saga: iconSaga(selectedCatalogIcon || {})
+  }
+  const previousProfile = profile.value
+  const nextProfile = {
+    ...profile.value,
+    selectedIcon: iconId,
+    selectedIconUrl,
+    selectedIconEffect,
+    updatedAt: Date.now()
+  }
+  profile.value = nextProfile
+  pendingSelectedIcon.value = iconId
+  window.dispatchEvent(new CustomEvent('galaxy-profile-updated', {
+    detail: {
+      uid: profileId.value,
+      profile: nextProfile
+    }
+  }))
 
   try {
     await updateDoc(doc(db, 'users', profileId.value), {
       selectedIcon: iconId,
       selectedIconUrl,
+      selectedIconEffect,
       updatedAt: Date.now()
     })
-    profile.value = {
-      ...profile.value,
-      selectedIcon: iconId,
-      selectedIconUrl,
-      updatedAt: Date.now()
-    }
   } catch (error) {
+    profile.value = previousProfile
+    pendingSelectedIcon.value = previousProfile?.selectedIcon || 'kirby-01'
     message.value = 'No se pudo guardar el icono.'
   } finally {
     isSavingIcon.value = false
@@ -1127,6 +1231,7 @@ onUnmounted(() => {
       <ProfileHeaderCard
         :profile="profile"
         :profile-icon="profileIcon"
+        :profile-icon-meta="profileIconMeta"
         :current-achievement="currentAchievement"
         :rewards-expanded="rewardsExpanded"
         :is-own-profile="isOwnProfile"
@@ -1299,6 +1404,7 @@ onUnmounted(() => {
         v-model:upload-icon-draft="uploadIconDraft"
         :profile="profile"
         :profile-icon="profileIcon"
+        :profile-icon-meta="profileIconMeta"
         :collection-open="iconCollectionOpen"
         :panel-open="iconPanelOpen"
         :upload-open="iconUploadOpen"
@@ -2151,7 +2257,6 @@ onUnmounted(() => {
 }
 
 .achievement-grid,
-.icon-grid,
 .profile-directory-grid,
 .profile-columns {
   display: grid;
@@ -2273,7 +2378,6 @@ onUnmounted(() => {
 }
 
 .achievement-card strong,
-.icon-card strong,
 .link-list strong,
 .post-strip strong {
   color: #111827;
@@ -2283,7 +2387,6 @@ onUnmounted(() => {
 }
 
 .achievement-card p,
-.icon-card small,
 .profile-directory-grid small,
 .link-list span {
   color: #64748b;
@@ -2364,1250 +2467,6 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.icon-grid {
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-}
-
-.icon-shop.compact {
-  border-color: #ddd6fe;
-  box-shadow: 0 18px 50px rgba(124, 58, 237, 0.1);
-  padding-bottom: 18px;
-  scroll-margin-top: 92px;
-}
-
-.icon-test-panel {
-  display: flex;
-  justify-content: flex-start;
-  margin-bottom: 12px;
-}
-
-.icon-test-panel.active {
-  color: #ffffff;
-}
-
-.icon-test-panel button {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.075);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  color: #cbd5e1;
-  display: inline-flex;
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 950;
-  gap: 7px;
-  min-height: 34px;
-  padding: 0 14px;
-  text-transform: uppercase;
-}
-
-.icon-test-panel.active button {
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border-color: transparent;
-  color: #ffffff;
-}
-
-.icon-preview-bar {
-  align-items: center;
-  background: linear-gradient(135deg, #fff7ed, #fffbeb);
-  border: 1px solid #fed7aa;
-  border-radius: 14px;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
-  margin-bottom: 14px;
-  padding: 10px 12px;
-}
-
-.preview-avatar {
-  background: #ffffff;
-  border: 2px solid #ffffff;
-  border-radius: 999px;
-  box-shadow: 0 8px 18px rgba(245, 158, 11, 0.16);
-  height: 48px;
-  overflow: hidden;
-  width: 48px;
-}
-
-.preview-avatar img {
-  height: 138%;
-  margin-left: -19%;
-  margin-top: -18%;
-  max-width: none;
-  object-fit: cover;
-  width: 138%;
-}
-
-.icon-preview-bar strong {
-  color: #92400e;
-  display: block;
-  font-size: 13px;
-  font-weight: 950;
-}
-
-.icon-preview-bar small {
-  color: #b45309;
-  display: block;
-  font-size: 11px;
-  font-weight: 800;
-  margin-top: 2px;
-}
-
-.icon-preview-bar button {
-  background: #111827;
-  border-radius: 999px;
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 900;
-  min-height: 34px;
-  padding: 0 14px;
-  text-transform: uppercase;
-}
-
-.icon-preview-bar button:disabled {
-  background: #cbd5e1;
-  cursor: not-allowed;
-}
-
-.profile-message.soft {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  color: #64748b;
-}
-
-.icon-grid.compact {
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-}
-
-.icon-card {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  overflow: hidden;
-  padding: 12px;
-  position: relative;
-  text-align: center;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.icon-card:hover {
-  border-color: #c4b5fd;
-  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.1);
-  transform: translateY(-2px);
-}
-
-.icon-card.selected {
-  border-color: #a855f7;
-  box-shadow: 0 0 0 3px #f3e8ff;
-}
-
-.icon-card.saved::after {
-  align-items: center;
-  background: #111827;
-  border: 2px solid #ffffff;
-  border-radius: 999px;
-  color: #ffffff;
-  content: '\f00c';
-  display: flex;
-  font-family: 'Font Awesome 6 Free';
-  font-size: 8px;
-  font-weight: 900;
-  height: 18px;
-  justify-content: center;
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  width: 18px;
-  z-index: 3;
-}
-
-.icon-card.saved small {
-  color: #22c55e;
-}
-
-.icon-card.test {
-  border-color: #f59e0b;
-  box-shadow: 0 0 0 3px #fef3c7;
-}
-
-.icon-card.test::before {
-  background: #f59e0b;
-  border-radius: 999px;
-  color: #ffffff;
-  content: 'TEST';
-  font-size: 8px;
-  font-weight: 950;
-  left: 8px;
-  padding: 2px 5px;
-  position: absolute;
-  top: 8px;
-  z-index: 3;
-}
-
-.icon-card.redeeming {
-  border-color: #f59e0b;
-  box-shadow: 0 0 0 3px #fef3c7, 0 16px 34px rgba(245, 158, 11, 0.18);
-  transform: translateY(-2px);
-}
-
-.redeem-fill {
-  background: linear-gradient(180deg, rgba(253, 230, 138, 0.12), rgba(245, 158, 11, 0.32));
-  bottom: 0;
-  inset-inline: 0;
-  overflow: hidden;
-  position: absolute;
-  top: 0;
-  z-index: 1;
-}
-
-.redeem-fill::before {
-  animation: cardFill 0.82s ease-out both;
-  background: linear-gradient(180deg, rgba(250, 204, 21, 0.1), rgba(250, 204, 21, 0.52));
-  bottom: 0;
-  content: '';
-  left: 0;
-  position: absolute;
-  right: 0;
-  top: 100%;
-}
-
-.redeem-fill i {
-  animation: fillShine 0.82s ease-out both;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
-  height: 140%;
-  left: -80%;
-  position: absolute;
-  top: -20%;
-  transform: rotate(18deg);
-  width: 46%;
-}
-
-.icon-card.redeeming .icon-art,
-.icon-card.redeeming small,
-.icon-card.redeeming .lock-badge {
-  position: relative;
-  z-index: 2;
-}
-
-.icon-card.locked {
-  background: #f1f5f9;
-  border-color: #e2e8f0;
-}
-
-.icon-card.locked .icon-art {
-  opacity: 0.42;
-}
-
-.icon-card.locked .icon-art img {
-  filter: grayscale(0.82) saturate(0.55);
-}
-
-.icon-art {
-  align-items: center;
-  background: #ffffff;
-  border: 3px solid #ffffff;
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-  display: flex;
-  justify-content: center;
-  margin-bottom: 10px;
-  min-height: 104px;
-  overflow: hidden;
-}
-
-.icon-grid.compact .icon-art {
-  margin: 0 auto 8px;
-  min-height: 58px;
-  width: 58px;
-}
-
-.icon-art img {
-  height: 136px;
-  max-width: none;
-  object-fit: cover;
-  transform: translateY(-15px);
-  width: 136px;
-}
-
-.icon-grid.compact .icon-art img {
-  height: 82px;
-  transform: translateY(-10px);
-  width: 82px;
-}
-
-.lock-badge {
-  align-items: center;
-  background: #e5e7eb;
-  border: 2px solid #ffffff;
-  border-radius: 999px;
-  bottom: 30px;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
-  color: #64748b;
-  display: inline-flex;
-  font-size: 10px;
-  height: 22px;
-  justify-content: center;
-  left: 50%;
-  position: absolute;
-  transform: translateX(-50%);
-  width: 22px;
-  z-index: 2;
-}
-
-.icon-card.denied .lock-badge {
-  animation: lockShake 0.58s ease;
-}
-
-.icon-grid.compact .icon-card {
-  padding: 9px;
-}
-
-.icon-grid.compact .icon-card small {
-  font-size: 9px;
-  line-height: 1.15;
-  margin-top: 0;
-}
-
-.icon-modal-backdrop,
-.icon-collection-backdrop {
-  align-items: center;
-  background: rgba(3, 7, 18, 0.76);
-  backdrop-filter: blur(12px);
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  padding: 18px;
-  position: fixed;
-  z-index: 2000;
-}
-
-.icon-collection-card {
-  background:
-    radial-gradient(circle at 12% 0%, rgba(168, 85, 247, 0.24), transparent 30%),
-    radial-gradient(circle at 90% 8%, rgba(236, 72, 153, 0.16), transparent 26%),
-    #0b1020;
-  border: 1px solid rgba(168, 85, 247, 0.28);
-  border-radius: 18px;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
-  color: #f8fafc;
-  display: grid;
-  gap: 18px;
-  max-height: min(760px, calc(100dvh - 36px));
-  overflow: hidden;
-  padding: 20px;
-  position: relative;
-  width: min(920px, calc(100vw - 28px));
-}
-
-.icon-collection-head {
-  align-items: center;
-  display: grid;
-  gap: 14px;
-  grid-template-columns: 86px minmax(0, 1fr) auto;
-  padding-right: 46px;
-}
-
-.collection-profile-avatar {
-  background: #ffffff;
-  border: 4px solid rgba(255, 255, 255, 0.95);
-  border-radius: 999px;
-  display: block;
-  height: 86px;
-  overflow: hidden;
-  width: 86px;
-}
-
-.collection-profile-avatar img {
-  height: 138%;
-  margin-left: -19%;
-  margin-top: -18%;
-  max-width: none;
-  object-fit: cover;
-  width: 138%;
-}
-
-.collection-kicker {
-  color: #c084fc;
-  display: block;
-  font-size: 11px;
-  font-weight: 950;
-  text-transform: uppercase;
-}
-
-.icon-collection-head h2 {
-  color: #ffffff;
-  font-size: 28px;
-  font-weight: 950;
-  line-height: 1.05;
-  margin-top: 4px;
-}
-
-.icon-collection-head p {
-  color: #aeb8d3;
-  font-size: 13px;
-  font-weight: 800;
-  margin-top: 6px;
-}
-
-.icon-collection-head > strong {
-  align-items: center;
-  background: rgba(168, 85, 247, 0.16);
-  border: 1px solid rgba(168, 85, 247, 0.28);
-  border-radius: 16px;
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 22px;
-  font-weight: 950;
-  gap: 8px;
-  min-height: 54px;
-  padding: 0 16px;
-}
-
-.icon-collection-head > strong i {
-  color: #c084fc;
-  font-size: 18px;
-}
-
-.icon-collection-groups {
-  display: grid;
-  gap: 14px;
-  max-height: min(560px, calc(100dvh - 190px));
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.icon-collection-group {
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-}
-
-.icon-collection-group header {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-}
-
-.icon-collection-group header span {
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 950;
-}
-
-.icon-collection-group header small {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  color: #cbd5e1;
-  font-size: 11px;
-  font-weight: 900;
-  padding: 6px 9px;
-}
-
-.collection-icon-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-}
-
-.collection-icon-grid figure {
-  align-content: start;
-  background: rgba(6, 9, 24, 0.62);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  display: grid;
-  gap: 8px;
-  justify-items: center;
-  min-height: 132px;
-  padding: 12px 8px;
-  text-align: center;
-}
-
-.collection-icon-grid figure.equipped {
-  background:
-    radial-gradient(circle at 50% 0%, rgba(250, 204, 21, 0.18), transparent 52%),
-    rgba(88, 28, 135, 0.32);
-  border-color: rgba(250, 204, 21, 0.36);
-}
-
-.collection-icon-grid figure > span {
-  background: #ffffff;
-  border: 3px solid rgba(255, 255, 255, 0.96);
-  border-radius: 999px;
-  display: block;
-  height: 66px;
-  overflow: hidden;
-  width: 66px;
-}
-
-.collection-icon-grid img {
-  height: 136%;
-  margin-left: -18%;
-  margin-top: -17%;
-  max-width: none;
-  object-fit: cover;
-  width: 136%;
-}
-
-.collection-icon-grid figcaption {
-  color: #e2e8f0;
-  display: grid;
-  font-size: 11px;
-  font-weight: 900;
-  gap: 5px;
-  line-height: 1.15;
-}
-
-.collection-icon-grid em {
-  color: #facc15;
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 950;
-  text-transform: uppercase;
-}
-
-.icon-collection-empty {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px dashed rgba(168, 85, 247, 0.28);
-  border-radius: 16px;
-  color: #aeb8d3;
-  display: grid;
-  justify-items: center;
-  min-height: 220px;
-  padding: 24px;
-  text-align: center;
-}
-
-.icon-collection-empty i {
-  color: #c084fc;
-  font-size: 34px;
-}
-
-.icon-collection-empty strong {
-  color: #ffffff;
-  font-size: 18px;
-  font-weight: 950;
-  margin-top: 10px;
-}
-
-.icon-collection-empty p {
-  font-size: 13px;
-  font-weight: 800;
-  margin-top: 6px;
-}
-
-.icon-modal-card {
-  background: #0b1020;
-  border: 1px solid rgba(168, 85, 247, 0.28);
-  border-radius: 18px;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
-  color: #f8fafc;
-  display: grid;
-  gap: 16px;
-  max-height: min(760px, calc(100dvh - 36px));
-  overflow: hidden;
-  padding: 20px;
-  position: relative;
-  z-index: 1;
-  width: min(1120px, calc(100vw - 28px));
-}
-
-.icon-modal-close {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  color: #cbd5e1;
-  display: flex;
-  height: 38px;
-  justify-content: center;
-  position: absolute;
-  right: 18px;
-  top: 18px;
-  width: 38px;
-  z-index: 2;
-}
-
-.icon-modal-head {
-  align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
-  padding-right: 48px;
-}
-
-.icon-modal-symbol {
-  align-items: center;
-  background: rgba(168, 85, 247, 0.18);
-  border-radius: 999px;
-  color: #c084fc;
-  display: flex;
-  height: 34px;
-  justify-content: center;
-  width: 34px;
-}
-
-.icon-modal-head h2 {
-  color: #ffffff;
-  font-size: 22px;
-  font-weight: 950;
-}
-
-.icon-modal-head p {
-  color: #cbd5e1;
-  font-size: 12px;
-  font-weight: 750;
-  margin-top: 3px;
-}
-
-.icon-modal-wallet {
-  align-items: center;
-  background: linear-gradient(135deg, #fef3c7, #fce7f3);
-  border: 1px solid #fde68a;
-  border-radius: 14px;
-  color: #92400e;
-  display: grid;
-  gap: 2px 7px;
-  grid-template-columns: auto auto;
-  justify-items: center;
-  min-width: 104px;
-  padding: 10px 12px;
-}
-
-.icon-modal-wallet.spending {
-  animation: walletSpend 0.55s ease;
-  box-shadow: 0 14px 34px rgba(245, 158, 11, 0.24);
-}
-
-.icon-modal-wallet i {
-  color: #f59e0b;
-}
-
-.icon-modal-wallet strong {
-  font-size: 22px;
-  font-weight: 950;
-  line-height: 1;
-}
-
-.icon-modal-wallet span {
-  font-size: 9px;
-  font-weight: 950;
-  grid-column: 1 / -1;
-  text-transform: uppercase;
-}
-
-.icon-modal-actions {
-  align-items: center;
-  display: inline-flex;
-  gap: 8px;
-  justify-self: end;
-}
-
-.icon-add-button {
-  align-items: center;
-  background: linear-gradient(135deg, #22c55e, #06b6d4);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 14px;
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 15px;
-  height: 44px;
-  justify-content: center;
-  width: 44px;
-}
-
-.icon-add-button:hover {
-  filter: brightness(1.08);
-  transform: translateY(-1px);
-}
-
-.icon-upload-backdrop {
-  align-items: center;
-  background: rgba(3, 7, 18, 0.68);
-  backdrop-filter: blur(14px);
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  padding: 18px;
-  position: fixed;
-  z-index: 2000;
-}
-
-.icon-upload-card {
-  background: #0b1020;
-  border: 1px solid rgba(34, 211, 238, 0.25);
-  border-radius: 18px;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.46);
-  color: #f8fafc;
-  display: grid;
-  gap: 18px;
-  max-height: min(720px, calc(100dvh - 36px));
-  overflow: hidden;
-  padding: 20px;
-  position: relative;
-  width: min(760px, calc(100vw - 28px));
-  z-index: 1;
-}
-
-.upload-head {
-  grid-template-columns: 34px minmax(0, 1fr);
-}
-
-.icon-upload-layout {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: 280px minmax(0, 1fr);
-  min-height: 0;
-}
-
-.icon-drop-zone {
-  align-content: center;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px dashed rgba(34, 211, 238, 0.42);
-  border-radius: 16px;
-  cursor: pointer;
-  display: grid;
-  gap: 10px;
-  justify-items: center;
-  min-height: 310px;
-  padding: 18px;
-  text-align: center;
-}
-
-.icon-drop-zone.active,
-.icon-drop-zone.filled {
-  background: rgba(34, 211, 238, 0.08);
-  border-color: rgba(34, 211, 238, 0.78);
-}
-
-.icon-drop-zone input {
-  display: none;
-}
-
-.icon-manage-list {
-  align-content: start;
-  display: grid;
-  gap: 8px;
-  max-height: 440px;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.icon-manage-list > div {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  color: #f8fafc;
-  cursor: pointer;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 46px minmax(0, 1fr) 24px;
-  min-height: 60px;
-  padding: 7px;
-  text-align: left;
-}
-
-.icon-manage-list > div.selected {
-  background: rgba(34, 211, 238, 0.12);
-  border-color: rgba(34, 211, 238, 0.72);
-}
-
-.icon-manage-list > div.visible .icon-manage-actions i {
-  color: #86efac;
-}
-
-.icon-manage-list img {
-  aspect-ratio: 1;
-  border-radius: 10px;
-  height: 46px;
-  object-fit: cover;
-  width: 46px;
-}
-
-.icon-manage-list span {
-  display: grid;
-  min-width: 0;
-}
-
-.icon-manage-list strong,
-.icon-manage-list small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.icon-manage-list small {
-  color: #94a3b8;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.icon-manage-actions {
-  align-items: center;
-  display: flex;
-  justify-content: center;
-}
-
-.icon-manage-actions button {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  color: #cbd5e1;
-  display: inline-flex;
-  height: 32px;
-  justify-content: center;
-  width: 32px;
-}
-
-.icon-drop-zone strong,
-.icon-upload-mini-preview strong {
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 950;
-  text-transform: capitalize;
-}
-
-.icon-drop-zone small,
-.icon-upload-mini-preview small {
-  color: #94a3b8;
-  font-size: 11px;
-  font-weight: 850;
-}
-
-.upload-preview-avatar i,
-.icon-upload-mini-preview .preview-large-avatar i {
-  color: #7c3aed;
-  font-size: 34px;
-}
-
-.icon-upload-form {
-  align-content: start;
-  display: grid;
-  gap: 12px;
-}
-
-.icon-upload-form label {
-  color: #cbd5e1;
-  display: grid;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.icon-upload-form input,
-.icon-upload-form select {
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: 12px;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 800;
-  min-height: 42px;
-  outline: none;
-  padding: 0 12px;
-}
-
-.icon-upload-form select option {
-  background: #0b1020;
-  color: #ffffff;
-}
-
-.icon-upload-mini-preview {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  display: grid;
-  gap: 5px 12px;
-  grid-template-columns: 70px minmax(0, 1fr);
-  padding: 12px;
-}
-
-.icon-upload-mini-preview .preview-large-avatar {
-  grid-row: span 2;
-  height: 70px;
-  margin: 0;
-  width: 70px;
-}
-
-.icon-upload-progress {
-  display: grid;
-  gap: 7px;
-}
-
-.icon-upload-progress span {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  height: 8px;
-  overflow: hidden;
-}
-
-.icon-upload-progress strong {
-  background: linear-gradient(135deg, #22d3ee, #a3e635);
-  border-radius: inherit;
-  display: block;
-  height: 100%;
-  transition: width 0.18s ease;
-}
-
-.icon-upload-progress small {
-  color: #bae6fd;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.icon-upload-form > button {
-  align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #06b6d4);
-  border-radius: 12px;
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: 950;
-  gap: 8px;
-  justify-content: center;
-  min-height: 44px;
-  width: 100%;
-}
-
-.icon-upload-form > button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.mobile-editor-tabs,
-.mobile-icon-grid,
-.mobile-icon-pager {
-  display: none;
-}
-
-.icon-modal-toolbar {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 210px minmax(0, 1fr);
-  padding: 0 0 12px;
-}
-
-.profile-editor-layout {
-  display: grid;
-  gap: 18px;
-  grid-template-columns: 320px minmax(0, 1fr);
-  min-height: 0;
-  overflow: hidden;
-}
-
-.profile-editor-panel,
-.icon-picker-panel {
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  min-height: 0;
-}
-
-.profile-editor-panel {
-  align-content: start;
-  display: grid;
-  gap: 16px;
-  overflow-y: auto;
-  padding: 18px;
-}
-
-.icon-picker-panel {
-  display: grid;
-  gap: 14px;
-  grid-template-rows: auto minmax(0, 1fr);
-  overflow: hidden;
-  padding: 16px;
-}
-
-.editor-avatar-preview {
-  background: #ffffff;
-  border: 4px solid rgba(255, 255, 255, 0.96);
-  border-radius: 999px;
-  box-shadow: 0 0 34px rgba(168, 85, 247, 0.58);
-  display: block;
-  height: 116px;
-  justify-self: center;
-  overflow: hidden;
-  width: 116px;
-}
-
-.editor-avatar-preview img {
-  height: 138%;
-  margin-left: -19%;
-  margin-top: -18%;
-  max-width: none;
-  object-fit: cover;
-  width: 138%;
-}
-
-.modal-profile-form {
-  gap: 12px;
-}
-
-.modal-profile-form label {
-  color: #cbd5e1;
-}
-
-.modal-profile-form input,
-.modal-profile-form textarea {
-  background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(255, 255, 255, 0.11);
-  color: #ffffff;
-}
-
-.modal-profile-form input:focus,
-.modal-profile-form textarea:focus {
-  border-color: rgba(168, 85, 247, 0.62);
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.14);
-}
-
-.modal-social-grid {
-  grid-template-columns: 1fr;
-}
-
-.modal-edit-actions {
-  align-items: stretch;
-  display: grid;
-  gap: 10px;
-}
-
-.modal-edit-actions p {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.2);
-  border-radius: 10px;
-  color: #86efac;
-  padding: 9px 10px;
-}
-
-.modal-edit-actions button {
-  width: 100%;
-}
-
-.icon-search-box {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  color: #94a3b8;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 16px minmax(0, 1fr);
-  min-height: 38px;
-  padding: 0 12px;
-}
-
-.icon-search-box input {
-  background: transparent;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 800;
-  min-width: 0;
-  outline: none;
-}
-
-.icon-filter-row {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 1px;
-  scrollbar-width: none;
-}
-
-.icon-filter-row::-webkit-scrollbar {
-  display: none;
-}
-
-.icon-filter-row button {
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  color: #cbd5e1;
-  flex: 0 0 auto;
-  font-size: 11px;
-  font-weight: 900;
-  min-height: 38px;
-  padding: 0 10px;
-}
-
-.icon-filter-row button.active {
-  background: linear-gradient(135deg, #7c3aed, #9333ea);
-  border-color: transparent;
-  color: #ffffff;
-}
-
-.icon-modal-layout {
-  display: grid;
-  gap: 18px;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.icon-modal-list {
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.icon-modal-list > strong {
-  color: #ffffff;
-  display: block;
-  font-size: 13px;
-  font-weight: 950;
-  margin-bottom: 12px;
-}
-
-.modal-icons {
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-}
-
-.modal-icons .icon-card {
-  background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-}
-
-.modal-icons .icon-card.selected {
-  border-color: #a855f7;
-  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.42);
-}
-
-.modal-icons .icon-card.saved {
-  border-color: rgba(34, 197, 94, 0.72);
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22);
-}
-
-.modal-icons .icon-card small {
-  align-items: center;
-  color: #facc15;
-  display: inline-flex;
-  gap: 5px;
-  justify-content: center;
-}
-
-.icon-preview-panel {
-  align-content: start;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  display: grid;
-  gap: 12px;
-  justify-items: center;
-  padding: 20px 16px;
-  text-align: center;
-}
-
-.icon-preview-panel h3 {
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 950;
-  justify-self: start;
-}
-
-.preview-large-avatar {
-  background: #ffffff;
-  border: 4px solid #ffffff;
-  border-radius: 999px;
-  box-shadow: 0 0 34px rgba(168, 85, 247, 0.72);
-  display: block;
-  height: 126px;
-  margin-top: 8px;
-  overflow: hidden;
-  width: 126px;
-}
-
-.preview-large-avatar img {
-  height: 138%;
-  margin-left: -19%;
-  margin-top: -18%;
-  max-width: none;
-  object-fit: cover;
-  width: 138%;
-}
-
-.icon-preview-panel strong {
-  color: #ffffff;
-  font-size: 17px;
-  font-weight: 950;
-}
-
-.icon-preview-panel small {
-  background: rgba(168, 85, 247, 0.2);
-  border-radius: 999px;
-  color: #c084fc;
-  font-size: 11px;
-  font-weight: 900;
-  padding: 4px 9px;
-}
-
-.icon-preview-panel p {
-  color: #cbd5e1;
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 1.45;
-}
-
-.icon-preview-panel button {
-  background: linear-gradient(135deg, #7c3aed, #9333ea);
-  border-radius: 12px;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 950;
-  min-height: 44px;
-  width: 100%;
-}
-
-.icon-preview-panel button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.icon-preview-panel button.equipped {
-  background: linear-gradient(135deg, #16a34a, #22c55e);
-  opacity: 1;
-}
-
-.icon-preview-actions {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: 100%;
-}
-
-.icon-preview-actions button {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.075);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  display: inline-flex;
-  font-size: 12px;
-  gap: 7px;
-  justify-content: center;
-  min-height: 38px;
-}
-
-.icon-preview-actions button.danger {
-  background: rgba(239, 68, 68, 0.13);
-  border-color: rgba(248, 113, 113, 0.26);
-  color: #fecaca;
-}
-
-@keyframes lockShake {
-  0%,
-  100% { transform: translateX(-50%) rotate(0deg); }
-  18% { transform: translateX(calc(-50% - 3px)) rotate(-10deg); }
-  36% { transform: translateX(calc(-50% + 3px)) rotate(10deg); }
-  54% { transform: translateX(calc(-50% - 2px)) rotate(-7deg); }
-  72% { transform: translateX(calc(-50% + 2px)) rotate(7deg); }
-}
-
 @keyframes walletSpend {
   0%,
   100% {
@@ -3639,173 +2498,6 @@ onUnmounted(() => {
   }
 }
 
-@keyframes cardFill {
-  0% {
-    top: 100%;
-  }
-  100% {
-    top: 0;
-  }
-}
-
-@keyframes fillShine {
-  0% {
-    opacity: 0;
-    left: -80%;
-  }
-  18% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    left: 125%;
-  }
-}
-
-.redeem-confirm-backdrop {
-  align-items: center;
-  background: rgba(15, 23, 42, 0.46);
-  backdrop-filter: blur(10px);
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  padding: 18px;
-  position: fixed;
-  z-index: 3000;
-}
-
-.redeem-confirm {
-  background: #ffffff;
-  border: 1px solid #fde68a;
-  border-radius: 16px;
-  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.26);
-  max-width: 360px;
-  padding: 22px;
-  position: relative;
-  text-align: center;
-  width: min(100%, 360px);
-}
-
-.redeem-close {
-  align-items: center;
-  background: #f1f5f9;
-  border-radius: 999px;
-  color: #64748b;
-  display: inline-flex;
-  height: 30px;
-  justify-content: center;
-  position: absolute;
-  right: 12px;
-  top: 12px;
-  width: 30px;
-}
-
-.redeem-confirm-icon {
-  background: #fffbeb;
-  border: 3px solid #ffffff;
-  border-radius: 999px;
-  box-shadow: 0 14px 30px rgba(245, 158, 11, 0.18);
-  display: block;
-  height: 78px;
-  margin: 4px auto 14px;
-  overflow: hidden;
-  position: relative;
-  width: 78px;
-}
-
-.redeem-confirm-icon img {
-  height: 112px;
-  margin-left: -17px;
-  margin-top: -15px;
-  max-width: none;
-  object-fit: cover;
-  width: 112px;
-}
-
-.redeem-confirm-icon i {
-  color: #f59e0b;
-  font-size: 18px;
-  left: 50%;
-  position: absolute;
-  text-shadow: 0 4px 10px rgba(245, 158, 11, 0.34);
-  top: 4px;
-  transform: translateX(-50%);
-}
-
-.redeem-confirm span:not(.redeem-confirm-icon) {
-  color: #7c3aed;
-  display: block;
-  font-size: 10px;
-  font-weight: 950;
-  text-transform: uppercase;
-}
-
-.redeem-confirm h2 {
-  color: #111827;
-  font-size: 22px;
-  font-weight: 950;
-  margin-top: 3px;
-}
-
-.redeem-confirm p {
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 750;
-  line-height: 1.5;
-  margin-top: 8px;
-}
-
-.redeem-confirm-actions {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 1fr 1fr;
-  margin-top: 18px;
-}
-
-.redeem-confirm-actions button {
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 900;
-  min-height: 40px;
-  padding: 0 14px;
-}
-
-.cancel-redeem {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.confirm-redeem {
-  background: linear-gradient(135deg, #f59e0b, #ec4899);
-  color: #ffffff;
-  box-shadow: 0 12px 24px rgba(245, 158, 11, 0.22);
-}
-
-.redeem-confirm-actions button:disabled,
-.redeem-close:disabled {
-  cursor: not-allowed;
-  opacity: 0.64;
-}
-
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.modal-fade-enter-active .redeem-confirm,
-.modal-fade-leave-active .redeem-confirm {
-  transition: transform 0.2s ease;
-}
-
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
-}
-
-.modal-fade-enter-from .redeem-confirm,
-.modal-fade-leave-to .redeem-confirm {
-  transform: translateY(14px) scale(0.96);
-}
 
 .creator-showcase {
   border-color: #ddd6fe;
@@ -3891,20 +2583,6 @@ onUnmounted(() => {
   -webkit-line-clamp: 2;
 }
 
-.icon-card.burst {
-  animation: unlockGlow 0.9s ease-out;
-}
-
-.profile-message {
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  border-radius: 12px;
-  color: #c2410c;
-  font-size: 12px;
-  font-weight: 900;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-}
 
 .profile-columns {
   align-items: start;
@@ -3958,21 +2636,6 @@ onUnmounted(() => {
 
 .post-strip strong {
   margin-top: 9px;
-}
-
-@keyframes unlockGlow {
-  0% {
-    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
-    transform: translateY(-2px) scale(1);
-  }
-  45% {
-    box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.32), 0 18px 34px rgba(245, 158, 11, 0.18);
-    transform: translateY(-3px) scale(1.035);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
-    transform: translateY(0) scale(1);
-  }
 }
 
 @media (max-width: 760px) {
@@ -4058,392 +2721,6 @@ onUnmounted(() => {
     margin-top: 4px;
     text-align: center;
     width: 100%;
-  }
-
-  .icon-shop.compact {
-    border-color: #c4b5fd;
-    box-shadow: 0 18px 50px rgba(124, 58, 237, 0.16);
-    margin-top: 14px;
-  }
-
-  .icon-modal-backdrop {
-    align-items: center;
-    padding: 16px;
-  }
-
-  .icon-modal-card {
-    border-radius: 18px;
-    display: grid;
-    gap: 10px;
-    grid-template-rows: auto auto minmax(0, 1fr);
-    height: auto;
-    max-height: calc(100svh - 32px);
-    overflow: hidden;
-    padding: 12px;
-    width: min(100%, 1120px);
-  }
-
-  .icon-modal-close {
-    height: 34px;
-    right: 12px;
-    top: 12px;
-    width: 34px;
-  }
-
-  .icon-modal-head {
-    align-items: center;
-    gap: 9px;
-    grid-template-columns: 28px minmax(0, 1fr) 76px;
-    padding-right: 38px;
-  }
-
-  .icon-modal-symbol {
-    height: 28px;
-    width: 28px;
-  }
-
-  .icon-modal-head h2 {
-    font-size: 19px;
-    line-height: 1.05;
-  }
-
-  .icon-modal-head p {
-    display: none;
-  }
-
-  .icon-modal-wallet {
-    gap: 1px 5px;
-    grid-column: auto;
-    justify-self: end;
-    min-width: 70px;
-    padding: 6px 7px;
-  }
-
-  .icon-modal-wallet strong {
-    font-size: 17px;
-  }
-
-  .icon-modal-wallet span {
-    font-size: 7px;
-  }
-
-  .icon-modal-actions {
-    gap: 6px;
-  }
-
-  .icon-add-button {
-    border-radius: 12px;
-    height: 34px;
-    width: 34px;
-  }
-
-  .icon-upload-backdrop {
-    align-items: center;
-    padding: 16px;
-  }
-
-  .icon-upload-card {
-    border-radius: 18px;
-    gap: 12px;
-    height: auto;
-    max-height: calc(100svh - 32px);
-    overflow-y: auto;
-    padding: 12px;
-    width: min(100%, 760px);
-  }
-
-  .icon-upload-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .icon-drop-zone {
-    min-height: 190px;
-    padding: 14px;
-  }
-
-  .icon-upload-mini-preview {
-    grid-template-columns: 58px minmax(0, 1fr);
-  }
-
-  .icon-upload-mini-preview .preview-large-avatar {
-    height: 58px;
-    width: 58px;
-  }
-
-  .mobile-editor-tabs {
-    background: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 14px;
-    display: grid;
-    gap: 6px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding: 5px;
-  }
-
-  .mobile-editor-tabs button {
-    align-items: center;
-    border-radius: 10px;
-    color: #cbd5e1;
-    display: inline-flex;
-    font-size: 12px;
-    font-weight: 950;
-    gap: 7px;
-    justify-content: center;
-    min-height: 38px;
-  }
-
-  .mobile-editor-tabs button.active {
-    background: linear-gradient(135deg, #7c3aed, #ec4899);
-    color: #ffffff;
-  }
-
-  .profile-editor-layout {
-    gap: 0;
-    grid-template-columns: 1fr;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .profile-editor-panel,
-  .icon-picker-panel {
-    border-radius: 14px;
-    height: 100%;
-    overflow: hidden;
-    padding: 12px;
-  }
-
-  .icon-picker-panel:not(.mobile-hidden-panel) {
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    min-height: 0;
-  }
-
-  .profile-editor-panel:not(.mobile-hidden-panel) {
-    overflow-y: auto;
-  }
-
-  .profile-editor-panel:not(.mobile-hidden-panel) .profile-edit-form {
-    padding-bottom: 8px;
-  }
-
-  .modal-edit-actions {
-    background: #0b1020;
-    bottom: 0;
-    margin: 0 -12px -12px;
-    padding: 10px 12px max(10px, env(safe-area-inset-bottom));
-    position: sticky;
-  }
-
-  .mobile-hidden-panel {
-    display: none;
-  }
-
-  .editor-avatar-preview {
-    height: 74px;
-    width: 74px;
-  }
-
-  .modal-profile-form {
-    gap: 9px;
-  }
-
-  .modal-profile-form input,
-  .modal-profile-form textarea {
-    border-radius: 11px;
-    font-size: 13px;
-    padding: 9px 10px;
-  }
-
-  .modal-profile-form textarea {
-    min-height: 68px;
-  }
-
-  .modal-profile-form label {
-    font-size: 10px;
-    gap: 5px;
-  }
-
-  .modal-social-grid {
-    display: none;
-  }
-
-  .modal-edit-actions button {
-    min-height: 40px;
-  }
-
-  .icon-modal-toolbar,
-  .icon-modal-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .icon-modal-toolbar {
-    border-bottom: 0;
-    gap: 8px;
-    padding: 0;
-  }
-
-  .icon-search-box {
-    min-height: 38px;
-  }
-
-  .icon-filter-row {
-    margin: 0 -14px;
-    overflow-x: auto;
-    padding: 0 14px 2px;
-  }
-
-  .icon-filter-row button {
-    min-height: 36px;
-    padding: 0 11px;
-  }
-
-  .icon-modal-layout {
-    gap: 9px;
-    grid-template-rows: auto minmax(0, 1fr);
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .icon-modal-list {
-    min-height: 0;
-    overflow-y: auto;
-    padding-bottom: 6px;
-    padding-right: 0;
-  }
-
-  .desktop-icon-grid {
-    display: none;
-  }
-
-  .mobile-icon-grid {
-    display: grid;
-  }
-
-  .modal-icons {
-    gap: 8px;
-    grid-auto-flow: row;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-rows: none;
-    margin: 0;
-    overflow: visible;
-    padding: 2px 0 4px;
-  }
-
-  .modal-icons::-webkit-scrollbar {
-    display: none;
-  }
-
-  .modal-icons .icon-card {
-    border-radius: 12px;
-    min-height: 104px;
-    padding: 7px 5px;
-  }
-
-  .icon-grid.compact .icon-art {
-    margin-bottom: 5px;
-    min-height: 46px;
-    width: 46px;
-  }
-
-  .icon-grid.compact .icon-art img {
-    height: 66px;
-    transform: translateY(-8px);
-    width: 66px;
-  }
-
-  .mobile-icon-pager {
-    align-items: center;
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    padding-top: 6px;
-  }
-
-  .mobile-icon-pager button {
-    align-items: center;
-    background: rgba(168, 85, 247, 0.18);
-    border: 1px solid rgba(168, 85, 247, 0.28);
-    border-radius: 999px;
-    color: #ffffff;
-    display: inline-flex;
-    height: 34px;
-    justify-content: center;
-    width: 34px;
-  }
-
-  .mobile-icon-pager span {
-    color: #cbd5e1;
-    font-size: 11px;
-    font-weight: 950;
-  }
-
-  .icon-preview-panel {
-    order: -1;
-    display: grid;
-    gap: 6px 10px;
-    grid-template-columns: 64px minmax(0, 1fr);
-    justify-items: start;
-    padding: 10px;
-    text-align: left;
-  }
-
-  .preview-large-avatar {
-    grid-row: span 4;
-    height: 64px;
-    margin: 0;
-    width: 64px;
-  }
-
-  .icon-preview-panel h3 {
-    display: none;
-  }
-
-  .icon-preview-panel strong {
-    font-size: 14px;
-  }
-
-  .icon-preview-panel p {
-    display: none;
-    font-size: 11px;
-    margin: 0;
-  }
-
-  .icon-preview-panel button {
-    font-size: 11px;
-    min-height: 34px;
-    padding: 0 10px;
-  }
-
-  .icon-test-panel {
-    margin-bottom: 8px;
-  }
-
-  .icon-shop .section-head h2 {
-    font-size: 24px;
-    line-height: 1.05;
-  }
-
-  .icon-shop .section-head p {
-    background: #f5f3ff;
-    border-radius: 10px;
-    padding: 9px 10px;
-  }
-
-  .icon-preview-bar {
-    grid-template-columns: 44px minmax(0, 1fr);
-  }
-
-  .icon-preview-bar button {
-    grid-column: 1 / -1;
-    width: 100%;
-  }
-
-  .icon-test-panel button {
-    justify-content: center;
-  }
-
-  .redeem-confirm-actions {
-    grid-template-columns: 1fr;
   }
 
   .achievements-section {
@@ -5094,84 +3371,6 @@ onUnmounted(() => {
 @media (max-width: 760px) {
   .profile-page {
     padding: var(--public-page-top-mobile, 76px) 10px var(--public-page-bottom-mobile, calc(92px + env(safe-area-inset-bottom)));
-  }
-
-  .icon-collection-backdrop {
-    align-items: stretch;
-    padding: 10px;
-  }
-
-  .icon-collection-card {
-    align-self: center;
-    border-radius: 16px;
-    gap: 14px;
-    max-height: calc(100dvh - 20px);
-    padding: 14px;
-    width: 100%;
-  }
-
-  .icon-collection-card .icon-modal-close {
-    right: 12px;
-    top: 12px;
-  }
-
-  .icon-collection-head {
-    gap: 10px;
-    grid-template-columns: 58px minmax(0, 1fr);
-    padding-right: 42px;
-  }
-
-  .collection-profile-avatar {
-    height: 58px;
-    width: 58px;
-  }
-
-  .icon-collection-head h2 {
-    display: -webkit-box;
-    font-size: 20px;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-  }
-
-  .icon-collection-head p {
-    font-size: 11px;
-    line-height: 1.25;
-  }
-
-  .icon-collection-head > strong {
-    grid-column: 1 / -1;
-    justify-content: center;
-    min-height: 40px;
-    width: 100%;
-  }
-
-  .icon-collection-groups {
-    max-height: calc(100dvh - 186px);
-  }
-
-  .icon-collection-group {
-    border-radius: 14px;
-    padding: 12px;
-  }
-
-  .collection-icon-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .collection-icon-grid figure {
-    border-radius: 12px;
-    min-height: 112px;
-    padding: 10px 5px;
-  }
-
-  .collection-icon-grid figure > span {
-    height: 54px;
-    width: 54px;
-  }
-
-  .collection-icon-grid figcaption {
-    font-size: 9.5px;
   }
 
   .profile-hero {

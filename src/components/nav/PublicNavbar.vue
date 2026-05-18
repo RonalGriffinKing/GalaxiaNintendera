@@ -5,15 +5,16 @@ import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signOut, u
 import { addDoc, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { deleteApp, initializeApp } from 'firebase/app'
 import { auth, db, firebaseConfig } from '@/firebase'
-import { resolveProfileIcon } from '@/services/profileProgress'
+import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { resetPlayerSession } from '@/services/playerState'
 import PostEditor from '@/components/posts/PostEditor.vue'
 import ThreadComposer from '@/components/community/ThreadComposer.vue'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
 import PublicCreateSheet from '@/components/nav/PublicCreateSheet.vue'
-import PublicNotificationsPanel from '@/components/nav/PublicNotificationsPanel.vue'
+import NotificationDropdown from '@/components/nav/NotificationDropdown.vue'
 import PublicQuickAdminModals from '@/components/nav/PublicQuickAdminModals.vue'
 import PublicSearchPanel from '@/components/nav/PublicSearchPanel.vue'
+import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import { DEFAULT_POST_CATEGORIES, loadPostCategories, postCategoryLabels } from '@/services/postCategories'
 import {
   DEFAULT_QUICK_THREAD_TOPICS,
@@ -42,6 +43,7 @@ const currentCanChat = ref(false)
 const confirmLogoutOpen = ref(false)
 const isLoggingOut = ref(false)
 const currentProfile = ref({})
+const notificationButton = ref(null)
 const quickPostOpen = ref(false)
 const quickPostCategories = ref(DEFAULT_POST_CATEGORIES)
 const quickThreadOpen = ref(false)
@@ -187,6 +189,10 @@ const currentProfileIcon = computed(() => {
     imageUrl: currentProfile.value.imageUrl || currentUser.value.photoURL || ''
   })
 })
+const currentProfileIconMeta = computed(() => resolveProfileIconMeta({
+  ...currentProfile.value,
+  imageUrl: currentProfile.value.imageUrl || currentUser.value?.photoURL || ''
+}))
 const availableThreadStickers = computed(() => {
   const unlockedCount = Math.max(1, Number(currentProfile.value?.unlockedIcons?.length || 1))
   return quickStickerPool.slice(0, Math.min(quickStickerPool.length, unlockedCount))
@@ -346,6 +352,16 @@ const loadUserRole = async (user) => {
   } catch (error) {
     console.error(error)
   }
+}
+
+const syncCurrentProfile = (event) => {
+  if (!currentUser.value || event.detail?.uid !== currentUser.value.uid) return
+  currentProfile.value = {
+    ...currentProfile.value,
+    ...(event.detail.profile || {})
+  }
+  currentRole.value = currentProfile.value.role || currentRole.value || 'user'
+  currentCanChat.value = Boolean(currentProfile.value.canChat)
 }
 
 const goOwnProfile = () => {
@@ -641,6 +657,11 @@ const publishQuickThread = async () => {
       authorId: user.uid,
       author: currentProfile.value?.name || user.displayName || user.email || 'Usuario',
       authorImage: currentProfileIcon.value || '',
+      authorIconEffect: {
+        special: Boolean(currentProfileIconMeta.value.special),
+        effectColor: currentProfileIconMeta.value.effectColor,
+        saga: currentProfileIconMeta.value.saga
+      },
       handle: '@tu_usuario',
       topic: threadTopic,
       title: body.length > 72 ? `${body.slice(0, 72)}...` : body,
@@ -842,6 +863,7 @@ onMounted(() => {
     subscribeNotifications(user)
   })
   window.addEventListener('open-quick-thread-composer', openQuickThreadComposer)
+  window.addEventListener('galaxy-profile-updated', syncCurrentProfile)
 })
 
 watch([menuOpen, createMenuOpen, accountMenuOpen, quickPostOpen, quickThreadOpen, quickCommunityOpen, quickUserOpen], ([isMenuOpen, isCreateOpen, isAccountOpen, isQuickPostOpen, isQuickThreadOpen, isQuickCommunityOpen, isQuickUserOpen]) => {
@@ -858,6 +880,7 @@ watch(selectedThreadCommunity, (community) => {
 
 onUnmounted(() => {
   window.removeEventListener('open-quick-thread-composer', openQuickThreadComposer)
+  window.removeEventListener('galaxy-profile-updated', syncCurrentProfile)
   unsubscribeAuth?.()
   unsubscribeNotifications?.()
   document.body.style.overflow = ''
@@ -920,6 +943,7 @@ onUnmounted(() => {
         <div class="public-profile-nav">
           <button
             v-if="currentUser"
+            ref="notificationButton"
             class="public-icon notification-nav-btn"
             aria-label="Notificaciones"
             @click="toggleNotifications"
@@ -929,10 +953,13 @@ onUnmounted(() => {
           </button>
 
           <button v-if="currentUser" class="public-account-btn" type="button" @click="goAccount">
-            <span class="account-btn-avatar">
-              <img v-if="currentProfileIcon" :src="currentProfileIcon" alt="" class="profile-icon-img" />
-              <i v-else class="fas fa-user"></i>
-            </span>
+            <ProfileAvatar
+              class="account-btn-avatar"
+              :src="currentProfileIcon"
+              :alt="authLabel"
+              :label="authLabel"
+              :effect="currentProfileIconMeta"
+            />
             <span>{{ authLabel }}</span>
             <i class="fas fa-chevron-down"></i>
           </button>
@@ -952,8 +979,13 @@ onUnmounted(() => {
           :aria-expanded="accountMenuOpen"
           @click="goAccount"
         >
-          <img v-if="currentProfileIcon" :src="currentProfileIcon" alt="" class="profile-icon-img" />
-          <i v-else class="fas fa-user"></i>
+          <ProfileAvatar
+            class="profile-icon-effect-wrap"
+            :src="currentProfileIcon"
+            :alt="authLabel"
+            :label="authLabel"
+            :effect="currentProfileIconMeta"
+          />
         </button>
       </div>
     </div>
@@ -969,13 +1001,15 @@ onUnmounted(() => {
       @open-post="goSearchResult"
     />
 
-    <PublicNotificationsPanel
+    <NotificationDropdown
       :open="notificationsOpen"
+      :anchor-el="notificationButton"
       :notifications="notifications"
       :unread-count="unreadCount"
       :clearing="isClearingNotifications"
       :format-date="formatNotificationDate"
       @clear="clearNotifications"
+      @close="notificationsOpen = false"
       @open-notification="openNotification"
     />
 
@@ -983,8 +1017,13 @@ onUnmounted(() => {
         <div class="public-account-card">
         <button class="public-account-head" type="button" @click="goOwnProfile">
           <span>
-            <img v-if="currentProfileIcon" :src="currentProfileIcon" alt="" class="profile-icon-img" />
-            <i v-else class="fas fa-user"></i>
+            <ProfileAvatar
+              class="profile-icon-effect-wrap"
+              :src="currentProfileIcon"
+              :alt="authLabel"
+              :label="authLabel"
+              :effect="currentProfileIconMeta"
+            />
           </span>
           <div>
             <strong>{{ authLabel }}</strong>
@@ -1047,9 +1086,10 @@ onUnmounted(() => {
               <button class="danger" @click="logout" :disabled="isLoggingOut">
                 {{ isLoggingOut ? 'Cerrando...' : 'Cerrar sesion' }}
               </button>
-            </div>
-          </div>
         </div>
+      </div>
+    </div>
+
       </Transition>
     </Teleport>
 
@@ -1064,10 +1104,13 @@ onUnmounted(() => {
 
         <div v-if="currentUser" class="public-mobile-account-block" :class="{ open: mobileAccountOpen }">
           <button class="public-mobile-user-card" type="button" @click="mobileAccountOpen = !mobileAccountOpen">
-            <span>
-              <img v-if="currentProfileIcon" :src="currentProfileIcon" alt="" class="profile-icon-img" />
-              <i v-else class="fas fa-user"></i>
-            </span>
+            <ProfileAvatar
+              class="mobile-user-avatar"
+              :src="currentProfileIcon"
+              :alt="authLabel"
+              :label="authLabel"
+              :effect="currentProfileIconMeta"
+            />
             <div>
               <strong>{{ authLabel }}</strong>
               <small>{{ currentRole }}</small>
@@ -1306,10 +1349,13 @@ onUnmounted(() => {
                 </p>
 
                 <div class="quick-thread-composer">
-                  <span class="quick-thread-avatar">
-                    <img v-if="currentProfileIcon" :src="currentProfileIcon" alt="" />
-                    <b v-else>{{ (authLabel || 'U').charAt(0).toUpperCase() }}</b>
-                  </span>
+                  <ProfileAvatar
+                    class="quick-thread-avatar"
+                    :src="currentProfileIcon"
+                    :alt="authLabel"
+                    :label="authLabel"
+                    :effect="currentProfileIconMeta"
+                  />
                   <div class="quick-thread-input-wrap">
                     <textarea
                       v-model="quickThreadText"
@@ -1691,29 +1737,13 @@ onUnmounted(() => {
 }
 
 .account-btn-avatar {
-  align-items: center;
-  background: #ffffff;
-  border-radius: 999px;
-  color: #ffffff;
-  display: flex;
-  flex: 0 0 auto;
-  height: 24px;
-  justify-content: center;
-  overflow: hidden;
-  width: 24px;
+  --avatar-size: 24px;
+  --avatar-border: 2px;
 }
 
-.account-btn-avatar img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.public-search-panel {
-  background: #050816;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.25);
-  padding: 14px 24px 18px;
+.profile-icon-effect-wrap {
+  --avatar-size: 42px;
+  --avatar-border: 2px;
 }
 
 .public-account-head img {
@@ -1781,23 +1811,9 @@ onUnmounted(() => {
   padding: 9px 12px;
 }
 
-.public-mobile-user-card > span {
-  align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border: 2px solid rgba(255, 255, 255, 0.22);
-  border-radius: 16px;
-  color: #ffffff;
-  display: flex;
-  height: 54px;
-  justify-content: center;
-  overflow: hidden;
-  width: 54px;
-}
-
-.public-mobile-user-card img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
+.public-mobile-user-card .mobile-user-avatar {
+  --avatar-size: 54px;
+  --avatar-border: 2px;
 }
 
 .public-mobile-user-card strong {
@@ -1913,12 +1929,12 @@ onUnmounted(() => {
 }
 
 .public-account-panel {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0 auto;
-  max-width: 1280px;
-  padding: 0 24px;
-  position: relative;
+  display: block;
+  pointer-events: none;
+  position: fixed;
+  right: max(18px, calc((100vw - 1280px) / 2 + 24px));
+  top: calc(var(--public-nav-offset, 72px) - 10px);
+  z-index: 360;
 }
 
 .public-account-card {
@@ -1929,11 +1945,12 @@ onUnmounted(() => {
   color: #111827;
   display: grid;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 0;
   padding: 14px;
-  position: absolute;
-  right: 24px;
-  top: 0;
+  pointer-events: auto;
+  position: relative;
+  right: auto;
+  top: auto;
   width: min(320px, calc(100vw - 32px));
 }
 
@@ -1950,14 +1967,18 @@ onUnmounted(() => {
 
 .public-account-head > span {
   align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border-radius: 12px;
-  color: #ffffff;
+  background: transparent;
+  border-radius: 999px;
   display: flex;
   height: 42px;
   justify-content: center;
+  overflow: visible;
   width: 42px;
-  overflow: hidden;
+}
+
+.public-account-head > span .profile-icon-effect-wrap {
+  --avatar-size: 42px;
+  --avatar-border: 2px;
 }
 
 .public-account-head strong {
@@ -2352,6 +2373,7 @@ onUnmounted(() => {
     margin: 0;
     max-width: none;
     padding: 0;
+    pointer-events: auto;
     position: fixed;
     right: 0;
     top: 0;
@@ -2383,9 +2405,13 @@ onUnmounted(() => {
   }
 
   .public-account-head > span {
-    border-radius: 22px;
     height: 72px;
     width: 72px;
+  }
+
+  .public-account-head > span .profile-icon-effect-wrap {
+    --avatar-size: 72px;
+    --avatar-border: 3px;
   }
 
   .public-account-head strong {
@@ -3188,27 +3214,8 @@ onUnmounted(() => {
 }
 
 .quick-thread-avatar {
-  align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
-  display: flex;
-  height: 44px;
-  justify-content: center;
-  overflow: hidden;
-  width: 44px;
-}
-
-.quick-thread-avatar img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.quick-thread-avatar b {
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 900;
+  --avatar-size: 44px;
+  --avatar-border: 2px;
 }
 
 .quick-thread-input-wrap {
@@ -3560,10 +3567,6 @@ onUnmounted(() => {
     width: 32px;
   }
 
-  .public-search-panel {
-    padding: 12px 16px 16px;
-  }
-
   .public-mobile-links {
     max-height: 100dvh;
     padding: 16px;
@@ -3693,10 +3696,8 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.public-mobile-user-card > span {
-  border-radius: 18px;
-  height: 58px;
-  width: 58px;
+.public-mobile-user-card .mobile-user-avatar {
+  --avatar-size: 58px;
 }
 
 .public-mobile-user-card strong {

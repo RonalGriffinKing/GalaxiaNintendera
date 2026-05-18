@@ -27,6 +27,7 @@ const activeLiveGoal = ref(null)
 const playerFrame = ref(null)
 
 let livePollTimer = null
+let apiQuotaExceeded = false
 
 const youtubeChannelId = computed(() => import.meta.env.VITE_YOUTUBE_CHANNEL_ID || '')
 const youtubeApiKey = computed(() => import.meta.env.VITE_YOUTUBE_API_KEY || '')
@@ -71,7 +72,7 @@ const liveEmbedSrc = computed(() => {
 })
 
 const fetchLiveStatus = async () => {
-  if (!youtubeChannelId.value || !youtubeApiKey.value || isLoading.value) return
+  if (!youtubeChannelId.value || !youtubeApiKey.value || isLoading.value || apiQuotaExceeded) return
 
   isLoading.value = true
   apiError.value = false
@@ -86,7 +87,19 @@ const fetchLiveStatus = async () => {
       key: youtubeApiKey.value
     })
     const response = await fetch(`${YOUTUBE_SEARCH_API}?${params.toString()}`)
-    if (!response.ok) throw new Error('youtube-live-check-failed')
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      const status = response.status
+      const message = errorData.error?.message || response.statusText
+
+      if (status === 403 && message.includes('quota')) {
+        apiQuotaExceeded = true
+        console.warn('YouTube API quota exceeded. Live status polling disabled.')
+        return
+      }
+
+      throw new Error(`youtube-live-check-failed: ${status} ${message}`)
+    }
     const data = await response.json()
     const item = data.items?.[0]
 
@@ -97,7 +110,7 @@ const fetchLiveStatus = async () => {
     } : null
     apiChecked.value = true
   } catch (error) {
-    console.error(error)
+    console.error('YouTube Live Status Check:', error.message || error)
     apiError.value = true
   } finally {
     isLoading.value = false
@@ -108,8 +121,9 @@ const startLivePolling = () => {
   window.clearInterval(livePollTimer)
   livePollTimer = null
   if (!youtubeChannelId.value || !youtubeApiKey.value) return
+  apiQuotaExceeded = false
   fetchLiveStatus()
-  livePollTimer = window.setInterval(fetchLiveStatus, 90000)
+  livePollTimer = window.setInterval(fetchLiveStatus, 300000)
 }
 
 const openCommunityLive = () => {
@@ -117,7 +131,7 @@ const openCommunityLive = () => {
   minimized.value = false
   closed.value = false
   soundEnabled.value = true
-  const theaterQuery = window.matchMedia?.('(max-width: 859px)').matches ? '&theater=1' : ''
+  const theaterQuery = '&theater=1'
 
   if (playerState.currentVideo?.id) {
     const mediaId = playerState.currentVideo.id
@@ -251,21 +265,14 @@ onUnmounted(() => {
           <i class="fas fa-minus"></i>
         </button>
 
-        <button v-if="!isBubbleOnly" type="button" class="global-live-close" aria-label="Cerrar live" @click="closePlayer">
-          <i class="fas fa-xmark"></i>
-        </button>
-
         <div v-if="isBubbleOnly" class="global-live-mini">
-          <button type="button" class="global-live-mini-title" aria-label="Abrir video" @click="reopenPlayer">
+          <button type="button" class="global-live-mini-title" aria-label="Abrir video en grande" @click="openCommunityLive">
             <i class="fas fa-play"></i>
             <b>En vivo</b>
             <span>{{ isBubbleOnly ? 'Vivo' : currentTitle }}</span>
           </button>
           <button type="button" aria-label="Pausar video" @click="pauseFloatingPlayer">
             <i class="fas fa-pause"></i>
-          </button>
-          <button type="button" aria-label="Cerrar video" @click="closePlayer">
-            <i class="fas fa-xmark"></i>
           </button>
         </div>
 
@@ -375,7 +382,7 @@ onUnmounted(() => {
   color: #ffffff;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) 38px 38px;
+  grid-template-columns: minmax(0, 1fr) 38px;
 }
 
 .global-live-bubble.minimized .global-live-mini {
@@ -470,8 +477,7 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
-.global-live-minimize,
-.global-live-close {
+.global-live-minimize {
   align-items: center;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
@@ -487,10 +493,6 @@ onUnmounted(() => {
 }
 
 .global-live-minimize {
-  right: 44px;
-}
-
-.global-live-close {
   right: 10px;
 }
 

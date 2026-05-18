@@ -2049,4 +2049,5 @@ const savePost = async (targetStatus = 'pending') => {
     grid-template-columns: 1fr;
   }
 }
+
 </style>

@@ -1,4 +1,6 @@
 <script setup>
+import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
+
 defineProps({
   profile: {
     type: Object,
@@ -7,6 +9,10 @@ defineProps({
   profileIcon: {
     type: String,
     default: ''
+  },
+  profileIconMeta: {
+    type: Object,
+    default: () => ({})
   },
   currentAchievement: {
     type: Object,
@@ -90,10 +96,13 @@ const emit = defineEmits([
     </button>
 
     <div class="profile-avatar-wrap">
-      <span class="profile-avatar-circle">
-        <img :src="profileIcon" alt="" class="profile-avatar" />
-      </span>
-      <span class="role-badge">{{ profile.role || 'user' }}</span>
+      <ProfileAvatar
+        class="profile-avatar-circle"
+        :src="profileIcon"
+        :alt="profile.name || profile.email || 'Usuario'"
+        :effect="profileIconMeta"
+        :role-badge="profile.role || 'user'"
+      />
       <button
         v-if="isOwnProfile"
         class="avatar-edit-shortcut"
@@ -123,9 +132,15 @@ const emit = defineEmits([
         <span>{{ redeemedIconCount }} iconos</span>
       </button>
       <div v-if="visibleProfileIcons.length" class="hero-icon-stack">
-        <span v-for="icon in visibleProfileIcons.slice(0, 4)" :key="icon.id">
-          <img :src="icon.src" alt="" />
-        </span>
+        <ProfileAvatar
+          v-for="icon in visibleProfileIcons.slice(0, 4)"
+          :key="icon.id"
+          class="hero-stack-avatar"
+          :src="icon.src"
+          :alt="icon.name"
+          :effect="icon"
+          decorative
+        />
       </div>
     </div>
 
@@ -229,11 +244,11 @@ const emit = defineEmits([
   border-color: rgba(250, 204, 21, 0.58);
   color: #fde68a;
   grid-area: level;
-  justify-self: stretch;
-  max-width: 100%;
+  justify-self: start;
+  max-width: min(520px, 100%);
   min-width: 0;
   text-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
-  width: 100%;
+  width: auto;
 }
 
 .profile-level-icon {
@@ -256,6 +271,7 @@ const emit = defineEmits([
 }
 
 .profile-level-label {
+  align-self: center;
   min-width: 0;
   overflow: hidden;
   text-align: left;
@@ -273,34 +289,9 @@ const emit = defineEmits([
 }
 
 .profile-avatar-circle {
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border: 4px solid rgba(255, 255, 255, 0.82);
-  border-radius: 30px;
-  box-shadow: 0 20px 45px rgba(124, 58, 237, 0.32);
-  display: block;
-  height: 136px;
-  overflow: hidden;
-  width: 136px;
-}
-
-.profile-avatar {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.role-badge {
-  background: #111827;
-  border: 2px solid #ffffff;
-  border-radius: 999px;
-  bottom: -8px;
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 950;
-  left: 12px;
-  padding: 6px 10px;
-  position: absolute;
-  text-transform: uppercase;
+  --avatar-size: 136px;
+  --avatar-border: 4px;
+  --avatar-role-offset: -8px;
 }
 
 .avatar-edit-shortcut {
@@ -310,7 +301,7 @@ const emit = defineEmits([
   border-radius: 999px;
   bottom: -8px;
   color: #ffffff;
-  display: inline-flex;
+  display: none;
   font-size: 11px;
   font-weight: 950;
   gap: 6px;
@@ -376,37 +367,25 @@ const emit = defineEmits([
   display: grid;
   gap: 10px;
   grid-area: rewards;
-  justify-items: end;
+  justify-items: center;
 }
 
 .hero-rewards-panel button {
   grid-template-columns: auto minmax(0, 1fr);
+  justify-content: center;
 }
 
 .hero-icon-stack {
   display: flex;
   flex-direction: row-reverse;
+  justify-content: center;
+  min-width: 118px;
 }
 
-.hero-icon-stack span {
-  background: #111827;
-  border: 2px solid rgba(255, 255, 255, 0.86);
-  border-radius: 999px;
-  box-shadow: 0 0 18px rgba(168, 85, 247, 0.34);
-  display: block;
-  height: 36px;
+.hero-stack-avatar {
+  --avatar-size: 36px;
+  --avatar-border: 2px;
   margin-left: -8px;
-  overflow: hidden;
-  width: 36px;
-}
-
-.hero-icon-stack img {
-  height: 136%;
-  margin-left: -18%;
-  margin-top: -17%;
-  max-width: none;
-  object-fit: cover;
-  width: 136%;
 }
 
 .profile-social-panel {
@@ -536,9 +515,17 @@ const emit = defineEmits([
   }
 
   .profile-avatar-circle {
-    border-radius: 22px;
-    height: 92px;
-    width: 92px;
+    --avatar-size: 92px;
+    --avatar-role-offset: -5px;
+  }
+
+  .avatar-edit-shortcut {
+    display: inline-flex;
+    bottom: -34px;
+    left: 50%;
+    min-height: 34px;
+    right: auto;
+    transform: translateX(-50%);
   }
 
   .avatar-edit-shortcut span {
@@ -556,7 +543,10 @@ const emit = defineEmits([
   .profile-level-pill {
     font-size: 11px;
     grid-template-columns: 28px minmax(0, 1fr) 14px 12px;
+    justify-self: stretch;
+    max-width: 100%;
     min-height: 38px;
+    width: 100%;
   }
 
   .profile-level-icon {
@@ -575,6 +565,10 @@ const emit = defineEmits([
 
   .profile-actions button {
     justify-content: center;
+  }
+
+  .profile-actions .profile-edit-main-action {
+    display: none;
   }
 }
 </style>

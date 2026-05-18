@@ -23,10 +23,13 @@ const activeTab = ref('calendar')
 const detailEvent = ref(null)
 const editorOpen = ref(false)
 const editingEvent = ref(null)
+const calendarPanelOpen = ref(false)
 
 let unsubscribeEvents = null
 let unsubscribeCommunities = null
 let unsubscribeAuth = null
+let previousBodyOverflow = ''
+let previousHtmlOverflow = ''
 
 const isAdmin = computed(() => currentRole.value === 'admin')
 const upcomingEvents = computed(() => events.value.filter(event => event.startsAt >= Date.now()).slice(0, 20))
@@ -124,6 +127,18 @@ const openSocialImage = (event) => {
   router.push(`/admin/post-share/${event.id}?type=event`)
 }
 
+const lockCalendarScroll = () => {
+  previousBodyOverflow = document.body.style.overflow
+  previousHtmlOverflow = document.documentElement.style.overflow
+  document.body.style.overflow = 'hidden'
+  document.documentElement.style.overflow = 'hidden'
+}
+
+const unlockCalendarScroll = () => {
+  document.body.style.overflow = previousBodyOverflow
+  document.documentElement.style.overflow = previousHtmlOverflow
+}
+
 onMounted(() => {
   unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
     currentUser.value = user
@@ -160,10 +175,19 @@ watch(() => route.query.id, (id) => {
   if (found) detailEvent.value = found
 })
 
+watch(calendarPanelOpen, (isOpen) => {
+  if (isOpen) {
+    lockCalendarScroll()
+  } else {
+    unlockCalendarScroll()
+  }
+})
+
 onUnmounted(() => {
   unsubscribeAuth?.()
   unsubscribeEvents?.()
   unsubscribeCommunities?.()
+  if (calendarPanelOpen.value) unlockCalendarScroll()
 })
 </script>
 
@@ -175,10 +199,20 @@ onUnmounted(() => {
 
       <section class="events-premium-layout">
         <EventsCalendar
+          class="events-calendar-desktop"
           :events="upcomingEvents"
           :selected-id="detailEvent?.id || ''"
           @select="openDetails"
         />
+
+        <button type="button" class="events-calendar-mobile-trigger" @click="calendarPanelOpen = true">
+          <span><i class="far fa-calendar-days"></i></span>
+          <div>
+            <strong>Mostrar calendario</strong>
+            <small>Consulta la agenda sin romper el layout.</small>
+          </div>
+          <i class="fas fa-chevron-up"></i>
+        </button>
 
         <section class="events-premium-feed">
           <EventPremiumCard
@@ -235,6 +269,31 @@ onUnmounted(() => {
       @close="closeEditor"
       @saved="editingEvent = null"
     />
+
+    <Teleport to="body">
+      <Transition name="calendar-panel">
+        <section v-if="calendarPanelOpen" class="events-calendar-modal" aria-label="Calendario de eventos">
+          <div class="events-calendar-backdrop" @click="calendarPanelOpen = false"></div>
+          <div class="events-calendar-sheet">
+            <header>
+              <div>
+                <span>Agenda</span>
+                <h2>Calendario de eventos</h2>
+              </div>
+              <button type="button" aria-label="Cerrar calendario" @click="calendarPanelOpen = false">
+                <i class="fas fa-xmark"></i>
+              </button>
+            </header>
+
+            <EventsCalendar
+              :events="upcomingEvents"
+              :selected-id="detailEvent?.id || ''"
+              @select="event => { openDetails(event); calendarPanelOpen = false }"
+            />
+          </div>
+        </section>
+      </Transition>
+    </Teleport>
   </main>
 </template>
 
@@ -260,6 +319,48 @@ onUnmounted(() => {
   display: grid;
   gap: 18px;
   grid-template-columns: 320px minmax(0, 1fr) 320px;
+}
+
+.events-calendar-mobile-trigger {
+  align-items: center;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(168, 85, 247, 0.28), transparent 40%),
+    rgba(8, 12, 30, 0.86);
+  border: 1px solid rgba(168, 85, 247, 0.24);
+  border-radius: 18px;
+  color: #ffffff;
+  display: none;
+  gap: 12px;
+  min-height: 72px;
+  padding: 12px;
+  text-align: left;
+}
+
+.events-calendar-mobile-trigger > span {
+  align-items: center;
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
+  border-radius: 16px;
+  display: flex;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+
+.events-calendar-mobile-trigger div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.events-calendar-mobile-trigger strong {
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.events-calendar-mobile-trigger small {
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .events-premium-feed {
@@ -483,12 +584,107 @@ onUnmounted(() => {
   .events-premium-layout {
     grid-template-columns: 1fr;
   }
+
+  .events-calendar-desktop {
+    display: none;
+  }
+
+  .events-calendar-mobile-trigger {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) 24px;
+  }
 }
 
 @media (max-width: 980px) {
   .events-premium-feed {
     grid-template-columns: 1fr;
   }
+}
+
+.events-calendar-modal {
+  inset: 0;
+  position: fixed;
+  z-index: 2300;
+}
+
+.events-calendar-backdrop {
+  background: rgba(2, 6, 23, 0.74);
+  backdrop-filter: blur(16px);
+  inset: 0;
+  position: absolute;
+}
+
+.events-calendar-sheet {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(168, 85, 247, 0.28), transparent 38%),
+    linear-gradient(145deg, rgba(8, 12, 30, 0.98), rgba(18, 7, 38, 0.98));
+  border: 1px solid rgba(168, 85, 247, 0.32);
+  border-radius: 24px;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
+  color: #ffffff;
+  left: 50%;
+  max-height: min(720px, calc(100dvh - 28px));
+  overflow-y: auto;
+  padding: 16px;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 24px));
+}
+
+.events-calendar-sheet > header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.events-calendar-sheet > header span {
+  color: #c084fc;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.events-calendar-sheet > header h2 {
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.events-calendar-sheet > header button {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: #ffffff;
+  height: 38px;
+  width: 38px;
+}
+
+.events-calendar-sheet :deep(.events-calendar-premium) {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.calendar-panel-enter-active,
+.calendar-panel-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.calendar-panel-enter-active .events-calendar-sheet,
+.calendar-panel-leave-active .events-calendar-sheet {
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.calendar-panel-enter-from,
+.calendar-panel-leave-to {
+  opacity: 0;
+}
+
+.calendar-panel-enter-from .events-calendar-sheet,
+.calendar-panel-leave-to .events-calendar-sheet {
+  opacity: 0;
+  transform: translate(-50%, -46%) scale(0.98);
 }
 
 @media (max-width: 680px) {

@@ -404,16 +404,33 @@ const emit = defineEmits([
     linear-gradient(180deg, rgba(8, 12, 30, 0.22), rgba(8, 12, 30, 0.9)),
     var(--event-bg, none) center / cover,
     rgba(8, 12, 30, 0.72);
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 0;
   border-radius: 14px;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.16);
   color: #f8fafc;
   display: grid;
   gap: 5px;
   min-height: 112px;
   overflow: hidden;
+  isolation: isolate;
   padding: 12px 54px 12px 12px;
   position: relative;
   text-align: left;
+}
+
+.event-mini-card::after {
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(216, 180, 254, 0.12);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.event-mini-card > * {
+  position: relative;
+  z-index: 2;
 }
 
 .galaxy-calendar-box {
@@ -423,7 +440,7 @@ const emit = defineEmits([
 .galaxy-calendar-box .event-stack {
   max-height: 220px;
   overflow-y: auto;
-  padding-right: 2px;
+  padding: 0 2px 1px 0;
 }
 
 .event-mini-card span {

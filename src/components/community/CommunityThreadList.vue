@@ -1,6 +1,10 @@
 <script setup>
+import { ref } from 'vue'
 import CommunityEmptyState from '@/components/community/CommunityEmptyState.vue'
+import PostEditCard from '@/components/community/PostEditCard.vue'
+import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import ThreadComposer from '@/components/community/ThreadComposer.vue'
+import ContextMenu from '@/components/shared/ContextMenu.vue'
 
 const replyDraft = defineModel('replyDraft', {
   type: String,
@@ -79,6 +83,10 @@ defineProps({
   canDeleteComment: {
     type: Function,
     default: () => false
+  },
+  canEditComment: {
+    type: Function,
+    default: () => false
   }
 })
 
@@ -89,10 +97,46 @@ const emit = defineEmits([
   'delete-thread',
   'comment-thread',
   'delete-comment',
+  'edit-comment',
   'pin-thread',
+  'home-thread',
   'open-profile',
   'update-filter'
 ])
+
+const editingCommentId = ref('')
+const editingCommentBody = ref('')
+const openCommentMenuId = ref('')
+
+const toggleCommentMenu = (comment) => {
+  openCommentMenuId.value = openCommentMenuId.value === comment.id ? '' : comment.id
+}
+
+const startEditComment = (comment) => {
+  openCommentMenuId.value = ''
+  editingCommentId.value = comment.id
+  editingCommentBody.value = comment.body || ''
+}
+
+const cancelEditComment = () => {
+  editingCommentId.value = ''
+  editingCommentBody.value = ''
+}
+
+const saveEditComment = (thread, comment) => {
+  const body = editingCommentBody.value.trim()
+  if (!body || body === comment.body) {
+    cancelEditComment()
+    return
+  }
+  emit('edit-comment', thread, comment, body)
+  cancelEditComment()
+}
+
+const deleteComment = (thread, comment) => {
+  openCommentMenuId.value = ''
+  emit('delete-comment', thread, comment)
+}
 </script>
 
 <template>
@@ -137,9 +181,17 @@ const emit = defineEmits([
     />
 
     <article v-for="thread in threads" v-else :key="thread.id" class="thread-card">
-      <button class="thread-avatar profile-trigger" type="button" @click="emit('open-profile', thread)">
-        <img v-if="thread.authorImage" :src="thread.authorImage" alt="" />
-        <span v-else>{{ avatarInitial(thread.author) }}</span>
+      <button
+        class="thread-avatar profile-trigger"
+        type="button"
+        @click="emit('open-profile', thread)"
+      >
+        <ProfileAvatar
+          :src="thread.authorImage"
+          :alt="thread.author"
+          :label="thread.author"
+          :effect="thread.authorIconEffect"
+        />
       </button>
 
       <div class="thread-main">
@@ -174,12 +226,22 @@ const emit = defineEmits([
           <button
             v-if="canPinThread(thread)"
             class="pin-thread"
-            :class="{ active: thread.pinnedHome }"
-            title="Fijar en home"
+            :class="{ active: thread.pinnedCommunity }"
+            title="Fijar arriba en comunidad"
             @click="emit('pin-thread', thread)"
           >
             <i class="fas fa-thumbtack"></i>
-            {{ thread.pinnedHome ? 'Fijado' : 'Fijar' }}
+            {{ thread.pinnedCommunity ? 'Fijado' : 'Fijar' }}
+          </button>
+          <button
+            v-if="canPinThread(thread)"
+            class="home-thread"
+            :class="{ active: thread.showOnHome || thread.pinnedHome }"
+            title="Mostrar este hilo destacado en Home"
+            @click="emit('home-thread', thread)"
+          >
+            <i class="fas fa-home"></i>
+            {{ (thread.showOnHome || thread.pinnedHome) ? 'En Home' : 'Mostrar en Home' }}
           </button>
           <button
             v-if="canDeleteThread(thread)"
@@ -201,28 +263,46 @@ const emit = defineEmits([
 
           <div v-if="thread.comments?.length" class="comment-list">
             <div v-for="comment in thread.comments" :key="comment.id" class="comment-row">
-              <button class="comment-avatar profile-trigger" type="button" @click="emit('open-profile', comment)">
-                <img v-if="comment.authorImage" :src="comment.authorImage" alt="" />
-                <span v-else>{{ avatarInitial(comment.author) }}</span>
+              <button
+                class="comment-avatar profile-trigger"
+                type="button"
+                @click="emit('open-profile', comment)"
+              >
+                <ProfileAvatar
+                  :src="comment.authorImage"
+                  :alt="comment.author"
+                  :label="comment.author"
+                  :effect="comment.authorIconEffect"
+                />
               </button>
-              <div>
+              <div class="comment-body">
                 <div class="comment-meta">
                   <button type="button" @click="emit('open-profile', comment)">
                     <strong>{{ comment.author }}</strong>
                   </button>
                   <span>{{ comment.handle }}</span>
                   <span>{{ formatAgo(comment.createdAt) }}</span>
+                  <span v-if="comment.editedAt">Editado</span>
                 </div>
-                <p>{{ comment.body }}</p>
+                <template v-if="editingCommentId === comment.id">
+                  <PostEditCard
+                    v-model="editingCommentBody"
+                    :disabled="!editingCommentBody.trim()"
+                    @cancel="cancelEditComment"
+                    @save="saveEditComment(thread, comment)"
+                  />
+                </template>
+                <p v-else>{{ comment.body }}</p>
               </div>
-              <button
-                v-if="canDeleteComment(comment)"
-                class="delete-comment"
-                title="Borrar mensaje"
-                @click="emit('delete-comment', thread, comment)"
-              >
-                <i class="fas fa-trash"></i>
-              </button>
+              <ContextMenu
+                v-if="canDeleteComment(comment) || canEditComment(comment)"
+                :open="openCommentMenuId === comment.id && editingCommentId !== comment.id"
+                :can-edit="canEditComment(comment)"
+                :can-delete="canDeleteComment(comment)"
+                @toggle="toggleCommentMenu(comment)"
+                @edit="startEditComment(comment)"
+                @delete="deleteComment(thread, comment)"
+              />
             </div>
           </div>
 
@@ -320,10 +400,10 @@ const emit = defineEmits([
 
 .thread-card {
   align-items: start;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+  background: rgba(9, 11, 30, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
   display: grid;
   gap: 16px;
   grid-template-columns: 58px minmax(0, 1fr);
@@ -337,16 +417,12 @@ const emit = defineEmits([
 
 .thread-avatar,
 .comment-avatar {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .thread-avatar {
   align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border-radius: 18px;
-  color: #ffffff;
   display: flex;
-  font-weight: 900;
   height: 58px;
   justify-content: center;
   width: 58px;
@@ -358,20 +434,9 @@ const emit = defineEmits([
   padding: 0;
 }
 
-.thread-avatar img,
-.comment-avatar img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.thread-avatar span,
-.comment-avatar span {
-  align-items: center;
-  display: flex;
-  height: 100%;
-  justify-content: center;
-  width: 100%;
+.thread-avatar :deep(.profile-avatar-ui) {
+  --avatar-size: 58px;
+  --avatar-border: 3px;
 }
 
 .thread-meta {
@@ -395,13 +460,13 @@ const emit = defineEmits([
 }
 
 .thread-meta strong {
-  color: #111827;
+  color: #ffffff;
   font-size: 13px;
   font-weight: 900;
 }
 
 .thread-card h2 {
-  color: #111827;
+  color: #ffffff;
   font-size: 16px;
   font-weight: 900;
   line-height: 1.25;
@@ -410,7 +475,7 @@ const emit = defineEmits([
 }
 
 .thread-card p {
-  color: #64748b;
+  color: #dbeafe;
   font-size: 13px;
   font-weight: 650;
   line-height: 1.55;
@@ -481,6 +546,17 @@ const emit = defineEmits([
   padding: 5px 8px;
 }
 
+.thread-footer .home-thread {
+  color: #c084fc;
+}
+
+.thread-footer .home-thread.active {
+  background: rgba(168, 85, 247, 0.16);
+  border-radius: 999px;
+  color: #f0abfc;
+  padding: 5px 8px;
+}
+
 .thread-footer .delete-thread:hover {
   color: #dc2626;
 }
@@ -497,11 +573,13 @@ const emit = defineEmits([
 }
 
 .thread-chat {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  background:
+    radial-gradient(circle at 14% 0%, rgba(124, 58, 237, 0.18), transparent 36%),
+    rgba(5, 8, 22, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
   margin-top: 16px;
-  padding: 14px;
+  padding: 16px;
 }
 
 .chat-title {
@@ -512,7 +590,7 @@ const emit = defineEmits([
 }
 
 .chat-title strong {
-  color: #111827;
+  color: #ffffff;
   font-size: 13px;
   font-weight: 900;
 }
@@ -525,31 +603,52 @@ const emit = defineEmits([
 
 .comment-list {
   display: grid;
-  gap: 10px;
+  gap: 0;
 }
 
 .comment-row {
   align-items: start;
-  background: #ffffff;
-  border: 1px solid #eef2f7;
-  border-radius: 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   display: grid;
-  gap: 10px;
-  grid-template-columns: 32px minmax(0, 1fr) 24px;
-  padding: 10px;
+  gap: 12px;
+  grid-template-columns: 38px minmax(0, 1fr) 34px;
+  padding: 13px 0;
+  position: relative;
+}
+
+.comment-row:not(:last-child) {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.comment-row::before {
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.5), rgba(148, 163, 184, 0.08));
+  bottom: -6px;
+  content: "";
+  left: 18px;
+  position: absolute;
+  top: 52px;
+  width: 2px;
+}
+
+.comment-row:last-child::before {
+  display: none;
 }
 
 .comment-avatar {
   align-items: center;
-  background: #ede9fe;
-  border-radius: 999px;
-  color: #7c3aed;
   display: flex;
-  font-size: 11px;
-  font-weight: 900;
-  height: 32px;
+  height: 38px;
   justify-content: center;
-  width: 32px;
+  position: relative;
+  width: 38px;
+  z-index: 1;
+}
+
+.comment-avatar :deep(.profile-avatar-ui) {
+  --avatar-size: 38px;
+  --avatar-border: 2px;
 }
 
 .comment-meta {
@@ -563,34 +662,29 @@ const emit = defineEmits([
 }
 
 .comment-meta strong {
-  color: #111827;
+  color: #ffffff;
   font-size: 12px;
   font-weight: 900;
 }
 
-.comment-row p {
-  color: #475569;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.45;
-  margin-top: 5px;
+.comment-body {
+  min-width: 0;
 }
 
-.delete-comment {
-  align-items: center;
-  color: #ef4444;
-  display: flex;
-  font-size: 11px;
-  height: 24px;
-  justify-content: center;
-  width: 24px;
+.comment-row p {
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
 }
 
 .empty-chat {
-  background: #ffffff;
-  border: 1px dashed #cbd5e1;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px dashed rgba(148, 163, 184, 0.26);
   border-radius: 12px;
-  color: #64748b;
+  color: #cbd5e1;
   font-size: 12px;
   font-weight: 800;
   padding: 14px;

@@ -45,7 +45,7 @@ const emit = defineEmits([
     <Transition name="fade">
       <div v-if="communityOpen" class="quick-create-modal">
         <button class="quick-create-backdrop" type="button" @click="emit('close-community')"></button>
-        <section class="quick-create-card">
+        <section class="quick-create-card community-create-card">
           <div class="quick-create-head">
             <strong>Crear comunidad</strong>
             <button type="button" @click="emit('close-community')">
@@ -121,6 +121,28 @@ const emit = defineEmits([
                 <i class="fas fa-plus"></i>
                 Agregar
               </button>
+            </div>
+          </div>
+
+          <div class="quick-community-preview">
+            <figure class="quick-community-banner">
+              <img v-if="communityDraft.bannerUrl" :src="communityDraft.bannerUrl" alt="" />
+              <span v-else>Banner</span>
+            </figure>
+            <figure class="quick-community-icon">
+              <img v-if="communityDraft.iconUrl" :src="communityDraft.iconUrl" alt="" />
+              <span v-else>{{ communityDraft.name.slice(0, 2).toUpperCase() || 'GN' }}</span>
+            </figure>
+            <strong>{{ communityDraft.name || 'Nueva comunidad' }}</strong>
+            <p>{{ communityDraft.description || 'Descripcion corta para presentar el espacio.' }}</p>
+            <small v-if="communityDraft.threadBackgroundUrl">Fondo de hilos configurado</small>
+            <small v-if="communityDraft.musicPlaylistUrl">Playlist vinculada</small>
+            <small>Volumen: {{ Number(communityDraft.musicVolume || 35) }}%</small>
+            <div>
+              <span v-for="topic in communityDraft.threadTopics" :key="topic">
+                <i :class="getTopicIcon(topic)"></i>
+                {{ topic }}
+              </span>
             </div>
           </div>
 
@@ -255,6 +277,11 @@ const emit = defineEmits([
   z-index: 1;
 }
 
+.community-create-card {
+  max-width: min(980px, calc(100vw - 56px));
+  width: min(980px, calc(100vw - 56px));
+}
+
 .quick-create-head {
   align-items: center;
   display: flex;
@@ -283,6 +310,103 @@ const emit = defineEmits([
   font-size: 12px;
   font-weight: 900;
   gap: 6px;
+}
+
+.quick-community-preview {
+  align-content: start;
+  background: #0b1020;
+  border-radius: 18px;
+  color: #ffffff;
+  display: grid;
+  gap: 10px;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.quick-community-banner {
+  aspect-ratio: 16 / 7;
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
+  border-radius: 14px;
+  margin: 0;
+  overflow: hidden;
+}
+
+.quick-community-icon {
+  align-items: center;
+  background: #ffffff;
+  border: 3px solid #0b1020;
+  border-radius: 18px;
+  display: flex;
+  height: 74px;
+  justify-content: center;
+  margin: -42px 0 0 14px;
+  overflow: hidden;
+  width: 74px;
+}
+
+.quick-community-banner img,
+.quick-community-icon img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.quick-community-banner span,
+.quick-community-icon span {
+  align-items: center;
+  color: #ffffff;
+  display: flex;
+  font-size: 12px;
+  font-weight: 950;
+  height: 100%;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+.quick-community-icon span {
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
+  width: 100%;
+}
+
+.quick-community-preview strong {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.quick-community-preview p {
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.quick-community-preview small {
+  color: #c084fc;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.quick-community-preview > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 4px;
+}
+
+.quick-community-preview > div span {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #e9d5ff;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 950;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 9px;
 }
 
 .quick-create-card input,
@@ -418,6 +542,47 @@ const emit = defineEmits([
     border-radius: 22px 22px 0 0;
     max-height: calc(100dvh - 20px);
     width: 100%;
+  }
+}
+
+@media (min-width: 760px) {
+  .community-create-card {
+    align-items: start;
+    display: grid;
+    gap: 14px 16px;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
+    max-height: min(780px, calc(100dvh - 56px));
+    padding: 24px;
+  }
+
+  .community-create-card .quick-create-head,
+  .community-create-card label:nth-of-type(1),
+  .community-create-card label:nth-of-type(2),
+  .community-create-card .quick-create-submit,
+  .community-create-card .quick-loading-cover {
+    grid-column: 1 / -1;
+  }
+
+  .community-create-card label:nth-of-type(2) textarea {
+    min-height: 94px;
+  }
+
+  .community-create-card .quick-topic-editor {
+    grid-column: 2;
+    grid-row: 4 / span 4;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+
+  .community-create-card .quick-community-preview {
+    grid-column: 2;
+    grid-row: 8 / span 2;
+  }
+
+  .community-create-card .quick-create-submit {
+    justify-self: end;
+    min-width: 220px;
+    padding: 0 22px;
   }
 }
 </style>

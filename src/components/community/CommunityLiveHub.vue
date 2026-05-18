@@ -1,7 +1,7 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
-defineProps({
+const props = defineProps({
   youtubeVideosLoading: Boolean,
   youtubeStageEmbedUrl: { type: String, default: '' },
   currentLiveGoal: { type: Object, default: null },
@@ -32,7 +32,9 @@ defineProps({
   avatarInitial: { type: Function, required: true },
   hasLikedVideoMessage: { type: Function, required: true },
   canDeleteVideoMessage: { type: Function, required: true },
-  formatVideoDate: { type: Function, required: true }
+  formatVideoDate: { type: Function, required: true },
+  viewMode: { type: String, default: 'default' },
+  activeRoute: { type: Boolean, default: true }
 })
 
 const videoChatDraft = defineModel('videoChatDraft', {
@@ -45,9 +47,32 @@ const videoReplyDrafts = defineModel('videoReplyDrafts', {
 })
 
 const liveStageEl = ref(null)
+const placeholderEl = ref(null)
+const playerFrame = ref(null)
+const mobileChatOpen = ref(false)
+const sheetTouchStartY = ref(0)
+const shellRect = ref(null)
+const placeholderHeight = ref(520)
+
+const mobileChatLabel = computed(() => {
+  const count = props.visibleVideoChatMessages.length
+  if (count) return `Chat / Comentarios - ${count} mensaje${count === 1 ? '' : 's'}`
+  return 'Abrir chat'
+})
+const latestMobileMessage = computed(() => props.visibleVideoChatMessages.at(-1) || null)
+const shellVisible = computed(() => props.activeRoute || props.viewMode !== 'default')
 
 defineExpose({
   getBoundingClientRect: () => liveStageEl.value?.getBoundingClientRect()
+})
+
+const shellPlacementStyle = computed(() => {
+  if (props.viewMode !== 'default' || !shellRect.value) return null
+  return {
+    left: `${shellRect.value.left}px`,
+    top: `${shellRect.value.top}px`,
+    width: `${shellRect.value.width}px`
+  }
 })
 
 const emit = defineEmits([
@@ -59,6 +84,9 @@ const emit = defineEmits([
   'delete-message',
   'send-reply',
   'send-message',
+  'update:viewMode',
+  'close-player',
+  'return-community',
   'update-video-filter',
   'update-video-page',
   'play-video'
@@ -70,11 +98,143 @@ const openReplyDraft = (message) => {
     [message.id]: videoReplyDrafts.value[message.id] ?? ''
   }
 }
+
+const handleSheetTouchStart = (event) => {
+  sheetTouchStartY.value = event.touches?.[0]?.clientY || 0
+}
+
+const handleSheetTouchEnd = (event) => {
+  const endY = event.changedTouches?.[0]?.clientY || sheetTouchStartY.value
+  if (endY - sheetTouchStartY.value > 80) mobileChatOpen.value = false
+  sheetTouchStartY.value = 0
+}
+
+const setViewMode = (mode) => {
+  emit('update:viewMode', mode)
+}
+
+const openMobileDiscussion = () => {
+  mobileChatOpen.value = true
+  setViewMode('theater')
+}
+
+const closeTheaterView = () => {
+  mobileChatOpen.value = false
+  setViewMode('default')
+}
+
+const postPlayerCommand = (func) => {
+  playerFrame.value?.contentWindow?.postMessage(JSON.stringify({
+    event: 'command',
+    func,
+    args: []
+  }), '*')
+}
+
+const closePlayerShell = () => {
+  postPlayerCommand('pauseVideo')
+  mobileChatOpen.value = false
+  setViewMode('paused')
+  emit('close-player')
+}
+
+const returnToCommunityPlayer = () => {
+  mobileChatOpen.value = false
+  setViewMode('default')
+  emit('return-community')
+}
+
+const updateShellPlacement = async () => {
+  await nextTick()
+  const rect = placeholderEl.value?.getBoundingClientRect()
+  if (rect) {
+    shellRect.value = {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width
+    }
+  }
+  if (liveStageEl.value && props.viewMode === 'default') {
+    placeholderHeight.value = Math.max(280, Math.ceil(liveStageEl.value.getBoundingClientRect().height || placeholderHeight.value))
+  }
+}
+
+onMounted(() => {
+  updateShellPlacement()
+  window.addEventListener('resize', updateShellPlacement)
+  window.addEventListener('scroll', updateShellPlacement, { passive: true })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateShellPlacement)
+  window.removeEventListener('scroll', updateShellPlacement)
+})
+
+watch(() => props.viewMode, updateShellPlacement)
+watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
 </script>
 
 <template>
   <section class="official-media-hub">
-    <article ref="liveStageEl" class="official-live-stage">
+    <div
+      ref="placeholderEl"
+      class="official-live-placeholder"
+      :style="{ height: viewMode === 'default' ? `${placeholderHeight}px` : '0px' }"
+      aria-hidden="true"
+    ></div>
+
+    <Teleport to="body">
+      <article
+        ref="liveStageEl"
+        class="official-live-stage"
+        :class="[
+          `mode-${viewMode}`,
+          {
+            'mobile-chat-open': mobileChatOpen,
+            'is-route-hidden': !shellVisible
+          }
+        ]"
+        :style="shellPlacementStyle"
+      >
+      <Teleport to=".public-live-slot" :disabled="viewMode !== 'background'">
+        <button
+          v-if="viewMode === 'background'"
+          type="button"
+          class="player-nav-live-pill"
+          @click="setViewMode('floating')"
+        >
+          <i class="fas fa-circle"></i>
+          En vivo
+        </button>
+      </Teleport>
+
+      <div v-if="viewMode !== 'default' && viewMode !== 'background'" class="player-shell-topbar">
+        <strong>{{ youtubeStageTitle }}</strong>
+        <div>
+          <button
+            type="button"
+            :aria-label="viewMode === 'floating' ? 'Segundo plano' : 'Minimizar reproductor'"
+            @click="viewMode === 'floating' ? setViewMode('background') : setViewMode('floating')"
+          >
+            <i :class="viewMode === 'floating' ? 'fas fa-arrow-up' : 'fas fa-minus'"></i>
+          </button>
+          <button
+            type="button"
+            aria-label="Volver a comunidad"
+            @click="returnToCommunityPlayer"
+          >
+            <i class="fas fa-house"></i>
+          </button>
+          <button
+            type="button"
+            aria-label="Cerrar reproductor"
+            @click="closePlayerShell"
+          >
+            <i class="fas fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
       <div class="official-section-title">
         <span><i class="fas fa-circle"></i> En vivo ahora</span>
         <button type="button" class="live-refresh-btn" :disabled="youtubeVideosLoading" @click="emit('refresh-live')">
@@ -88,6 +248,7 @@ const openReplyDraft = (message) => {
           <div class="official-live-frame">
             <iframe
               v-if="youtubeStageEmbedUrl"
+              ref="playerFrame"
               :src="youtubeStageEmbedUrl"
               title="Directo o video destacado de Galaxia Nintendera"
               allowfullscreen
@@ -103,6 +264,16 @@ const openReplyDraft = (message) => {
               </button>
             </div>
           </div>
+
+          <button
+            v-if="viewMode === 'floating'"
+            type="button"
+            class="player-expand-discussion-btn"
+            @click="openMobileDiscussion"
+          >
+            <i class="fas fa-up-right-and-down-left-from-center"></i>
+            <span>Agrandar y chatear</span>
+          </button>
 
           <button
             v-if="currentLiveGoal"
@@ -123,11 +294,15 @@ const openReplyDraft = (message) => {
             <h2>{{ youtubeStageTitle }}</h2>
             <p>{{ youtubeStageDescription }}</p>
             <div class="official-live-actions">
+              <button v-if="featuredYoutubeVideo" type="button" class="mobile-chat-action" @click="openMobileDiscussion">
+                <i class="far fa-comments"></i>
+                <span>{{ featuredVideoIsLive ? 'Abrir chat' : 'Comentarios' }}</span>
+              </button>
               <button v-if="featuredYoutubeVideo" type="button" @click="emit('featured-video-action')">
                 <i :class="featuredVideoActionIcon"></i>
                 <span>{{ featuredVideoActionLabel }}</span>
               </button>
-              <button v-if="featuredYoutubeVideo" type="button" class="mobile-theater-btn" @click="emit('open-theater')">
+              <button v-if="featuredYoutubeVideo" type="button" class="mobile-theater-btn" @click="setViewMode('theater')">
                 <i class="fas fa-up-right-and-down-left-from-center"></i>
                 <span>Ver en grande</span>
               </button>
@@ -139,13 +314,48 @@ const openReplyDraft = (message) => {
           </div>
         </div>
 
-        <aside class="video-chat-panel">
-          <header>
+        <button
+          type="button"
+          class="video-chat-mobile-toggle"
+          :aria-expanded="mobileChatOpen"
+          @click="openMobileDiscussion"
+        >
+          <span class="video-chat-mobile-title">
+            <span>
+              <i class="far fa-comments"></i>
+              {{ mobileChatLabel }}
+            </span>
+            <small v-if="latestMobileMessage">
+              {{ latestMobileMessage.author }}: {{ latestMobileMessage.body }}
+            </small>
+            <small v-else-if="!featuredYoutubeVideo">
+              El chat se activara cuando el live este en vivo.
+            </small>
+          </span>
+          <i class="fas fa-chevron-right"></i>
+        </button>
+
+        <button
+          v-if="mobileChatOpen"
+          type="button"
+          class="video-chat-mobile-backdrop"
+          aria-label="Cerrar chat"
+          @click="mobileChatOpen = false"
+        ></button>
+
+        <aside
+          class="video-chat-panel"
+          :class="{ 'mobile-collapsed': !mobileChatOpen }"
+        >
+          <header @touchstart.passive="handleSheetTouchStart" @touchend.passive="handleSheetTouchEnd">
             <div>
               <strong>{{ videoDiscussionTitle }}</strong>
               <span>{{ videoDiscussionSubtitle }}</span>
             </div>
             <small>{{ formatVideoChatTime(activeVideoSecond) }}</small>
+            <button type="button" class="video-chat-collapse-btn" aria-label="Cerrar chat" @click="mobileChatOpen = false">
+              <i class="fas fa-xmark"></i>
+            </button>
           </header>
 
           <div class="video-chat-list">
@@ -191,7 +401,7 @@ const openReplyDraft = (message) => {
               </div>
             </article>
             <div v-if="!visibleVideoChatMessages.length" class="video-chat-empty">
-              {{ !featuredYoutubeVideo ? 'El chat se abrira cuando el live este en vivo.' : (featuredVideoIsLive ? 'Aun no hay mensajes para este momento.' : 'Aun no hay comentarios en este video.') }}
+              {{ !featuredYoutubeVideo ? 'El chat se activara cuando el live este en vivo.' : (featuredVideoIsLive ? 'Aun no hay mensajes para este momento.' : 'Aun no hay comentarios en este video.') }}
             </div>
           </div>
 
@@ -204,11 +414,13 @@ const openReplyDraft = (message) => {
             />
             <button type="submit" :disabled="!featuredYoutubeVideo || !videoChatDraft.trim()">
               <i class="fas fa-paper-plane"></i>
+              <span>Enviar</span>
             </button>
           </form>
         </aside>
       </div>
-    </article>
+      </article>
+    </Teleport>
 
     <section class="official-video-shelf">
       <div class="official-video-head">
@@ -297,6 +509,11 @@ const openReplyDraft = (message) => {
   overflow: hidden;
 }
 
+.official-live-placeholder {
+  min-height: 0;
+  transition: height 0.2s ease;
+}
+
 .official-live-stage,
 .official-video-shelf {
   background:
@@ -308,6 +525,207 @@ const openReplyDraft = (message) => {
   min-width: 0;
   overflow: hidden;
   padding: 14px;
+}
+
+.official-live-stage {
+  position: fixed;
+  transition: border-radius 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+  z-index: 20;
+}
+
+.official-live-stage.mode-default {
+  max-width: calc(100vw - 16px);
+}
+
+.official-live-stage.is-route-hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.player-shell-topbar {
+  align-items: center;
+  display: none;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.player-shell-topbar strong {
+  color: #ffffff;
+  flex: 1 1 auto;
+  font-size: 14px;
+  font-weight: 950;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-shell-topbar > div {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.player-shell-topbar button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: #ffffff;
+  display: flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.player-shell-topbar button.second-plane-btn {
+  gap: 8px;
+  padding: 0 14px;
+  width: auto;
+}
+
+.player-shell-topbar button.second-plane-btn span {
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.player-nav-live-pill {
+  align-items: center;
+  background: rgba(124, 58, 237, 0.36);
+  border: 1px solid rgba(192, 132, 252, 0.35);
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 950;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.player-nav-live-pill i {
+  color: #ef4444;
+  font-size: 8px;
+}
+
+.official-live-stage.mode-theater {
+  background: #050816;
+  border-radius: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100dvh;
+  inset: 0;
+  overflow: hidden;
+  padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
+  position: fixed;
+  width: 100dvw;
+  z-index: 2147483600;
+}
+
+.official-live-stage.mode-theater .player-shell-topbar,
+.official-live-stage.mode-floating .player-shell-topbar {
+  display: flex;
+}
+
+.official-live-stage.mode-theater .official-section-title,
+.official-live-stage.mode-floating .official-section-title {
+  display: none;
+}
+
+.official-live-stage.mode-background {
+  height: 1px;
+  left: -9999px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: fixed;
+  top: -9999px;
+  width: 1px;
+}
+
+.official-live-stage.mode-paused {
+  height: 1px;
+  left: -9999px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: fixed;
+  top: -9999px;
+  width: 1px;
+}
+
+.official-live-stage.mode-theater .official-live-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  grid-template-rows: minmax(0, 1fr);
+  margin-top: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.official-live-stage.mode-theater .official-live-video-column {
+  align-content: start;
+  display: grid;
+  min-height: 0;
+}
+
+.official-live-stage.mode-theater .official-live-frame {
+  border-radius: 18px;
+}
+
+.official-live-stage.mode-theater .official-live-copy {
+  display: none;
+}
+
+.official-live-stage.mode-theater .video-chat-panel {
+  min-height: 0;
+}
+
+.official-live-stage.mode-floating {
+  padding: 10px;
+  position: fixed;
+  right: 18px;
+  top: calc(var(--public-nav-offset, 72px) + 14px);
+  width: min(420px, calc(100vw - 28px));
+  z-index: 2600;
+}
+
+.official-live-stage.mode-floating .official-live-layout {
+  gap: 8px;
+  grid-template-columns: 1fr;
+  margin-top: 0;
+}
+
+.official-live-stage.mode-floating .official-live-copy,
+.official-live-stage.mode-floating .video-chat-panel {
+  display: none;
+}
+
+.official-live-stage.mode-floating .official-live-frame {
+  border-radius: 14px;
+}
+
+.player-expand-discussion-btn {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(192, 132, 252, 0.28);
+  border-radius: 999px;
+  color: #ffffff;
+  display: none;
+  font-size: 12px;
+  font-weight: 950;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  width: 100%;
+}
+
+.official-live-stage.mode-floating .player-expand-discussion-btn {
+  display: inline-flex;
 }
 
 .official-section-title {
@@ -530,7 +948,7 @@ const openReplyDraft = (message) => {
   position: static;
 }
 
-.official-live-copy span {
+.official-live-copy > span {
   align-items: center;
   background: rgba(239, 68, 68, 0.18);
   border-radius: 999px;
@@ -571,15 +989,14 @@ const openReplyDraft = (message) => {
   gap: 10px;
 }
 
-.mobile-theater-btn {
-  display: none;
-}
-
 .official-live-actions button,
 .official-live-actions a {
   align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(124, 58, 237, 0.94), rgba(236, 72, 153, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  box-shadow: 0 12px 28px rgba(124, 58, 237, 0.2);
   color: #ffffff;
   display: inline-flex;
   font-size: 11px;
@@ -592,8 +1009,17 @@ const openReplyDraft = (message) => {
 }
 
 .official-live-actions a {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+}
+
+.official-live-actions .mobile-chat-action {
+  display: none;
+}
+
+.official-live-actions button:hover,
+.official-live-actions a:hover {
+  filter: brightness(1.08) saturate(1.08);
+  transform: translateY(-1px);
 }
 
 .video-chat-panel {
@@ -610,6 +1036,12 @@ const openReplyDraft = (message) => {
   min-width: 0;
   overflow: hidden;
   width: 100%;
+}
+
+.video-chat-mobile-toggle,
+.video-chat-mobile-backdrop,
+.video-chat-collapse-btn {
+  display: none;
 }
 
 .video-chat-panel header {
@@ -825,7 +1257,12 @@ const openReplyDraft = (message) => {
   border-radius: 14px;
   color: #ffffff;
   display: flex;
+  gap: 8px;
   justify-content: center;
+}
+
+.video-chat-form button span {
+  display: none;
 }
 
 .video-chat-form button:disabled {
@@ -1049,18 +1486,318 @@ const openReplyDraft = (message) => {
 }
 
 @media (max-width: 720px) {
+  :global(body.community-player-expanded .global-live-bubble),
+  :global(body.community-player-expanded .direct-chat-fab),
+  :global(body.community-player-expanded .direct-chat-panel),
+  :global(body.community-player-expanded .music-bubble-fab),
+  :global(body.community-player-expanded .music-bubble-panel),
+  :global(body.community-player-expanded .community-rail-nav),
+  :global(body.community-player-expanded .community-switcher-shell),
+  :global(body.community-player-expanded .community-quick-shell),
+  :global(body.community-player-expanded .community-rail-card),
+  :global(body.community-player-expanded .community-switcher),
+  :global(body.community-player-expanded .community-rail-dots),
+  :global(body.community-player-expanded .public-live-slot),
+  :global(body.community-player-expanded .public-bottom-nav),
+  :global(body.community-player-expanded .bottom-nav) {
+    display: none !important;
+  }
+
   .official-live-stage,
   .official-video-shelf {
     margin-left: calc(-1 * var(--community-mobile-bleed, 0px));
     margin-right: calc(-1 * var(--community-mobile-bleed, 0px));
   }
 
+  .official-live-stage {
+    padding: 8px;
+  }
+
+  .official-live-stage.mode-default {
+    max-width: 100vw;
+  }
+
+  .official-live-stage.mode-theater {
+    border: 0;
+    border-radius: 0;
+    bottom: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: auto;
+    min-height: 100dvh;
+    padding: max(8px, env(safe-area-inset-top)) 0 max(8px, env(safe-area-inset-bottom));
+    top: 0;
+  }
+
+  .official-live-stage.mode-floating {
+    left: 12px;
+    right: 12px;
+    top: calc(var(--public-nav-offset, 86px) + 10px);
+    width: auto;
+  }
+
+  .official-live-stage.mode-theater .player-shell-topbar {
+    min-height: 42px;
+    padding: 0 10px;
+  }
+
+  .official-live-stage.mode-theater .player-shell-topbar strong {
+    font-size: 13px;
+  }
+
+  .official-live-stage.mode-theater .player-shell-topbar button {
+    height: 36px;
+    width: 36px;
+  }
+
+  .official-live-stage.mobile-chat-open {
+    padding-bottom: 8px;
+  }
+
+  .official-live-stage.mobile-chat-open .official-section-title,
+  .official-live-stage.mobile-chat-open .official-live-copy,
+  .official-live-stage.mobile-chat-open .video-chat-mobile-toggle {
+    display: none;
+  }
+
   .official-live-layout {
     gap: 10px;
+    margin-top: 8px;
+  }
+
+  .official-live-stage.mode-theater .official-live-layout {
+    display: grid;
+    gap: 0;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(145px, 34svh) minmax(0, 1fr);
+    margin-top: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .official-live-stage.mode-theater .official-live-video-column {
+    min-height: 0;
+  }
+
+  .official-live-stage.mobile-chat-open .official-live-layout {
+    margin-top: 0;
+  }
+
+  .official-live-frame {
+    border-radius: 14px;
+  }
+
+  .official-live-stage.mode-theater .official-live-frame {
+    border-left: 0;
+    border-radius: 0;
+    border-right: 0;
+  }
+
+  .official-live-stage.mode-theater .official-live-goal-overlay {
+    left: 10px;
+    top: 10px;
+  }
+
+  .official-live-stage.mode-theater .video-chat-mobile-toggle,
+  .official-live-stage.mode-theater .video-chat-mobile-backdrop {
+    display: none;
+  }
+
+  .official-live-stage:not(.mode-theater) .video-chat-mobile-toggle {
+    display: none;
+  }
+
+  .video-chat-mobile-toggle {
+    align-items: center;
+    background:
+      radial-gradient(circle at 14% 0%, rgba(168, 85, 247, 0.18), transparent 36%),
+      rgba(8, 12, 30, 0.86);
+    border: 1px solid rgba(216, 180, 254, 0.2);
+    border-radius: 16px;
+    color: #ffffff;
+    display: flex;
+    font-size: 13px;
+    font-weight: 950;
+    justify-content: space-between;
+    min-height: 50px;
+    padding: 0 14px;
+    text-align: left;
+    width: 100%;
+  }
+
+  .video-chat-mobile-title {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .video-chat-mobile-title > span {
+    align-items: center;
+    display: inline-flex;
+    gap: 9px;
+    min-width: 0;
+  }
+
+  .video-chat-mobile-title > span i {
+    color: #c084fc;
+  }
+
+  .video-chat-mobile-title small {
+    color: #aeb8d3;
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .video-chat-mobile-backdrop {
+    background: rgba(2, 6, 23, 0.18);
+    display: block;
+    inset: 0;
+    position: fixed;
+    z-index: 2290;
   }
 
   .video-chat-panel {
-    min-height: 380px;
+    border-radius: 22px 22px 0 0;
+    border-width: 1px 0 0;
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -24px 70px rgba(0, 0, 0, 0.46);
+    left: 0;
+    max-height: min(46svh, 460px);
+    min-height: min(330px, 44svh);
+    position: fixed;
+    right: 0;
+    width: 100vw;
+    z-index: 2300;
+  }
+
+  .official-live-stage.mode-theater .video-chat-panel {
+    border-radius: 18px 18px 0 0;
+    border-width: 1px 0 0;
+    bottom: auto;
+    box-shadow: none;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: 100%;
+    left: auto;
+    max-height: none;
+    min-height: 0;
+    position: relative;
+    right: auto;
+    width: 100%;
+    z-index: 1;
+  }
+
+  .video-chat-panel::before {
+    background: rgba(226, 232, 240, 0.42);
+    border-radius: 999px;
+    content: "";
+    height: 4px;
+    left: 50%;
+    position: absolute;
+    top: 8px;
+    transform: translateX(-50%);
+    width: 44px;
+  }
+
+  .video-chat-panel.mobile-collapsed {
+    display: none;
+    min-height: 0;
+  }
+
+  .official-live-stage.mode-theater .video-chat-panel.mobile-collapsed {
+    display: grid;
+  }
+
+  .video-chat-collapse-btn {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    color: #e2e8f0;
+    display: flex;
+    flex: 0 0 auto;
+    height: 32px;
+    justify-content: center;
+    width: 32px;
+  }
+
+  .video-chat-panel header {
+    padding-top: 20px;
+  }
+
+  .official-live-stage.mode-theater .video-chat-panel header {
+    padding: 20px 18px 12px;
+  }
+
+  .official-live-stage.mode-theater .video-chat-collapse-btn {
+    display: none;
+  }
+
+  .video-chat-list {
+    min-height: 0;
+    padding-bottom: 10px;
+  }
+
+  .official-live-stage.mode-theater .video-chat-list {
+    align-content: start;
+    overflow-y: auto;
+    padding: 10px 18px;
+  }
+
+  .video-chat-form {
+    background:
+      linear-gradient(180deg, rgba(12, 9, 30, 0.94), rgba(12, 9, 30, 0.99));
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    position: sticky;
+    bottom: 0;
+  }
+
+  .official-live-stage.mode-theater .video-chat-form {
+    border-top: 1px solid rgba(148, 163, 184, 0.16);
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    position: relative;
+  }
+
+  .official-live-stage.mode-theater:focus-within {
+    min-height: var(--direct-chat-vvh, 100dvh);
+  }
+
+  .official-live-stage.mode-theater:focus-within .player-shell-topbar {
+    min-height: 36px;
+  }
+
+  .official-live-stage.mode-theater:focus-within .official-live-layout {
+    grid-template-rows: minmax(120px, 30svh) minmax(0, 1fr);
+  }
+
+  .official-live-stage.mode-theater:focus-within .video-chat-panel header {
+    padding-bottom: 8px;
+    padding-top: 12px;
+  }
+
+  .official-live-stage.mode-theater:focus-within .video-chat-list {
+    max-height: 28svh;
+    padding-bottom: 8px;
+  }
+
+  .video-chat-form input {
+    min-height: 42px;
+  }
+
+  .video-chat-form button {
+    min-height: 42px;
+    padding: 0 14px;
+  }
+
+  .video-chat-form button span {
+    display: inline;
+    font-size: 12px;
+    font-weight: 950;
   }
 
   .official-live-copy {
@@ -1083,17 +1820,33 @@ const openReplyDraft = (message) => {
   }
 
   .official-live-actions {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+
+  .official-live-actions .mobile-chat-action {
+    display: inline-flex;
+  }
+
+  .official-live-actions .mobile-theater-btn {
+    display: none;
   }
 
   .official-live-actions button,
   .official-live-actions a {
-    width: 100%;
+    border-radius: 999px;
+    flex: 0 0 42px;
+    height: 42px;
+    min-height: 42px;
+    padding: 0;
+    width: 42px;
   }
 
-  .mobile-theater-btn {
-    display: inline-flex;
+  .official-live-actions button span,
+  .official-live-actions a span {
+    display: none;
   }
 
   .official-video-head {

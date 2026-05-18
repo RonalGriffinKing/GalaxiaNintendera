@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { addDoc, collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
-import { resolveProfileIcon } from '@/services/profileProgress'
+import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { playPublishSound } from '@/services/uiSounds'
 import officialLogo from '@/iconos/logo.png'
 
@@ -66,6 +66,10 @@ const topicIcons = {
 const canManageOfficial = computed(() => ['admin', 'publisher'].includes(props.userRole))
 const user = computed(() => auth.currentUser)
 const currentProfileIcon = computed(() => resolveProfileIcon({
+  ...currentProfile.value,
+  imageUrl: currentProfile.value.imageUrl || user.value?.photoURL || ''
+}))
+const currentProfileIconMeta = computed(() => resolveProfileIconMeta({
   ...currentProfile.value,
   imageUrl: currentProfile.value.imageUrl || user.value?.photoURL || ''
 }))
@@ -190,6 +194,11 @@ const publish = async () => {
       authorId: activeUser.uid,
       author: displayName.value,
       authorImage: currentProfileIcon.value || '',
+      authorIconEffect: {
+        special: Boolean(currentProfileIconMeta.value.special),
+        effectColor: currentProfileIconMeta.value.effectColor,
+        saga: currentProfileIconMeta.value.saga
+      },
       handle: '@tu_usuario',
       topic: topics.value.includes(selectedTopic.value) ? selectedTopic.value : topics.value[0],
       title: text.length > 72 ? `${text.slice(0, 72)}...` : text,

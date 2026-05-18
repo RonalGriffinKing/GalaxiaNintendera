@@ -3,7 +3,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from "firebase/firestore"
 import { auth, db } from "@/firebase"
-import { READ_REWARD_STARS, awardPostRead, getReadRewardDelayMs, resolveProfileIcon } from '@/services/profileProgress'
+import { READ_REWARD_STARS, awardPostRead, getReadRewardDelayMs, resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
+import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,6 +31,7 @@ const postSections = computed(() => Array.isArray(post.value.sections) ? post.va
 const postReleaseTime = computed(() => getTime(post.value.releaseAt || post.value.scheduledAt))
 const isUpcomingPost = computed(() => postReleaseTime.value > Date.now())
 const authorIcon = computed(() => authorProfile.value ? resolveProfileIcon(authorProfile.value) : '')
+const authorIconMeta = computed(() => authorProfile.value ? resolveProfileIconMeta(authorProfile.value) : {})
 const normalizeCategory = (value) => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -407,8 +409,13 @@ onUnmounted(() => {
             type="button"
             @click="goProfile(post.authorId)"
           >
-            <img v-if="authorIcon" :src="authorIcon" alt="" />
-            <span v-else>{{ (post.authorName || 'R').charAt(0).toUpperCase() }}</span>
+            <ProfileAvatar
+              class="post-author-avatar"
+              :src="authorIcon"
+              :alt="post.authorName || authorProfile?.name || 'Redactor'"
+              :label="post.authorName || authorProfile?.name || 'Redactor'"
+              :effect="authorIconMeta"
+            />
             <strong>{{ post.authorName || authorProfile?.name || 'Redactor' }}</strong>
             <i class="fas fa-circle"></i>
             <small>{{ formatDate(post.createdAt) }}</small>
@@ -853,7 +860,7 @@ onUnmounted(() => {
 }
 
 .post-author-chip img,
-.post-author-chip > span {
+.post-author-chip > span:not(.post-author-avatar) {
   align-items: center;
   background: linear-gradient(135deg, #7c3aed, #ec4899);
   border: 2px solid rgba(255, 255, 255, 0.78);
@@ -867,6 +874,11 @@ onUnmounted(() => {
   object-fit: cover;
   overflow: hidden;
   width: 44px;
+}
+
+.post-author-chip .post-author-avatar {
+  --avatar-size: 44px;
+  --avatar-border: 2px;
 }
 
 .post-author-chip strong {
@@ -1689,7 +1701,7 @@ onUnmounted(() => {
 @media (max-width: 720px) {
   .post-layout {
     gap: 20px;
-    padding: 90px 14px 32px;
+    padding: var(--public-page-top-mobile, 90px) 14px 32px;
   }
 
   .post-title {
@@ -1808,11 +1820,16 @@ onUnmounted(() => {
 }
 
 .post-author-chip img,
-.post-author-chip > span {
+.post-author-chip > span:not(.post-author-avatar) {
   border-width: 1px;
   height: 24px;
   width: 24px;
   font-size: 11px;
+}
+
+.post-author-chip .post-author-avatar {
+  --avatar-size: 28px;
+  --avatar-border: 2px;
 }
 
 .post-author-chip strong {

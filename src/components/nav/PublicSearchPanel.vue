@@ -70,9 +70,9 @@ const emit = defineEmits(['close', 'submit', 'open-post'])
   color: #111827;
   left: 50%;
   max-width: 760px;
-  padding: 14px;
+  padding: 14px 24px 18px;
   position: fixed;
-  top: 72px;
+  top: var(--public-nav-offset, 72px);
   transform: translateX(-50%);
   width: calc(100vw - 28px);
   z-index: 1200;
@@ -134,5 +134,20 @@ const emit = defineEmits(['close', 'submit', 'open-post'])
   font-size: 12px;
   font-weight: 800;
   padding: 10px;
+}
+
+@media (max-width: 680px) {
+  .public-search-panel {
+    max-width: none;
+    padding: 12px 16px 16px;
+    top: var(--public-nav-offset, 64px);
+    width: calc(100vw - 28px);
+  }
+}
+
+@media (max-width: 420px) {
+  .public-search-panel {
+    padding: 12px 14px 14px;
+  }
 }
 </style>

@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
 const profileDraft = defineModel('profileDraft', {
   type: Object,
@@ -25,6 +26,7 @@ const uploadIconDraft = defineModel('uploadIconDraft', {
 defineProps({
   profile: { type: Object, required: true },
   profileIcon: { type: String, default: '' },
+  profileIconMeta: { type: Object, default: () => ({}) },
   collectionOpen: { type: Boolean, default: false },
   panelOpen: { type: Boolean, default: false },
   uploadOpen: { type: Boolean, default: false },
@@ -72,10 +74,11 @@ const emit = defineEmits([
   'toggle-test-mode',
   'choose-icon',
   'change-mobile-page',
-  'equip-preview',
   'upload-icon',
+  'edit-icon',
   'delete-icon',
   'select-managed-icon',
+  'open-icon-detail',
   'toggle-managed-visibility',
   'save-uploaded-icon',
   'close-redeem',
@@ -98,9 +101,12 @@ defineExpose({
         </button>
 
         <div class="icon-collection-head">
-          <span class="collection-profile-avatar">
-            <img :src="profileIcon" alt="" />
-          </span>
+          <ProfileAvatar
+            class="collection-profile-avatar"
+            :src="profileIcon"
+            :alt="profile.name || profile.email || 'Usuario'"
+            :effect="profileIconMeta"
+          />
           <div>
             <span class="collection-kicker">Coleccion canjeada</span>
             <h2>{{ profile.name || profile.email || 'Usuario' }}</h2>
@@ -119,15 +125,22 @@ defineExpose({
               <small>{{ group.icons.length }} iconos</small>
             </header>
             <div class="collection-icon-grid">
-              <figure v-for="icon in group.icons" :key="icon.id" :class="{ equipped: profile.selectedIcon === icon.id }">
-                <span>
-                  <img :src="icon.src" alt="" />
-                </span>
+              <button
+                v-for="icon in group.icons"
+                :key="icon.id"
+                type="button"
+                class="collection-icon-card"
+                :class="{ equipped: profile.selectedIcon === icon.id, special: icon.special }"
+                :style="{ '--avatar-effect': icon.effectColor || '#a855f7' }"
+                @click="emit('open-icon-detail', icon)"
+              >
+                <ProfileAvatar class="collection-grid-avatar" :src="icon.src" :alt="icon.name" :effect="icon" />
                 <figcaption>
                   {{ icon.name }}
+                  <span v-if="icon.special">Especial</span>
                   <em v-if="profile.selectedIcon === icon.id">Equipado</em>
                 </figcaption>
-              </figure>
+              </button>
             </div>
           </article>
         </div>
@@ -166,7 +179,7 @@ defineExpose({
               type="button"
               title="Gestionar iconos"
               aria-label="Gestionar iconos"
-              @click="emit('upload-icon')"
+              @click="emit('upload-icon', previewIcon)"
             >
               <i class="fas fa-sliders"></i>
             </button>
@@ -186,19 +199,28 @@ defineExpose({
 
         <div class="profile-editor-layout">
           <aside class="profile-editor-panel" :class="{ 'mobile-hidden-panel': mobileEditorTab !== 'details' }">
-            <span class="editor-avatar-preview">
-              <img :src="profileIcon" alt="" />
-            </span>
+            <ProfileAvatar
+              class="editor-avatar-preview"
+              :src="profileIcon"
+              :alt="profile.name || profile.email || 'Usuario'"
+              :effect="profileIconMeta"
+            />
 
             <div class="profile-edit-form modal-profile-form">
               <label>
-                Nombre
-                <input v-model="profileDraft.name" />
+                <span>
+                  Nombre
+                  <small>{{ (profileDraft.name || '').length }}/24</small>
+                </span>
+                <input v-model="profileDraft.name" maxlength="24" />
               </label>
 
               <label>
-                Descripcion
-                <textarea v-model="profileDraft.description" rows="4"></textarea>
+                <span>
+                  Descripcion
+                  <small>{{ (profileDraft.description || '').length }}/140</small>
+                </span>
+                <textarea v-model="profileDraft.description" maxlength="140" rows="4"></textarea>
               </label>
 
               <div class="social-edit-grid modal-social-grid">
@@ -249,7 +271,28 @@ defineExpose({
 
             <div class="icon-modal-layout">
               <div class="icon-modal-list">
-                <strong>Todos los iconos</strong>
+                <section v-if="redeemedProfileIcons.length" class="unlocked-icons-section">
+                  <header>
+                    <strong>Desbloqueados</strong>
+                    <small>{{ redeemedProfileIcons.length }} disponibles para equipar</small>
+                  </header>
+                  <div class="unlocked-icon-strip">
+                    <button
+                      v-for="icon in redeemedProfileIcons"
+                      :key="icon.id"
+                      type="button"
+                      :class="{ selected: previewIcon.id === icon.id, saved: profile.selectedIcon === icon.id, special: icon.special }"
+                      :style="{ '--icon-effect': icon.effectColor || '#a855f7' }"
+                      :aria-label="`Equipar ${icon.name}`"
+                      @click="emit('choose-icon', icon, $event)"
+                    >
+                      <ProfileAvatar class="icon-strip-avatar" :src="icon.src" :alt="icon.name" :effect="icon" />
+                      <small>{{ profile.selectedIcon === icon.id ? 'Equipado' : 'Desbloqueado' }}</small>
+                    </button>
+                  </div>
+                </section>
+
+                <strong>Catalogo de iconos</strong>
 
                 <div v-if="isAdminOwnProfile" class="icon-test-panel" :class="{ active: iconTestMode }">
                   <button
@@ -275,6 +318,7 @@ defineExpose({
                       test: iconTestMode && testUnlockedIcons.includes(icon.id),
                       selected: previewIcon.id === icon.id,
                       saved: profile.selectedIcon === icon.id,
+                      special: icon.special,
                       denied: deniedIcon === icon.id,
                       redeeming: redeemingIcon === icon.id,
                       burst: unlockBurst === icon.id
@@ -286,9 +330,12 @@ defineExpose({
                     <span v-if="redeemingIcon === icon.id" class="redeem-fill" aria-hidden="true">
                       <i></i>
                     </span>
-                    <span class="icon-art">
-                      <img :src="icon.src" alt="" />
-                    </span>
+                    <ProfileAvatar
+                      class="icon-art"
+                      :src="icon.src"
+                      :alt="icon.name"
+                      :effect="icon"
+                    />
                     <span v-if="!effectiveUnlockedIcons.includes(icon.id)" class="lock-badge" aria-hidden="true">
                       <i class="fas fa-lock"></i>
                     </span>
@@ -299,56 +346,16 @@ defineExpose({
                   </button>
                 </div>
 
-                <div class="icon-grid compact modal-icons mobile-icon-grid">
-                  <button
-                    v-for="icon in mobileIconCatalog"
-                    :key="icon.id"
-                    class="icon-card"
-                    :class="{
-                      locked: !effectiveUnlockedIcons.includes(icon.id),
-                      test: iconTestMode && testUnlockedIcons.includes(icon.id),
-                      selected: previewIcon.id === icon.id,
-                      saved: profile.selectedIcon === icon.id,
-                      denied: deniedIcon === icon.id,
-                      redeeming: redeemingIcon === icon.id,
-                      burst: unlockBurst === icon.id
-                    }"
-                    :aria-label="`${icon.name} - ${iconState(icon)}`"
-                    type="button"
-                    @click="emit('choose-icon', icon, $event)"
-                  >
-                    <span v-if="redeemingIcon === icon.id" class="redeem-fill" aria-hidden="true">
-                      <i></i>
-                    </span>
-                    <span class="icon-art">
-                      <img :src="icon.src" alt="" />
-                    </span>
-                    <span v-if="!effectiveUnlockedIcons.includes(icon.id)" class="lock-badge" aria-hidden="true">
-                      <i class="fas fa-lock"></i>
-                    </span>
-                    <small>
-                      <i v-if="!effectiveUnlockedIcons.includes(icon.id)" class="fas fa-star"></i>
-                      {{ effectiveUnlockedIcons.includes(icon.id) ? iconState(icon) : iconCost(icon) }}
-                    </small>
-                  </button>
-                </div>
-
-                <div class="mobile-icon-pager">
-                  <button type="button" aria-label="Iconos anteriores" @click="emit('change-mobile-page', -1)">
-                    <i class="fas fa-chevron-left"></i>
-                  </button>
-                  <span>{{ mobileIconPage + 1 }} / {{ mobileIconPageCount }}</span>
-                  <button type="button" aria-label="Iconos siguientes" @click="emit('change-mobile-page', 1)">
-                    <i class="fas fa-chevron-right"></i>
-                  </button>
-                </div>
               </div>
 
               <aside class="icon-preview-panel">
                 <h3>Vista previa</h3>
-                <span class="preview-large-avatar">
-                  <img :src="previewIcon.src" alt="" />
-                </span>
+                <ProfileAvatar
+                  class="preview-large-avatar"
+                  :src="previewIcon.src"
+                  :alt="previewIcon.name"
+                  :effect="previewIcon"
+                />
                 <strong>{{ previewIcon.name }}</strong>
                 <small>{{ iconSaga(previewIcon) }}</small>
                 <p>{{ previewIconEquipped ? 'Este icono esta equipado ahora mismo.' : (effectiveUnlockedIcons.includes(previewIcon.id) ? 'Icono desbloqueado para tu perfil.' : `Necesitas ${iconCost(previewIcon)} estrellas para desbloquearlo.`) }}</p>
@@ -361,14 +368,10 @@ defineExpose({
                   <i :class="previewIconEquipped ? 'fas fa-check' : (effectiveUnlockedIcons.includes(previewIcon.id) ? 'fas fa-shirt' : 'fas fa-star')"></i>
                   {{ previewIconEquipped ? 'Icono equipado' : (effectiveUnlockedIcons.includes(previewIcon.id) ? 'Equipar icono' : 'Desbloquear icono') }}
                 </button>
-                <div v-if="isAdminOwnProfile && !previewIcon.builtIn" class="icon-preview-actions">
+                <div v-if="isAdminOwnProfile" class="icon-preview-actions">
                   <button type="button" :disabled="isDeletingIcon" @click="emit('edit-icon', previewIcon)">
-                    <i class="fas fa-pen"></i>
-                    Editar
-                  </button>
-                  <button type="button" class="danger" :disabled="isDeletingIcon" @click="emit('delete-icon')">
-                    <i class="fas fa-trash"></i>
-                    {{ isDeletingIcon ? 'Ocultando...' : 'Ocultar' }}
+                    <i class="fas fa-sliders"></i>
+                    Gestionar este icono
                   </button>
                 </div>
               </aside>
@@ -389,41 +392,58 @@ defineExpose({
         <div class="icon-modal-head upload-head">
           <span class="icon-modal-symbol"><i class="fas fa-sliders"></i></span>
           <div>
-            <h2>Gestionar iconos</h2>
-            <p>Toca el ojo para mostrar u ocultar, ajusta datos y guarda</p>
+            <h2>Gestionar icono</h2>
+            <p>Ajusta este icono sin tocar archivos ni subir nada nuevo</p>
           </div>
         </div>
 
-        <div class="icon-upload-layout">
-          <div class="icon-manage-list">
-            <div
-              v-for="icon in manageableProfileIcons"
-              :key="icon.id"
-              :class="{ selected: editingIconId === icon.id, visible: managedIconVisible(icon) }"
-              @click="emit('select-managed-icon', icon)"
-            >
-              <img :src="icon.src" alt="" />
-              <span>
-                <strong>{{ icon.name }}</strong>
-                <small>{{ icon.sourcePath || iconSaga(icon) }}</small>
-              </span>
-              <span class="icon-manage-actions">
-                <button
-                  type="button"
-                  :aria-label="managedIconVisible(icon) ? 'Ocultar icono' : 'Mostrar icono'"
-                  :title="managedIconVisible(icon) ? 'Ocultar para todos' : 'Mostrar para todos'"
-                  @click.stop="emit('toggle-managed-visibility', icon)"
-                >
-                  <i :class="managedIconVisible(icon) ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
-                </button>
-              </span>
-            </div>
-            <p v-if="!manageableProfileIcons.length" class="profile-message soft">
-              Crea carpetas como src/iconos/profileIcons/Mario y sube ahi tus PNG, JPG o WEBP.
-            </p>
-          </div>
-
+        <div class="single-icon-manage">
           <div class="icon-upload-form">
+            <aside class="icon-upload-mini-preview">
+              <ProfileAvatar
+                class="preview-large-avatar"
+                :src="uploadIconPreview"
+                :alt="uploadIconDraft.name || 'Icono'"
+                :effect="{ special: uploadIconDraft.special, effectColor: uploadIconDraft.effectColor }"
+              />
+              <strong>{{ uploadIconDraft.name || 'Icono' }}</strong>
+              <small>{{ uploadIconDraft.saga }} - {{ Math.max(0, Number(uploadIconDraft.cost || 0)) }} estrellas</small>
+            </aside>
+
+            <button
+              type="button"
+              class="visibility-toggle"
+              :class="{ hidden: !uploadIconDraft.visible }"
+              :disabled="!editingIconId"
+              @click="uploadIconDraft.visible = !uploadIconDraft.visible"
+            >
+              <i :class="uploadIconDraft.visible ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
+              {{ uploadIconDraft.visible ? 'Visible en la tienda' : 'Oculto para usuarios' }}
+            </button>
+
+            <button
+              type="button"
+              class="special-toggle"
+              :class="{ active: uploadIconDraft.special }"
+              :disabled="!editingIconId"
+              @click="uploadIconDraft.special = !uploadIconDraft.special"
+            >
+              <i class="fas fa-wand-magic-sparkles"></i>
+              {{ uploadIconDraft.special ? 'Icono especial activo' : 'Marcar como especial' }}
+            </button>
+
+            <label v-if="uploadIconDraft.special" class="effect-color-field">
+              Color del efecto
+              <input v-model="uploadIconDraft.effectColor" type="color" :disabled="!editingIconId" />
+              <span>
+                <button type="button" style="--swatch: #a855f7" @click="uploadIconDraft.effectColor = '#a855f7'"></button>
+                <button type="button" style="--swatch: #22c55e" @click="uploadIconDraft.effectColor = '#22c55e'"></button>
+                <button type="button" style="--swatch: #ef4444" @click="uploadIconDraft.effectColor = '#ef4444'"></button>
+                <button type="button" style="--swatch: #3b82f6" @click="uploadIconDraft.effectColor = '#3b82f6'"></button>
+                <button type="button" style="--swatch: #f59e0b" @click="uploadIconDraft.effectColor = '#f59e0b'"></button>
+              </span>
+            </label>
+
             <label>
               Nombre
               <input v-model="uploadIconDraft.name" :disabled="!editingIconId" placeholder="Mario Fuego" />
@@ -442,15 +462,6 @@ defineExpose({
               Coste en estrellas
               <input v-model.number="uploadIconDraft.cost" :disabled="!editingIconId" type="number" min="0" step="1" />
             </label>
-
-            <aside class="icon-upload-mini-preview">
-              <span class="preview-large-avatar">
-                <img v-if="uploadIconPreview" :src="uploadIconPreview" alt="" />
-                <i v-else class="fas fa-wand-magic-sparkles"></i>
-              </span>
-              <strong>{{ uploadIconDraft.name || 'Nuevo icono' }}</strong>
-              <small>{{ uploadIconDraft.saga }} Â· {{ Math.max(0, Number(uploadIconDraft.cost || 0)) }} estrellas</small>
-            </aside>
 
             <p v-if="uploadIconMessage" class="profile-message soft">{{ uploadIconMessage }}</p>
             <button type="button" :disabled="isUploadingIcon || !editingIconId" @click="emit('save-uploaded-icon')">
@@ -528,6 +539,10 @@ defineExpose({
   width: min(1120px, calc(100vw - 28px));
 }
 
+.icon-upload-card {
+  width: min(520px, calc(100vw - 28px));
+}
+
 .icon-modal-close,
 .redeem-close {
   align-items: center;
@@ -554,11 +569,10 @@ defineExpose({
   padding-right: 46px;
 }
 
-.icon-modal-symbol,
-.collection-profile-avatar {
+.icon-modal-symbol {
   align-items: center;
   background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border-radius: 18px;
+  border-radius: 999px;
   color: #ffffff;
   display: flex;
   height: 58px;
@@ -567,10 +581,9 @@ defineExpose({
   width: 58px;
 }
 
-.collection-profile-avatar img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
+.collection-profile-avatar {
+  --avatar-size: 58px;
+  --avatar-border: 3px;
 }
 
 .icon-modal-head h2,
@@ -648,9 +661,7 @@ defineExpose({
   width: 42px;
 }
 
-.mobile-editor-tabs,
-.mobile-icon-grid,
-.mobile-icon-pager {
+.mobile-editor-tabs {
   display: none;
 }
 
@@ -671,20 +682,9 @@ defineExpose({
 
 .editor-avatar-preview,
 .preview-large-avatar {
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border-radius: 22px;
-  display: block;
-  height: 96px;
+  --avatar-size: 96px;
+  --avatar-border: 4px;
   margin: 0 auto 14px;
-  overflow: hidden;
-  width: 96px;
-}
-
-.editor-avatar-preview img,
-.preview-large-avatar img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
 }
 
 .modal-profile-form,
@@ -701,6 +701,18 @@ defineExpose({
   font-weight: 950;
   gap: 6px;
   text-transform: uppercase;
+}
+
+.modal-profile-form label > span {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.modal-profile-form label > span small {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 900;
 }
 
 .modal-profile-form input,
@@ -743,11 +755,17 @@ defineExpose({
 .modal-edit-actions button,
 .icon-upload-form > button,
 .icon-preview-panel button {
+  align-items: center;
   background: linear-gradient(135deg, #9333ea, #ec4899);
   border-radius: 13px;
   color: #ffffff;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
   font-weight: 950;
   min-height: 42px;
+  padding: 0 14px;
+  white-space: nowrap;
 }
 
 .icon-modal-toolbar {
@@ -815,6 +833,68 @@ defineExpose({
   margin-bottom: 10px;
 }
 
+.unlocked-icons-section {
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid rgba(192, 132, 252, 0.22);
+  border-radius: 16px;
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.unlocked-icons-section header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.unlocked-icons-section strong {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.unlocked-icons-section small {
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.unlocked-icon-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.unlocked-icon-strip button {
+  background: rgba(255, 255, 255, 0.075);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  color: #f8fafc;
+  display: grid;
+  flex: 0 0 88px;
+  gap: 7px;
+  justify-items: center;
+  min-height: 96px;
+  padding: 9px;
+}
+
+.unlocked-icon-strip button.selected {
+  border-color: rgba(192, 132, 252, 0.75);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
+}
+
+.unlocked-icon-strip button.saved {
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.icon-strip-avatar {
+  --avatar-size: 50px;
+  --avatar-border: 2px;
+}
+
 .icon-test-panel {
   margin-bottom: 10px;
 }
@@ -856,6 +936,24 @@ defineExpose({
   box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
 }
 
+.icon-card.special {
+  border-color: rgba(250, 204, 21, 0.5);
+  box-shadow: 0 0 18px rgba(168, 85, 247, 0.18);
+}
+
+.icon-card.special::after {
+  background: linear-gradient(135deg, #a855f7, #ec4899);
+  border-radius: 999px;
+  color: #ffffff;
+  content: 'Especial';
+  font-size: 8px;
+  font-weight: 950;
+  left: 7px;
+  padding: 4px 6px;
+  position: absolute;
+  top: 7px;
+}
+
 .icon-card.locked .icon-art {
   filter: grayscale(0.65);
   opacity: 0.58;
@@ -872,23 +970,17 @@ defineExpose({
   position: absolute;
   right: 7px;
   top: 7px;
+  z-index: 5;
+}
+
+.icon-card.special.saved::after {
+  content: 'Equipado';
 }
 
 .icon-art {
-  border-radius: 14px;
-  display: block;
-  height: 58px;
-  overflow: hidden;
-  width: 58px;
-}
-
-.icon-art img {
-  height: 136%;
-  margin-left: -18%;
-  margin-top: -17%;
-  max-width: none;
-  object-fit: cover;
-  width: 136%;
+  --avatar-size: 58px;
+  --avatar-border: 2px;
+  z-index: 2;
 }
 
 .lock-badge {
@@ -903,6 +995,7 @@ defineExpose({
   right: 8px;
   top: 8px;
   width: 26px;
+  z-index: 6;
 }
 
 .icon-card small {
@@ -959,18 +1052,21 @@ defineExpose({
   background: rgba(34, 197, 94, 0.28);
 }
 
+.icon-preview-panel > button,
+.icon-preview-actions button {
+  min-height: 58px;
+  width: 100%;
+}
+
 .icon-preview-actions {
   display: grid;
   gap: 8px;
   width: 100%;
 }
 
-.icon-preview-actions button.danger {
-  background: #7f1d1d;
-}
-
 .icon-collection-groups,
-.icon-upload-layout {
+.icon-upload-layout,
+.single-icon-manage {
   display: grid;
   gap: 14px;
   margin-top: 18px;
@@ -1009,9 +1105,11 @@ defineExpose({
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
 }
 
-.collection-icon-grid figure {
+.collection-icon-card {
   background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
+  color: #ffffff;
   display: grid;
   gap: 8px;
   justify-items: center;
@@ -1019,30 +1117,34 @@ defineExpose({
   text-align: center;
 }
 
-.collection-icon-grid figure.equipped {
+.collection-icon-card.special {
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--avatar-effect, #a855f7), transparent 72%), transparent 62%),
+    rgba(255, 255, 255, 0.07);
+  border-color: color-mix(in srgb, var(--avatar-effect, #a855f7), transparent 36%);
+}
+
+.collection-icon-card.equipped {
   outline: 2px solid rgba(34, 197, 94, 0.65);
 }
 
-.collection-icon-grid figure > span {
-  border-radius: 999px;
-  height: 54px;
-  overflow: hidden;
-  width: 54px;
-}
-
-.collection-icon-grid img {
-  height: 136%;
-  margin-left: -18%;
-  margin-top: -17%;
-  max-width: none;
-  object-fit: cover;
-  width: 136%;
+.collection-grid-avatar {
+  --avatar-size: 54px;
+  --avatar-border: 2px;
 }
 
 .collection-icon-grid figcaption {
   color: #e5e7eb;
   font-size: 11px;
   font-weight: 850;
+}
+
+.collection-icon-grid figcaption span {
+  color: #fbbf24;
+  display: block;
+  font-size: 9px;
+  font-weight: 950;
+  text-transform: uppercase;
 }
 
 .collection-icon-grid em {
@@ -1069,6 +1171,10 @@ defineExpose({
   grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
 }
 
+.single-icon-manage {
+  grid-template-columns: 1fr;
+}
+
 .icon-manage-list {
   display: grid;
   gap: 9px;
@@ -1092,7 +1198,8 @@ defineExpose({
 }
 
 .icon-manage-list img {
-  border-radius: 12px;
+  background: #ffffff;
+  border-radius: 999px;
   height: 44px;
   object-fit: cover;
   width: 44px;
@@ -1125,9 +1232,66 @@ defineExpose({
   text-align: center;
 }
 
+.visibility-toggle,
+.special-toggle {
+  align-items: center;
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(134, 239, 172, 0.24);
+  border-radius: 14px;
+  color: #dcfce7;
+  display: inline-flex;
+  gap: 9px;
+  justify-content: center;
+  min-height: 42px;
+  font-weight: 950;
+}
+
+.special-toggle {
+  background: rgba(168, 85, 247, 0.18);
+  border-color: rgba(216, 180, 254, 0.24);
+  color: #f3e8ff;
+}
+
+.special-toggle.active {
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.65), rgba(236, 72, 153, 0.55));
+  box-shadow: 0 0 22px rgba(168, 85, 247, 0.24);
+}
+
+.visibility-toggle.hidden {
+  background: rgba(127, 29, 29, 0.24);
+  border-color: rgba(252, 165, 165, 0.28);
+  color: #fecaca;
+}
+
+.effect-color-field {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.effect-color-field input[type="color"] {
+  border-radius: 999px;
+  height: 42px;
+  padding: 3px;
+  width: 64px;
+}
+
+.effect-color-field span {
+  display: flex;
+  gap: 7px;
+  grid-column: 1 / -1;
+}
+
+.effect-color-field span button {
+  background: var(--swatch);
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  height: 28px;
+  width: 28px;
+}
+
 .icon-upload-mini-preview .preview-large-avatar {
-  height: 78px;
-  width: 78px;
+  --avatar-size: 78px;
+  --avatar-border: 3px;
 }
 
 .icon-upload-mini-preview strong {
@@ -1309,34 +1473,78 @@ defineExpose({
     display: none;
   }
 
-  .desktop-icon-grid {
+  .modal-icons {
+    display: grid !important;
+    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-height: 330px;
+    overflow-y: auto;
+    padding-right: 0;
+  }
+
+  .modal-icons .icon-card {
+    border-radius: 14px;
+    gap: 5px;
+    min-height: 92px;
+    padding: 8px 6px;
+  }
+
+  .modal-icons .icon-art {
+    --avatar-size: 48px;
+    --avatar-border: 2px;
+  }
+
+  .modal-icons .icon-card small {
+    font-size: 9px;
+  }
+
+  .modal-icons .lock-badge {
+    height: 22px;
+    right: 5px;
+    top: 5px;
+    width: 22px;
+    z-index: 6;
+  }
+
+  .icon-preview-panel {
+    align-items: center;
+    display: grid;
+    gap: 10px 12px;
+    grid-template-columns: 72px minmax(0, 1fr);
+    justify-items: start;
+    padding: 12px;
+    text-align: left;
+  }
+
+  .icon-preview-panel h3 {
     display: none;
   }
 
-  .mobile-icon-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .icon-preview-panel .preview-large-avatar {
+    --avatar-size: 66px;
+    --avatar-border: 3px;
+    grid-row: span 3;
+    margin: 0;
   }
 
-  .mobile-icon-pager {
-    align-items: center;
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    margin-top: 12px;
+  .icon-preview-panel p {
+    font-size: 10px;
+    margin: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .mobile-icon-pager button {
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 999px;
-    color: #ffffff;
-    height: 36px;
-    width: 36px;
+  .icon-preview-panel > button,
+  .icon-preview-actions {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
-  .mobile-icon-pager span {
-    color: #cbd5e1;
-    font-weight: 950;
+  .icon-preview-actions button {
+    min-height: 42px;
+    width: 100%;
   }
 
   .redeem-confirm-actions {

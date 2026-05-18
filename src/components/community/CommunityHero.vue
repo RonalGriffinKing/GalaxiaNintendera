@@ -22,7 +22,7 @@ defineProps({
   }
 })
 
-const emit = defineEmits(['edit', 'delete', 'toggle-membership'])
+const emit = defineEmits(['edit', 'toggle-membership'])
 </script>
 
 <template>
@@ -40,10 +40,6 @@ const emit = defineEmits(['edit', 'delete', 'toggle-membership'])
       <button v-if="isAdmin" type="button" class="admin-action" @click="emit('edit', community)">
         <i class="fas fa-pen"></i>
         Editar
-      </button>
-      <button v-if="isAdmin && !isOfficial" type="button" class="admin-danger" @click="emit('delete', community)">
-        <i class="fas fa-trash"></i>
-        Eliminar
       </button>
       <button v-if="!isOfficial" type="button" :class="{ joined: isJoined }" :disabled="isToggling" @click="emit('toggle-membership')">
         <i :class="isJoined ? 'fas fa-check' : 'far fa-star'"></i>
@@ -117,6 +113,7 @@ const emit = defineEmits(['edit', 'delete', 'toggle-membership'])
 .galaxy-copy h1 {
   color: #ffffff;
   font-size: clamp(34px, 5vw, 60px);
+  font-weight: 950;
   line-height: 0.95;
   margin-top: 6px;
 }
@@ -161,41 +158,65 @@ const emit = defineEmits(['edit', 'delete', 'toggle-membership'])
 }
 
 .galaxy-actions button.joined {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.galaxy-actions .admin-action {
-  background: #eef2ff;
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
   color: #ffffff;
 }
 
-.galaxy-actions .admin-danger {
-  background: #fee2e2;
-  color: #b91c1c;
+.galaxy-actions .admin-action {
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
+  color: #ffffff;
 }
 
 @media (max-width: 760px) {
   .galaxy-hero {
-    align-items: start;
-    grid-template-columns: 1fr;
+    align-items: center;
+    border-radius: 20px;
+    gap: 10px 12px;
+    grid-template-columns: 64px minmax(0, 1fr);
     min-height: 0;
-    padding: 22px;
+    padding: 14px;
   }
 
   .galaxy-icon {
-    height: 76px;
-    width: 76px;
+    border-radius: 18px;
+    height: 64px;
+    width: 64px;
+  }
+
+  .galaxy-copy h1 {
+    font-size: clamp(25px, 8vw, 34px);
+    margin-top: 3px;
+  }
+
+  .galaxy-copy h1 i {
+    font-size: 16px;
+  }
+
+  .galaxy-copy p {
+    display: -webkit-box;
+    font-size: 12px;
+    line-height: 1.35;
+    margin-top: 6px;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .galaxy-actions {
-    align-items: stretch;
-    width: 100%;
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+    grid-column: 1 / -1;
+    width: auto;
   }
 
   .galaxy-actions button {
+    border-radius: 999px;
     justify-content: center;
-    width: 100%;
+    min-height: 36px;
+    max-width: 100%;
+    padding: 0 13px;
+    width: auto;
   }
 }
 </style>

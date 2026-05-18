@@ -21,7 +21,6 @@ import {
 import { auth, db } from '@/firebase'
 import { notifyThreadLike, notifyThreadReply } from '@/services/notifications'
 import {
-  allowFloatingPlayback,
   disableFloatingPlayback,
   playerState,
   setCurrentVideo,
@@ -29,10 +28,9 @@ import {
   setPlaybackStatus,
   stopPlayback
 } from '@/services/playerState'
-import { resolveProfileIcon } from '@/services/profileProgress'
+import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import CommunityHero from '@/components/community/CommunityHero.vue'
 import CommunityLiveHub from '@/components/community/CommunityLiveHub.vue'
-import CommunityMediaTheater from '@/components/community/CommunityMediaTheater.vue'
 import CommunityOfficialPanel from '@/components/community/CommunityOfficialPanel.vue'
 import CommunityRailNav from '@/components/community/CommunityRailNav.vue'
 import CommunityThreadList from '@/components/community/CommunityThreadList.vue'
@@ -105,7 +103,9 @@ const youtubeVideosError = ref('')
 const videoChatMessages = ref([])
 const videoChatDraft = ref('')
 const videoReplyDrafts = ref({})
-const mediaTheaterOpen = ref(false)
+const playerViewMode = ref('default')
+const mediaTheaterOpen = computed(() => playerViewMode.value === 'theater')
+const persistentPlayerModes = ['floating', 'background', 'paused']
 const liveClockNow = ref(Date.now())
 const liveSessionStartedAt = ref(0)
 const liveStageRef = ref(null)
@@ -214,18 +214,20 @@ const youtubeStageDescription = computed(() => {
 })
 const featuredVideoIsFloating = computed(() => (
   Boolean(featuredYoutubeVideo.value?.id) &&
-  playerState.allowFloatingPlayback &&
+  (playerViewMode.value === 'floating' || playerViewMode.value === 'background') &&
   playerState.currentVideo?.id === featuredYoutubeVideo.value.id
 ))
 const featuredVideoIsPlayingHere = computed(() => (
   Boolean(featuredYoutubeVideo.value?.id) &&
   selectedYoutubeVideo.value?.id === featuredYoutubeVideo.value.id &&
-  !playerState.allowFloatingPlayback
+  playerViewMode.value !== 'floating' &&
+  playerViewMode.value !== 'background'
 ))
 const featuredVideoActionLabel = computed(() => {
-  if (featuredVideoIsFloating.value) return 'Ver aquí'
-  if (featuredVideoIsPlayingHere.value) return 'Ver en segundo plano'
-  return 'Reproducir aquí'
+  if (playerViewMode.value === 'background') return 'Ver mini'
+  if (featuredVideoIsFloating.value) return 'Ver aqui'
+  if (featuredVideoIsPlayingHere.value) return 'Minimizar'
+  return 'Reproducir aqui'
 })
 const featuredVideoActionIcon = computed(() => {
   if (featuredVideoIsFloating.value) return 'fas fa-display'
@@ -266,9 +268,23 @@ const visibleVideoChatMessages = computed(() => {
     .slice(-80)
 })
 const officialVideoPageSize = 5
+const youtubeSearchPageSize = 50
+const officialLiveLibraryItem = computed(() => {
+  const liveVideo = youtubeLiveVideo.value || youtubeLiveFallbackVideo.value
+  if (!liveVideo?.id) return null
+
+  return {
+    ...liveVideo,
+    mediaType: 'live',
+    streamKind: 'live-now',
+    title: liveVideo.title || 'Emision en directo de Galaxia Nintendera',
+    description: liveVideo.description || 'Canal en directo de Galaxia Nintendera'
+  }
+})
 const officialVideoLibrary = computed(() => {
   const seen = new Set()
   return [
+    officialLiveLibraryItem.value,
     ...youtubePastLives.value.map(video => ({ ...video, mediaType: 'video', streamKind: video.streamKind || 'past-live' })),
     ...youtubeRecentVideos.value.map(video => ({ ...video, mediaType: 'video' }))
   ].filter((video) => {
@@ -279,12 +295,12 @@ const officialVideoLibrary = computed(() => {
 })
 const officialVideoFilters = computed(() => [
   { id: 'all', label: 'Todos', icon: 'fas fa-layer-group', count: officialVideoLibrary.value.length },
-  { id: 'live', label: 'Directos', icon: 'fas fa-tower-broadcast', count: officialVideoLibrary.value.filter(video => video.streamKind === 'past-live').length },
-  { id: 'video', label: 'Videos', icon: 'far fa-video', count: officialVideoLibrary.value.filter(video => video.streamKind !== 'past-live').length }
+  { id: 'live', label: 'Directos', icon: 'fas fa-tower-broadcast', count: officialVideoLibrary.value.filter(video => video.streamKind === 'live-now' || video.streamKind === 'past-live').length },
+  { id: 'video', label: 'Videos', icon: 'far fa-video', count: officialVideoLibrary.value.filter(video => video.streamKind !== 'live-now' && video.streamKind !== 'past-live').length }
 ].filter(filter => filter.id === 'all' || filter.count))
 const filteredOfficialVideos = computed(() => {
-  if (officialVideoFilter.value === 'live') return officialVideoLibrary.value.filter(video => video.streamKind === 'past-live')
-  if (officialVideoFilter.value === 'video') return officialVideoLibrary.value.filter(video => video.streamKind !== 'past-live')
+  if (officialVideoFilter.value === 'live') return officialVideoLibrary.value.filter(video => video.streamKind === 'live-now' || video.streamKind === 'past-live')
+  if (officialVideoFilter.value === 'video') return officialVideoLibrary.value.filter(video => video.streamKind !== 'live-now' && video.streamKind !== 'past-live')
   return officialVideoLibrary.value
 })
 const officialVideoPageCount = computed(() => Math.max(1, Math.ceil(filteredOfficialVideos.value.length / officialVideoPageSize)))
@@ -304,6 +320,17 @@ const currentUserImage = computed(() => resolveProfileIcon({
   ...currentUserProfile.value,
   imageUrl: currentUserProfile.value.imageUrl || auth.currentUser?.photoURL || ''
 }))
+const currentUserIconEffect = computed(() => {
+  const meta = resolveProfileIconMeta({
+    ...currentUserProfile.value,
+    imageUrl: currentUserProfile.value.imageUrl || auth.currentUser?.photoURL || ''
+  })
+  return {
+    special: Boolean(meta.special),
+    effectColor: meta.effectColor,
+    saga: meta.saga
+  }
+})
 const isAdmin = computed(() => props.userRole === 'admin')
 const canManageOfficialContent = computed(() => ['admin', 'publisher'].includes(props.userRole))
 const communityRef = collection(db, 'communityThreads')
@@ -338,7 +365,13 @@ const threadTopicFilters = computed(() => [
 ])
 const selectedCommunityThreads = computed(() => {
   if (!selectedCommunity.value) return []
-  return threads.value.filter(thread => (thread.communityId || '') === selectedCommunity.value.id)
+  return threads.value
+    .filter(thread => (thread.communityId || '') === selectedCommunity.value.id)
+    .sort((a, b) => {
+      const pinnedDelta = Number(Boolean(b.pinnedCommunity)) - Number(Boolean(a.pinnedCommunity))
+      if (pinnedDelta) return pinnedDelta
+      return getMillis(b.updatedAt || b.createdAt) - getMillis(a.updatedAt || a.createdAt)
+    })
 })
 const isJoinedSelectedCommunity = computed(() => selectedCommunity.value && joinedCommunityIds.value.includes(selectedCommunity.value.id))
 const isOfficialSelectedCommunity = computed(() => selectedCommunity.value?.id === OFFICIAL_COMMUNITY_ID || selectedCommunity.value?.isOfficial)
@@ -354,6 +387,7 @@ const communityMusicVolumePreview = computed(() => Number(communityDraft.value.m
 const communityThreadBackgroundPreview = computed(() => communityDraft.value.threadBackgroundUrl.trim())
 const draftImagePreview = computed(() => draftImageUrl.value.trim())
 const isEditingCommunity = computed(() => Boolean(editingCommunityId.value))
+const editingCommunity = computed(() => communities.value.find(community => community.id === editingCommunityId.value) || null)
 const communityThreadBackgroundStyle = computed(() => {
   const background = selectedCommunity.value?.threadBackgroundUrl?.trim()
   if (!background) return {}
@@ -548,6 +582,10 @@ const canDeleteComment = (comment) => {
   return isAdmin.value || Boolean(comment.authorId && comment.authorId === currentUserId.value)
 }
 
+const canEditComment = (comment) => {
+  return Boolean(comment?.authorId && comment.authorId === currentUserId.value)
+}
+
 const formatAgo = (value) => {
   const time = getMillis(value)
   if (!time) return 'Ahora'
@@ -696,6 +734,7 @@ const publishThread = async () => {
     authorId: currentUserId.value,
     author: displayName.value,
     authorImage: currentUserImage.value,
+    authorIconEffect: currentUserIconEffect.value,
     handle: '@tu_usuario',
     topic: threadTopic,
     title: body.length > 72 ? `${body.slice(0, 72)}...` : body,
@@ -792,7 +831,7 @@ const closeDiscoverModal = () => {
 }
 
 const viewDiscoveredCommunity = (community) => {
-  if (community?.id !== selectedCommunityId.value && !playerState.allowFloatingPlayback) {
+  if (community?.id !== selectedCommunityId.value && playerViewMode.value !== 'floating') {
     stopPlayback()
     selectedYoutubeVideo.value = null
   }
@@ -801,7 +840,7 @@ const viewDiscoveredCommunity = (community) => {
 }
 
 const selectRailCommunity = (community) => {
-  if (community?.id !== selectedCommunityId.value && !playerState.allowFloatingPlayback) {
+  if (community?.id !== selectedCommunityId.value && playerViewMode.value !== 'floating') {
     stopPlayback()
     selectedYoutubeVideo.value = null
   }
@@ -1001,6 +1040,17 @@ const toggleThread = (thread) => {
   replyDraft.value = ''
 }
 
+const openRouteThread = () => {
+  const threadId = String(route.query.thread || '')
+  if (!threadId) return
+  const thread = threads.value.find(item => item.id === threadId)
+  if (thread?.communityId && selectedCommunityId.value !== thread.communityId) {
+    selectedCommunityId.value = thread.communityId
+  }
+  openThreadId.value = threadId
+  replyDraft.value = ''
+}
+
 const hasLiked = (thread) => {
   return thread.likedBy?.includes(currentUserId.value)
 }
@@ -1033,9 +1083,23 @@ const togglePinnedThread = async (thread) => {
   if (!canPinThread(thread)) return
   const now = Date.now()
   await updateDoc(threadRef(thread.id), {
-    pinnedHome: !thread.pinnedHome,
-    pinnedAt: !thread.pinnedHome ? now : 0,
-    pinnedBy: !thread.pinnedHome ? currentUserId.value : '',
+    pinnedCommunity: !thread.pinnedCommunity,
+    pinnedAt: !thread.pinnedCommunity ? now : 0,
+    pinnedBy: !thread.pinnedCommunity ? currentUserId.value : '',
+    pinnedHome: false,
+    updatedAt: now
+  })
+}
+
+const toggleThreadHomeFeature = async (thread) => {
+  if (!canPinThread(thread)) return
+  const now = Date.now()
+  const isShowing = Boolean(thread.showOnHome || thread.pinnedHome)
+  await updateDoc(threadRef(thread.id), {
+    showOnHome: !isShowing,
+    homePinnedAt: !isShowing ? now : 0,
+    homePinnedBy: !isShowing ? currentUserId.value : '',
+    pinnedHome: false,
     updatedAt: now
   })
 }
@@ -1114,10 +1178,12 @@ const playYoutubeVideo = (video) => {
   window.dispatchEvent(new CustomEvent('galaxy-media-stop'))
   selectedYoutubeVideo.value = nextVideo
   disableFloatingPlayback()
+  playerViewMode.value = 'default'
   setCurrentVideo(nextVideo)
   setPlaybackStatus('playing')
   skipNextVideoRouteScroll = route.query.v !== video.id
   router.replace({ path: route.path, query: { ...route.query, id: selectedCommunityId.value, v: video.id, live: undefined, reload: undefined } })
+  scrollToLiveStage()
 }
 
 const refreshLiveNow = async () => {
@@ -1137,10 +1203,8 @@ const moveYoutubeVideoToFloating = (video) => {
     ...video,
     startedAt: playerState.currentTime
   })
-  allowFloatingPlayback({ minimized: window.matchMedia?.('(max-width: 859px)').matches })
-  window.dispatchEvent(new CustomEvent('galaxy-media-play', { detail: playerState.currentVideo }))
-  selectedYoutubeVideo.value = null
-  router.replace({ path: route.path, query: { ...route.query, v: undefined, live: undefined, reload: undefined } })
+  disableFloatingPlayback()
+  playerViewMode.value = 'floating'
 }
 
 const handleFeaturedVideoAction = () => {
@@ -1148,19 +1212,45 @@ const handleFeaturedVideoAction = () => {
   if (!video?.id) return
 
   if (featuredVideoIsFloating.value) {
-    playYoutubeVideo({
-      ...video,
-      startedAt: playerState.currentTime
-    })
+    playerViewMode.value = 'floating'
     return
   }
 
-  if (featuredVideoIsPlayingHere.value) {
+  if (featuredVideoIsPlayingHere.value || playerState.currentVideo?.id === video.id) {
     moveYoutubeVideoToFloating(video)
     return
   }
 
   playYoutubeVideo(video)
+}
+
+const pausePlayerShell = () => {
+  setPlaybackStatus('paused')
+}
+
+const restorePausedPlayerOnCommunityRoute = async () => {
+  if (route.path !== '/comunidad' || playerViewMode.value !== 'paused') return
+  const pausedVideo = selectedYoutubeVideo.value || playerState.currentVideo
+  if (!pausedVideo?.id) return
+
+  if (!selectedYoutubeVideo.value?.id) {
+    selectedYoutubeVideo.value = {
+      ...pausedVideo,
+      startedAt: playerState.currentTime || pausedVideo.startedAt || 0
+    }
+  }
+
+  playerViewMode.value = 'default'
+  await nextTick()
+  scrollToLiveStage()
+}
+
+const returnPlayerToCommunity = () => {
+  playerViewMode.value = 'default'
+  router.push({
+    path: '/comunidad',
+    query: { id: selectedCommunityId.value || OFFICIAL_COMMUNITY_ID }
+  })
 }
 
 const formatVideoChatTime = (seconds) => {
@@ -1186,6 +1276,7 @@ const sendVideoChatMessage = async () => {
     authorId: userId,
     author: displayName.value,
     authorImage: currentUserImage.value,
+    authorIconEffect: currentUserIconEffect.value,
     likedBy: [],
     likes: 0,
     replies: [],
@@ -1230,6 +1321,7 @@ const sendVideoReply = async (message) => {
     authorId: currentUserId.value,
     author: displayName.value,
     authorImage: currentUserImage.value,
+    authorIconEffect: currentUserIconEffect.value,
     createdAt: Date.now()
   }
 
@@ -1247,12 +1339,14 @@ const deleteVideoMessage = async (message) => {
 
 const openVideoTheater = () => {
   if (!featuredYoutubeVideo.value?.id) return
-  playYoutubeVideo(featuredYoutubeVideo.value)
-  mediaTheaterOpen.value = true
+  if (playerState.currentVideo?.id !== featuredYoutubeVideo.value.id) {
+    playYoutubeVideo(featuredYoutubeVideo.value)
+  }
+  playerViewMode.value = 'theater'
 }
 
 const closeVideoTheater = () => {
-  mediaTheaterOpen.value = false
+  playerViewMode.value = 'default'
   if (route.query.theater) {
     router.replace({ path: route.path, query: { ...route.query, theater: undefined } })
   }
@@ -1317,9 +1411,7 @@ const scrollToLiveStage = async (retries = 8) => {
   ) || 72
   const rect = stage.getBoundingClientRect()
   const topPadding = navOffset + 14
-  const availableHeight = Math.max(280, window.innerHeight - topPadding - 18)
-  const centerOffset = Math.max(0, (availableHeight - rect.height) / 2)
-  const targetTop = window.scrollY + rect.top - topPadding - centerOffset
+  const targetTop = window.scrollY + rect.top - topPadding
 
   window.scrollTo({
     top: Math.max(0, targetTop),
@@ -1400,7 +1492,7 @@ const loadYoutubeVideos = async ({ force = false } = {}) => {
         eventType: 'completed',
         type: 'video',
         order: 'date',
-        maxResults: 12,
+        maxResults: youtubeSearchPageSize,
         key: youtubeApiKey.value
       }).catch(() => ({ items: [] })),
       fetchYoutubeJson('search', {
@@ -1408,7 +1500,7 @@ const loadYoutubeVideos = async ({ force = false } = {}) => {
         channelId: youtubeChannelId.value,
         order: 'date',
         type: 'video',
-        maxResults: 25,
+        maxResults: youtubeSearchPageSize,
         key: youtubeApiKey.value
       })
     ])
@@ -1637,6 +1729,7 @@ const publishReply = async (thread) => {
     authorId: currentUserId.value,
     author: displayName.value,
     authorImage: currentUserImage.value,
+    authorIconEffect: currentUserIconEffect.value,
     handle: '@tu_usuario',
     body,
     createdAt: now
@@ -1672,6 +1765,26 @@ const triggerDeleteComment = (thread, comment) => {
     message: 'Se borrara este mensaje de la conversacion.',
     action: () => deleteComment(thread, comment)
   }
+}
+
+const editComment = async (thread, comment, body) => {
+  if (!canEditComment(comment)) return
+  const nextBody = String(body || '').trim()
+  if (!nextBody || nextBody === comment.body) return
+
+  const comments = (thread.comments || []).map(item => {
+    if (item.id !== comment.id) return item
+    return {
+      ...item,
+      body: nextBody,
+      editedAt: Date.now()
+    }
+  })
+
+  await updateDoc(threadRef(thread.id), {
+    comments,
+    updatedAt: Date.now()
+  })
 }
 
 const closeConfirm = () => {
@@ -1863,6 +1976,10 @@ watch(() => route.query.id, (id) => {
   }
 })
 
+watch([() => route.query.thread, threads], () => {
+  openRouteThread()
+}, { immediate: true })
+
 watch([() => route.query.v, youtubeRecentVideos, youtubePastLives, youtubeLiveVideo], ([videoId]) => {
   if (!videoId) return
   const id = String(videoId)
@@ -1891,8 +2008,24 @@ watch(() => route.query.live, (live) => {
   loadYoutubeVideos().finally(() => scrollToLiveStage())
 }, { immediate: true })
 
+watch(() => route.fullPath, () => {
+  restorePausedPlayerOnCommunityRoute()
+}, { immediate: true })
+
+watch(playerViewMode, () => {
+  restorePausedPlayerOnCommunityRoute()
+})
+
 watch(() => route.query.theater, (theater) => {
-  if (theater) mediaTheaterOpen.value = true
+  if (theater) playerViewMode.value = 'theater'
+}, { immediate: true })
+
+watch(playerViewMode, (mode) => {
+  document.body.classList.toggle('community-player-expanded', mode === 'theater')
+  document.documentElement.classList.toggle('community-player-expanded', mode === 'theater')
+  if (mode !== 'theater' && route.query.theater) {
+    router.replace({ path: route.path, query: { ...route.query, theater: undefined } })
+  }
 }, { immediate: true })
 
 watch([youtubeChannelId, youtubeApiKey], () => {
@@ -1947,7 +2080,7 @@ watch(selectedCommunity, (community) => {
 })
 
 onBeforeRouteLeave((to, from, next) => {
-  if (selectedYoutubeVideo.value?.id && !playerState.allowFloatingPlayback) {
+  if (selectedYoutubeVideo.value?.id && !persistentPlayerModes.includes(playerViewMode.value)) {
     stopPlayback()
     selectedYoutubeVideo.value = null
   }
@@ -1959,7 +2092,7 @@ onBeforeRouteUpdate((to, from, next) => {
   const toCommunityId = String(to.query.id || '')
   const isChangingCommunity = to.path === '/comunidad' && toCommunityId && toCommunityId !== fromCommunityId
 
-  if (isChangingCommunity && selectedYoutubeVideo.value?.id && !playerState.allowFloatingPlayback) {
+  if (isChangingCommunity && selectedYoutubeVideo.value?.id && !persistentPlayerModes.includes(playerViewMode.value)) {
     stopPlayback()
     selectedYoutubeVideo.value = null
   }
@@ -1975,6 +2108,8 @@ onUnmounted(() => {
   unsubscribeLiveGoals?.()
   unsubscribeVideoChat?.()
   document.body.style.overflow = ''
+  document.body.classList.remove('community-player-expanded')
+  document.documentElement.classList.remove('community-player-expanded')
 })
 </script>
 
@@ -2010,7 +2145,6 @@ onUnmounted(() => {
           :is-joined="isJoinedSelectedCommunity"
           :is-toggling="isTogglingMembership"
           @edit="startEditCommunity"
-          @delete="triggerDeleteCommunity"
           @toggle-membership="joinSelectedCommunity"
         />
 
@@ -2020,6 +2154,7 @@ onUnmounted(() => {
           v-model:video-chat-draft="videoChatDraft"
           v-model:video-reply-drafts="videoReplyDrafts"
           :youtube-videos-loading="youtubeVideosLoading"
+          v-model:view-mode="playerViewMode"
           :youtube-stage-embed-url="youtubeStageEmbedUrl"
           :current-live-goal="currentLiveGoal"
           :featured-video-is-live="featuredVideoIsLive"
@@ -2050,10 +2185,13 @@ onUnmounted(() => {
           :has-liked-video-message="hasLikedVideoMessage"
           :can-delete-video-message="canDeleteVideoMessage"
           :format-video-date="formatVideoDate"
+          :active-route="route.path === '/comunidad'"
           @refresh-live="refreshLiveNow"
           @toggle-live-goal="toggleLiveGoalExpanded"
           @featured-video-action="handleFeaturedVideoAction"
           @open-theater="openVideoTheater"
+          @close-player="pausePlayerShell"
+          @return-community="returnPlayerToCommunity"
           @like-message="toggleVideoMessageLike"
           @delete-message="deleteVideoMessage"
           @send-reply="sendVideoReply"
@@ -2083,12 +2221,15 @@ onUnmounted(() => {
           :can-pin-thread="canPinThread"
           :can-delete-thread="canDeleteThread"
           :can-delete-comment="canDeleteComment"
+          :can-edit-comment="canEditComment"
           @create-thread="openThreadComposer"
           @open-thread="toggleThread"
           @like-thread="toggleLike"
           @pin-thread="togglePinnedThread"
+          @home-thread="toggleThreadHomeFeature"
           @delete-thread="triggerDeleteThread"
           @delete-comment="triggerDeleteComment"
+          @edit-comment="editComment"
           @comment-thread="publishReply"
           @open-profile="openUserProfile"
           @update-filter="(topic) => { selectedTopic = topic }"
@@ -2133,9 +2274,20 @@ onUnmounted(() => {
                 <span>Admin</span>
                 <h2>{{ isEditingCommunity ? 'Editar comunidad' : 'Crear comunidad' }}</h2>
               </div>
-              <button type="button" aria-label="Cerrar editor" @click="closeCommunityEditor">
-                <i class="fas fa-xmark"></i>
-              </button>
+              <div class="community-editor-head-actions">
+                <button
+                  v-if="isEditingCommunity && editingCommunity && !editingCommunity.isOfficial && editingCommunity.id !== OFFICIAL_COMMUNITY_ID"
+                  type="button"
+                  class="community-editor-delete"
+                  aria-label="Eliminar comunidad"
+                  @click="triggerDeleteCommunity(editingCommunity)"
+                >
+                  <i class="fas fa-trash"></i>
+                </button>
+                <button type="button" aria-label="Cerrar editor" @click="closeCommunityEditor">
+                  <i class="fas fa-xmark"></i>
+                </button>
+              </div>
             </div>
 
             <div class="community-editor-layout">
@@ -2440,30 +2592,6 @@ onUnmounted(() => {
       </div>
     </Transition>
 
-    <CommunityMediaTheater
-      v-model:video-chat-draft="videoChatDraft"
-      :open="mediaTheaterOpen"
-      :youtube-stage-title="youtubeStageTitle"
-      :youtube-stage-embed-url="youtubeStageEmbedUrl"
-      :current-live-goal="currentLiveGoal"
-      :video-discussion-title="videoDiscussionTitle"
-      :video-discussion-subtitle="videoDiscussionSubtitle"
-      :active-video-second="activeVideoSecond"
-      :visible-video-chat-messages="visibleVideoChatMessages"
-      :featured-youtube-video="featuredYoutubeVideo"
-      :featured-video-is-live="featuredVideoIsLive"
-      :video-discussion-placeholder="videoDiscussionPlaceholder"
-      :format-video-chat-time="formatVideoChatTime"
-      :avatar-initial="avatarInitial"
-      :has-liked-video-message="hasLikedVideoMessage"
-      :can-delete-video-message="canDeleteVideoMessage"
-      @close="closeVideoTheater"
-      @toggle-live-goal="toggleLiveGoalExpanded"
-      @like-message="toggleVideoMessageLike"
-      @delete-message="deleteVideoMessage"
-      @send-message="sendVideoChatMessage"
-    />
-
     <Transition name="fade">
       <div v-if="selectedProfile" class="profile-view-modal">
         <div class="confirm-backdrop" @click="closeUserProfile"></div>
@@ -2560,6 +2688,26 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+:global(body.community-player-expanded .public-bottom-nav),
+:global(body.community-player-expanded .public-live-slot),
+:global(body.community-player-expanded .global-live-bubble),
+:global(body.community-player-expanded .direct-chat-fab),
+:global(body.community-player-expanded .direct-chat-panel),
+:global(body.community-player-expanded .music-bubble-fab),
+:global(body.community-player-expanded .music-bubble-panel),
+:global(body.community-player-expanded .community-rail-nav),
+:global(body.community-player-expanded .community-switcher-shell),
+:global(body.community-player-expanded .community-quick-shell),
+:global(body.community-player-expanded .community-rail-card),
+:global(body.community-player-expanded .community-switcher),
+:global(body.community-player-expanded .community-rail-dots),
+:global(body.community-player-expanded .public-nav),
+:global(body.community-player-expanded .public-bottom-nav) {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
 .community-panel {
   display: grid;
   gap: 18px;
@@ -3176,7 +3324,13 @@ onUnmounted(() => {
   font-weight: 950;
 }
 
-.community-editor-topbar > button {
+.community-editor-head-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.community-editor-head-actions button {
   align-items: center;
   background: #f8fafc;
   border: 1px solid #e5e7eb;
@@ -3186,6 +3340,12 @@ onUnmounted(() => {
   height: 40px;
   justify-content: center;
   width: 40px;
+}
+
+.community-editor-head-actions .community-editor-delete {
+  background: #fff1f2;
+  border-color: #ffe4e6;
+  color: #e11d48;
 }
 
 .community-editor-layout {
@@ -4305,19 +4465,22 @@ onUnmounted(() => {
   border: 1px solid rgba(216, 180, 254, 0.24);
   border-radius: 22px;
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
+  box-sizing: border-box;
   color: #f8fafc;
   display: grid;
   gap: 16px;
-  max-height: min(760px, calc(100dvh - 36px));
-  max-width: 720px;
+  max-height: min(820px, calc(100dvh - 40px));
+  max-width: min(980px, calc(100vw - 48px));
+  overflow-x: hidden;
   overflow-y: auto;
-  padding: 22px;
+  padding: 24px;
   position: relative;
   width: 100%;
 }
 
 .event-manager-head {
-  padding-right: 42px;
+  min-width: 0;
+  padding-right: 54px;
 }
 
 .event-manager-head span {
@@ -4331,9 +4494,11 @@ onUnmounted(() => {
 
 .event-manager-head h2 {
   color: #ffffff;
-  font-size: 22px;
+  font-size: clamp(24px, 2.6vw, 34px);
   font-weight: 950;
+  line-height: 1.05;
   margin-top: 5px;
+  overflow-wrap: anywhere;
 }
 
 .event-form-actions {
@@ -4417,6 +4582,77 @@ onUnmounted(() => {
   color: #fecaca;
 }
 
+@media (min-width: 920px) {
+  .event-manager-card {
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  }
+
+  .event-manager-head {
+    grid-column: 1 / -1;
+  }
+
+  .event-admin-form {
+    align-self: start;
+    margin-top: 0;
+  }
+
+  .event-manager-list {
+    align-self: start;
+    background: rgba(8, 12, 30, 0.42);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 18px;
+    max-height: calc(100dvh - 230px);
+    min-height: 0;
+    overflow-y: auto;
+    padding: 14px;
+  }
+}
+
+.event-manager-modal {
+  overflow: hidden;
+}
+
+.event-manager-card {
+  display: flex !important;
+  flex-direction: column;
+  max-width: min(760px, calc(100vw - 36px));
+  min-width: 0;
+  overflow-x: hidden !important;
+  scrollbar-gutter: stable;
+  width: min(760px, calc(100vw - 36px));
+}
+
+.event-manager-head {
+  display: block !important;
+  flex: 0 0 auto;
+  padding-right: 56px;
+  width: 100%;
+}
+
+.event-manager-head h2 {
+  max-width: 100%;
+  text-align: left;
+  white-space: normal;
+}
+
+.event-admin-form,
+.event-manager-list {
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.event-date-picker {
+  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
+}
+
+.event-manager-list {
+  background: rgba(8, 12, 30, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 18px;
+  padding: 14px;
+}
+
 .setup-only {
   background: #111827;
   color: #ffffff;
@@ -4430,6 +4666,22 @@ onUnmounted(() => {
 @media (max-width: 780px) {
   .miiverse-composer {
     display: none;
+  }
+
+  .event-manager-modal {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .event-manager-card {
+    border-radius: 20px;
+    max-height: calc(100dvh - 20px);
+    max-width: 100%;
+    padding: 18px;
+  }
+
+  .event-manager-head {
+    padding-right: 46px;
   }
 
   .event-date-picker {
@@ -4586,7 +4838,7 @@ onUnmounted(() => {
     line-height: 1.1;
   }
 
-  .community-editor-topbar > button {
+  .community-editor-head-actions button {
     border-radius: 999px;
     height: 38px;
     width: 38px;

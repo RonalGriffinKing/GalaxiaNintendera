@@ -6,7 +6,8 @@
 
 html {
   background: #050816;
-  font-family: 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family-base: 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-family-base);
   min-height: 100%;
   overscroll-behavior-y: none;
   scrollbar-color: #c084fc rgba(8, 12, 30, 0.78);
@@ -18,7 +19,7 @@ body {
   margin: 0;
   background: #050816;
   color: #f8fafc;
-  font-family: 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-family-base);
   min-height: 100%;
   overscroll-behavior-y: none;
   -webkit-font-smoothing: antialiased;
@@ -76,4 +77,12 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-family-base);
+  font-weight: 950;
 }

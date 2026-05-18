@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { collection, getDocs } from "firebase/firestore"
 import { auth, db } from "@/firebase"
-import { resolveProfileIcon } from '@/services/profileProgress'
+import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { categoryIcon, loadPostCategories, normalizeCategory, postCategoryLabels, postMatchesCategory } from '@/services/postCategories'
 import bienvenidaImage from '@/iconos/bienvenida.png'
 import bannerImage from '@/iconos/Banner.png'
@@ -11,20 +11,33 @@ import { HOME_HERO_SLIDE_DURATION, HOME_LATEST_SLIDE_DURATION, HOME_POSTS_PER_PA
 import { useTimedCarousel } from '@/composables/useTimedCarousel'
 import HomeDiscoveryFeed from '@/components/home/HomeDiscoveryFeed.vue'
 import HomeMediaPanel from '@/components/home/HomeMediaPanel.vue'
+import HomeWelcomeLoader from '@/components/home/HomeWelcomeLoader.vue'
+import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
 const router = useRouter()
+const HOME_WELCOME_STORAGE_KEY = 'galaxia-home-welcome-seen'
+const HOME_WELCOME_MAX_WAIT = 4200
+const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
+const shouldShowHomeWelcome = typeof window !== 'undefined'
+  && sessionStorage.getItem(HOME_WELCOME_STORAGE_KEY) !== 'true'
 const posts = ref([])
 const mainEntries = ref([])
 const upcomingPosts = ref([])
 const communities = ref([])
 const communityThreads = ref([])
 const galaxyEvents = ref([])
+const displayedFeaturedHomeEvents = ref([])
 const viewedPosts = ref([])
 const rewardedPosts = ref([])
 const authorProfiles = ref({})
 const selectedLatestFilter = ref('Todas')
 const categories = ref([])
+const isInitialHomeLoading = ref(shouldShowHomeWelcome)
+const homeDataReady = ref(false)
+const initialLoadCompleted = ref(!shouldShowHomeWelcome)
+const homeWelcomeTimedOut = ref(false)
 const POSTS_PER_PAGE = HOME_POSTS_PER_PAGE
+let homeWelcomeTimer = null
 
 const latestPool = computed(() => {
   return posts.value
@@ -42,11 +55,11 @@ const latestPosts = computed(() => {
   return latestPool.value.slice(start, start + POSTS_PER_PAGE)
 })
 const featuredPost = computed(() => posts.value[0] || null)
-const officialCommunity = computed(() => communities.value.find(community => community.isOfficial || community.id === 'galaxia-oficial') || communities.value[0] || null)
-const recommendedCommunities = computed(() => communities.value.filter(community => community.id !== 'galaxia-oficial').slice(0, 4))
+const officialCommunity = computed(() => communities.value.find(community => community.isOfficial || community.id === OFFICIAL_COMMUNITY_ID) || communities.value[0] || null)
+const recommendedCommunities = computed(() => communities.value.filter(community => community.id !== OFFICIAL_COMMUNITY_ID).slice(0, 4))
 const pinnedHomeThread = computed(() => [...communityThreads.value]
-  .filter(thread => thread.pinnedHome)
-  .sort((a, b) => getTime(b.pinnedAt || b.updatedAt || b.createdAt) - getTime(a.pinnedAt || a.updatedAt || a.createdAt))[0] || null
+  .filter(thread => thread.showOnHome || thread.pinnedHome)
+  .sort((a, b) => getTime(b.homePinnedAt || b.pinnedAt || b.updatedAt || b.createdAt) - getTime(a.homePinnedAt || a.pinnedAt || a.updatedAt || a.createdAt))[0] || null
 )
 const successfulThreads = computed(() => [...communityThreads.value]
   .sort((a, b) => (Number(b.likes || 0) + Number(b.replies || 0)) - (Number(a.likes || 0) + Number(a.replies || 0)))
@@ -110,6 +123,12 @@ const featuredHomeEvents = computed(() => galaxyEvents.value
   .sort((a, b) => getTime(a.startsAt) - getTime(b.startsAt))
   .slice(0, 3)
 )
+const communityForThread = (thread) => {
+  if (!thread) return officialCommunity.value
+  return communities.value.find(community => community.id === thread.communityId)
+    || communities.value.find(community => community.name === thread.communityName)
+    || officialCommunity.value
+}
 const formatHeroDate = (value) => {
   const time = getTime(value)
   if (!time) return ''
@@ -121,21 +140,47 @@ const formatHeroDate = (value) => {
     minute: '2-digit'
   }).format(new Date(time))
 }
+const formatHeroDay = (value) => {
+  const time = getTime(value)
+  if (!time) return '--'
+  return new Intl.DateTimeFormat('es-ES', { day: '2-digit' }).format(new Date(time))
+}
+const formatHeroMonth = (value) => {
+  const time = getTime(value)
+  if (!time) return 'Pronto'
+  return new Intl.DateTimeFormat('es-ES', { month: 'short' }).format(new Date(time)).replace('.', '')
+}
+const formatHeroTime = (value) => {
+  const time = getTime(value)
+  if (!time) return 'Hora pendiente'
+  return new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit' }).format(new Date(time))
+}
 const heroSlides = computed(() => {
   const slides = []
 
   if (pinnedHomeThread.value) {
+    const community = communityForThread(pinnedHomeThread.value)
     slides.push({
       id: `thread-${pinnedHomeThread.value.id}`,
+      kind: 'thread',
       eyebrow: pinnedHomeThread.value.communityName || 'Hilo fijado',
       title: pinnedHomeThread.value.title || 'Destacado de la comunidad',
       accent: 'Destacado',
       text: pinnedHomeThread.value.body || 'Un comunicado importante fijado desde comunidades.',
-      image: pinnedHomeThread.value.imageUrl || bannerImage,
+      image: community?.bannerUrl || pinnedHomeThread.value.imageUrl || bannerImage,
+      visualImage: community?.bannerUrl || pinnedHomeThread.value.imageUrl || bannerImage,
+      communityIcon: community?.iconUrl || '',
+      communityName: community?.name || pinnedHomeThread.value.communityName || 'Comunidad',
       label: 'Destacado',
       primaryLabel: 'Ver hilo',
       primaryIcon: 'far fa-comment',
-      action: () => router.push('/comunidad')
+      action: () => router.push({
+        path: '/comunidad',
+        query: {
+          id: pinnedHomeThread.value.communityId || community?.id || OFFICIAL_COMMUNITY_ID,
+          thread: pinnedHomeThread.value.id
+        }
+      })
     })
   }
 
@@ -154,14 +199,18 @@ const heroSlides = computed(() => {
     })
   }
 
-  featuredHomeEvents.value.forEach((event) => {
+  displayedFeaturedHomeEvents.value.forEach((event) => {
     slides.push({
       id: `event-${event.id}`,
+      kind: 'event',
       eyebrow: event.type || 'Evento',
       title: event.title || 'Evento destacado',
       accent: '',
       text: event.description || 'Un evento importante de Galaxia Nintendera.',
       meta: formatHeroDate(event.startsAt),
+      dateDay: formatHeroDay(event.startsAt),
+      dateMonth: formatHeroMonth(event.startsAt),
+      dateTime: formatHeroTime(event.startsAt),
       image: event.backgroundUrl || event.imageUrl || bannerImage,
       label: event.type || 'Evento',
       primaryLabel: ['live', 'directo', 'direct'].includes(String(event.type || '').toLowerCase()) ? 'Apuntarme al live' : 'Apuntarme al evento',
@@ -220,9 +269,35 @@ const heroCarousel = useTimedCarousel(computed(() => heroSlides.value.length), H
 const heroSlideIndex = heroCarousel.index
 const heroProgressPercent = heroCarousel.progressPercent
 
+const finishInitialHomeLoad = () => {
+  if (initialLoadCompleted.value) return
+  initialLoadCompleted.value = true
+  isInitialHomeLoading.value = false
+  if (typeof window !== 'undefined') {
+    window.clearTimeout(homeWelcomeTimer)
+    homeWelcomeTimer = null
+  }
+}
+
+const markHomeDataReady = () => {
+  homeDataReady.value = true
+  if (!homeWelcomeTimedOut.value) {
+    displayedFeaturedHomeEvents.value = featuredHomeEvents.value
+  }
+  finishInitialHomeLoad()
+}
+
 onMounted(async () => {
+  if (shouldShowHomeWelcome && typeof window !== 'undefined') {
+    sessionStorage.setItem(HOME_WELCOME_STORAGE_KEY, 'true')
+    homeWelcomeTimer = window.setTimeout(() => {
+      homeWelcomeTimedOut.value = true
+      finishInitialHomeLoad()
+    }, HOME_WELCOME_MAX_WAIT)
+  }
+
   window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
-  categories.value = await loadPostCategories()
+  categories.value = await loadPostCategories().catch(() => [])
   loadLocalReadMarks()
   const cached = localStorage.getItem('posts')
 
@@ -266,10 +341,13 @@ onMounted(async () => {
     await loadHomeCommunityData()
   } catch (error) {
     console.error(error)
+  } finally {
+    markHomeDataReady()
   }
 })
 
 onUnmounted(() => {
+  if (typeof window !== 'undefined') window.clearTimeout(homeWelcomeTimer)
   heroCarousel.stop()
   latestCarousel.stop()
 })
@@ -382,6 +460,10 @@ const authorIcon = (post) => {
   const profile = authorProfile(post)
   return post.authorId ? resolveProfileIcon(profile) : ''
 }
+const authorIconMeta = (post) => {
+  const profile = authorProfile(post)
+  return post.authorId ? resolveProfileIconMeta(profile) : {}
+}
 
 const loadAuthorProfiles = async (sourcePosts = posts.value) => {
   const ids = [...new Set(sourcePosts.map(post => post.authorId).filter(Boolean))]
@@ -433,7 +515,7 @@ const loadHomeCommunityData = async () => {
       ...official
     },
     ...savedCommunities.filter(item => item.id !== 'galaxia-oficial')
-  ].slice(0, 6)
+  ]
 
   communityThreads.value = threadSnap.docs
     .map(item => ({ id: item.id, ...item.data() }))
@@ -448,6 +530,8 @@ const loadHomeCommunityData = async () => {
 
 <template>
   <div class="home-page">
+    <HomeWelcomeLoader :visible="isInitialHomeLoading" />
+
     <div class="home-page-content">
         <section
           class="home-hero"
@@ -528,17 +612,39 @@ const loadHomeCommunityData = async () => {
               <button
                 type="button"
                 class="hero-feature-card"
-                :class="{ 'no-image': !activeHeroSlide.image, clickable: activeHeroSlide.action }"
+                :class="[
+                  { 'no-image': !activeHeroSlide.visualImage && !activeHeroSlide.image, clickable: activeHeroSlide.action },
+                  activeHeroSlide.kind ? `is-${activeHeroSlide.kind}` : ''
+                ]"
                 @click="openHeroSlide"
               >
-                <img v-if="activeHeroSlide.image" :src="activeHeroSlide.image" alt="" />
+                <template v-if="activeHeroSlide.kind === 'event'">
+                  <div class="hero-event-preview">
+                    <span class="hero-event-preview-label">{{ activeHeroSlide.label }}</span>
+                    <strong>{{ activeHeroSlide.dateDay }}</strong>
+                    <em>{{ activeHeroSlide.dateMonth }}</em>
+                    <small>{{ activeHeroSlide.dateTime }}</small>
+                  </div>
+                </template>
+                <template v-else-if="activeHeroSlide.kind === 'thread'">
+                  <img v-if="activeHeroSlide.visualImage || activeHeroSlide.image" :src="activeHeroSlide.visualImage || activeHeroSlide.image" alt="" />
+                  <div class="hero-thread-preview">
+                    <img v-if="activeHeroSlide.communityIcon" :src="activeHeroSlide.communityIcon" alt="" />
+                    <span v-else>{{ (activeHeroSlide.communityName || 'G').charAt(0) }}</span>
+                    <div>
+                      <small>{{ activeHeroSlide.communityName }}</small>
+                      <strong>Ver hilo</strong>
+                    </div>
+                  </div>
+                </template>
+                <img v-else-if="activeHeroSlide.image" :src="activeHeroSlide.image" alt="" />
                 <div v-else class="hero-empty-state">
                   <div class="hero-empty-content">
                     <h2>{{ activeHeroSlide.title }}</h2>
                     <p>{{ activeHeroSlide.text }}</p>
                   </div>
                 </div>
-                <span>{{ activeHeroSlide.label }}</span>
+                <span v-if="activeHeroSlide.kind !== 'event'">{{ activeHeroSlide.label }}</span>
               </button>
             </div>
           </div>
@@ -616,10 +722,13 @@ const loadHomeCommunityData = async () => {
                 <p>{{ post.content }}</p>
                 <div class="analysis-card-footer">
                   <div class="analysis-card-author">
-                    <span>
-                      <img v-if="authorIcon(post)" :src="authorIcon(post)" alt="" />
-                      <b v-else>{{ (post.authorName || 'R').charAt(0).toUpperCase() }}</b>
-                    </span>
+                    <ProfileAvatar
+                      class="news-author-avatar"
+                      :src="authorIcon(post)"
+                      :alt="post.authorName || 'Redactor'"
+                      :label="post.authorName || 'Redactor'"
+                      :effect="authorIconMeta(post)"
+                    />
                     <small>{{ post.authorName || 'Redactor' }} - {{ formatAgo(post.createdAt) }}</small>
                   </div>
                   <em>Leer analisis <i class="fas fa-arrow-right"></i></em>
@@ -640,10 +749,13 @@ const loadHomeCommunityData = async () => {
                 <p>{{ post.content }}</p>
                 <div class="featured-news-footer">
                   <div class="featured-news-author">
-                    <span>
-                      <img v-if="authorIcon(post)" :src="authorIcon(post)" alt="" />
-                      <b v-else>{{ (post.authorName || 'R').charAt(0).toUpperCase() }}</b>
-                    </span>
+                    <ProfileAvatar
+                      class="news-author-avatar"
+                      :src="authorIcon(post)"
+                      :alt="post.authorName || 'Redactor'"
+                      :label="post.authorName || 'Redactor'"
+                      :effect="authorIconMeta(post)"
+                    />
                     <small>{{ post.authorName || 'Redactor' }} - {{ formatAgo(post.createdAt) }}</small>
                   </div>
                   <em>Ver noticia <i class="fas fa-arrow-right"></i></em>
@@ -660,10 +772,13 @@ const loadHomeCommunityData = async () => {
                 <h3>{{ cardTitle(post) }}</h3>
                 <div class="standard-news-footer">
                   <div class="standard-news-author">
-                    <span>
-                      <img v-if="authorIcon(post)" :src="authorIcon(post)" alt="" />
-                      <b v-else>{{ (post.authorName || 'R').charAt(0).toUpperCase() }}</b>
-                    </span>
+                    <ProfileAvatar
+                      class="news-author-avatar"
+                      :src="authorIcon(post)"
+                      :alt="post.authorName || 'Redactor'"
+                      :label="post.authorName || 'Redactor'"
+                      :effect="authorIconMeta(post)"
+                    />
                     <small>{{ post.authorName || 'Redactor' }} - {{ formatAgo(post.createdAt) }}</small>
                   </div>
                   <em>Ver <i class="fas fa-arrow-right"></i></em>
@@ -717,6 +832,11 @@ const loadHomeCommunityData = async () => {
   min-height: 100vh;
   overflow: hidden;
   padding: var(--public-page-top, 88px) 10px 36px;
+}
+
+.home-page-content {
+  display: grid;
+  gap: 18px;
 }
 
 .home-hero {
@@ -1045,6 +1165,137 @@ const loadHomeCommunityData = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.hero-feature-card.is-thread::before,
+.hero-feature-card.is-event::before {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(34, 211, 238, 0.28), transparent 28%),
+    radial-gradient(circle at 78% 18%, rgba(236, 72, 153, 0.28), transparent 28%),
+    linear-gradient(135deg, rgba(5, 8, 22, 0.22), rgba(5, 8, 22, 0.82));
+  content: "";
+  inset: 0;
+  position: absolute;
+  z-index: 1;
+}
+
+.hero-thread-preview {
+  align-items: center;
+  background: rgba(5, 8, 22, 0.78);
+  border: 1px solid rgba(216, 180, 254, 0.2);
+  border-radius: 16px;
+  bottom: 14px;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.32);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 46px minmax(0, 1fr);
+  left: 14px;
+  max-width: calc(100% - 28px);
+  padding: 10px;
+  position: absolute;
+  z-index: 2;
+}
+
+.hero-thread-preview img,
+.hero-thread-preview > span {
+  border: 2px solid rgba(236, 72, 153, 0.72);
+  border-radius: 999px;
+  height: 46px;
+  inset: auto;
+  padding: 0;
+  position: static;
+  width: 46px;
+}
+
+.hero-thread-preview img {
+  background: #ffffff;
+  object-fit: cover;
+}
+
+.hero-thread-preview > span {
+  align-items: center;
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
+  color: #ffffff;
+  display: flex;
+  font-size: 16px;
+  font-weight: 950;
+  justify-content: center;
+}
+
+.hero-thread-preview small,
+.hero-thread-preview strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-thread-preview small {
+  color: #d8b4fe;
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.hero-thread-preview strong {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.hero-event-preview {
+  align-items: center;
+  background:
+    radial-gradient(circle at 18% 16%, rgba(34, 211, 238, 0.22), transparent 28%),
+    radial-gradient(circle at 82% 22%, rgba(236, 72, 153, 0.24), transparent 30%),
+    linear-gradient(145deg, rgba(17, 24, 39, 0.92), rgba(76, 29, 149, 0.72));
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: center;
+  min-height: 180px;
+  padding: 24px;
+  position: relative;
+  text-align: center;
+  width: 100%;
+  z-index: 2;
+}
+
+.hero-event-preview-label {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  color: #f5d0fe;
+  font-size: 10px;
+  font-weight: 950;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  position: static;
+  text-transform: uppercase;
+  z-index: auto;
+}
+
+.hero-event-preview strong {
+  color: #ffffff;
+  font-size: clamp(56px, 9vw, 92px);
+  font-weight: 950;
+  line-height: 0.9;
+}
+
+.hero-event-preview em {
+  color: #f0abfc;
+  font-size: 18px;
+  font-style: normal;
+  font-weight: 950;
+  margin-top: 8px;
+  text-transform: uppercase;
+}
+
+.hero-event-preview small {
+  color: #e0f2fe;
+  font-size: 13px;
+  font-weight: 900;
+  margin-top: 10px;
 }
 
 .hero-empty-state {
@@ -1953,6 +2204,8 @@ const loadHomeCommunityData = async () => {
   .community-stories-panel {
     grid-area: stories;
     min-height: 0;
+    max-height: 100%;
+    overflow: auto;
     padding: 18px;
   }
 
@@ -1977,10 +2230,32 @@ const loadHomeCommunityData = async () => {
   .media-center-panel {
     align-content: start;
     min-height: 0;
+    overflow: auto;
   }
 
   .media-hero-card {
     min-height: 0;
+    padding: 18px;
+  }
+
+  .media-hero-card h3 {
+    font-size: clamp(22px, 2.4vw, 30px);
+    margin-top: 12px;
+  }
+
+  .media-hero-card p {
+    display: -webkit-box;
+    font-size: 12px;
+    line-height: 1.4;
+    margin-top: 8px;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .media-hero-card button {
+    margin-top: 12px;
+    padding: 9px 14px;
   }
 
   .media-chip-grid button {
@@ -2511,32 +2786,10 @@ const loadHomeCommunityData = async () => {
   min-width: 0;
 }
 
-.analysis-card-author span {
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border: 2px solid rgba(255, 255, 255, 0.72);
-  border-radius: 999px;
-  display: block;
-  height: 36px;
-  overflow: hidden;
-  width: 36px;
-}
-
-.analysis-card-author img {
-  height: 138%;
-  margin-left: -19%;
-  margin-top: -18%;
-  max-width: none;
-  object-fit: cover;
-  width: 138%;
-}
-
-.analysis-card-author span b {
-  align-items: center;
-  color: #ffffff;
-  display: flex;
-  font-size: 12px;
-  height: 100%;
-  justify-content: center;
+.analysis-card-author .news-author-avatar,
+.featured-news-author .news-author-avatar {
+  --avatar-size: 36px;
+  --avatar-border: 2px;
 }
 
 .analysis-card-author small {
@@ -2647,32 +2900,9 @@ const loadHomeCommunityData = async () => {
   min-width: 0;
 }
 
-.standard-news-author span {
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border: 2px solid rgba(255, 255, 255, 0.72);
-  border-radius: 999px;
-  display: block;
-  height: 34px;
-  overflow: hidden;
-  width: 34px;
-}
-
-.standard-news-author img {
-  height: 138%;
-  margin-left: -19%;
-  margin-top: -18%;
-  max-width: none;
-  object-fit: cover;
-  width: 138%;
-}
-
-.standard-news-author b {
-  align-items: center;
-  color: #ffffff;
-  display: flex;
-  font-size: 12px;
-  height: 100%;
-  justify-content: center;
+.standard-news-author .news-author-avatar {
+  --avatar-size: 34px;
+  --avatar-border: 2px;
 }
 
 .standard-news-author small {
@@ -2728,15 +2958,6 @@ const loadHomeCommunityData = async () => {
   opacity: 0.6;
   position: absolute;
   width: 100%;
-}
-
-.news-card.analysis .analysis-card-footer img {
-  aspect-ratio: auto;
-  height: 138%;
-  margin-left: -19%;
-  margin-top: -18%;
-  max-width: none;
-  width: 138%;
 }
 
 .news-placeholder {
@@ -2919,34 +3140,6 @@ const loadHomeCommunityData = async () => {
   gap: 10px;
   grid-template-columns: 38px minmax(0, 1fr);
   min-width: 0;
-}
-
-.featured-news-author span {
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border: 2px solid rgba(255, 255, 255, 0.72);
-  border-radius: 999px;
-  display: block;
-  height: 36px;
-  overflow: hidden;
-  width: 36px;
-}
-
-.featured-news-author img {
-  height: 138%;
-  margin-left: -19%;
-  margin-top: -18%;
-  max-width: none;
-  object-fit: cover;
-  width: 138%;
-}
-
-.featured-news-author b {
-  align-items: center;
-  color: #ffffff;
-  display: flex;
-  font-size: 12px;
-  height: 100%;
-  justify-content: center;
 }
 
 .featured-news-author small {
@@ -3142,12 +3335,11 @@ const loadHomeCommunityData = async () => {
   }
 
   .hero-dashboard-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: none !important;
   }
 
   .hero-mini-card {
-    height: auto;
-    min-height: 82px;
+    display: none;
   }
 
   .news-card.featured {
@@ -3161,13 +3353,23 @@ const loadHomeCommunityData = async () => {
 
 @media (max-width: 680px) {
   .home-page {
+    overflow-x: hidden;
+    overflow-y: auto;
     padding: var(--public-page-top-mobile, 76px) 0 calc(160px + env(safe-area-inset-bottom));
+  }
+
+  .home-page-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
   }
 
   .home-hero {
     border-radius: 0;
     border-left: 0;
     border-right: 0;
+    min-height: 0;
+    order: 1;
   }
 
   .hero-content,
@@ -3180,12 +3382,13 @@ const loadHomeCommunityData = async () => {
   }
 
   .hero-content {
-    padding: 38px 22px 34px;
+    align-content: center;
+    padding: 28px 20px 24px;
   }
 
   .hero-copy h1 {
     display: block;
-    font-size: clamp(34px, 9vw, 42px);
+    font-size: clamp(30px, 8.2vw, 38px);
     line-height: 1.08;
     min-height: 0;
     overflow: visible;
@@ -3194,8 +3397,8 @@ const loadHomeCommunityData = async () => {
   }
 
   .hero-copy p {
-    font-size: 15px;
-    line-height: 1.55;
+    font-size: 14px;
+    line-height: 1.45;
     min-height: 0;
     overflow: visible;
     -webkit-line-clamp: unset;
@@ -3210,7 +3413,10 @@ const loadHomeCommunityData = async () => {
   }
 
   .home-shell {
-    margin-top: -16px;
+    display: grid;
+    gap: 18px;
+    margin-top: 16px;
+    order: 2;
     padding: 0 14px calc(150px + env(safe-area-inset-bottom));
   }
 
@@ -3626,5 +3832,156 @@ const loadHomeCommunityData = async () => {
     font-size: 21px;
     right: 18px;
   }
+}
+
+@media (min-width: 1180px) {
+  .home-page-content {
+    grid-template-columns: minmax(620px, 1.08fr) minmax(420px, 0.92fr);
+    grid-template-rows: minmax(0, 0.68fr) minmax(0, 0.32fr);
+  }
+
+  .home-hero,
+  .home-shell :deep(.media-center-panel),
+  .home-shell :deep(.community-stories-panel) {
+    box-sizing: border-box;
+    justify-self: stretch;
+    margin-left: 0;
+    margin-right: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .hero-content {
+    padding: clamp(34px, 4vw, 58px);
+  }
+}
+
+@media (min-width: 681px) and (max-width: 1179px) {
+  .home-page {
+    overflow-x: hidden;
+  }
+
+  .home-page-content {
+    margin: 0 auto;
+    max-width: min(980px, calc(100vw - 32px));
+    width: 100%;
+  }
+
+  .home-hero {
+    border-radius: 18px;
+    box-sizing: border-box;
+    margin-left: 0;
+    margin-right: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .home-shell {
+    box-sizing: border-box;
+    margin: 16px 0 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .home-shell :deep(.media-center-panel),
+  .home-shell :deep(.community-stories-panel) {
+    box-sizing: border-box;
+    max-width: none;
+    width: 100%;
+  }
+
+  .hero-content {
+    min-height: clamp(360px, 52vw, 560px);
+    padding: clamp(34px, 6vw, 64px);
+  }
+
+  .community-discovery-panel {
+    display: none !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .home-page {
+    background:
+      radial-gradient(circle at 70% 18%, rgba(147, 51, 234, 0.28), transparent 30%),
+      radial-gradient(circle at 24% 38%, rgba(236, 72, 153, 0.18), transparent 26%),
+      #050816;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .home-page-content {
+    gap: 14px;
+  }
+
+  .home-hero {
+    border-left: 1px solid transparent;
+    border-radius: 18px;
+    border-right: 1px solid transparent;
+    box-sizing: border-box;
+    margin: 0;
+    width: 100%;
+  }
+
+  .hero-stars {
+    border-radius: 17px;
+  }
+
+  .home-hero::before {
+    border-radius: inherit;
+  }
+
+  .hero-content {
+    min-height: clamp(270px, 70vw, 340px);
+    padding: 24px 20px;
+  }
+
+  .hero-actions {
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .hero-primary,
+  .hero-secondary {
+    border-radius: 12px;
+    flex: 1 1 140px;
+    min-height: 42px;
+    padding: 0 14px;
+  }
+
+  .hero-controls {
+    margin-top: 20px;
+  }
+
+  .home-shell {
+    padding-left: 0;
+    padding-right: 0;
+    width: 100%;
+  }
+
+  .home-shell :deep(.media-center-panel),
+  .home-shell :deep(.community-stories-panel) {
+    box-sizing: border-box;
+    max-width: none;
+    width: 100%;
+  }
+
+  .community-discovery-panel,
+  .galaxy-live-panel,
+  .hero-dashboard-cards {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1179px) {
+  .hero-dashboard-cards,
+  .hero-mini-card {
+    display: none !important;
+  }
+}
+
+.hero-dashboard-cards,
+.hero-mini-card {
+  display: none !important;
 }
 </style>
