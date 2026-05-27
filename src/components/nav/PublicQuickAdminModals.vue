@@ -247,33 +247,39 @@ const emit = defineEmits([
   display: flex;
   inset: 0;
   justify-content: center;
-  padding: 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 28px;
   position: fixed;
-  z-index: 1800;
+  z-index: 4300;
 }
 
 .quick-create-backdrop {
   background:
-    radial-gradient(circle at 20% 10%, rgba(147, 51, 234, 0.3), transparent 28%),
-    rgba(15, 23, 42, 0.72);
-  backdrop-filter: blur(16px);
+    radial-gradient(circle at 20% 10%, rgba(147, 51, 234, 0.24), transparent 30%),
+    rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(14px);
   border: 0;
   inset: 0;
   position: absolute;
 }
 
 .quick-create-card {
-  background: #ffffff;
+  background:
+    radial-gradient(circle at 78% 8%, rgba(168, 85, 247, 0.2), transparent 34%),
+    linear-gradient(135deg, rgba(8, 12, 30, 0.98), rgba(18, 12, 42, 0.98));
+  border: 1px solid rgba(168, 85, 247, 0.28);
   border-radius: 22px;
-  box-shadow: 0 26px 80px rgba(15, 23, 42, 0.28);
-  color: #111827;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
+  color: #ffffff;
   display: grid;
   gap: 12px;
-  max-height: min(720px, calc(100dvh - 28px));
+  max-height: min(88dvh, 820px);
+  max-width: min(560px, calc(100vw - 56px));
   overflow-y: auto;
-  padding: 20px;
+  padding: 24px;
   position: relative;
-  width: min(560px, calc(100vw - 28px));
+  width: min(560px, 100%);
   z-index: 1;
 }
 
@@ -289,15 +295,17 @@ const emit = defineEmits([
 }
 
 .quick-create-head strong {
-  font-size: 20px;
+  color: #ffffff;
+  font-size: clamp(22px, 4vw, 32px);
   font-weight: 950;
+  line-height: 1;
 }
 
 .quick-create-head button {
   align-items: center;
-  background: #f1f5f9;
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  color: #64748b;
+  color: #ffffff;
   display: flex;
   height: 38px;
   justify-content: center;
@@ -305,7 +313,7 @@ const emit = defineEmits([
 }
 
 .quick-create-card label {
-  color: #475569;
+  color: #cbd5e1;
   display: grid;
   font-size: 12px;
   font-weight: 900;
@@ -412,13 +420,20 @@ const emit = defineEmits([
 .quick-create-card input,
 .quick-create-card textarea,
 .quick-create-card select {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  color: #111827;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  color: #ffffff;
+  font-weight: 850;
+  min-height: 46px;
   outline: none;
-  padding: 11px 12px;
+  padding: 0 14px;
   resize: vertical;
+}
+
+.quick-create-card textarea {
+  min-height: 118px;
+  padding: 12px 14px;
 }
 
 .quick-create-card input:focus,
@@ -429,8 +444,8 @@ const emit = defineEmits([
 }
 
 .quick-topic-editor {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 16px;
   display: grid;
   gap: 10px;
@@ -450,7 +465,7 @@ const emit = defineEmits([
 }
 
 .quick-topic-head strong {
-  color: #111827;
+  color: #ffffff;
   font-size: 13px;
   font-weight: 950;
 }
@@ -534,14 +549,15 @@ const emit = defineEmits([
 
 @media (max-width: 560px) {
   .quick-create-modal {
-    align-items: flex-end;
-    padding: 0;
+    align-items: center;
+    padding: 16px 0;
   }
 
   .quick-create-card {
-    border-radius: 22px 22px 0 0;
-    max-height: calc(100dvh - 20px);
-    width: 100%;
+    border-radius: 22px;
+    max-height: calc(100dvh - 32px);
+    padding: calc(18px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
+    width: min(92vw, 520px);
   }
 }
 
@@ -551,7 +567,7 @@ const emit = defineEmits([
     display: grid;
     gap: 14px 16px;
     grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
-    max-height: min(780px, calc(100dvh - 56px));
+    max-height: min(88dvh, 820px);
     padding: 24px;
   }
 

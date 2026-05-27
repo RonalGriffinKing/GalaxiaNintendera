@@ -580,6 +580,7 @@ const formatTime = (value) => {
 }
 
 const handleOpenRequest = async (event) => {
+  if (event.detail?.source === 'galaxia-hub') return
   await openChat(event.detail)
 }
 
@@ -1411,6 +1412,9 @@ onUnmounted(() => {
 @media (max-width: 859px) {
   .direct-chat-fab {
     bottom: var(--galaxy-dock-bottom, calc(84px + env(safe-area-inset-bottom)));
+    box-shadow:
+      0 18px 42px rgba(0, 0, 0, 0.34),
+      0 0 28px rgba(168, 85, 247, 0.3);
   }
 
   .direct-chat-fab.raised {
@@ -1736,5 +1740,12 @@ onUnmounted(() => {
 
 .direct-chat-composer input::placeholder {
   color: #94a3b8;
+}
+
+@media (max-width: 390px) {
+  .direct-chat-fab {
+    height: 50px;
+    width: 50px;
+  }
 }
 </style>

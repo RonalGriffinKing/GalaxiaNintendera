@@ -321,7 +321,7 @@ onMounted(async () => {
 
     const approved = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
-      .filter(p => p.status === 'approved')
+      .filter(p => p.status === 'approved' && p.visibility !== 'private' && p.visibility !== 'unlisted')
       .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
     const fresh = approved.filter(p => p.placement !== 'hero' && !p.isMainEntry && isReleased(p))
     const freshMainEntries = approved.filter(p => (p.placement === 'hero' || p.isMainEntry) && isReleased(p))
@@ -2646,6 +2646,7 @@ const loadHomeCommunityData = async () => {
   background: rgba(70, 51, 108, 0.58);
   border: 1px solid rgba(216, 180, 254, 0.44);
   border-radius: 999px;
+  box-shadow: 0 12px 28px rgba(7, 10, 24, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.14);
   color: #f5f3ff;
   display: inline-flex;
   font-size: 12px;
@@ -2653,7 +2654,9 @@ const loadHomeCommunityData = async () => {
   gap: 8px;
   letter-spacing: 0;
   padding: 12px 18px;
+  position: relative;
   text-transform: uppercase;
+  z-index: 4;
 }
 
 .analysis-card-topline > span i {
@@ -2782,14 +2785,28 @@ const loadHomeCommunityData = async () => {
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
   min-width: 0;
+  overflow: visible;
 }
 
 .analysis-card-author .news-author-avatar,
 .featured-news-author .news-author-avatar {
-  --avatar-size: 36px;
+  --avatar-size: 40px;
   --avatar-border: 2px;
+}
+
+.news-card.featured.analysis .analysis-card-author {
+  grid-template-columns: 68px minmax(0, 1fr);
+  min-height: 66px;
+  margin-left: 6px;
+  overflow: visible;
+}
+
+.news-card.featured.analysis .analysis-card-author .news-author-avatar {
+  --avatar-size: 44px;
+  --avatar-border: 2px;
+  justify-self: center;
 }
 
 .analysis-card-author small {
@@ -2858,8 +2875,12 @@ const loadHomeCommunityData = async () => {
   font-weight: 950;
   gap: 7px;
   justify-self: start;
+  max-width: calc(100% - 94px);
+  overflow: hidden;
   padding: 8px 11px;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .standard-news-category i {
@@ -2975,10 +2996,11 @@ const loadHomeCommunityData = async () => {
   font-size: 10px;
   font-weight: 900;
   gap: 5px;
-  left: 10px;
+  left: auto;
   margin: 0;
   padding: 6px 8px;
   position: absolute;
+  right: 18px;
   top: 16px;
   z-index: 3;
 }
@@ -2994,6 +3016,7 @@ const loadHomeCommunityData = async () => {
 }
 
 .news-card.analysis .read-mark {
+  right: 22px;
   top: 58px;
 }
 
@@ -3138,8 +3161,9 @@ const loadHomeCommunityData = async () => {
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
   min-width: 0;
+  overflow: visible;
 }
 
 .featured-news-author small {
@@ -3289,11 +3313,39 @@ const loadHomeCommunityData = async () => {
     margin-top: 0;
   }
 
+  .news-card.featured.analysis .analysis-card-footer {
+    gap: 14px;
+    min-height: 70px;
+    overflow: visible;
+  }
+
+  .news-card.featured.analysis .analysis-card-author {
+    grid-template-columns: 72px minmax(0, 1fr);
+    min-height: 68px;
+    margin-left: 6px;
+    overflow: visible;
+  }
+
+  .news-card.featured.analysis .analysis-card-author .news-author-avatar {
+    --avatar-size: 46px;
+    justify-self: center;
+  }
+
   .news-card.analysis:not(.featured) .analysis-card-footer,
   .standard-news-footer {
     grid-template-columns: minmax(0, 1fr) auto;
     margin-top: 0;
-    overflow: hidden;
+    overflow: visible;
+  }
+
+  .analysis-card-author,
+  .featured-news-author {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .analysis-card-author .news-author-avatar,
+  .featured-news-author .news-author-avatar {
+    --avatar-size: 38px;
   }
 
   .analysis-card-footer em,
@@ -3492,6 +3544,11 @@ const loadHomeCommunityData = async () => {
     top: 58%;
   }
 
+  .news-card .read-mark {
+    right: 18px;
+    top: 18px;
+  }
+
   .news-card strong {
     font-size: 22px;
     top: calc(58% + 42px);
@@ -3623,9 +3680,14 @@ const loadHomeCommunityData = async () => {
 }
 
 .analysis-card-topline > span {
-  background: rgba(113, 63, 18, 0.62);
-  border-color: rgba(250, 204, 21, 0.52);
-  color: #fef3c7;
+  background: linear-gradient(135deg, rgba(161, 98, 7, 0.95), rgba(120, 53, 15, 0.9));
+  border-color: rgba(250, 204, 21, 0.78);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.3),
+    0 0 24px rgba(245, 158, 11, 0.2),
+    inset 0 1px 0 rgba(255, 251, 235, 0.18);
+  color: #fff7d6;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
 }
 
 .analysis-card-topline > span i {
@@ -3747,7 +3809,11 @@ const loadHomeCommunityData = async () => {
   .featured-news-topline > span {
     font-size: 10px;
     min-height: 36px;
+    max-width: calc(100% - 86px);
+    overflow: hidden;
     padding: 0 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .analysis-card-score {
@@ -3799,8 +3865,34 @@ const loadHomeCommunityData = async () => {
     white-space: normal;
   }
 
+  .analysis-card-author,
+  .featured-news-author {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .analysis-card-author .news-author-avatar,
+  .featured-news-author .news-author-avatar {
+    --avatar-size: 40px;
+  }
+
+  .news-card.featured.analysis .analysis-card-author {
+    grid-template-columns: 72px minmax(0, 1fr);
+    min-height: 68px;
+    margin-left: 6px;
+    overflow: visible;
+  }
+
+  .news-card.featured.analysis .analysis-card-author .news-author-avatar {
+    --avatar-size: 46px;
+    justify-self: center;
+  }
+
   .news-card:not(.analysis):not(.featured) {
     min-height: 330px;
+  }
+
+  .standard-news-category {
+    max-width: calc(100% - 82px);
   }
 
   .news-author-overlay {

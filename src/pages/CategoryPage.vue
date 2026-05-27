@@ -122,7 +122,7 @@ const loadPosts = async () => {
 
     posts.value = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
-      .filter(p => p.status === 'approved')
+      .filter(p => p.status === 'approved' && p.visibility !== 'private' && p.visibility !== 'unlisted')
       .filter(p => p.placement !== 'hero' && !p.isMainEntry)
       .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
     await loadAuthorProfiles(posts.value)
@@ -819,7 +819,7 @@ watch(() => route.fullPath, () => {
   padding: 12px 0;
 }
 
-.post-copy span {
+.post-copy > span {
   background: #ede9fe;
   border-radius: 999px;
   color: #7c3aed;
@@ -1436,7 +1436,7 @@ watch(() => route.fullPath, () => {
   padding-top: 58px;
 }
 
-.post-copy span {
+.post-copy > span {
   background: rgba(124, 58, 237, 0.5);
   color: #e9d5ff;
   font-size: 11px;
@@ -1740,9 +1740,17 @@ watch(() => route.fullPath, () => {
   margin-top: 0;
 }
 
-.news-row.analysis .post-copy span {
+.news-row.analysis .post-copy > span {
   background: rgba(113, 63, 18, 0.72);
   color: #fef3c7;
+}
+
+.news-row.analysis .post-mobile-meta > span {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: #ffffff;
+  padding: 0;
 }
 
 .listing-analysis-score {
@@ -1958,6 +1966,8 @@ watch(() => route.fullPath, () => {
 
   .post-mobile-meta > span {
     align-items: center;
+    background: transparent;
+    border-radius: 0;
     color: #ffffff;
     display: inline-flex;
     font-size: 10px;
@@ -1966,6 +1976,7 @@ watch(() => route.fullPath, () => {
     line-height: 1;
     max-width: min(68%, 240px);
     min-width: 0;
+    padding: 0;
     text-transform: uppercase;
   }
 
@@ -2048,8 +2059,12 @@ watch(() => route.fullPath, () => {
 }
 
 .post-mobile-meta .listing-author-avatar {
-  --avatar-size: 34px;
+  --avatar-size: 38px;
   --avatar-border: 2px;
+  background: transparent;
+  border-radius: 999px;
+  filter: drop-shadow(0 0 12px rgba(168, 85, 247, 0.38));
+  padding: 0;
 }
 
 .news-row .listing-author-overlay strong,
@@ -2080,5 +2095,26 @@ watch(() => route.fullPath, () => {
   background: transparent;
   border: 0;
   color: #cbd5e1;
+}
+
+@media (max-width: 760px) {
+  .post-mobile-meta {
+    gap: 14px;
+    margin-top: 16px;
+    padding-top: 14px;
+  }
+
+  .post-mobile-meta > span {
+    background: transparent;
+    gap: 9px;
+    max-width: min(72%, 260px);
+    padding: 0;
+  }
+
+  .post-mobile-meta .listing-author-avatar {
+    --avatar-size: 40px;
+    --avatar-border: 2px;
+    filter: drop-shadow(0 0 14px rgba(168, 85, 247, 0.46));
+  }
 }
 </style>

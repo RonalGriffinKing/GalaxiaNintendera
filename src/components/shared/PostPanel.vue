@@ -286,6 +286,7 @@ const tabLabel = (value) => ({
 }[value] || value)
 
 const statusLabel = (value = 'pending') => ({
+  draft: 'Borrador',
   pending: 'Pendiente',
   approved: 'Aprobado',
   rejected: 'Rechazado'
@@ -807,6 +808,11 @@ const executeDelete = async (id) => {
 .state-pill.pending {
   background: #fef3c7;
   color: #b45309;
+}
+
+.state-pill.draft {
+  background: #e0e7ff;
+  color: #4338ca;
 }
 
 .state-pill.approved {

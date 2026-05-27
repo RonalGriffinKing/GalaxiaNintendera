@@ -64,6 +64,10 @@ const quickThreadCommunityPickerOpen = ref(false)
 const quickThreadTopicPickerOpen = ref(false)
 const quickCommunities = ref([])
 const quickJoinedCommunityIds = ref([])
+const scrollY = ref(0)
+const navHidden = ref(false)
+const navCompact = ref(false)
+const readingProgress = ref(0)
 const quickStickerPool = QUICK_STICKER_POOL
 const quickEmojiPool = QUICK_EMOJI_POOL
 const quickCommunityDraft = ref({
@@ -88,6 +92,8 @@ const quickUserDraft = ref({
 })
 let unsubscribeAuth = null
 let unsubscribeNotifications = null
+let lastScrollY = 0
+let scrollTicking = false
 
 const links = PUBLIC_NAV_LINKS
 const mobileDrawerLinks = computed(() => links.filter(link => link.to !== '/comunidad'))
@@ -115,6 +121,23 @@ const canPublish = computed(() => ['admin', 'publisher'].includes(currentRole.va
 const isAdmin = computed(() => currentRole.value === 'admin')
 const bottomNavItems = computed(() => PUBLIC_NAV_LINKS)
 const bottomNavColumns = computed(() => bottomNavItems.value.length + 1)
+const isReadingRoute = computed(() => route.path.startsWith('/post/'))
+const mobileNavClass = computed(() => ({
+  compact: navCompact.value,
+  hidden: navHidden.value,
+  reading: isReadingRoute.value,
+  'account-open': accountMenuOpen.value
+}))
+const activeBottomIndex = computed(() => {
+  const index = bottomNavItems.value.findIndex(item => isActivePath(item.to))
+  if (index < 0) return 0
+  return index < 2 ? index : index + 1
+})
+const bottomNavStyle = computed(() => ({
+  gridTemplateColumns: `repeat(${bottomNavColumns.value}, minmax(0, 1fr))`,
+  '--active-index': activeBottomIndex.value,
+  '--bottom-cols': bottomNavColumns.value
+}))
 const createOptions = computed(() => {
   if (!currentUser.value) {
     return [{ label: 'Crear perfil', icon: 'fas fa-user-plus', to: '/login?mode=register' }]
@@ -258,7 +281,7 @@ const loadSearchPosts = async () => {
     const snap = await getDocs(collection(db, 'posts'))
     searchPosts.value = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
-      .filter(post => post.status === 'approved' && post.placement !== 'hero' && !post.isMainEntry)
+      .filter(post => post.status === 'approved' && post.visibility !== 'private' && post.visibility !== 'unlisted' && post.placement !== 'hero' && !post.isMainEntry)
   } finally {
     loadingSearch.value = false
   }
@@ -289,6 +312,53 @@ const submitSearch = () => {
 const isMobileNav = () => {
   if (typeof window === 'undefined') return false
   return window.matchMedia('(max-width: 859px)').matches
+}
+
+const updateScrollNavigation = () => {
+  if (typeof window === 'undefined') return
+  const nextY = Math.max(0, window.scrollY || 0)
+  const delta = nextY - lastScrollY
+  const doc = document.documentElement
+  const maxScroll = Math.max(1, doc.scrollHeight - window.innerHeight)
+
+  scrollY.value = nextY
+  navCompact.value = nextY > (isReadingRoute.value ? 8 : 28)
+  readingProgress.value = isReadingRoute.value ? Math.min(100, Math.max(0, (nextY / maxScroll) * 100)) : 0
+
+  if (isMobileNav() && !menuOpen.value && !accountMenuOpen.value && !searchOpen.value && !notificationsOpen.value) {
+    const hideThreshold = isReadingRoute.value ? 72 : 150
+    if (delta > 8 && nextY > hideThreshold) navHidden.value = true
+    if (delta < -8 || nextY < 24) navHidden.value = false
+  } else {
+    navHidden.value = false
+  }
+
+  lastScrollY = nextY
+  scrollTicking = false
+}
+
+const onScrollNavigation = () => {
+  if (scrollTicking) return
+  scrollTicking = true
+  if (typeof window !== 'undefined') {
+    window.requestAnimationFrame(updateScrollNavigation)
+  }
+}
+
+const updateQuickThreadKeyboardState = () => {
+  if (typeof window === 'undefined') return
+  document.documentElement.classList.remove('quick-thread-keyboard-open')
+  document.documentElement.style.removeProperty('--quick-thread-keyboard-overlap')
+}
+
+const lockPageScrollForComposer = () => {
+  document.body.style.overflow = 'hidden'
+  document.documentElement.style.overflow = 'hidden'
+}
+
+const unlockPageScrollForComposer = () => {
+  document.body.style.overflow = ''
+  document.documentElement.style.overflow = ''
 }
 
 const goAccount = () => {
@@ -864,10 +934,27 @@ onMounted(() => {
   })
   window.addEventListener('open-quick-thread-composer', openQuickThreadComposer)
   window.addEventListener('galaxy-profile-updated', syncCurrentProfile)
+  window.addEventListener('scroll', onScrollNavigation, { passive: true })
+  window.addEventListener('resize', updateScrollNavigation)
+  window.addEventListener('resize', updateQuickThreadKeyboardState)
+  window.addEventListener('focusin', updateQuickThreadKeyboardState)
+  window.addEventListener('focusout', updateQuickThreadKeyboardState)
+  window.visualViewport?.addEventListener('resize', updateQuickThreadKeyboardState)
+  window.visualViewport?.addEventListener('scroll', updateQuickThreadKeyboardState)
+  updateScrollNavigation()
+  updateQuickThreadKeyboardState()
 })
 
 watch([menuOpen, createMenuOpen, accountMenuOpen, quickPostOpen, quickThreadOpen, quickCommunityOpen, quickUserOpen], ([isMenuOpen, isCreateOpen, isAccountOpen, isQuickPostOpen, isQuickThreadOpen, isQuickCommunityOpen, isQuickUserOpen]) => {
-  document.body.style.overflow = isMenuOpen || isCreateOpen || (isAccountOpen && isMobileNav()) || isQuickPostOpen || isQuickThreadOpen || isQuickCommunityOpen || isQuickUserOpen ? 'hidden' : ''
+  const mobileThreadSheetOpen = isQuickThreadOpen && isMobileNav()
+  if (mobileThreadSheetOpen) {
+    lockPageScrollForComposer()
+  } else {
+    unlockPageScrollForComposer()
+    document.body.style.overflow = isMenuOpen || isCreateOpen || (isAccountOpen && isMobileNav()) || isQuickPostOpen || isQuickThreadOpen || isQuickCommunityOpen || isQuickUserOpen ? 'hidden' : ''
+  }
+  document.body.classList.toggle('quick-thread-sheet-open', mobileThreadSheetOpen)
+  updateQuickThreadKeyboardState()
 })
 
 watch(selectedThreadCommunity, (community) => {
@@ -878,17 +965,38 @@ watch(selectedThreadCommunity, (community) => {
   }
 })
 
+watch(() => route.fullPath, () => {
+  navHidden.value = false
+  lastScrollY = 0
+  if (typeof window !== 'undefined') {
+    window.requestAnimationFrame(updateScrollNavigation)
+  }
+})
+
 onUnmounted(() => {
   window.removeEventListener('open-quick-thread-composer', openQuickThreadComposer)
   window.removeEventListener('galaxy-profile-updated', syncCurrentProfile)
+  window.removeEventListener('scroll', onScrollNavigation)
+  window.removeEventListener('resize', updateScrollNavigation)
+  window.removeEventListener('resize', updateQuickThreadKeyboardState)
+  window.removeEventListener('focusin', updateQuickThreadKeyboardState)
+  window.removeEventListener('focusout', updateQuickThreadKeyboardState)
+  window.visualViewport?.removeEventListener('resize', updateQuickThreadKeyboardState)
+  window.visualViewport?.removeEventListener('scroll', updateQuickThreadKeyboardState)
   unsubscribeAuth?.()
   unsubscribeNotifications?.()
+  unlockPageScrollForComposer()
   document.body.style.overflow = ''
+  document.documentElement.style.overflow = ''
+  document.body.classList.remove('quick-thread-sheet-open')
+  document.documentElement.classList.remove('quick-thread-keyboard-open')
+  document.documentElement.style.removeProperty('--quick-thread-keyboard-overlap')
 })
 </script>
 
 <template>
-  <nav class="public-nav">
+  <nav class="public-nav" :class="mobileNavClass" :style="{ '--read-progress': `${readingProgress}%` }">
+    <div v-if="isReadingRoute" class="mobile-reading-progress" aria-hidden="true"></div>
     <div class="public-nav-inner">
       <div class="public-brand-zone">
         <button class="public-brand" @click="goTo('/')">
@@ -1015,6 +1123,9 @@ onUnmounted(() => {
 
     <div v-if="accountMenuOpen" class="public-account-panel" @click.self="accountMenuOpen = false">
         <div class="public-account-card">
+        <button class="public-account-close" type="button" aria-label="Cerrar menu de cuenta" @click="accountMenuOpen = false">
+          <i class="fas fa-xmark"></i>
+        </button>
         <button class="public-account-head" type="button" @click="goOwnProfile">
           <span>
             <ProfileAvatar
@@ -1179,34 +1290,37 @@ onUnmounted(() => {
       @select="openCreateOption"
     />
 
-    <div class="public-bottom-nav" aria-label="Navegacion movil" :style="{ gridTemplateColumns: `repeat(${bottomNavColumns}, minmax(0, 1fr))` }">
-      <button
-        v-for="item in bottomNavItems.slice(0, 2)"
-        :key="item.label"
-        type="button"
-        :class="{ active: isActivePath(item.to) }"
-        @click="goTo(item.to)"
-      >
-        <i :class="item.icon"></i>
-        <span>{{ item.label }}</span>
-      </button>
+    <Teleport to="body">
+      <div class="public-bottom-nav" :class="{ compact: isReadingRoute }" aria-label="Navegacion movil" :style="bottomNavStyle">
+        <span class="bottom-nav-indicator" aria-hidden="true"></span>
+        <button
+          v-for="item in bottomNavItems.slice(0, 2)"
+          :key="item.label"
+          type="button"
+          :class="{ active: isActivePath(item.to) }"
+          @click="goTo(item.to)"
+        >
+          <i :class="item.icon"></i>
+          <span>{{ item.label }}</span>
+        </button>
 
-      <button class="bottom-create-btn" type="button" aria-label="Crear hilo" @click="openQuickThreadComposer">
-        <i class="fas fa-plus"></i>
-        <span>Hilo</span>
-      </button>
+        <button class="bottom-create-btn" type="button" aria-label="Crear hilo" @click="openQuickThreadComposer">
+          <i class="fas fa-plus"></i>
+          <span>Hilo</span>
+        </button>
 
-      <button
-        v-for="item in bottomNavItems.slice(2)"
-        :key="item.label"
-        type="button"
-        :class="{ active: isActivePath(item.to) }"
-        @click="goTo(item.to)"
-      >
-        <i :class="item.icon"></i>
-        <span>{{ item.label }}</span>
-      </button>
-    </div>
+        <button
+          v-for="item in bottomNavItems.slice(2)"
+          :key="item.label"
+          type="button"
+          :class="{ active: isActivePath(item.to) }"
+          @click="goTo(item.to)"
+        >
+          <i :class="item.icon"></i>
+          <span>{{ item.label }}</span>
+        </button>
+      </div>
+    </Teleport>
 
     <PostEditor
       v-if="quickPostOpen"
@@ -1456,7 +1570,31 @@ onUnmounted(() => {
   position: fixed;
   right: 0;
   top: 0;
+  transform: translate3d(0, 0, 0);
+  transition:
+    transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+    background 0.24s ease,
+    border-color 0.24s ease,
+    box-shadow 0.24s ease;
+  will-change: transform;
   z-index: 300;
+}
+
+.public-nav.account-open {
+  z-index: 1400;
+}
+
+.mobile-reading-progress {
+  background: linear-gradient(90deg, #7c3aed, #ec4899);
+  box-shadow: 0 0 14px rgba(168, 85, 247, 0.45);
+  height: 2px;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform: scaleX(calc(var(--read-progress, 0%) / 100%));
+  transform-origin: left center;
+  width: 100%;
+  z-index: 4;
 }
 
 .public-nav-inner {
@@ -1469,6 +1607,7 @@ onUnmounted(() => {
   min-height: 64px;
   padding: 8px 0;
   position: relative;
+  transition: min-height 0.24s ease, padding 0.24s ease;
 }
 
 .public-brand-zone {
@@ -1492,6 +1631,8 @@ onUnmounted(() => {
   display: inline-flex;
   min-height: 36px;
   min-width: 0;
+  overflow: visible;
+  padding: 8px;
 }
 
 .public-brand-logo {
@@ -1499,6 +1640,7 @@ onUnmounted(() => {
   height: 44px;
   max-width: 58px;
   object-fit: contain;
+  transition: height 0.24s ease, max-width 0.24s ease, transform 0.24s ease;
   width: auto;
 }
 
@@ -1531,7 +1673,7 @@ onUnmounted(() => {
 
 .public-nav-link,
 .public-mobile-link {
-  transition: color 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.18s ease;
 }
 
 .public-nav-link {
@@ -1617,11 +1759,19 @@ onUnmounted(() => {
   height: 34px;
   justify-content: center;
   opacity: 0.92;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.18s cubic-bezier(0.2, 0.9, 0.2, 1);
   width: 34px;
 }
 
 .public-icon:hover {
   background: rgba(124, 58, 237, 0.24);
+}
+
+.public-icon:active,
+.public-nav-link:active,
+.public-mobile-link:active,
+.public-bottom-nav button:active {
+  transform: scale(0.94);
 }
 
 .public-mobile-search-btn {
@@ -1934,7 +2084,7 @@ onUnmounted(() => {
   position: fixed;
   right: max(18px, calc((100vw - 1280px) / 2 + 24px));
   top: calc(var(--public-nav-offset, 72px) - 10px);
-  z-index: 360;
+  z-index: 960;
 }
 
 .public-account-card {
@@ -2306,11 +2456,37 @@ onUnmounted(() => {
 }
 
 @media (max-width: 859px) {
+  .public-nav {
+    background: rgba(5, 8, 22, 0.86);
+    backdrop-filter: blur(18px) saturate(1.25);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.18);
+  }
+
+  .public-nav.compact {
+    background: rgba(5, 8, 22, 0.68);
+    border-bottom-color: rgba(168, 85, 247, 0.14);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.18);
+  }
+
+  .public-nav.hidden {
+    transform: translate3d(0, calc(-100% - 8px), 0);
+  }
+
+  .public-nav.reading.compact {
+    background: rgba(5, 8, 22, 0.56);
+  }
+
   .public-nav-inner {
     display: flex;
     justify-content: space-between;
     max-width: none;
     padding: 8px 16px;
+  }
+
+  .public-nav.compact .public-nav-inner {
+    min-height: 52px;
+    padding: 4px 14px;
   }
 
   .public-brand-zone {
@@ -2319,15 +2495,28 @@ onUnmounted(() => {
 
   .public-live-slot {
     left: 50%;
-    min-height: 36px;
+    min-height: 44px;
+    overflow: visible;
+    padding: 10px;
     position: absolute;
-    top: 50%;
-    transform: translate(-50%, -50%);
+    top: calc(50% + 1px);
+    transform: translate(-50%, -50%) scale(0.96);
     z-index: 6;
   }
 
   .public-brand span {
     display: none;
+  }
+
+  .public-nav.compact .public-brand-logo {
+    height: 34px;
+    max-width: 46px;
+    transform: translateY(-1px);
+  }
+
+  .public-nav.compact .public-icon {
+    height: 32px;
+    width: 32px;
   }
 
   .public-profile-nav {
@@ -2377,7 +2566,7 @@ onUnmounted(() => {
     position: fixed;
     right: 0;
     top: 0;
-    z-index: 340;
+    z-index: 960;
   }
 
   .public-account-card {
@@ -2386,36 +2575,41 @@ onUnmounted(() => {
     border-right: 1px solid rgba(216, 180, 254, 0.2);
     border-radius: 0 24px 24px 0;
     box-shadow: 28px 0 70px rgba(0, 0, 0, 0.38);
-    gap: 22px;
+    gap: 14px;
     height: 100dvh;
     margin: 0;
     max-height: none;
     overflow-y: auto;
-    padding: calc(22px + env(safe-area-inset-top)) 22px calc(24px + env(safe-area-inset-bottom));
+    padding: calc(16px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
     position: relative;
     right: auto;
     top: auto;
     width: min(86vw, 430px);
   }
 
+  .public-account-close {
+    display: flex;
+  }
+
   .public-account-head {
-    gap: 14px;
-    grid-template-columns: 72px minmax(0, 1fr);
-    padding-bottom: 22px;
+    gap: 12px;
+    grid-template-columns: 64px minmax(0, 1fr);
+    padding-bottom: 16px;
+    padding-right: 42px;
   }
 
   .public-account-head > span {
-    height: 72px;
-    width: 72px;
+    height: 64px;
+    width: 64px;
   }
 
   .public-account-head > span .profile-icon-effect-wrap {
-    --avatar-size: 72px;
+    --avatar-size: 64px;
     --avatar-border: 3px;
   }
 
   .public-account-head strong {
-    font-size: 22px;
+    font-size: 20px;
     line-height: 1.05;
   }
 
@@ -2436,17 +2630,17 @@ onUnmounted(() => {
   .public-account-list button {
     background: transparent;
     border: 0;
-    border-radius: 16px;
-    font-size: 18px;
-    gap: 22px;
-    grid-template-columns: 32px minmax(0, 1fr) 18px;
-    min-height: 58px;
-    padding: 0 10px;
+    border-radius: 14px;
+    font-size: 15px;
+    gap: 14px;
+    grid-template-columns: 28px minmax(0, 1fr) 14px;
+    min-height: 46px;
+    padding: 0 8px;
   }
 
   .public-account-list button i:first-child {
     color: #f8fafc;
-    font-size: 23px;
+    font-size: 19px;
     text-align: center;
   }
 
@@ -2457,13 +2651,13 @@ onUnmounted(() => {
 
   .public-account-actions {
     margin-top: auto;
-    padding-top: 22px;
+    padding-top: 14px;
   }
 
   .public-account-actions button {
-    border-radius: 16px;
-    font-size: 16px;
-    min-height: 54px;
+    border-radius: 14px;
+    font-size: 14px;
+    min-height: 46px;
   }
 
   @keyframes mobile-account-drawer-in {
@@ -2480,22 +2674,69 @@ onUnmounted(() => {
 
   .public-bottom-nav {
     align-items: center;
-    background: rgba(5, 8, 22, 0.94);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    bottom: 0;
-    box-shadow: 0 -18px 42px rgba(0, 0, 0, 0.32);
+    background: rgba(5, 8, 22, 0.72);
+    backdrop-filter: blur(22px) saturate(1.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.34),
+      0 0 34px rgba(168, 85, 247, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
     display: grid;
     gap: 2px;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    left: 0;
-    padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
+    left: 10px;
+    overflow: visible;
+    padding: 7px 8px;
     position: fixed;
-    right: 0;
+    right: 10px;
+    transform: translate3d(0, 0, 0);
+    transition:
+      opacity 0.24s ease,
+      transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
+      padding 0.22s ease,
+      background 0.22s ease;
+    will-change: transform;
     z-index: 300;
+  }
+
+  .public-bottom-nav.compact {
+    background: rgba(5, 8, 22, 0.58);
+    padding: 5px 8px;
+    transform: translate3d(0, 4px, 0) scale(0.985);
+  }
+
+  .bottom-nav-indicator {
+    background: linear-gradient(90deg, rgba(124, 58, 237, 0.04), rgba(236, 72, 153, 0.9), rgba(124, 58, 237, 0.04));
+    border-radius: 999px;
+    bottom: 6px;
+    box-shadow: 0 0 16px rgba(216, 180, 254, 0.62);
+    height: 3px;
+    left: 8px;
+    pointer-events: none;
+    position: absolute;
+    transform: translateX(calc(var(--active-index, 0) * 100%));
+    transition:
+      opacity 0.2s ease,
+      transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+    width: calc((100% - 16px) / var(--bottom-cols, 5));
+    z-index: 0;
+  }
+
+  .bottom-nav-indicator::before {
+    background: linear-gradient(90deg, rgba(168, 85, 247, 0.1), #c084fc, #ec4899, rgba(168, 85, 247, 0.1));
+    border-radius: inherit;
+    content: '';
+    display: block;
+    height: 100%;
+    margin: 0 auto;
+    width: 28px;
   }
 
   .public-bottom-nav button {
     align-items: center;
+    background: transparent;
     border-radius: 12px;
     color: #94a3b8;
     display: grid;
@@ -2505,6 +2746,18 @@ onUnmounted(() => {
     justify-items: center;
     min-height: 46px;
     min-width: 0;
+    position: relative;
+    transition:
+      color 0.2s ease,
+      text-shadow 0.2s ease,
+      transform 0.18s cubic-bezier(0.2, 0.9, 0.2, 1);
+    z-index: 1;
+  }
+
+  .public-bottom-nav button:hover,
+  .public-bottom-nav button:focus-visible {
+    background: rgba(255, 255, 255, 0.06);
+    color: #f8fafc;
   }
 
   .public-bottom-nav i {
@@ -2513,6 +2766,11 @@ onUnmounted(() => {
 
   .public-bottom-nav button.active {
     color: #c084fc;
+    text-shadow: 0 0 18px rgba(216, 180, 254, 0.46);
+  }
+
+  .public-bottom-nav button.active i {
+    filter: drop-shadow(0 0 12px rgba(192, 132, 252, 0.5));
   }
 
   .public-bottom-nav .bottom-create-btn {
@@ -2525,12 +2783,35 @@ onUnmounted(() => {
     background: linear-gradient(135deg, #7c3aed, #ec4899);
     border: 4px solid #050816;
     border-radius: 999px;
-    box-shadow: 0 14px 30px rgba(124, 58, 237, 0.38);
+    box-shadow:
+      0 14px 30px rgba(124, 58, 237, 0.38),
+      0 0 0 0 rgba(236, 72, 153, 0.28);
     display: flex;
     font-size: 22px;
     height: 54px;
     justify-content: center;
+    animation: bottom-fab-pulse 4.2s ease-in-out infinite;
+    transition: box-shadow 0.22s ease, transform 0.18s cubic-bezier(0.2, 0.9, 0.2, 1);
     width: 54px;
+  }
+
+  .bottom-create-btn:active i {
+    transform: scale(0.9);
+  }
+
+  @keyframes bottom-fab-pulse {
+    0%,
+    100% {
+      box-shadow:
+        0 14px 30px rgba(124, 58, 237, 0.38),
+        0 0 0 0 rgba(236, 72, 153, 0.2);
+    }
+
+    50% {
+      box-shadow:
+        0 18px 36px rgba(124, 58, 237, 0.5),
+        0 0 0 8px rgba(236, 72, 153, 0.08);
+    }
   }
 }
 
@@ -2648,6 +2929,7 @@ onUnmounted(() => {
   backdrop-filter: blur(12px);
   inset: 0;
   position: absolute;
+  z-index: 0;
 }
 
 .thread-composer-modal {
@@ -2661,7 +2943,15 @@ onUnmounted(() => {
   overflow: hidden;
   position: relative;
   width: min(100%, 1120px);
-  z-index: 1;
+  z-index: 2;
+}
+
+.thread-composer-modal :deep(.thread-composer) {
+  opacity: 1;
+  position: relative;
+  transform: none;
+  visibility: visible;
+  z-index: 2;
 }
 
 .quick-create-card {
@@ -3343,14 +3633,41 @@ onUnmounted(() => {
 
 @media (max-width: 859px) {
   .thread-composer-modal {
-    align-items: stretch;
-    justify-content: flex-start;
-    padding: 0;
+    align-items: center;
+    bottom: 0;
+    display: grid;
+    height: 100dvh;
+    justify-content: center;
+    left: 0;
+    min-height: 100dvh;
+    padding: 12px;
+    place-items: center;
+    pointer-events: auto;
+    right: 0;
+    top: 0;
+    transform: translate3d(0, 0, 0);
+    z-index: 620;
+  }
+
+  .thread-composer-modal .quick-create-backdrop {
+    background: rgba(3, 6, 18, 0.3);
+    backdrop-filter: blur(6px);
+    pointer-events: auto;
   }
 
   .thread-composer-modal .thread-composer {
-    max-height: 100dvh;
-    width: 100vw;
+    align-self: center;
+    justify-self: center;
+    margin: auto;
+    pointer-events: auto;
+    max-height: min(78dvh, calc(100dvh - 28px));
+    width: min(calc(100vw - 24px), 520px);
+  }
+
+  .thread-composer-modal :deep(.thread-composer) {
+    opacity: 1;
+    transform: none !important;
+    visibility: visible;
   }
 
   .quick-thread-modal {
@@ -3518,6 +3835,27 @@ onUnmounted(() => {
 @media (max-width: 859px) {
   .public-bottom-nav {
     display: grid;
+  }
+
+  :global(body.quick-thread-sheet-open) .public-bottom-nav {
+    background: rgba(5, 8, 22, 0.58);
+    box-shadow:
+      0 12px 34px rgba(0, 0, 0, 0.28),
+      0 0 18px rgba(168, 85, 247, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    transform: translate3d(0, 3px, 0) scale(0.99);
+    z-index: 390;
+  }
+
+  :global(body.quick-thread-sheet-open .music-bubble-fab),
+  :global(body.quick-thread-sheet-open .music-bubble-panel),
+  :global(body.quick-thread-sheet-open .direct-chat-fab),
+  :global(body.quick-thread-sheet-open .direct-chat-panel),
+  :global(body.quick-thread-sheet-open .community-floating-access),
+  :global(body.quick-thread-sheet-open .global-live-bubble) {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateY(16px) scale(0.94) !important;
   }
 
   .mobile-create-layer {
@@ -3776,6 +4114,22 @@ onUnmounted(() => {
   color: #f8fafc;
 }
 
+.public-account-close {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #ffffff;
+  display: none;
+  height: 36px;
+  justify-content: center;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 36px;
+  z-index: 3;
+}
+
 .public-account-head {
   border-bottom-color: rgba(255, 255, 255, 0.08);
 }
@@ -3803,6 +4157,26 @@ onUnmounted(() => {
   color: #fb7185;
 }
 
+@media (max-width: 768px) {
+  .public-account-card {
+    border-radius: 0 22px 22px 0;
+  }
+
+  .public-account-close {
+    display: flex;
+  }
+
+  .public-account-list button {
+    font-size: 15px;
+    min-height: 46px;
+  }
+
+  .public-account-actions button {
+    font-size: 14px;
+    min-height: 46px;
+  }
+}
+
 .mobile-drawer-enter-active,
 .mobile-drawer-leave-active,
 .account-fold-enter-active,
@@ -3820,6 +4194,24 @@ onUnmounted(() => {
   opacity: 0;
 }
 
+@media (max-width: 859px) {
+  .thread-composer-modal.fade-enter-active,
+  .thread-composer-modal.fade-leave-active {
+    transition: opacity 0.2s ease;
+  }
+
+  .thread-composer-modal.fade-enter-active .thread-composer,
+  .thread-composer-modal.fade-leave-active .thread-composer {
+    transition: opacity 0.2s ease;
+  }
+
+  .thread-composer-modal.fade-enter-from .thread-composer,
+  .thread-composer-modal.fade-leave-to .thread-composer {
+    opacity: 0;
+    transform: none !important;
+  }
+}
+
 .mobile-drawer-enter-from,
 .mobile-drawer-leave-to {
   opacity: 0;
@@ -3830,6 +4222,21 @@ onUnmounted(() => {
 .account-fold-leave-to {
   opacity: 0;
   transform: translateY(-6px) scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-nav,
+  .public-nav-inner,
+  .public-brand-logo,
+  .public-icon,
+  .public-bottom-nav,
+  .public-bottom-nav button,
+  .bottom-nav-indicator,
+  .bottom-create-btn i,
+  .mobile-reading-progress {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 </style>

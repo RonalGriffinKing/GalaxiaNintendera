@@ -457,6 +457,12 @@ onUnmounted(() => {
     right: var(--galaxy-dock-community-right, 78px);
   }
 
+  .community-floating-button {
+    box-shadow:
+      0 18px 42px rgba(0, 0, 0, 0.34),
+      0 0 28px rgba(236, 72, 153, 0.3);
+  }
+
   .community-popup {
     border: 0;
     border-radius: 0;
@@ -479,13 +485,13 @@ onUnmounted(() => {
 
 @media (max-width: 420px) {
   .community-floating-button {
-    height: 52px;
-    width: 52px;
+    height: 50px;
+    width: 50px;
   }
 
   .community-current-icon {
-    height: 44px;
-    width: 44px;
+    height: 42px;
+    width: 42px;
   }
 }
 </style>

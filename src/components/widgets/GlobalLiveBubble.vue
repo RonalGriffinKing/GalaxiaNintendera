@@ -675,7 +675,7 @@ onUnmounted(() => {
     bottom: auto;
     max-height: calc(44dvh - 10px);
     overflow-y: auto;
-    top: calc(var(--public-nav-offset, 72px) + 12px);
+    top: calc(var(--public-nav-offset, 72px) + max(16px, env(safe-area-inset-top)));
     left: 12px;
     right: 12px;
     width: auto;
@@ -715,7 +715,7 @@ onUnmounted(() => {
       linear-gradient(135deg, #22d3ee, #a855f7, #ec4899, #facc15) border-box !important;
     border: 1px solid transparent;
     border-radius: 999px;
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.34), 0 0 20px rgba(168, 85, 247, 0.2);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.34), 0 0 24px rgba(168, 85, 247, 0.26);
     gap: 7px;
     height: 34px;
     min-width: 92px;

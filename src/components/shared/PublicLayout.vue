@@ -4,9 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '@/firebase'
 import DirectChatBubble from '@/components/widgets/chat/DirectChatBubble.vue'
-import MusicBubble from '@/components/widgets/chat/MusicBubble.vue'
-import CommunityFloatingAccess from '@/components/community/CommunityFloatingAccess.vue'
 import GlobalLiveBubble from '@/components/widgets/GlobalLiveBubble.vue'
+import GalaxiaHub from '@/components/shared/GalaxiaHub.vue'
 import PublicNavbar from '@/components/nav/PublicNavbar.vue'
 
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
@@ -129,20 +128,21 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
     :style="layoutStyle"
   >
     <PublicNavbar />
-    <router-view v-slot="{ Component }">
-      <KeepAlive include="CommunityPage">
-        <component :is="Component" />
-      </KeepAlive>
+    <router-view v-slot="{ Component, route: viewRoute }">
+      <Transition name="page-soft" mode="out-in">
+        <KeepAlive include="CommunityPage">
+          <component :is="Component" :key="viewRoute.name || viewRoute.path" />
+        </KeepAlive>
+      </Transition>
     </router-view>
     <GlobalLiveBubble />
-    <MusicBubble />
-    <CommunityFloatingAccess
-      v-if="showCommunityAccess"
+    <GalaxiaHub
       :official-community="officialCommunity"
       :favorite-communities="favoriteCommunities"
       :suggested-communities="suggestedCommunities"
       :all-communities="communities"
       :active-community-id="activeCommunityId"
+      :show-community-access="showCommunityAccess"
       @open-community="openCommunity"
       @toggle-favorite="toggleFavoriteCommunity"
       @open-explore="openExplore"
@@ -165,18 +165,31 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
   --galaxy-dock-community-right: 146px;
 }
 
+:global(.direct-chat-fab) {
+  display: none !important;
+}
+
 @media (max-width: 859px) {
   :global(body) {
-    --galaxy-dock-bottom: calc(76px + env(safe-area-inset-bottom));
-    --galaxy-dock-chat-right: 16px;
-    --galaxy-dock-music-right: 78px;
-    --galaxy-dock-community-right: 140px;
-    --galaxy-dock-panel-bottom: calc(146px + env(safe-area-inset-bottom));
+    --galaxy-dock-bottom: calc(104px + env(safe-area-inset-bottom));
+    --galaxy-dock-chat-right: max(18px, env(safe-area-inset-right));
+    --galaxy-dock-music-right: calc(max(18px, env(safe-area-inset-right)) + 68px);
+    --galaxy-dock-community-right: calc(max(18px, env(safe-area-inset-right)) + 136px);
+    --galaxy-dock-panel-bottom: calc(174px + env(safe-area-inset-bottom));
   }
 
   :global(body.direct-chat-available) {
-    --galaxy-dock-music-right: 78px;
-    --galaxy-dock-community-right: 140px;
+    --galaxy-dock-music-right: calc(max(18px, env(safe-area-inset-right)) + 68px);
+    --galaxy-dock-community-right: calc(max(18px, env(safe-area-inset-right)) + 136px);
+  }
+}
+
+@media (max-width: 390px) {
+  :global(body) {
+    --galaxy-dock-bottom: calc(108px + env(safe-area-inset-bottom));
+    --galaxy-dock-chat-right: max(14px, env(safe-area-inset-right));
+    --galaxy-dock-music-right: calc(max(14px, env(safe-area-inset-right)) + 62px);
+    --galaxy-dock-community-right: calc(max(14px, env(safe-area-inset-right)) + 124px);
   }
 }
 
@@ -190,9 +203,36 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
   background: #f8fafc;
 }
 
+.page-soft-enter-active,
+.page-soft-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 0.22s ease;
+}
+
+.page-soft-enter-from {
+  filter: blur(4px);
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-soft-leave-to {
+  filter: blur(2px);
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 @media (max-width: 680px) {
   .public-layout-shell {
     --public-nav-offset: 64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-soft-enter-active,
+  .page-soft-leave-active {
+    transition: none;
   }
 }
 </style>

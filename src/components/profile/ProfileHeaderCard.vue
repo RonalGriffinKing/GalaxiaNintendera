@@ -111,7 +111,7 @@ const emit = defineEmits([
         @click="emit('toggle-icon-panel')"
       >
         <i class="fas fa-pen"></i>
-        <span>Iconos</span>
+        <span>Editar</span>
       </button>
     </div>
 
@@ -167,6 +167,7 @@ const emit = defineEmits([
       <i class="fas fa-star"></i>
       <strong>{{ displayStars }}</strong>
       <span>estrellas</span>
+      <small>Gana mas leyendo noticias y participando en la galaxia.</small>
     </div>
 
     <div class="profile-actions">
@@ -460,6 +461,14 @@ const emit = defineEmits([
   text-transform: uppercase;
 }
 
+.star-wallet small {
+  color: #cbd5e1;
+  display: none;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+ }
+
 .profile-actions {
   display: flex;
   flex-wrap: wrap;
@@ -504,58 +513,153 @@ const emit = defineEmits([
 
 @media (max-width: 760px) {
   .profile-hero {
+    align-items: start;
     grid-template-areas:
-      "level level"
       "avatar info"
+      "level level"
+      "rewards socials"
       "wallet wallet"
-      "socials rewards"
       "actions actions";
-    grid-template-columns: 92px minmax(0, 1fr);
-    padding: 16px;
+    grid-template-columns: minmax(112px, 34%) minmax(0, 1fr);
+    gap: 16px 14px;
+    padding: 20px 16px 18px;
+  }
+
+  .profile-avatar-wrap {
+    align-self: start;
+    display: grid;
+    justify-items: center;
+    padding-top: 8px;
   }
 
   .profile-avatar-circle {
-    --avatar-size: 92px;
+    --avatar-size: clamp(104px, 30vw, 132px);
+    --avatar-border: 4px;
     --avatar-role-offset: -5px;
   }
 
   .avatar-edit-shortcut {
     display: inline-flex;
-    bottom: -34px;
+    bottom: -42px;
+    box-shadow: 0 12px 24px rgba(147, 51, 234, 0.36);
+    gap: 6px;
+    height: 36px;
     left: 50%;
-    min-height: 34px;
+    min-height: 36px;
+    padding: 0 13px;
     right: auto;
     transform: translateX(-50%);
   }
 
   .avatar-edit-shortcut span {
-    display: none;
+    display: inline;
+    font-size: 10px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .profile-main-copy {
+    align-self: start;
+    padding-top: 2px;
   }
 
   .profile-main-copy h1 {
-    font-size: clamp(24px, 7vw, 30px);
+    font-size: clamp(34px, 10vw, 48px);
+    line-height: 0.94;
+    max-width: 8ch;
   }
 
   .profile-main-copy p {
-    font-size: 12px;
+    display: -webkit-box;
+    font-size: 14px;
+    line-height: 1.42;
+    margin-top: 12px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+    overflow: hidden;
   }
 
   .profile-level-pill {
-    font-size: 11px;
-    grid-template-columns: 28px minmax(0, 1fr) 14px 12px;
+    font-size: 12px;
+    grid-template-columns: 34px minmax(0, 1fr) 18px 14px;
     justify-self: stretch;
     max-width: 100%;
-    min-height: 38px;
+    min-height: 44px;
+    padding: 5px 12px 5px 5px;
     width: 100%;
   }
 
   .profile-level-icon {
-    height: 28px;
-    width: 28px;
+    height: 34px;
+    width: 34px;
   }
 
   .star-wallet {
+    column-gap: 12px;
+    grid-template-columns: 52px auto minmax(0, 1fr);
+    justify-items: start;
     min-width: 0;
+    padding: 14px 16px;
+  }
+
+  .star-wallet i {
+    align-items: center;
+    background: rgba(250, 204, 21, 0.14);
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 26px;
+    height: 52px;
+    justify-content: center;
+    grid-row: span 2;
+    width: 52px;
+  }
+
+  .star-wallet strong {
+    font-size: 34px;
+    line-height: 0.95;
+  }
+
+  .star-wallet span {
+    align-self: end;
+  }
+
+  .star-wallet small {
+    display: block;
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    max-width: 22ch;
+  }
+
+  .hero-rewards-panel,
+  .profile-social-panel {
+    background: rgba(7, 10, 24, 0.54);
+    border: 1px solid rgba(168, 85, 247, 0.18);
+    border-radius: 20px;
+    min-height: 110px;
+    padding: 14px 10px;
+  }
+
+  .hero-rewards-panel {
+    justify-items: center;
+  }
+
+  .hero-icon-stack {
+    min-width: 0;
+  }
+
+  .hero-stack-avatar {
+    --avatar-size: 36px;
+    margin-left: -10px;
+  }
+
+  .profile-social-panel {
+    align-content: center;
+    justify-items: center;
+  }
+
+  .profile-social-links {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 
   .profile-actions {
@@ -564,7 +668,9 @@ const emit = defineEmits([
   }
 
   .profile-actions button {
+    border-radius: 999px;
     justify-content: center;
+    min-height: 48px;
   }
 
   .profile-actions .profile-edit-main-action {

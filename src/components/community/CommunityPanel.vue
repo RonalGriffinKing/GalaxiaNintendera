@@ -2853,7 +2853,7 @@ onUnmounted(() => {
   justify-content: center;
   padding: 18px;
   position: fixed;
-  z-index: 2000;
+  z-index: 2600;
 }
 
 .profile-view-modal {

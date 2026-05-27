@@ -259,7 +259,7 @@ const groupedRedeemedIcons = computed(() => {
     .sort((a, b) => a.saga.localeCompare(b.saga, 'es'))
 })
 const canUseDirectChat = computed(() => {
-  return Boolean(auth.currentUser) && (
+  return Boolean(auth.currentUser) && !isOwnProfile.value && isFollowing.value && (
     ['admin', 'publisher'].includes(viewerProfile.value.role) || viewerProfile.value.canChat
   )
 })
@@ -491,7 +491,7 @@ const loadProfile = async () => {
       .slice(0, 6)
     posts.value = postsSnap.docs
       .map(item => ({ id: item.id, ...item.data() }))
-      .filter(post => post.authorId === profileId.value && post.status === 'approved' && post.placement !== 'hero' && !post.isMainEntry)
+      .filter(post => post.authorId === profileId.value && post.status === 'approved' && post.visibility !== 'private' && post.visibility !== 'unlisted' && post.placement !== 'hero' && !post.isMainEntry)
       .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
       .slice(0, 6)
     publicProfiles.value = usersSnap.docs
@@ -1143,19 +1143,22 @@ const openRelationChat = (user) => {
     router.push(`/login?redirect=${encodeURIComponent(route.fullPath)}`)
     return
   }
-  if (!canUseDirectChat.value) {
+  const followsUser = followingList.value.some(item => item.id === user.id)
+  if (!canUseDirectChat.value || !followsUser) {
     openRelationProfile(user)
     return
   }
 
   window.dispatchEvent(new CustomEvent('open-direct-chat', {
     detail: {
+      source: 'galaxia-hub',
       id: user.id,
       name: user.name || user.email || 'Usuario',
       email: user.email || '',
       imageUrl: user.imageUrl || fallbackProfileIcon,
       role: user.role || 'user',
-      canChat: Boolean(user.canChat)
+      canChat: Boolean(user.canChat),
+      canMessage: true
     }
   }))
   closeRelationModal()
@@ -1172,12 +1175,14 @@ const openDirectMessage = () => {
 
   window.dispatchEvent(new CustomEvent('open-direct-chat', {
     detail: {
+      source: 'galaxia-hub',
       id: profileId.value,
       name: profile.value.name || profile.value.email || 'Usuario',
       email: profile.value.email || '',
       imageUrl: profileIcon.value,
       role: profile.value.role || 'user',
-      canChat: Boolean(profile.value.canChat)
+      canChat: Boolean(profile.value.canChat),
+      canMessage: true
     }
   }))
 }
@@ -3375,18 +3380,19 @@ onUnmounted(() => {
   }
 
   .profile-hero {
-    align-items: center;
+    align-items: start;
     border-radius: 16px;
-    gap: 12px;
+    gap: 16px 14px;
     grid-template-areas:
-      "avatar info info wallet"
-      "level level level level"
-      "rewards rewards socials socials"
-      "actions actions actions actions";
-    grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) 86px;
+      "avatar info"
+      "level level"
+      "rewards socials"
+      "wallet wallet"
+      "actions actions";
+    grid-template-columns: minmax(126px, 36%) minmax(0, 1fr);
     min-height: 0;
     overflow: hidden;
-    padding: 14px;
+    padding: 18px 14px;
     pointer-events: auto;
     isolation: isolate;
   }
@@ -3404,12 +3410,13 @@ onUnmounted(() => {
   }
 
   .profile-avatar-wrap {
-    justify-self: start;
+    justify-self: center;
+    padding-top: 6px;
   }
 
   .profile-avatar-circle {
-    height: 92px;
-    width: 92px;
+    height: clamp(112px, 31vw, 132px);
+    width: clamp(112px, 31vw, 132px);
   }
 
   .role-badge {
@@ -3419,16 +3426,19 @@ onUnmounted(() => {
   }
 
   .avatar-edit-shortcut {
-    bottom: 2px;
-    height: 32px;
-    right: -4px;
-    width: 32px;
+    bottom: -36px;
+    height: 36px;
+    left: 50%;
+    min-width: 96px;
+    right: auto;
+    transform: translateX(-50%);
+    width: auto;
   }
 
   .profile-main-copy {
-    align-self: center;
+    align-self: start;
     min-width: 0;
-    padding-top: 0;
+    padding-top: 4px;
   }
 
   .profile-level-pill {
@@ -3456,9 +3466,9 @@ onUnmounted(() => {
 
   .profile-main-copy h1 {
     display: -webkit-box;
-    font-size: clamp(24px, 7vw, 30px);
-    line-height: 1.06;
-    max-width: 100%;
+    font-size: clamp(34px, 10vw, 46px);
+    line-height: 0.94;
+    max-width: 8ch;
     overflow: hidden;
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
@@ -3466,19 +3476,19 @@ onUnmounted(() => {
   }
 
   .profile-username {
-    font-size: 12px;
-    margin-top: 3px;
+    font-size: 13px;
+    margin-top: 7px;
   }
 
   .profile-main-copy p {
     display: -webkit-box;
-    font-size: 12px;
-    line-height: 1.35;
-    margin-top: 5px;
+    font-size: 13px;
+    line-height: 1.42;
+    margin-top: 10px;
     overflow: hidden;
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
+    -webkit-line-clamp: 6;
   }
 
   .hero-rewards-panel {
@@ -3581,24 +3591,36 @@ onUnmounted(() => {
   .star-wallet {
     align-self: center;
     align-content: center;
-    border-radius: 14px;
-    justify-self: end;
+    border-radius: 18px;
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    justify-items: start;
+    justify-self: stretch;
     min-width: 0;
-    width: 82px;
-    padding: 8px 7px;
+    width: 100%;
+    padding: 14px 18px;
     position: static;
   }
 
   .star-wallet i {
-    font-size: 15px;
+    align-items: center;
+    background: rgba(250, 204, 21, 0.14);
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 26px;
+    grid-row: span 2;
+    height: 52px;
+    justify-content: center;
+    width: 52px;
   }
 
   .star-wallet strong {
-    font-size: 20px;
+    font-size: 34px;
+    line-height: 0.95;
   }
 
   .star-wallet span {
-    font-size: 8px;
+    font-size: 10px;
     margin-top: 2px;
   }
 

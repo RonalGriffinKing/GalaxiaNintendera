@@ -967,6 +967,9 @@ watch(open, (isOpen) => {
 
 @media (max-width: 859px) {
   .music-bubble-fab {
+    box-shadow:
+      0 18px 42px rgba(0, 0, 0, 0.34),
+      0 0 28px rgba(168, 85, 247, 0.3);
     z-index: 265;
   }
 
@@ -979,11 +982,11 @@ watch(open, (isOpen) => {
   }
 
   .music-track-pill {
-    bottom: calc(var(--galaxy-dock-bottom, calc(84px + env(safe-area-inset-bottom))) + 72px);
+    bottom: calc(var(--galaxy-dock-bottom, calc(104px + env(safe-area-inset-bottom))) + 72px);
     display: flex;
     max-width: min(340px, calc(100vw - 24px));
     min-width: min(240px, calc(100vw - 24px));
-    right: max(12px, calc(var(--galaxy-dock-music-right, 16px) - 54px));
+    right: max(14px, calc(var(--galaxy-dock-music-right, 86px) - 54px));
   }
 
   .music-bubble-panel {
@@ -1024,6 +1027,17 @@ watch(open, (isOpen) => {
     left: 0;
     right: 0;
     top: 0;
+  }
+}
+
+@media (max-width: 390px) {
+  .music-bubble-fab {
+    height: 50px;
+    width: 50px;
+  }
+
+  .music-bubble-fab i {
+    font-size: 18px;
   }
 }
 </style>

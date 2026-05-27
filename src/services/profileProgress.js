@@ -190,6 +190,9 @@ export const awardPostRead = async ({ user, post }) => {
 
   const userRef = doc(db, 'users', user.uid)
   const readRef = doc(db, 'users', user.uid, 'readPosts', post.id)
+  const configuredReward = Math.max(0, Number(post.starReward || READ_REWARD_STARS))
+  const multiplier = Math.max(0, Number(post.rewardMultiplier || 1))
+  const rewardStars = Math.max(0, Math.round(configuredReward * multiplier))
 
   return runTransaction(db, async (transaction) => {
     const readSnap = await transaction.get(readRef)
@@ -200,7 +203,7 @@ export const awardPostRead = async ({ user, post }) => {
     }
 
     const data = userSnap.exists() ? userSnap.data() : {}
-    const nextStars = Number(data.stars || 0) + READ_REWARD_STARS
+    const nextStars = Number(data.stars || 0) + rewardStars
     const nextReadCount = Number(data.readPostsCount || 0) + 1
     const currentUnlocked = data.unlockedIcons?.length ? data.unlockedIcons : ['kirby-01']
 
@@ -208,7 +211,8 @@ export const awardPostRead = async ({ user, post }) => {
       postId: post.id,
       title: post.title || '',
       category: post.category || 'General',
-      stars: READ_REWARD_STARS,
+      rewardBadges: Array.isArray(post.rewardBadges) ? post.rewardBadges : [],
+      stars: rewardStars,
       readAt: Date.now()
     })
 
@@ -222,6 +226,7 @@ export const awardPostRead = async ({ user, post }) => {
 
     return {
       awarded: true,
+      awardedStars: rewardStars,
       stars: nextStars,
       readPostsCount: nextReadCount,
       achievements: unlockedAchievements(nextReadCount)

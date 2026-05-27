@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { addDoc, collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
@@ -42,6 +42,9 @@ const spoiler = ref(false)
 const pollOpen = ref(false)
 const communityPickerOpen = ref(false)
 const textAreaRef = ref(null)
+const sheetDragY = ref(0)
+const sheetDragging = ref(false)
+const sheetStartY = ref(0)
 
 const defaultTopics = ['Posts', 'Fanarts', 'Guias', 'Trucos', 'Preguntas', 'Clips', 'Eventos']
 const officialFallback = {
@@ -98,7 +101,7 @@ const placeholder = computed(() => {
   if (topic === 'Eventos') return 'Comparte un evento, quedada o partida con fecha...'
   return `Comparte una idea o abre conversacion con ${community}...`
 })
-const title = computed(() => '¿Que quieres compartir?')
+const title = computed(() => 'Que quieres compartir?')
 
 const normalizeTopics = (items = []) => {
   const seen = new Set()
@@ -179,6 +182,48 @@ const togglePoll = () => {
   }
 }
 
+const resizeTextarea = () => {
+  const textarea = textAreaRef.value
+  if (!textarea) return
+  textarea.style.height = 'auto'
+  textarea.style.height = `${Math.min(textarea.scrollHeight, 220)}px`
+}
+
+const handleComposerInput = () => {
+  resizeTextarea()
+}
+
+const openImageTool = () => {
+  pasteImageUrl()
+}
+
+const chooseQuestionType = () => {
+  const questionTopic = topics.value.find(topic => topic.toLowerCase() === 'preguntas')
+  selectedTopic.value = questionTopic || selectedTopic.value
+}
+
+const startSheetDrag = (event) => {
+  if (props.variant !== 'modal' || event.pointerType === 'mouse') return
+  sheetDragging.value = true
+  sheetStartY.value = event.clientY
+  sheetDragY.value = 0
+  event.currentTarget.setPointerCapture?.(event.pointerId)
+}
+
+const moveSheetDrag = (event) => {
+  if (!sheetDragging.value) return
+  sheetDragY.value = Math.max(0, event.clientY - sheetStartY.value)
+}
+
+const endSheetDrag = (event) => {
+  if (!sheetDragging.value) return
+  event.currentTarget.releasePointerCapture?.(event.pointerId)
+  const shouldClose = sheetDragY.value > 86
+  sheetDragging.value = false
+  sheetDragY.value = 0
+  if (shouldClose) emit('close')
+}
+
 const publish = async () => {
   const activeUser = user.value
   const community = selectedCommunity.value
@@ -239,15 +284,35 @@ watch(allowedCommunities, () => {
 watch(topics, (next) => {
   if (!next.includes(selectedTopic.value)) selectedTopic.value = next[0] || 'Posts'
 })
+watch(body, () => nextTick(resizeTextarea))
 
 onMounted(async () => {
   await loadContext()
-  if (props.autofocus) textAreaRef.value?.focus()
+  await nextTick()
+  resizeTextarea()
+  const isMobileViewport = typeof window !== 'undefined' && window.matchMedia('(max-width: 859px)').matches
+  if (props.autofocus && !isMobileViewport) textAreaRef.value?.focus()
 })
 </script>
 
 <template>
-  <section class="thread-composer" :class="[`is-${variant}`, { 'picker-open': communityPickerOpen }]">
+  <section
+    class="thread-composer"
+    :class="[`is-${variant}`, { 'picker-open': communityPickerOpen, dragging: sheetDragging }]"
+    :style="{ '--sheet-drag-y': `${sheetDragY}px` }"
+  >
+    <button
+      v-if="variant === 'modal'"
+      class="composer-drag-handle"
+      type="button"
+      aria-label="Cerrar deslizando"
+      @pointerdown="startSheetDrag"
+      @pointermove="moveSheetDrag"
+      @pointerup="endSheetDrag"
+      @pointercancel="endSheetDrag"
+    >
+      <span></span>
+    </button>
     <button v-if="variant === 'modal'" class="composer-close" type="button" aria-label="Cerrar" @click="$emit('close')">
       <i class="fas fa-xmark"></i>
     </button>
@@ -258,8 +323,6 @@ onMounted(async () => {
 
     <template v-else-if="allowedCommunities.length">
       <div class="composer-main">
-        <h2>{{ title }}</h2>
-
         <div class="composer-steps">
           <div class="composer-step community-step">
             <small>1. Elige la comunidad</small>
@@ -291,8 +354,33 @@ onMounted(async () => {
           </div>
         </div>
 
+        <h2>{{ title }}</h2>
+
+        <div class="mobile-composer-type-row" aria-label="Tipo de publicacion">
+          <button type="button" :class="{ active: selectedTopicMeta.label === 'Posts' }" @click="selectedTopic = topics.includes('Posts') ? 'Posts' : topics[0]">
+            <i class="far fa-comment"></i>
+            Hilo
+          </button>
+          <button type="button" :class="{ active: pollOpen }" @click="togglePoll">
+            <i class="fas fa-chart-simple"></i>
+            Encuesta
+          </button>
+          <button type="button" @click="openImageTool">
+            <i class="far fa-image"></i>
+            Imagen
+          </button>
+          <button type="button" :class="{ active: spoiler }" @click="spoiler = !spoiler">
+            <i class="fas fa-eye-slash"></i>
+            Spoiler
+          </button>
+          <button type="button" :class="{ active: selectedTopicMeta.label === 'Preguntas' }" @click="chooseQuestionType">
+            <i class="far fa-circle-question"></i>
+            Pregunta
+          </button>
+        </div>
+
         <label class="composer-textarea">
-          <textarea ref="textAreaRef" v-model="body" maxlength="240" :placeholder="placeholder"></textarea>
+          <textarea ref="textAreaRef" v-model="body" maxlength="240" :placeholder="placeholder" @input="handleComposerInput"></textarea>
           <span>{{ body.length }}/240</span>
         </label>
 
@@ -396,6 +484,11 @@ onMounted(async () => {
   z-index: 4;
 }
 
+.composer-drag-handle,
+.mobile-composer-type-row {
+  display: none;
+}
+
 .community-select span,
 .community-list button > span {
   background: linear-gradient(135deg, #7c3aed, #ec4899);
@@ -429,6 +522,7 @@ onMounted(async () => {
   font-size: clamp(24px, 2.6vw, 34px);
   font-weight: 950;
   line-height: 1.05;
+  order: -1;
 }
 
 .composer-steps {
@@ -814,39 +908,225 @@ onMounted(async () => {
   }
 }
 
-@media (max-width: 620px) {
-  .thread-composer,
+@media (max-width: 859px) {
   .thread-composer.is-modal {
-    border-radius: 0;
+    border-radius: 26px;
     grid-template-columns: minmax(0, 1fr);
-    min-height: 100dvh;
-    max-height: 100dvh;
-    padding: calc(18px + env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom));
-    width: 100vw;
+    min-height: auto;
+    max-height: min(78dvh, calc(100dvh - 28px));
+    overflow-y: auto;
+    padding: 16px;
+    transform: none;
+    transition:
+      border-radius 0.22s ease,
+      box-shadow 0.22s ease;
+    width: 100%;
+  }
+
+  .thread-composer.is-modal {
+    background:
+      radial-gradient(circle at 82% 0%, rgba(236, 72, 153, 0.2), transparent 34%),
+      radial-gradient(circle at 14% 4%, rgba(124, 58, 237, 0.28), transparent 36%),
+      linear-gradient(145deg, rgba(6, 9, 24, 0.98), rgba(17, 12, 42, 0.97));
+    border-color: rgba(192, 132, 252, 0.42);
+    box-shadow:
+      0 -18px 68px rgba(0, 0, 0, 0.42),
+      0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 0 36px rgba(168, 85, 247, 0.2);
+  }
+
+  .thread-composer.dragging {
+    transition: none;
+  }
+
+  .composer-drag-handle {
+    display: none;
+  }
+
+  .composer-drag-handle span {
+    background: rgba(216, 180, 254, 0.5);
+    border-radius: 999px;
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.3);
+    display: block;
+    height: 4px;
+    width: 42px;
   }
 
   .composer-close {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
     display: inline-flex;
+    font-size: 16px;
+    height: 34px;
+    right: 16px;
+    top: 21px;
+    width: 34px;
   }
 
   .composer-main {
-    gap: 14px;
+    gap: 12px;
+    padding-top: 2px;
   }
 
   .composer-main h2 {
-    font-size: 24px;
-    padding-right: 34px;
+    font-size: 18px;
+    order: 0;
+    padding-right: 38px;
+  }
+
+  .composer-steps {
+    gap: 0;
+  }
+
+  .composer-step small,
+  .community-step p,
+  .type-step {
+    display: none;
+  }
+
+  .community-step {
+    grid-template-columns: 1fr;
+  }
+
+  .community-select {
+    background: rgba(8, 12, 30, 0.72);
+    border-color: rgba(168, 85, 247, 0.52);
+    border-radius: 999px;
+    box-shadow:
+      0 14px 34px rgba(0, 0, 0, 0.24),
+      0 0 26px rgba(168, 85, 247, 0.18);
+    gap: 9px;
+    grid-template-columns: 30px minmax(0, 1fr) 20px;
+    min-height: 44px;
+    padding: 6px 16px 6px 6px;
+    width: min(330px, calc(100% - 48px));
+  }
+
+  .community-select > i {
+    justify-self: center;
+  }
+
+  .community-select span {
+    height: 30px;
+    width: 30px;
+  }
+
+  .community-select strong {
+    font-size: 14px;
+  }
+
+  .mobile-composer-type-row {
+    display: flex;
+    gap: 7px;
+    margin-right: -16px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .mobile-composer-type-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-composer-type-row button {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 999px;
+    color: #cbd5e1;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 900;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 10px;
+  }
+
+  .mobile-composer-type-row button.active {
+    background: linear-gradient(135deg, #7c3aed, #c026d3);
+    border-color: rgba(216, 180, 254, 0.48);
+    color: #ffffff;
+    box-shadow: 0 0 18px rgba(168, 85, 247, 0.18);
   }
 
   .community-picker-panel {
+    background:
+      radial-gradient(circle at 18% 0%, rgba(168, 85, 247, 0.18), transparent 34%),
+      linear-gradient(145deg, rgba(6, 9, 24, 0.99), rgba(13, 10, 34, 0.99));
+    border-color: rgba(192, 132, 252, 0.24);
+    border-radius: inherit;
+    bottom: 0;
+    box-shadow: 0 22px 52px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
     left: 0;
-    padding: calc(24px + env(safe-area-inset-top)) 18px calc(92px + env(safe-area-inset-bottom));
-    width: 100vw;
+    max-height: none;
+    min-height: 100%;
+    padding: 18px;
+    position: absolute;
+    right: 0;
+    top: 0;
+    transform: translateY(10px) scale(0.98);
+    width: auto;
+    z-index: 12;
+  }
+
+  .thread-composer.picker-open .community-picker-panel {
+    transform: translateY(0) scale(1);
   }
 
   .community-list {
+    gap: 6px;
+    flex: 1;
     max-height: none;
+    min-height: 0;
     overflow-y: auto;
+    padding-right: 2px;
+  }
+
+  .picker-head {
+    margin-bottom: 8px;
+  }
+
+  .picker-head strong {
+    font-size: 15px;
+  }
+
+  .picker-head button {
+    height: 32px;
+    width: 32px;
+  }
+
+  .community-list button {
+    border-radius: 14px;
+    gap: 9px;
+    grid-template-columns: 42px minmax(0, 1fr) 18px;
+    min-height: 56px;
+    padding: 6px;
+  }
+
+  .community-list button > span {
+    height: 42px;
+    width: 42px;
+  }
+
+  .community-list strong {
+    font-size: 12px;
+  }
+
+  .community-list small {
+    font-size: 10px;
+    line-height: 1.2;
+    max-height: 2.4em;
+  }
+
+  .explore-btn {
+    border-radius: 13px;
+    font-size: 12px;
+    min-height: 38px;
+    margin-top: 10px;
   }
 
   .topic-row {
@@ -863,23 +1143,38 @@ onMounted(async () => {
   }
 
   .composer-textarea {
-    min-height: 150px;
-    padding: 14px;
+    background: rgba(5, 8, 22, 0.42);
+    min-height: 112px;
+    padding: 13px;
   }
 
   .composer-textarea textarea {
     font-size: 15px;
+    line-height: 1.35;
+    min-height: 68px;
   }
 
   .composer-footer {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  .tool-row {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .tool-row button {
+    height: 36px;
+    min-height: 36px;
+    width: 36px;
+  }
+
   .publish-btn {
     font-size: 13px;
-    min-height: 46px;
-    min-width: 112px;
-    padding: 0 16px;
+    min-height: 40px;
+    min-width: 104px;
+    padding: 0 14px;
   }
 }
+
 </style>

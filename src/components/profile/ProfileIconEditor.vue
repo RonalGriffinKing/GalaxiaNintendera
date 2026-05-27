@@ -670,6 +670,7 @@ defineExpose({
   gap: 18px;
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
   margin-top: 20px;
+  min-width: 0;
 }
 
 .profile-editor-panel,
@@ -677,6 +678,7 @@ defineExpose({
   background: rgba(255, 255, 255, 0.055);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
+  min-width: 0;
   padding: 16px;
 }
 
@@ -771,6 +773,8 @@ defineExpose({
 .icon-modal-toolbar {
   display: grid;
   gap: 10px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .icon-search-box {
@@ -797,8 +801,12 @@ defineExpose({
 .icon-filter-row {
   display: flex;
   gap: 8px;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   padding-bottom: 2px;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
 }
 
 .icon-filter-row button {
@@ -823,6 +831,11 @@ defineExpose({
   gap: 16px;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
   margin-top: 14px;
+  min-width: 0;
+}
+
+.icon-modal-list {
+  min-width: 0;
 }
 
 .icon-modal-list > strong {
@@ -864,8 +877,11 @@ defineExpose({
 .unlocked-icon-strip {
   display: flex;
   gap: 10px;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   padding-bottom: 2px;
+  overscroll-behavior-x: contain;
 }
 
 .unlocked-icon-strip button {
@@ -1416,6 +1432,7 @@ defineExpose({
   .icon-collection-backdrop,
   .icon-upload-backdrop {
     align-items: stretch;
+    overflow: hidden;
     padding: 10px;
   }
 
@@ -1423,8 +1440,16 @@ defineExpose({
   .icon-collection-card,
   .icon-upload-card {
     align-self: center;
+    box-sizing: border-box;
+    max-width: 100%;
     max-height: calc(100dvh - 20px);
-    padding: 52px 14px 18px;
+    overflow-x: hidden;
+    padding: 52px 12px calc(18px + env(safe-area-inset-bottom));
+    width: 100%;
+  }
+
+  .icon-modal-card * {
+    min-width: 0;
   }
 
   .icon-modal-close {
@@ -1467,18 +1492,46 @@ defineExpose({
   .icon-modal-layout,
   .icon-upload-layout {
     grid-template-columns: 1fr;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .icon-modal-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: visible;
   }
 
   .mobile-hidden-panel {
     display: none;
   }
 
+  .icon-picker-panel {
+    padding: 12px;
+  }
+
+  .icon-filter-row {
+    margin-inline: -2px;
+    padding: 0 2px 5px;
+    scrollbar-width: none;
+  }
+
+  .icon-filter-row::-webkit-scrollbar,
+  .unlocked-icon-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .unlocked-icons-section {
+    padding: 10px;
+  }
+
   .modal-icons {
     display: grid !important;
-    gap: 8px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    max-height: 330px;
-    overflow-y: auto;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
+    overflow: visible;
     padding-right: 0;
   }
 
@@ -1508,12 +1561,24 @@ defineExpose({
 
   .icon-preview-panel {
     align-items: center;
+    backdrop-filter: blur(16px);
+    background:
+      radial-gradient(circle at 18% 10%, rgba(168, 85, 247, 0.22), transparent 42%),
+      linear-gradient(145deg, rgba(43, 35, 70, 0.97), rgba(29, 24, 52, 0.97));
+    border-color: rgba(216, 180, 254, 0.3);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
     display: grid;
-    gap: 10px 12px;
-    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 7px 10px;
+    grid-template-columns: 56px minmax(0, 1fr);
     justify-items: start;
-    padding: 12px;
+    max-width: 100%;
+    order: -1;
+    overflow: hidden;
+    padding: 10px;
+    position: sticky;
     text-align: left;
+    top: 8px;
+    z-index: 12;
   }
 
   .icon-preview-panel h3 {
@@ -1521,19 +1586,22 @@ defineExpose({
   }
 
   .icon-preview-panel .preview-large-avatar {
-    --avatar-size: 66px;
+    --avatar-size: 54px;
     --avatar-border: 3px;
     grid-row: span 3;
     margin: 0;
   }
 
-  .icon-preview-panel p {
+  .icon-preview-panel strong {
+    font-size: 13px;
+  }
+
+  .icon-preview-panel small {
     font-size: 10px;
-    margin: 0;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  }
+
+  .icon-preview-panel p {
+    display: none;
   }
 
   .icon-preview-panel > button,
@@ -1542,8 +1610,11 @@ defineExpose({
     width: 100%;
   }
 
+  .icon-preview-panel > button,
   .icon-preview-actions button {
     min-height: 42px;
+    padding-inline: 10px;
+    white-space: normal;
     width: 100%;
   }
 

@@ -3,7 +3,9 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from "firebase/firestore"
 import { auth, db } from "@/firebase"
+import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
 import { READ_REWARD_STARS, awardPostRead, getReadRewardDelayMs, resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
+import { renderRichText } from '@/services/richText'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
 const route = useRoute()
@@ -21,15 +23,25 @@ const rewardChecked = ref(false)
 const readStatus = ref({ viewed: false, awarded: false })
 const isLoading = ref(true)
 let readTimer = null
+let previousTitle = ''
 
 const currentUrl = computed(() => {
   if (typeof window === 'undefined') return ''
   return window.location.href
 })
+const publicPostPath = computed(() => `/post/${post.value.slug || post.value.id || route.params.id}`)
 
 const postSections = computed(() => Array.isArray(post.value.sections) ? post.value.sections : [])
+const postCoverMedia = computed(() => mediaFromUrl(post.value.image))
+const mediaFor = (url) => mediaFromUrl(url)
+const richText = (value) => renderRichText(value)
 const postReleaseTime = computed(() => getTime(post.value.releaseAt || post.value.scheduledAt))
 const isUpcomingPost = computed(() => postReleaseTime.value > Date.now())
+const readRewardStars = computed(() => {
+  const configuredReward = Math.max(0, Number(post.value.starReward || READ_REWARD_STARS))
+  const multiplier = Math.max(0, Number(post.value.rewardMultiplier || 1))
+  return Math.max(0, Math.round(configuredReward * multiplier))
+})
 const authorIcon = computed(() => authorProfile.value ? resolveProfileIcon(authorProfile.value) : '')
 const authorIconMeta = computed(() => authorProfile.value ? resolveProfileIconMeta(authorProfile.value) : {})
 const normalizeCategory = (value) => String(value || '')
@@ -70,7 +82,7 @@ const analysisCriteria = computed(() => Array.isArray(post.value.analysis?.crite
 const analysisPros = computed(() => Array.isArray(post.value.analysis?.pros) ? post.value.analysis.pros : [])
 const analysisCons = computed(() => Array.isArray(post.value.analysis?.cons) ? post.value.analysis.cons : [])
 const readBadgeText = computed(() => {
-  if (readStatus.value.awarded) return `Visto +${READ_REWARD_STARS}`
+  if (readStatus.value.awarded) return `Visto +${readRewardStars.value}`
   if (readStatus.value.viewed) return 'Visto'
   return 'No visto'
 })
@@ -85,12 +97,25 @@ const loadPost = async () => {
   post.value = { sections: [] }
 
   try {
-    const snap = await getDoc(doc(db, "posts", route.params.id))
+    let snap = await getDoc(doc(db, "posts", route.params.id))
+
+    if (!snap.exists()) {
+      const postsSnap = await getDocs(collection(db, "posts"))
+      const slugMatch = postsSnap.docs.find(item => String(item.data()?.slug || '') === String(route.params.id || ''))
+      if (slugMatch) {
+        snap = slugMatch
+      }
+    }
 
     if (snap.exists()) {
       const loadedPost = { id: snap.id, sections: [], ...snap.data() }
       if (loadedPost.placement === 'hero' || loadedPost.isMainEntry) {
         router.replace('/')
+        return
+      }
+
+      if (loadedPost.visibility === 'private') {
+        router.replace('/noticias')
         return
       }
 
@@ -125,9 +150,9 @@ const loadAuthorProfile = async () => {
 const loadFavorite = async () => {
   const user = auth.currentUser
   isFavorite.value = false
-  if (!user || !route.params.id) return
+  if (!user || !post.value.id) return
 
-  const snap = await getDoc(doc(db, 'users', user.uid, 'favorites', route.params.id))
+  const snap = await getDoc(doc(db, 'users', user.uid, 'favorites', post.value.id))
   isFavorite.value = snap.exists()
 }
 
@@ -137,7 +162,7 @@ const loadRelatedPosts = async () => {
 
   relatedPosts.value = snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
-    .filter(item => item.id !== route.params.id && item.status === 'approved' && item.placement !== 'hero' && !item.isMainEntry)
+    .filter(item => item.id !== post.value.id && item.status === 'approved' && item.visibility !== 'private' && item.visibility !== 'unlisted' && item.placement !== 'hero' && !item.isMainEntry)
     .sort((a, b) => {
       const categoryScore = Number((b.category || '') === category) - Number((a.category || '') === category)
       if (categoryScore !== 0) return categoryScore
@@ -278,7 +303,7 @@ const tryAwardRead = async () => {
       readStatus.value = { viewed: true, awarded: true }
       rewardToast.value = {
         show: true,
-        message: `Has ganado ${READ_REWARD_STARS} estrellas`
+        message: `Has ganado ${result.awardedStars || readRewardStars.value} estrellas`
       }
       setTimeout(() => {
         rewardToast.value.show = false
@@ -305,11 +330,46 @@ const share = (platform) => {
 }
 
 const copyLink = async () => {
-  await navigator.clipboard.writeText(currentUrl.value)
+  const url = post.value.slug && typeof window !== 'undefined'
+    ? `${window.location.origin}${publicPostPath.value}`
+    : currentUrl.value
+  await navigator.clipboard.writeText(url)
   copied.value = true
   setTimeout(() => {
     copied.value = false
   }, 1800)
+}
+
+const ensureMetaTag = (name, content) => {
+  if (typeof document === 'undefined') return
+  let meta = document.querySelector(`meta[name="${name}"]`)
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.setAttribute('name', name)
+    document.head.appendChild(meta)
+  }
+  meta.setAttribute('content', content)
+}
+
+const ensureCanonical = (href) => {
+  if (typeof document === 'undefined') return
+  let link = document.querySelector('link[rel="canonical"]')
+  if (!link) {
+    link = document.createElement('link')
+    link.setAttribute('rel', 'canonical')
+    document.head.appendChild(link)
+  }
+  link.setAttribute('href', href)
+}
+
+const applyPostSeo = () => {
+  if (typeof document === 'undefined' || !post.value.id) return
+  document.title = `${post.value.title || 'Post'} | Galaxia Nintendera`
+  ensureMetaTag('description', post.value.metaDescription || post.value.content || '')
+  ensureMetaTag('keywords', Array.isArray(post.value.keywords) ? post.value.keywords.join(', ') : '')
+  ensureMetaTag('robots', post.value.indexGoogle === false || post.value.visibility === 'private' ? 'noindex,nofollow' : 'index,follow')
+  const canonical = post.value.canonicalUrl || `${window.location.origin}${publicPostPath.value}`
+  ensureCanonical(canonical)
 }
 
 const toggleFavorite = async () => {
@@ -347,12 +407,15 @@ const toggleFavorite = async () => {
 }
 
 watch(() => route.params.id, loadPost, { immediate: true })
+watch(post, applyPostSeo, { deep: true })
 onMounted(() => {
+  previousTitle = document.title
   window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
   window.addEventListener('scroll', checkEndReached, { passive: true })
   window.addEventListener('resize', checkEndReached)
 })
 onUnmounted(() => {
+  if (previousTitle) document.title = previousTitle
   clearReadTimer()
   window.removeEventListener('scroll', checkEndReached)
   window.removeEventListener('resize', checkEndReached)
@@ -447,11 +510,22 @@ onUnmounted(() => {
         </div>
 
         <div class="post-cover-wrap" :class="{ analysis: isAnalysisPost }">
-          <img
+          <div
             v-if="post.image"
-            :src="post.image"
-            class="post-cover-image"
-          />
+            class="post-cover-image post-cover-media"
+            :class="{ video: isVideoMedia(postCoverMedia) }"
+          >
+            <iframe
+              v-if="postCoverMedia.type === 'youtube'"
+              :src="postCoverMedia.embedUrl"
+              title="Video del post"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowfullscreen
+            ></iframe>
+            <video v-else-if="postCoverMedia.type === 'video'" :src="postCoverMedia.url" controls playsinline></video>
+            <img v-else :src="postCoverMedia.url" alt="" />
+          </div>
           <div v-else class="post-cover-image post-cover-placeholder"></div>
 
           <strong v-if="isAnalysisPost" class="analysis-cover-score">
@@ -460,9 +534,7 @@ onUnmounted(() => {
           </strong>
         </div>
 
-        <p v-if="!isAnalysisPost" class="post-paragraph mb-8">
-          {{ post.content }}
-        </p>
+        <div v-if="!isAnalysisPost" class="post-paragraph rich-content mb-8" v-html="richText(post.content)"></div>
 
         <section v-if="isUpcomingPost" class="upcoming-post-lock">
           <span><i class="far fa-calendar"></i> Proximamente</span>
@@ -478,22 +550,30 @@ onUnmounted(() => {
             v-for="(section, i) in postSections"
             :id="`section-${i}`"
             :key="i"
-            class="scroll-mt-28 mb-8"
+            class="post-content-section scroll-mt-28"
           >
             <h2 class="text-xl font-black text-gray-800 mb-2">
               {{ section.title }}
             </h2>
 
-            <img
-              v-if="section.image"
-              :src="section.image"
-              class="post-section-image"
-              alt=""
-            />
+            <div class="post-paragraph rich-content" v-html="richText(section.content)"></div>
 
-            <p class="post-paragraph">
-              {{ section.content }}
-            </p>
+            <div
+              v-if="section.image"
+              class="post-section-image post-section-media"
+              :class="{ video: isVideoMedia(mediaFor(section.image)) }"
+            >
+              <iframe
+                v-if="mediaFor(section.image).type === 'youtube'"
+                :src="mediaFor(section.image).embedUrl"
+                :title="section.title || `Seccion ${i + 1}`"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowfullscreen
+              ></iframe>
+              <video v-else-if="mediaFor(section.image).type === 'video'" :src="mediaFor(section.image).url" controls playsinline></video>
+              <img v-else :src="mediaFor(section.image).url" alt="" />
+            </div>
           </section>
         </template>
 
@@ -551,6 +631,21 @@ onUnmounted(() => {
                 ></i>
               </strong>
             </div>
+          </div>
+
+          <div v-if="analysisPros.length || analysisCons.length" class="analysis-pros-cons-view">
+            <article v-if="analysisPros.length">
+              <h3>Lo mejor</h3>
+              <ul>
+                <li v-for="item in analysisPros" :key="item">{{ item }}</li>
+              </ul>
+            </article>
+            <article v-if="analysisCons.length">
+              <h3>Lo peor</h3>
+              <ul>
+                <li v-for="item in analysisCons" :key="item">{{ item }}</li>
+              </ul>
+            </article>
           </div>
         </section>
 
@@ -916,6 +1011,73 @@ onUnmounted(() => {
   color: #e5e7eb;
 }
 
+.post-content-section {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 42px;
+}
+
+.post-content-section h2 {
+  margin: 0;
+}
+
+.rich-content :deep(p) {
+  margin: 0 0 12px;
+}
+
+.rich-content :deep(strong) {
+  color: #ffffff;
+  font-weight: 950;
+}
+
+.rich-content :deep(em) {
+  font-style: italic;
+}
+
+.rich-content :deep(u) {
+  text-decoration: underline;
+  text-decoration-color: #c084fc;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.rich-content :deep(ul),
+.rich-content :deep(ol) {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 14px 22px;
+  padding: 0;
+}
+
+.rich-content :deep(ul) {
+  list-style: disc;
+}
+
+.rich-content :deep(ol) {
+  list-style: decimal;
+}
+
+.rich-content :deep(blockquote) {
+  background: rgba(168, 85, 247, 0.12);
+  border-left: 4px solid #a855f7;
+  border-radius: 10px;
+  margin: 12px 0;
+  padding: 12px 14px;
+}
+
+.rich-content :deep(a) {
+  color: #d8b4fe;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rich-content :deep(hr) {
+  border: 0;
+  border-top: 1px solid rgba(216, 180, 254, 0.35);
+  margin: 16px 0;
+}
+
 .post-meta-row {
   align-items: center;
   display: flex;
@@ -986,11 +1148,46 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #ede9fe, #f8fafc);
 }
 
+.post-cover-media {
+  background: #020617;
+  overflow: hidden;
+}
+
+.post-cover-media img,
+.post-cover-media iframe,
+.post-cover-media video {
+  border: 0;
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  width: 100%;
+}
+
+.post-cover-media.video {
+  aspect-ratio: 16 / 9;
+}
+
 .post-section-image {
   aspect-ratio: 16 / 9;
   border-radius: 8px;
   display: block;
-  margin: 16px 0 18px;
+  margin: 2px 0 0;
+  object-fit: cover;
+  width: 100%;
+}
+
+.post-section-media {
+  background: #020617;
+  overflow: hidden;
+}
+
+.post-section-media img,
+.post-section-media iframe,
+.post-section-media video {
+  border: 0;
+  display: block;
+  height: 100%;
   object-fit: cover;
   width: 100%;
 }
@@ -1100,7 +1297,6 @@ onUnmounted(() => {
     linear-gradient(135deg, rgba(120, 70, 8, 0.96), rgba(59, 35, 8, 0.94));
   border: 1px solid rgba(250, 204, 21, 0.58);
   border-radius: 18px;
-  animation: scoreGlow 2.9s ease-in-out infinite;
   box-shadow: 0 20px 44px rgba(146, 64, 14, 0.36), 0 0 34px rgba(250, 204, 21, 0.26), inset 0 1px 0 rgba(254, 240, 138, 0.22);
   color: #ffffff;
   display: flex;
@@ -1283,8 +1479,13 @@ onUnmounted(() => {
 }
 
 .analysis-page .read-status-strip {
-  background: rgba(15, 23, 42, 0.64);
-  border-color: rgba(250, 204, 21, 0.48);
+  background: rgba(17, 15, 10, 0.72);
+  border-color: rgba(253, 230, 138, 0.34);
+  color: #fef3c7;
+  box-shadow: 0 10px 24px rgba(17, 15, 10, 0.18);
+}
+
+.analysis-page .read-status-strip i {
   color: #facc15;
 }
 
@@ -1311,6 +1512,10 @@ onUnmounted(() => {
 }
 
 .analysis-summary-side .analysis-rating-grid {
+  grid-template-columns: 1fr;
+}
+
+.analysis-summary-side .analysis-pros-cons-view {
   grid-template-columns: 1fr;
 }
 
@@ -1423,6 +1628,18 @@ onUnmounted(() => {
 .read-status-strip.earned i {
   animation: rewardStar 1.4s ease-in-out infinite;
   color: #f59e0b;
+}
+
+.analysis-page .read-status-strip.viewed,
+.analysis-page .read-status-strip.earned {
+  background: rgba(17, 15, 10, 0.72);
+  border-color: rgba(253, 230, 138, 0.34);
+  color: #fef3c7;
+}
+
+.analysis-page .read-status-strip.viewed i,
+.analysis-page .read-status-strip.earned i {
+  color: #facc15;
 }
 
 .post-side-card {
@@ -1878,5 +2095,23 @@ onUnmounted(() => {
 .read-status-strip.earned {
   background: transparent;
   border: 0;
+}
+
+.analysis-page .read-status-strip,
+.analysis-page .read-status-strip.viewed,
+.analysis-page .read-status-strip.earned {
+  background: linear-gradient(135deg, rgba(92, 57, 12, 0.58), rgba(26, 20, 10, 0.5));
+  border: 1px solid rgba(253, 230, 138, 0.28);
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(17, 15, 10, 0.14), inset 0 1px 0 rgba(255, 251, 235, 0.1);
+  color: #fff7d6;
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.analysis-page .read-status-strip i,
+.analysis-page .read-status-strip.viewed i,
+.analysis-page .read-status-strip.earned i {
+  color: #facc15;
 }
 </style>
