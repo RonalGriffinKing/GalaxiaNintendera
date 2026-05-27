@@ -7,6 +7,7 @@ import DirectChatBubble from '@/components/widgets/chat/DirectChatBubble.vue'
 import GlobalLiveBubble from '@/components/widgets/GlobalLiveBubble.vue'
 import GalaxiaHub from '@/components/shared/GalaxiaHub.vue'
 import PublicNavbar from '@/components/nav/PublicNavbar.vue'
+import { defaultLogoUrl } from '@/constants/assets'
 
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
 const COMMUNITY_FAVORITES_KEY = 'galaxia-community-favorites'
@@ -80,7 +81,7 @@ const loadCommunities = async () => {
     {
       id: OFFICIAL_COMMUNITY_ID,
       name: 'Galaxia Nintendera Oficial',
-      iconUrl: '/src/iconos/logo.png',
+      iconUrl: defaultLogoUrl,
       isOfficial: true,
       membersCount: 0,
       ...savedOfficial
@@ -194,7 +195,7 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
 }
 
 .public-layout-shell {
-  background: #050816;
+  background: var(--app-bg, #050816);
   min-height: 100vh;
   min-height: 100dvh;
 }

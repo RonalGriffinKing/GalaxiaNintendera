@@ -1,3 +1,5 @@
+import { defaultBannerUrl, defaultLogoUrl } from '@/constants/assets'
+
 export const DEFAULT_THREAD_TOPICS = ['Posts', 'Fanarts', 'Guias', 'Trucos', 'Preguntas', 'Clips', 'Eventos']
 
 export const CONTENT_TAB_ICONS = {
@@ -19,8 +21,8 @@ export const createOfficialCommunity = () => ({
   id: OFFICIAL_COMMUNITY_ID,
   name: 'Galaxia Nintendera Oficial',
   description: 'Comunicados, lives, eventos y lanzamientos importantes de Galaxia Nintendera.',
-  bannerUrl: '/src/iconos/Banner.png',
-  iconUrl: '/src/iconos/logo.png',
+  bannerUrl: defaultBannerUrl,
+  iconUrl: defaultLogoUrl,
   membersCount: 0,
   isOfficial: true,
   lockedMembership: true,

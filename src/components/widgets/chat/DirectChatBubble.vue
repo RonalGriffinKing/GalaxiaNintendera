@@ -1201,7 +1201,10 @@ onUnmounted(() => {
   align-content: start;
   display: grid;
   gap: 10px;
+  max-width: 100%;
   min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 14px;
 }
@@ -1210,8 +1213,14 @@ onUnmounted(() => {
   background: #f8fafc;
   border: 1px solid #e5e7eb;
   border-radius: 14px;
-  max-width: 82%;
+  box-sizing: border-box;
+  max-width: min(78%, 520px);
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .direct-message-list article.mine {
@@ -1237,7 +1246,11 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.45;
+  max-width: 100%;
+  min-width: 0;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .direct-reply-action {

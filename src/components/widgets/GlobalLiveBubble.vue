@@ -8,6 +8,7 @@ import {
   setPlaybackStatus,
   shouldShowFloatingPlayer
 } from '@/services/playerState'
+import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
 
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
 const YOUTUBE_SEARCH_API = 'https://www.googleapis.com/youtube/v3/search'
@@ -41,7 +42,7 @@ const shouldShow = computed(() => {
 })
 const isBubbleOnly = computed(() => playerState.isFloatingMinimized && !expanded.value)
 const currentTitle = computed(() => playerState.currentVideo?.title || activeMedia.value?.title || liveVideo.value?.title || 'Directo oficial de Galaxia Nintendera')
-const currentThumbnail = computed(() => playerState.currentVideo?.thumbnail || activeMedia.value?.thumbnail || liveVideo.value?.thumbnail || '/src/iconos/Banner.png')
+const currentThumbnail = computed(() => resolveAssetUrl(playerState.currentVideo?.thumbnail || activeMedia.value?.thumbnail || liveVideo.value?.thumbnail, defaultBannerUrl))
 const liveEmbedSrc = computed(() => {
   if (playerState.currentVideo?.id) {
     const params = new URLSearchParams({
@@ -192,7 +193,7 @@ const handleMediaPlay = (event) => {
   activeMedia.value = {
     id: detail.id,
     title: detail.title || 'Video de Galaxia Nintendera',
-    thumbnail: detail.thumbnail || '/src/iconos/Banner.png',
+    thumbnail: resolveAssetUrl(detail.thumbnail, defaultBannerUrl),
     url: detail.url || youtubeChannelUrl.value
   }
   closed.value = false

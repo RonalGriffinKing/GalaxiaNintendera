@@ -29,6 +29,7 @@ import {
   stopPlayback
 } from '@/services/playerState'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
+import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
 import CommunityHero from '@/components/community/CommunityHero.vue'
 import CommunityLiveHub from '@/components/community/CommunityLiveHub.vue'
 import CommunityOfficialPanel from '@/components/community/CommunityOfficialPanel.vue'
@@ -174,7 +175,7 @@ const youtubeLiveFallbackVideo = computed(() => {
     id: `channel-live-${youtubeChannelId.value}`,
     title: 'Live de Galaxia Nintendera',
     description: 'Si el canal esta en directo, YouTube cargara la transmision aqui. Si aun no aparece, espera unos segundos y vuelve a comprobar.',
-    thumbnail: selectedCommunity.value?.bannerUrl || '/src/iconos/Banner.png',
+    thumbnail: resolveAssetUrl(selectedCommunity.value?.bannerUrl, defaultBannerUrl),
     url: youtubeVideosUrl.value,
     mediaType: 'live',
     isFallbackLive: true
@@ -1992,7 +1993,7 @@ watch([() => route.query.v, youtubeRecentVideos, youtubePastLives, youtubeLiveVi
   selectedYoutubeVideo.value = video || {
     id,
     title: 'Video de Galaxia Nintendera',
-    thumbnail: selectedCommunity.value?.bannerUrl || '/src/iconos/Banner.png',
+    thumbnail: resolveAssetUrl(selectedCommunity.value?.bannerUrl, defaultBannerUrl),
     url: `https://www.youtube.com/watch?v=${id}`
   }
   if (skipNextVideoRouteScroll) {

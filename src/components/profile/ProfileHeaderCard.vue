@@ -202,7 +202,7 @@ const emit = defineEmits([
   align-items: center;
   background:
     linear-gradient(135deg, rgba(7, 10, 24, 0.92), rgba(31, 19, 55, 0.86)),
-    url('/src/iconos/Banner.png') center / cover;
+    url('@/iconos/Banner.png') center / cover;
   border: 1px solid rgba(168, 85, 247, 0.18);
   border-radius: 28px;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);

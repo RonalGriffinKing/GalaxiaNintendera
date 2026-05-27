@@ -107,6 +107,20 @@ const emit = defineEmits([
 const editingCommentId = ref('')
 const editingCommentBody = ref('')
 const openCommentMenuId = ref('')
+const expandedCommentThreads = ref(new Set())
+const INITIAL_VISIBLE_COMMENTS = 12
+
+const visibleThreadComments = (thread) => {
+  const comments = thread.comments || []
+  if (expandedCommentThreads.value.has(thread.id)) return comments
+  return comments.slice(-INITIAL_VISIBLE_COMMENTS)
+}
+
+const hiddenCommentCount = (thread) => Math.max(0, (thread.comments?.length || 0) - INITIAL_VISIBLE_COMMENTS)
+
+const showAllComments = (thread) => {
+  expandedCommentThreads.value = new Set([...expandedCommentThreads.value, thread.id])
+}
 
 const toggleCommentMenu = (comment) => {
   openCommentMenuId.value = openCommentMenuId.value === comment.id ? '' : comment.id
@@ -262,7 +276,17 @@ const deleteComment = (thread, comment) => {
           </div>
 
           <div v-if="thread.comments?.length" class="comment-list">
-            <div v-for="comment in thread.comments" :key="comment.id" class="comment-row">
+            <button
+              v-if="hiddenCommentCount(thread) && !expandedCommentThreads.has(thread.id)"
+              type="button"
+              class="load-older-comments"
+              @click="showAllComments(thread)"
+            >
+              <i class="fas fa-clock-rotate-left"></i>
+              Ver {{ hiddenCommentCount(thread) }} mensajes anteriores
+            </button>
+
+            <div v-for="comment in visibleThreadComments(thread)" :key="comment.id" class="comment-row">
               <button
                 class="comment-avatar profile-trigger"
                 type="button"
@@ -604,6 +628,27 @@ const deleteComment = (thread, comment) => {
 .comment-list {
   display: grid;
   gap: 0;
+}
+
+.load-older-comments {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  color: #d8b4fe;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 8px;
+  justify-self: start;
+  margin-bottom: 6px;
+  min-height: 34px;
+  padding: 0 13px;
+}
+
+.load-older-comments:hover {
+  border-color: rgba(216, 180, 254, 0.42);
+  color: #ffffff;
 }
 
 .comment-row {

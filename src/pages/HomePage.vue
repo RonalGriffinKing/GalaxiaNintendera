@@ -7,6 +7,8 @@ import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profilePr
 import { categoryIcon, loadPostCategories, normalizeCategory, postCategoryLabels, postMatchesCategory } from '@/services/postCategories'
 import bienvenidaImage from '@/iconos/bienvenida.png'
 import bannerImage from '@/iconos/Banner.png'
+import logoImage from '@/iconos/logo.png'
+import { resolveAssetUrl } from '@/constants/assets'
 import { HOME_HERO_SLIDE_DURATION, HOME_LATEST_SLIDE_DURATION, HOME_POSTS_PER_PAGE } from '@/constants/home'
 import { useTimedCarousel } from '@/composables/useTimedCarousel'
 import HomeDiscoveryFeed from '@/components/home/HomeDiscoveryFeed.vue'
@@ -167,9 +169,9 @@ const heroSlides = computed(() => {
       title: pinnedHomeThread.value.title || 'Destacado de la comunidad',
       accent: 'Destacado',
       text: pinnedHomeThread.value.body || 'Un comunicado importante fijado desde comunidades.',
-      image: community?.bannerUrl || pinnedHomeThread.value.imageUrl || bannerImage,
-      visualImage: community?.bannerUrl || pinnedHomeThread.value.imageUrl || bannerImage,
-      communityIcon: community?.iconUrl || '',
+      image: resolveAssetUrl(community?.bannerUrl || pinnedHomeThread.value.imageUrl, bannerImage),
+      visualImage: resolveAssetUrl(community?.bannerUrl || pinnedHomeThread.value.imageUrl, bannerImage),
+      communityIcon: resolveAssetUrl(community?.iconUrl),
       communityName: community?.name || pinnedHomeThread.value.communityName || 'Comunidad',
       label: 'Destacado',
       primaryLabel: 'Ver hilo',
@@ -335,14 +337,18 @@ onMounted(async () => {
     }
 
     mainEntries.value = freshMainEntries
+    markHomeDataReady()
 
-    await loadAuthorProfiles(fresh)
-    await loadRewardedPosts()
-    await loadHomeCommunityData()
+    Promise.allSettled([
+      loadAuthorProfiles(fresh),
+      loadRewardedPosts(),
+      loadHomeCommunityData()
+    ]).catch(console.error)
   } catch (error) {
     console.error(error)
-  } finally {
     markHomeDataReady()
+  } finally {
+    if (!homeDataReady.value) markHomeDataReady()
   }
 })
 
@@ -508,8 +514,8 @@ const loadHomeCommunityData = async () => {
       id: 'galaxia-oficial',
       name: 'Galaxia Nintendera Oficial',
       description: 'Comunicados, lives, eventos y lanzamientos importantes de Galaxia Nintendera.',
-      bannerUrl: '/src/iconos/Banner.png',
-      iconUrl: '/src/iconos/logo.png',
+      bannerUrl: bannerImage,
+      iconUrl: logoImage,
       isOfficial: true,
       membersCount: 0,
       ...official
@@ -535,7 +541,7 @@ const loadHomeCommunityData = async () => {
     <div class="home-page-content">
         <section
           class="home-hero"
-          :style="{ '--hero-slide-image': activeHeroSlide.image ? `url(${activeHeroSlide.image})` : `url('/src/iconos/Banner.png')` }"
+          :style="{ '--hero-slide-image': `url(${resolveAssetUrl(activeHeroSlide.image, bannerImage)})` }"
         >
           <div class="hero-stars"></div>
 
@@ -878,7 +884,7 @@ const loadHomeCommunityData = async () => {
     radial-gradient(circle at 78% 26%, rgba(236, 72, 153, 0.75) 0 2px, transparent 3px),
     radial-gradient(circle at 92% 62%, rgba(255, 255, 255, 0.65) 0 1px, transparent 2px),
     linear-gradient(135deg, rgba(5, 8, 22, 0.76), rgba(17, 24, 39, 0.42)),
-    var(--hero-slide-image, url('/src/iconos/Banner.png'));
+    var(--hero-slide-image, url('@/iconos/Banner.png'));
   background-position: center;
   background-size: cover;
   border-radius: 7px;
@@ -1036,7 +1042,7 @@ const loadHomeCommunityData = async () => {
 .hero-mini-card.media {
   background:
     linear-gradient(135deg, rgba(124, 58, 237, 0.28), rgba(11, 16, 32, 0.86)),
-    url('/src/iconos/Banner.png') center / cover;
+    url('@/iconos/Banner.png') center / cover;
 }
 
 .hero-mini-card.mission strong,
@@ -1581,7 +1587,7 @@ const loadHomeCommunityData = async () => {
 .media-hero-card {
   background:
     linear-gradient(135deg, rgba(124, 58, 237, 0.28), rgba(8, 12, 30, 0.92)),
-    url('/src/iconos/Banner.png') center / cover;
+    url('@/iconos/Banner.png') center / cover;
   border: 1px solid rgba(192, 132, 252, 0.22);
   border-radius: 14px;
   display: grid;

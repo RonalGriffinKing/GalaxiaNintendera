@@ -1,4 +1,6 @@
 <script setup>
+import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
+
 defineProps({
   community: {
     type: Object,
@@ -26,9 +28,9 @@ const emit = defineEmits(['edit', 'toggle-membership'])
 </script>
 
 <template>
-  <section class="galaxy-hero" :style="{ '--community-banner': community.bannerUrl ? `url(${community.bannerUrl})` : `url('/src/iconos/Banner.png')` }">
+  <section class="galaxy-hero" :style="{ '--community-banner': `url(${resolveAssetUrl(community.bannerUrl, defaultBannerUrl)})` }">
     <div class="galaxy-icon">
-      <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+      <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
       <span v-else>{{ community.name.slice(0, 2).toUpperCase() }}</span>
     </div>
     <div class="galaxy-copy">

@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { defaultBannerUrl, defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
 
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
 
@@ -35,7 +36,7 @@ const emit = defineEmits(['open-community', 'toggle-favorite', 'open-explore'])
 const officialFallback = {
   id: OFFICIAL_COMMUNITY_ID,
   name: 'Galaxia Nintendera',
-  iconUrl: '/src/iconos/logo.png',
+  iconUrl: defaultLogoUrl,
   isOfficial: true
 }
 
@@ -78,7 +79,7 @@ const initials = (name = '') => String(name || 'C')
 
 const isOfficial = (community) => community?.id === OFFICIAL_COMMUNITY_ID || community?.isOfficial
 const isFavorite = (community) => isOfficial(community) || props.favoriteCommunities.some(item => item.id === community?.id)
-const communityBanner = (community) => community?.bannerUrl || community?.backgroundUrl || community?.imageUrl || '/src/iconos/Banner.png'
+const communityBanner = (community) => resolveAssetUrl(community?.bannerUrl || community?.backgroundUrl || community?.imageUrl, defaultBannerUrl)
 const communityDescription = (community) => community?.description || (isOfficial(community) ? 'Comunidad oficial' : 'Un lugar para fans de la galaxia')
 const activeCount = (community) => Number(community?.activeCount || community?.onlineCount || community?.activeUsers || 0)
 const conversationCount = (community) => Number(community?.threadCount || community?.threadsCount || community?.conversationsCount || 0)
@@ -108,7 +109,7 @@ const toggleFavorite = (community) => {
           >
             <button type="button" class="quick-community-main" @click="emit('open-community', community)">
               <span class="quick-community-icon">
-                <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+                <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
                 <b v-else>{{ initials(community.name) }}</b>
               </span>
               <span class="quick-community-copy">

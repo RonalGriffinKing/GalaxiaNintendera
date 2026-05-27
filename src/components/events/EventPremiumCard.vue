@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import EventCountdown from './EventCountdown.vue'
+import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
 
 const props = defineProps({
   event: {
@@ -37,7 +38,7 @@ const run = (eventName) => {
 
 <template>
   <article class="event-news-card" :class="{ options: optionsOpen }">
-    <img :src="event.backgroundUrl || event.imageUrl || '/src/iconos/Banner.png'" alt="" />
+    <img :src="resolveAssetUrl(event.backgroundUrl || event.imageUrl, defaultBannerUrl)" alt="" />
     <div class="event-news-shade"></div>
 
     <div class="event-news-front">

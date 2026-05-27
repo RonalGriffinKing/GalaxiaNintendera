@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, getDocs } from "firebase/firestore"
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter } from "firebase/firestore"
 import { auth, db } from "@/firebase"
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { categoryIcon, loadPostCategories, normalizeCategory as normalize, postCategoryLabels, postMatchesCategory } from '@/services/postCategories'
@@ -18,6 +18,14 @@ const isLoading = ref(true)
 const filters = ref(['Todas'])
 const sortMode = ref('recent')
 const sortOpen = ref(false)
+const isLoadingMore = ref(false)
+const isShowingMoreLoader = ref(false)
+const hasMorePosts = ref(true)
+const lastPostDoc = ref(null)
+const visiblePostLimit = ref(10)
+let loadRequestId = 0
+const PAGE_SIZE = 10
+const FETCH_BATCH_SIZE = 18
 const sortOptions = [
   { value: 'recent', label: 'Mas recientes' },
   { value: 'oldest', label: 'Mas antiguas' }
@@ -79,7 +87,7 @@ const pageConfig = computed(() => {
   }
 })
 
-const displayedPosts = computed(() => {
+const matchingPosts = computed(() => {
   const configFilter = normalize(pageConfig.value.filter)
   const activeFilter = normalize(selectedFilter.value)
 
@@ -97,6 +105,11 @@ const displayedPosts = computed(() => {
   })
 })
 
+const displayedPosts = computed(() => matchingPosts.value.slice(0, visiblePostLimit.value))
+
+const canLoadMoreVisiblePosts = computed(() => hasMorePosts.value || matchingPosts.value.length > displayedPosts.value.length)
+const showLoadMoreDots = computed(() => isLoadingMore.value || isShowingMoreLoader.value)
+
 const sortLabel = computed(() => sortOptions.find(option => option.value === sortMode.value)?.label || 'Mas recientes')
 
 const popularPosts = computed(() => posts.value.slice(0, 4))
@@ -113,22 +126,86 @@ const moreLinks = computed(() => {
 })
 
 const loadPosts = async () => {
+  const requestId = ++loadRequestId
   isLoading.value = true
+  isLoadingMore.value = false
+  hasMorePosts.value = true
+  lastPostDoc.value = null
+  visiblePostLimit.value = PAGE_SIZE
+  posts.value = []
+  authorProfiles.value = {}
+  rewardedPosts.value = []
   loadLocalReadMarks()
   try {
     const loadedCategories = await loadPostCategories()
+    if (requestId !== loadRequestId) return
     filters.value = ['Todas', ...loadedCategories]
-    const snap = await getDocs(collection(db, "posts"))
-
-    posts.value = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter(p => p.status === 'approved' && p.visibility !== 'private' && p.visibility !== 'unlisted')
-      .filter(p => p.placement !== 'hero' && !p.isMainEntry)
-      .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
-    await loadAuthorProfiles(posts.value)
-    await loadRewardedPosts()
-  } finally {
+    await loadMorePosts({ requestId, fillPage: true })
     isLoading.value = false
+
+    Promise.allSettled([
+      loadAuthorProfiles(posts.value, requestId),
+      loadRewardedPosts(requestId)
+    ]).catch(console.error)
+  } finally {
+    if (requestId === loadRequestId) isLoading.value = false
+  }
+}
+
+const loadMorePosts = async ({ requestId = loadRequestId, fillPage = false } = {}) => {
+  if (isLoadingMore.value || !hasMorePosts.value) return
+  isLoadingMore.value = true
+
+  try {
+    const targetCount = fillPage ? visiblePostLimit.value : 0
+    let attempts = 0
+
+    while (hasMorePosts.value && requestId === loadRequestId) {
+      const direction = sortMode.value === 'oldest' ? 'asc' : 'desc'
+      const constraints = [
+        orderBy('createdAt', direction),
+        limit(FETCH_BATCH_SIZE)
+      ]
+      if (lastPostDoc.value) constraints.splice(1, 0, startAfter(lastPostDoc.value))
+
+      const snap = await getDocs(query(collection(db, 'posts'), ...constraints))
+      if (requestId !== loadRequestId) return
+
+      lastPostDoc.value = snap.docs.at(-1) || lastPostDoc.value
+      hasMorePosts.value = snap.docs.length === FETCH_BATCH_SIZE
+
+      const nextPosts = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(p => p.status === 'approved' && p.visibility !== 'private' && p.visibility !== 'unlisted')
+        .filter(p => p.placement !== 'hero' && !p.isMainEntry)
+
+      const existing = new Set(posts.value.map(post => post.id))
+      const uniquePosts = nextPosts.filter(post => !existing.has(post.id))
+      posts.value = [...posts.value, ...uniquePosts]
+      loadAuthorProfiles(uniquePosts, requestId).catch(console.error)
+
+      attempts += 1
+      if (!fillPage || matchingPosts.value.length >= targetCount || attempts >= 5) break
+    }
+  } finally {
+    if (requestId === loadRequestId) isLoadingMore.value = false
+  }
+}
+
+const loadNextPostsPage = async () => {
+  if (showLoadMoreDots.value) return
+  isShowingMoreLoader.value = true
+  const nextLimit = visiblePostLimit.value + PAGE_SIZE
+
+  try {
+    const shouldFetchMore = matchingPosts.value.length < nextLimit && hasMorePosts.value
+    await Promise.all([
+      shouldFetchMore ? loadMorePosts({ fillPage: true }) : Promise.resolve(),
+      new Promise(resolve => window.setTimeout(resolve, 850))
+    ])
+    visiblePostLimit.value = nextLimit
+  } finally {
+    isShowingMoreLoader.value = false
   }
 }
 
@@ -170,6 +247,7 @@ const selectFilter = (filter) => {
 const selectSort = (value) => {
   sortMode.value = value
   sortOpen.value = false
+  loadPosts()
 }
 
 const goPurpleAction = () => {
@@ -193,17 +271,21 @@ const authorIconMeta = (post) => {
   return post.authorId ? resolveProfileIconMeta(profile) : {}
 }
 
-const loadAuthorProfiles = async (sourcePosts = posts.value) => {
+const loadAuthorProfiles = async (sourcePosts = posts.value, requestId = loadRequestId) => {
   const ids = [...new Set(sourcePosts.map(post => post.authorId).filter(Boolean))]
+    .filter(id => !authorProfiles.value[id])
   if (!ids.length) return
 
-  const snap = await getDocs(collection(db, 'users')).catch(() => ({ docs: [] }))
-  authorProfiles.value = Object.fromEntries(
-    snap.docs
-      .map(item => ({ id: item.id, ...item.data() }))
-      .filter(user => ids.includes(user.id))
-      .map(user => [user.id, user])
-  )
+  const snaps = await Promise.all(ids.map(id => getDoc(doc(db, 'users', id)).catch(() => null)))
+  if (requestId !== loadRequestId) return
+  authorProfiles.value = {
+    ...authorProfiles.value,
+    ...Object.fromEntries(
+      snaps
+        .filter(item => item?.exists?.())
+        .map(item => [item.id, { id: item.id, ...item.data() }])
+    )
+  }
 }
 
 const loadLocalReadMarks = () => {
@@ -215,10 +297,11 @@ const loadLocalReadMarks = () => {
   }
 }
 
-const loadRewardedPosts = async () => {
+const loadRewardedPosts = async (requestId = loadRequestId) => {
   const user = auth.currentUser
   if (!user) return
   const snap = await getDocs(collection(db, 'users', user.uid, 'readPosts')).catch(() => ({ docs: [] }))
+  if (requestId !== loadRequestId) return
   rewardedPosts.value = snap.docs.map(item => item.id)
 }
 
@@ -348,7 +431,31 @@ watch(() => route.fullPath, () => {
 
           <div v-else class="empty-state">
             <h2>No hay articulos disponibles</h2>
-            <p>Cuando apruebes publicaciones para esta seccion apareceran aqui.</p>
+            <p>{{ canLoadMoreVisiblePosts ? 'No hay articulos en esta tanda. Puedes cargar mas resultados.' : 'Cuando apruebes publicaciones para esta seccion apareceran aqui.' }}</p>
+          </div>
+
+          <div class="listing-load-more">
+            <button
+              v-if="canLoadMoreVisiblePosts"
+              type="button"
+              :class="['load-more-btn', { loading: showLoadMoreDots }]"
+              :disabled="showLoadMoreDots"
+              @click="loadNextPostsPage"
+            >
+              <template v-if="showLoadMoreDots">
+                <span class="load-more-dots" aria-label="Cargando mas noticias">
+                  <i></i>
+                  <i></i>
+                  <i></i>
+                  <i></i>
+                </span>
+              </template>
+              <template v-else>
+                <i class="fas fa-arrow-down"></i>
+                Cargar mas noticias
+              </template>
+            </button>
+            <span v-else-if="displayedPosts.length">Has llegado al final de esta seccion.</span>
           </div>
         </div>
 
@@ -384,6 +491,7 @@ watch(() => route.fullPath, () => {
         </aside>
       </section>
     </main>
+
   </div>
 </template>
 
@@ -1544,6 +1652,87 @@ watch(() => route.fullPath, () => {
 
 .empty-state p {
   color: #cbd5e1;
+}
+
+.listing-load-more {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 74px;
+  padding: 18px 0 4px;
+}
+
+.listing-load-more span {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.load-more-btn {
+  align-items: center;
+  background:
+    radial-gradient(circle at 24% 0%, rgba(250, 204, 21, 0.2), transparent 36%),
+    linear-gradient(135deg, rgba(17, 24, 39, 0.96), rgba(35, 24, 7, 0.94));
+  border: 1px solid rgba(250, 204, 21, 0.36);
+  border-radius: 999px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24), 0 0 26px rgba(245, 158, 11, 0.12);
+  color: #fef3c7;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 950;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 22px;
+}
+
+.load-more-btn:disabled {
+  cursor: wait;
+  opacity: 0.78;
+}
+
+.load-more-btn.loading {
+  justify-content: center;
+  min-width: 174px;
+}
+
+.load-more-dots {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+  height: 16px;
+}
+
+.load-more-dots i {
+  animation: loadMoreDot 0.9s ease-in-out infinite;
+  background: #facc15;
+  border-radius: 999px;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.5);
+  display: block;
+  height: 7px;
+  width: 7px;
+}
+
+.load-more-dots i:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.load-more-dots i:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+.load-more-dots i:nth-child(4) {
+  animation-delay: 0.42s;
+}
+
+@keyframes loadMoreDot {
+  0%, 80%, 100% {
+    opacity: 0.42;
+    transform: translateY(0) scale(0.88);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1);
+  }
 }
 
 @media (max-width: 1100px) {

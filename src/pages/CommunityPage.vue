@@ -53,11 +53,11 @@ const goJoin = () => {
 
 onMounted(() => {
   window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: true } }))
-  unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+  unsubscribeAuth = onAuthStateChanged(auth, (user) => {
     isCheckingAuth.value = true
     currentUser.value = user
-    await loadRole(user)
     isCheckingAuth.value = false
+    loadRole(user).catch(console.error)
   })
 })
 

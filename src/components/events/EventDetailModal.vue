@@ -1,5 +1,6 @@
 <script setup>
 import EventCountdown from './EventCountdown.vue'
+import { defaultBannerUrl, defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
 
 defineProps({
   event: {
@@ -45,7 +46,7 @@ const typeClass = (type = '') => String(type || 'evento').toLowerCase()
           </button>
 
           <div class="event-detail-cover">
-            <img :src="event.backgroundUrl || event.imageUrl || '/src/iconos/Banner.png'" alt="" />
+            <img :src="resolveAssetUrl(event.backgroundUrl || event.imageUrl, defaultBannerUrl)" alt="" />
             <span :class="typeClass(event.type)">{{ event.type || 'Evento' }}</span>
           </div>
 
@@ -61,7 +62,7 @@ const typeClass = (type = '') => String(type || 'evento').toLowerCase()
             <div v-if="communities.length" class="event-detail-communities">
               <strong>Comunidades relacionadas</strong>
               <span v-for="community in communities" :key="community.id">
-                <img :src="community.iconUrl || '/src/iconos/logo.png'" alt="" />
+                <img :src="resolveAssetUrl(community.iconUrl, defaultLogoUrl)" alt="" />
                 {{ community.name }}
               </span>
             </div>

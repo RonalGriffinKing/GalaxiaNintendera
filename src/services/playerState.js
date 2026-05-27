@@ -1,4 +1,5 @@
 import { computed, reactive } from 'vue'
+import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
 
 export const playerState = reactive({
   currentVideo: null,
@@ -21,7 +22,7 @@ export const setCurrentVideo = (video) => {
   playerState.currentVideo = {
     id: video.id,
     title: video.title || 'Video de Galaxia Nintendera',
-    thumbnail: video.thumbnail || '/src/iconos/Banner.png',
+    thumbnail: resolveAssetUrl(video.thumbnail, defaultBannerUrl),
     url: video.url || '',
     startedAt: Number(video.startedAt || playerState.currentTime || 0)
   }

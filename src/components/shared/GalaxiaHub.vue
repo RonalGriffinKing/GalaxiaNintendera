@@ -1047,6 +1047,8 @@ onUnmounted(() => {
   display: grid;
   gap: 16px;
   max-height: min(760px, calc(100dvh - 36px));
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   padding: 16px;
   pointer-events: auto;
@@ -1124,7 +1126,9 @@ onUnmounted(() => {
 }
 
 .hub-content {
+  max-width: 100%;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -1137,6 +1141,7 @@ onUnmounted(() => {
 .hub-section {
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .hub-section.chat-room {
@@ -1144,6 +1149,7 @@ onUnmounted(() => {
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   position: relative;
 }
@@ -1375,12 +1381,17 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px 14px 14px 7px;
   color: #e2e8f0;
-  max-width: 72%;
+  box-sizing: border-box;
+  max-width: min(72%, 520px);
   min-height: 30px;
   min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   padding: 8px 12px;
   position: relative;
+  white-space: pre-wrap;
   width: fit-content;
+  word-break: break-word;
 }
 
 .hub-chat-messages article.mine {
@@ -1399,6 +1410,7 @@ onUnmounted(() => {
   font-weight: 800;
   line-height: 1.38;
   max-width: 100%;
+  min-width: 0;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1451,6 +1463,8 @@ onUnmounted(() => {
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) 44px;
   min-height: 44px;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .hub-chat-composer textarea {
@@ -1777,7 +1791,7 @@ onUnmounted(() => {
   }
 
   .hub-chat-messages article {
-    max-width: 75%;
+    max-width: min(78vw, 520px);
     padding: 8px 12px;
   }
 

@@ -475,28 +475,15 @@
               `preview-${previewDevice}`
             ]"
           >
-            <span class="preview-category">{{ post.category || 'Categoria' }}</span>
-            <h1>{{ post.title || 'Titulo de la publicacion' }}</h1>
-            <p v-if="post.subtitle" class="preview-subtitle">{{ post.subtitle }}</p>
-            <div class="preview-summary rich-content" v-html="richText(post.content || 'El resumen del post aparecera aqui para comprobar ritmo, longitud y contexto.')"></div>
-            <div class="preview-meta">
-              <span><i class="fas fa-user-circle"></i> Galaxia Nintendera</span>
-              <span><i class="far fa-calendar"></i> Hoy</span>
-              <span v-if="isAnalysisPost"><i class="far fa-star"></i> {{ analysisScore }}</span>
-            </div>
-            <div v-if="post.image" class="preview-cover preview-media">
-              <iframe
-                v-if="postCoverMedia.type === 'youtube'"
-                :src="postCoverMedia.embedUrl"
-                title="Preview video de portada"
-                loading="lazy"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowfullscreen
-              ></iframe>
-              <video v-else-if="postCoverMedia.type === 'video'" :src="postCoverMedia.url" controls playsinline></video>
-              <img v-else :src="postCoverMedia.url" alt="Preview portada" />
-            </div>
-            <div v-else class="preview-cover placeholder"><i class="far fa-image"></i></div>
+            <PostCinematicHero
+              :post="{ ...post, authorName: 'Galaxia Nintendera' }"
+              :is-analysis="isAnalysisPost"
+              :analysis-score="analysisScore"
+              :analysis-tier="analysisTier"
+              :date-label="'Hoy'"
+              :preview="true"
+              :device="previewDevice"
+            />
 
             <section v-for="(section, index) in visibleSections" :key="index" class="preview-section">
               <h2>{{ section.title || `Seccion ${index + 1}` }}</h2>
@@ -645,6 +632,7 @@ import { READ_REWARD_STARS } from '@/services/profileProgress'
 import { renderRichText } from '@/services/richText'
 import { playPublishSound } from '@/services/uiSounds'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
+import PostCinematicHero from '@/components/posts/PostCinematicHero.vue'
 
 const props = defineProps({
   editData: {
@@ -798,26 +786,42 @@ const scoreLabel = computed(() => {
 })
 const analysisTier = computed(() => {
   const score = analysisScore.value
-  if (score >= 90) {
+  if (score >= 95) {
     return {
       key: 'legendary',
       label: 'LEGENDARY',
-      range: '90+'
+      range: '95+'
     }
   }
 
-  if (score >= 80) {
+  if (score >= 85) {
     return {
       key: 'gold',
       label: 'GOLD',
-      range: '80+'
+      range: '85+'
+    }
+  }
+
+  if (score >= 75) {
+    return {
+      key: 'purple',
+      label: 'PREMIUM',
+      range: '75+'
+    }
+  }
+
+  if (score >= 65) {
+    return {
+      key: 'blue',
+      label: 'COOL',
+      range: '65+'
     }
   }
 
   return {
-    key: 'review',
+    key: 'dark',
     label: 'REVIEW',
-    range: '70+'
+    range: '<65'
   }
 })
 const imageTargets = computed(() => [
@@ -2532,12 +2536,14 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .post-live-preview {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(168, 85, 247, 0.16), transparent 34%),
+    linear-gradient(180deg, #020617, #0f172a);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
   display: grid;
-  gap: 12px;
+  gap: 18px;
   padding: 16px;
 }
 
@@ -2549,6 +2555,8 @@ const savePost = async (targetStatus = 'pending') => {
 .post-live-preview.preview-mobile {
   justify-self: center;
   max-width: 390px;
+  padding: 0 0 16px;
+  overflow: hidden;
 }
 
 .preview-category {
@@ -2723,12 +2731,19 @@ const savePost = async (targetStatus = 'pending') => {
 .preview-section {
   display: grid;
   gap: 8px;
+  padding: 0 4px;
 }
 
 .preview-section h2 {
-  color: #111827;
+  color: #ffffff;
   font-size: 16px;
   font-weight: 950;
+}
+
+.post-live-preview .preview-section-copy,
+.post-live-preview .preview-section-copy.rich-content,
+.post-live-preview .preview-section p {
+  color: #cbd5e1;
 }
 
 .preview-score-card {

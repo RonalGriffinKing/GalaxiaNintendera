@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
 
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
 
@@ -41,7 +42,7 @@ let previousHtmlOverflow = ''
 const officialFallback = {
   id: OFFICIAL_COMMUNITY_ID,
   name: 'Galaxia Nintendera',
-  iconUrl: '/src/iconos/logo.png',
+  iconUrl: defaultLogoUrl,
   isOfficial: true
 }
 
@@ -171,7 +172,7 @@ onUnmounted(() => {
       @click="togglePopup"
     >
       <span class="community-current-icon">
-        <img v-if="activeCommunity.iconUrl" :src="activeCommunity.iconUrl" alt="" />
+        <img v-if="activeCommunity.iconUrl" :src="resolveAssetUrl(activeCommunity.iconUrl)" alt="" />
         <b v-else>{{ initials(activeCommunity.name) }}</b>
       </span>
     </button>
@@ -197,7 +198,7 @@ onUnmounted(() => {
           >
             <button class="community-card-main" type="button" @click="openCommunity(community)">
               <span class="community-card-icon">
-                <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+                <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
                 <b v-else>{{ initials(community.name) }}</b>
               </span>
               <strong>{{ community.name || 'Comunidad' }}</strong>

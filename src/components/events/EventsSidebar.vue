@@ -1,4 +1,6 @@
 <script setup>
+import { defaultBannerUrl, defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
+
 defineProps({
   events: {
     type: Array,
@@ -34,7 +36,7 @@ const typeClass = (type = '') => String(type || 'evento').toLowerCase()
         <button type="button">Ver todos <i class="fas fa-arrow-right"></i></button>
       </header>
       <button v-for="event in events.slice(0, 4)" :key="event.id" type="button" class="side-event" @click="emit('select', event)">
-        <img :src="event.backgroundUrl || event.imageUrl || '/src/iconos/Banner.png'" alt="" />
+        <img :src="resolveAssetUrl(event.backgroundUrl || event.imageUrl, defaultBannerUrl)" alt="" />
         <span>
           <strong>{{ event.title }}</strong>
           <small>{{ formatDate(event.startsAt) }}</small>
@@ -64,7 +66,7 @@ const typeClass = (type = '') => String(type || 'evento').toLowerCase()
         <button type="button">Ver todas <i class="fas fa-arrow-right"></i></button>
       </header>
       <button v-for="community in communities.slice(0, 5)" :key="community.id" type="button" class="side-community" @click="emit('community', community)">
-        <img :src="community.iconUrl || '/src/iconos/logo.png'" alt="" />
+        <img :src="resolveAssetUrl(community.iconUrl, defaultLogoUrl)" alt="" />
         <span>
           <strong>{{ community.name }}</strong>
           <small>{{ community.membersCount || 0 }} miembros</small>

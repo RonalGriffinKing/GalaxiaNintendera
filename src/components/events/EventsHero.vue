@@ -27,7 +27,7 @@ defineEmits(['create'])
   align-items: center;
   background:
     linear-gradient(90deg, rgba(5, 8, 22, 0.96) 0%, rgba(5, 8, 22, 0.82) 46%, rgba(5, 8, 22, 0.52) 100%),
-    url('/src/iconos/Banner.png');
+    url('@/iconos/Banner.png');
   background-position: center;
   background-size: cover;
   border: 1px solid rgba(168, 85, 247, 0.18);

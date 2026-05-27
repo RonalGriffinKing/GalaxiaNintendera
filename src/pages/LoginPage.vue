@@ -9,7 +9,7 @@
       </button>
 
       <div class="brand">
-        <img src="/src/iconos/logo.png" alt="Galaxia Nintendera" />
+        <img :src="defaultLogoUrl" alt="Galaxia Nintendera" />
       </div>
 
       <h1>Bienvenido a la Galaxia</h1>
@@ -79,6 +79,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
+import { defaultLogoUrl } from '@/constants/assets'
 
 const route = useRoute()
 const router = useRouter()
@@ -237,7 +238,7 @@ const submit = async () => {
   background:
     radial-gradient(circle at 18% 22%, rgba(168, 85, 247, 0.45), transparent 28%),
     radial-gradient(circle at 76% 72%, rgba(236, 72, 153, 0.38), transparent 25%),
-    url('/src/iconos/Banner.png');
+    url('@/iconos/Banner.png');
   background-position: center;
   background-size: cover;
   inset: 0;

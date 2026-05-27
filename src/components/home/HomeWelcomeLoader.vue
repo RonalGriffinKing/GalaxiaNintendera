@@ -1,4 +1,6 @@
 <script setup>
+import { defaultLogoUrl } from '@/constants/assets'
+
 defineProps({
   visible: {
     type: Boolean,
@@ -16,7 +18,7 @@ defineProps({
 
       <div class="welcome-core">
         <span class="logo-orbit">
-          <img src="/src/iconos/logo.png" alt="" />
+          <img :src="defaultLogoUrl" alt="" />
         </span>
         <strong>Bienvenido a Galaxia Nintendera</strong>
         <p>Estamos cargando noticias, eventos y tus comunidades favoritas...</p>

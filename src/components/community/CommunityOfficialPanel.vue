@@ -1,4 +1,6 @@
 <script setup>
+import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
+
 defineProps({
   youtubeLiveUrl: {
     type: String,
@@ -109,7 +111,7 @@ const emit = defineEmits([
           :key="event.id"
           class="event-mini-card"
           type="button"
-          :style="{ '--event-bg': `url(${event.backgroundUrl || event.imageUrl || '/src/iconos/Banner.png'})` }"
+          :style="{ '--event-bg': `url(${resolveAssetUrl(event.backgroundUrl || event.imageUrl, defaultBannerUrl)})` }"
           @click="emit('open-event', event)"
         >
           <span>{{ event.type || 'Evento' }}</span>

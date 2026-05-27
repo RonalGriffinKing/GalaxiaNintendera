@@ -15,6 +15,7 @@ import NotificationDropdown from '@/components/nav/NotificationDropdown.vue'
 import PublicQuickAdminModals from '@/components/nav/PublicQuickAdminModals.vue'
 import PublicSearchPanel from '@/components/nav/PublicSearchPanel.vue'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
+import { defaultLogoUrl } from '@/constants/assets'
 import { DEFAULT_POST_CATEGORIES, loadPostCategories, postCategoryLabels } from '@/services/postCategories'
 import {
   DEFAULT_QUICK_THREAD_TOPICS,
@@ -1000,7 +1001,7 @@ onUnmounted(() => {
     <div class="public-nav-inner">
       <div class="public-brand-zone">
         <button class="public-brand" @click="goTo('/')">
-          <img src="/src/iconos/logo.png" class="public-brand-logo" alt="Galaxia Nintendera" />
+          <img :src="defaultLogoUrl" class="public-brand-logo" alt="Galaxia Nintendera" />
           <span>Galaxia Nintendera</span>
         </button>
         <div class="public-live-slot"></div>
@@ -1207,7 +1208,7 @@ onUnmounted(() => {
     <Transition name="mobile-drawer">
       <div v-if="menuOpen" class="public-mobile-links" :class="{ 'account-mode': mobileAccountOpen }">
         <div class="mobile-drawer-head">
-          <img src="/src/iconos/logo.png" alt="Galaxia Nintendera" />
+          <img :src="defaultLogoUrl" alt="Galaxia Nintendera" />
           <button type="button" aria-label="Cerrar menu" @click="menuOpen = false; mobileAccountOpen = false">
             <i class="fas fa-xmark"></i>
           </button>
@@ -2674,7 +2675,9 @@ onUnmounted(() => {
 
   .public-bottom-nav {
     align-items: center;
-    background: rgba(5, 8, 22, 0.72);
+    background:
+      linear-gradient(180deg, rgba(5, 8, 22, 0.82), rgba(5, 8, 22, 0.72)),
+      var(--app-bg, #070816);
     backdrop-filter: blur(22px) saturate(1.25);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 24px;
@@ -2688,7 +2691,7 @@ onUnmounted(() => {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     left: 10px;
     overflow: visible;
-    padding: 7px 8px;
+    padding: 7px 8px max(7px, env(safe-area-inset-bottom, 0px));
     position: fixed;
     right: 10px;
     transform: translate3d(0, 0, 0);

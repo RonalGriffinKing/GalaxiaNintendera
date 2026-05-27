@@ -83,6 +83,7 @@ const uploadIconDraft = ref({
 const mobileEditorTab = ref('details')
 const mobileIconPage = ref(0)
 const editMessage = ref('')
+let profileLoadRequestId = 0
 const profileDraft = ref({
   name: '',
   description: '',
@@ -411,7 +412,33 @@ const normalizeText = (value) => String(value || '')
   .toLowerCase()
   .trim()
 
+const applyProfileData = (userData = {}) => {
+  profile.value = {
+    id: profileId.value,
+    role: 'user',
+    description: 'Miembro de la comunidad',
+    stars: 0,
+    readPostsCount: 0,
+    unlockedIcons: ['kirby-01'],
+    selectedIcon: 'kirby-01',
+    ...userData
+  }
+  profileDraft.value = {
+    name: profile.value.name || auth.currentUser?.displayName || '',
+    description: profile.value.description || '',
+    socialLinks: {
+      tiktok: profile.value.socialLinks?.tiktok || '',
+      youtube: profile.value.socialLinks?.youtube || '',
+      twitch: profile.value.socialLinks?.twitch || ''
+    }
+  }
+  pendingSelectedIcon.value = profile.value.selectedIcon || 'kirby-01'
+  followersTotal.value = Number(profile.value.followersCount || 0)
+  followingTotal.value = Number(profile.value.followingCount || 0)
+}
+
 const loadProfile = async () => {
+  const requestId = ++profileLoadRequestId
   isLoading.value = true
   message.value = ''
   editMessage.value = ''
@@ -419,91 +446,87 @@ const loadProfile = async () => {
   iconCollectionOpen.value = false
   relationModal.value = ''
   isFollowing.value = false
+  favorites.value = []
+  threads.value = []
+  posts.value = []
+  userCommunities.value = []
+  publicProfiles.value = []
+  followersList.value = []
+  followingList.value = []
 
   try {
-    const [userSnap, favoritesSnap, threadsSnap, postsSnap, usersSnap, communitiesSnap, followersSnap, followingSnap, followSnap, viewerSnap, uploadedIcons, achievementsSnap] = await Promise.all([
-      getDoc(doc(db, 'users', profileId.value)),
-      getDocs(query(collection(db, 'users', profileId.value, 'favorites'), limit(6))).catch(() => ({ docs: [] })),
-      getDocs(query(collection(db, 'communityThreads'), limit(80))).catch(() => ({ docs: [] })),
-      getDocs(query(collection(db, 'posts'), limit(120))).catch(() => ({ docs: [] })),
-      getDocs(query(collection(db, 'users'), limit(24))).catch(() => ({ docs: [] })),
-      getDocs(query(collection(db, 'users', profileId.value, 'communities'), limit(12))).catch(() => ({ docs: [] })),
-      getDocs(query(collection(db, 'users', profileId.value, 'followers'), limit(500))).catch(() => ({ docs: [] })),
-      getDocs(query(collection(db, 'users', profileId.value, 'following'), limit(500))).catch(() => ({ docs: [] })),
-      auth.currentUser && auth.currentUser.uid !== profileId.value
-        ? getDoc(doc(db, 'users', profileId.value, 'followers', auth.currentUser.uid)).catch(() => ({ exists: () => false }))
-        : Promise.resolve({ exists: () => false }),
-      auth.currentUser
-        ? getDoc(doc(db, 'users', auth.currentUser.uid)).catch(() => ({ exists: () => false, data: () => ({}) }))
-        : Promise.resolve({ exists: () => false, data: () => ({}) }),
-      loadUploadedProfileIcons({ includeHidden: true }).catch(() => []),
-      getDoc(doc(db, 'siteConfig', 'profileAchievements')).catch(() => ({ exists: () => false, data: () => ({}) }))
-    ])
-    customIcons.value = uploadedIcons
-    managedAchievements.value = normalizeAchievements(
-      achievementsSnap.exists?.() ? achievementsSnap.data()?.items : achievements
-    )
+    const userSnap = await getDoc(doc(db, 'users', profileId.value))
+    if (requestId !== profileLoadRequestId) return
 
     if (!userSnap.exists()) {
       profile.value = null
       return
     }
 
-    const userData = userSnap.data()
-    profile.value = {
-      id: profileId.value,
-      role: 'user',
-      description: 'Miembro de la comunidad',
-      stars: 0,
-      readPostsCount: 0,
-      unlockedIcons: ['kirby-01'],
-      selectedIcon: 'kirby-01',
-      ...userData
-    }
-    profileDraft.value = {
-      name: profile.value.name || auth.currentUser?.displayName || '',
-      description: profile.value.description || '',
-      socialLinks: {
-        tiktok: profile.value.socialLinks?.tiktok || '',
-        youtube: profile.value.socialLinks?.youtube || '',
-        twitch: profile.value.socialLinks?.twitch || ''
-      }
-    }
-    pendingSelectedIcon.value = profile.value.selectedIcon || 'kirby-01'
-    const viewerData = typeof viewerSnap.exists === 'function' && viewerSnap.exists() ? viewerSnap.data() : {}
-    viewerProfile.value = {
-      role: viewerData.role || 'user',
-      canChat: Boolean(viewerData.canChat)
-    }
-
-    favorites.value = favoritesSnap.docs.map(item => ({ id: item.id, ...item.data() }))
-    userCommunities.value = communitiesSnap.docs.map(item => ({ id: item.id, ...item.data() }))
-    followersTotal.value = Number(profile.value.followersCount ?? followersSnap.docs.length)
-    followingTotal.value = Number(profile.value.followingCount ?? followingSnap.docs.length)
-    isFollowing.value = followSnap.exists()
-    const usersById = new Map(usersSnap.docs.map(item => [item.id, { id: item.id, ...item.data() }]))
-    followersList.value = followersSnap.docs.map(item => relationFromDoc(item, usersById))
-    followingList.value = followingSnap.docs.map(item => relationFromDoc(item, usersById))
-    threads.value = threadsSnap.docs
-      .map(item => ({ id: item.id, ...item.data() }))
-      .filter(thread => thread.authorId === profileId.value)
-      .sort((a, b) => getTime(b.updatedAt || b.createdAt) - getTime(a.updatedAt || a.createdAt))
-      .slice(0, 6)
-    posts.value = postsSnap.docs
-      .map(item => ({ id: item.id, ...item.data() }))
-      .filter(post => post.authorId === profileId.value && post.status === 'approved' && post.visibility !== 'private' && post.visibility !== 'unlisted' && post.placement !== 'hero' && !post.isMainEntry)
-      .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
-      .slice(0, 6)
-    publicProfiles.value = usersSnap.docs
-      .map(item => ({ id: item.id, role: 'user', readPostsCount: 0, ...item.data() }))
-      .filter(user => user.id !== profileId.value)
-      .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
-      .slice(0, 8)
-  } finally {
+    applyProfileData(userSnap.data())
     isLoading.value = false
+    loadProfileExtras(requestId).catch(console.error)
+  } finally {
+    if (requestId === profileLoadRequestId && !profile.value) isLoading.value = false
   }
 }
 
+const loadProfileExtras = async (requestId) => {
+  const [favoritesSnap, threadsSnap, postsSnap, usersSnap, communitiesSnap, followersSnap, followingSnap, followSnap, viewerSnap, uploadedIcons, achievementsSnap] = await Promise.all([
+    getDocs(query(collection(db, 'users', profileId.value, 'favorites'), limit(6))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'communityThreads'), limit(80))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'posts'), limit(120))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'users'), limit(24))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'users', profileId.value, 'communities'), limit(12))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'users', profileId.value, 'followers'), limit(500))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'users', profileId.value, 'following'), limit(500))).catch(() => ({ docs: [] })),
+    auth.currentUser && auth.currentUser.uid !== profileId.value
+      ? getDoc(doc(db, 'users', profileId.value, 'followers', auth.currentUser.uid)).catch(() => ({ exists: () => false }))
+      : Promise.resolve({ exists: () => false }),
+    auth.currentUser
+      ? getDoc(doc(db, 'users', auth.currentUser.uid)).catch(() => ({ exists: () => false, data: () => ({}) }))
+      : Promise.resolve({ exists: () => false, data: () => ({}) }),
+    loadUploadedProfileIcons({ includeHidden: true }).catch(() => []),
+    getDoc(doc(db, 'siteConfig', 'profileAchievements')).catch(() => ({ exists: () => false, data: () => ({}) }))
+  ])
+
+  if (requestId !== profileLoadRequestId || !profile.value) return
+
+  customIcons.value = uploadedIcons
+  managedAchievements.value = normalizeAchievements(
+    achievementsSnap.exists?.() ? achievementsSnap.data()?.items : achievements
+  )
+
+  const viewerData = typeof viewerSnap.exists === 'function' && viewerSnap.exists() ? viewerSnap.data() : {}
+  viewerProfile.value = {
+    role: viewerData.role || 'user',
+    canChat: Boolean(viewerData.canChat)
+  }
+
+  favorites.value = favoritesSnap.docs.map(item => ({ id: item.id, ...item.data() }))
+  userCommunities.value = communitiesSnap.docs.map(item => ({ id: item.id, ...item.data() }))
+  followersTotal.value = Number(profile.value.followersCount ?? followersSnap.docs.length)
+  followingTotal.value = Number(profile.value.followingCount ?? followingSnap.docs.length)
+  isFollowing.value = followSnap.exists()
+  const usersById = new Map(usersSnap.docs.map(item => [item.id, { id: item.id, ...item.data() }]))
+  followersList.value = followersSnap.docs.map(item => relationFromDoc(item, usersById))
+  followingList.value = followingSnap.docs.map(item => relationFromDoc(item, usersById))
+  threads.value = threadsSnap.docs
+    .map(item => ({ id: item.id, ...item.data() }))
+    .filter(thread => thread.authorId === profileId.value)
+    .sort((a, b) => getTime(b.updatedAt || b.createdAt) - getTime(a.updatedAt || a.createdAt))
+    .slice(0, 6)
+  posts.value = postsSnap.docs
+    .map(item => ({ id: item.id, ...item.data() }))
+    .filter(post => post.authorId === profileId.value && post.status === 'approved' && post.visibility !== 'private' && post.visibility !== 'unlisted' && post.placement !== 'hero' && !post.isMainEntry)
+    .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
+    .slice(0, 6)
+  publicProfiles.value = usersSnap.docs
+    .map(item => ({ id: item.id, role: 'user', readPostsCount: 0, ...item.data() }))
+    .filter(user => user.id !== profileId.value)
+    .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
+    .slice(0, 8)
+}
 const relationFromDoc = (item, usersById) => {
   const data = item.data()
   const id = data.userId || item.id
@@ -2797,7 +2820,7 @@ onUnmounted(() => {
 .profile-hero {
   background:
     linear-gradient(90deg, rgba(7, 10, 22, 0.92), rgba(7, 10, 22, 0.54)),
-    url('/src/iconos/Banner.png') center / cover;
+    url('@/iconos/Banner.png') center / cover;
   align-items: center;
   gap: 18px 28px;
   grid-template-columns: 150px minmax(300px, 1fr) minmax(170px, auto) minmax(160px, auto) minmax(130px, auto);

@@ -144,7 +144,7 @@ const emit = defineEmits(['update:activeLive', 'join'])
   background:
     linear-gradient(90deg, rgba(5, 7, 18, 0.92), rgba(26, 12, 58, 0.56), rgba(5, 7, 18, 0.18)),
     linear-gradient(0deg, rgba(5, 7, 18, 0.94), rgba(5, 7, 18, 0.08)),
-    url('/src/iconos/Banner.png') center / cover;
+    url('@/iconos/Banner.png') center / cover;
   border: 1px solid rgba(168, 85, 247, 0.3);
   border-radius: 18px;
   box-shadow: 0 26px 90px rgba(0, 0, 0, 0.36);
