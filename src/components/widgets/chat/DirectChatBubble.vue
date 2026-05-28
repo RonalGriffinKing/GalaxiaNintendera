@@ -1489,10 +1489,6 @@ onUnmounted(() => {
     max-height: none;
   }
 
-  :global(body.global-live-expanded) .direct-chat-panel.is-live-chat.has-active-chat {
-    top: calc(var(--public-nav-offset, 72px) + 44dvh + 18px);
-  }
-
   .direct-back-btn {
     display: inline-flex;
   }
@@ -1632,10 +1628,6 @@ onUnmounted(() => {
   .direct-chat-panel.community.is-live-chat.has-active-chat {
     height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
-  }
-
-  :global(body.global-live-expanded) .direct-chat-panel.is-live-chat.has-active-chat {
-    top: calc(var(--public-nav-offset, 72px) + 44dvh + 16px);
   }
 
   .direct-clear-btn,

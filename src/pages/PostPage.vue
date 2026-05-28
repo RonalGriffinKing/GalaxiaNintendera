@@ -964,9 +964,9 @@ onUnmounted(() => {
 }
 
 @media (max-width: 720px) {
-  .post-layout { gap: 22px; padding: 76px 0 var(--public-page-bottom-mobile, calc(112px + env(safe-area-inset-bottom))); }
-  .post-cinematic-hero { margin-left: 14px; margin-right: 14px; }
-  .post-paragraph, .post-content-section, .upcoming-post-lock, .analysis-summary-mobile { margin-left: 14px; margin-right: 14px; }
+  .post-layout { gap: 22px; padding: 68px 0 var(--public-page-bottom-mobile, calc(112px + env(safe-area-inset-bottom))); }
+  .post-cinematic-hero { margin-left: 6px; margin-right: 6px; }
+  .post-paragraph, .post-content-section, .upcoming-post-lock, .analysis-summary-mobile { margin-left: 10px; margin-right: 10px; }
   .post-paragraph { font-size: 15px; }
   .post-content-section h2 {
     font-size: 24px;

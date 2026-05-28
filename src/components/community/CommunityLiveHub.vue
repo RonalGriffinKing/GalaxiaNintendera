@@ -47,12 +47,14 @@ const videoReplyDrafts = defineModel('videoReplyDrafts', {
 })
 
 const liveStageEl = ref(null)
-const placeholderEl = ref(null)
 const playerFrame = ref(null)
+const videoChatListRef = ref(null)
+const videoChatInputRef = ref(null)
 const mobileChatOpen = ref(false)
+const keyboardOpen = ref(false)
+const viewportHeight = ref(0)
 const sheetTouchStartY = ref(0)
-const shellRect = ref(null)
-const placeholderHeight = ref(520)
+const pendingOwnMessageScroll = ref(false)
 
 const mobileChatLabel = computed(() => {
   const count = props.visibleVideoChatMessages.length
@@ -64,15 +66,6 @@ const shellVisible = computed(() => props.activeRoute || props.viewMode !== 'def
 
 defineExpose({
   getBoundingClientRect: () => liveStageEl.value?.getBoundingClientRect()
-})
-
-const shellPlacementStyle = computed(() => {
-  if (props.viewMode !== 'default' || !shellRect.value) return null
-  return {
-    left: `${shellRect.value.left}px`,
-    top: `${shellRect.value.top}px`,
-    width: `${shellRect.value.width}px`
-  }
 })
 
 const emit = defineEmits([
@@ -118,6 +111,36 @@ const openMobileDiscussion = () => {
   setViewMode('theater')
 }
 
+const scrollVideoChatToBottom = (behavior = 'smooth') => {
+  const container = videoChatListRef.value
+  if (!container) return
+  container.scrollTo({ top: container.scrollHeight, behavior })
+}
+
+const submitVideoMessage = async () => {
+  pendingOwnMessageScroll.value = true
+  emit('send-message')
+  await nextTick()
+  videoChatInputRef.value?.focus({ preventScroll: true })
+  window.setTimeout(() => {
+    if (!pendingOwnMessageScroll.value) return
+    scrollVideoChatToBottom('smooth')
+    pendingOwnMessageScroll.value = false
+  }, 2500)
+}
+
+const updateKeyboardState = () => {
+  if (typeof window === 'undefined' || !window.visualViewport || !window.matchMedia('(max-width: 720px)').matches) {
+    keyboardOpen.value = false
+    viewportHeight.value = 0
+    return
+  }
+  const viewport = window.visualViewport
+  const overlap = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+  keyboardOpen.value = overlap > 90
+  viewportHeight.value = Math.round(viewport.height)
+}
+
 const closeTheaterView = () => {
   mobileChatOpen.value = false
   setViewMode('default')
@@ -130,6 +153,39 @@ const postPlayerCommand = (func) => {
     args: []
   }), '*')
 }
+
+const registerPlayerFrame = () => {
+  playerFrame.value?.contentWindow?.postMessage(JSON.stringify({
+    event: 'listening',
+    id: 'galaxia-community-player'
+  }), '*')
+}
+
+watch(() => props.viewMode, (mode, previousMode) => {
+  if (previousMode === 'default' && ['background', 'paused'].includes(mode)) {
+    postPlayerCommand('pauseVideo')
+  }
+})
+
+watch(() => props.visibleVideoChatMessages.length, async () => {
+  if (!pendingOwnMessageScroll.value) return
+  await nextTick()
+  scrollVideoChatToBottom('smooth')
+  pendingOwnMessageScroll.value = false
+})
+
+onMounted(() => {
+  updateKeyboardState()
+  window.visualViewport?.addEventListener('resize', updateKeyboardState)
+  window.visualViewport?.addEventListener('scroll', updateKeyboardState)
+  window.addEventListener('resize', updateKeyboardState)
+})
+
+onUnmounted(() => {
+  window.visualViewport?.removeEventListener('resize', updateKeyboardState)
+  window.visualViewport?.removeEventListener('scroll', updateKeyboardState)
+  window.removeEventListener('resize', updateKeyboardState)
+})
 
 const closePlayerShell = () => {
   postPlayerCommand('pauseVideo')
@@ -144,46 +200,11 @@ const returnToCommunityPlayer = () => {
   emit('return-community')
 }
 
-const updateShellPlacement = async () => {
-  await nextTick()
-  const rect = placeholderEl.value?.getBoundingClientRect()
-  if (rect) {
-    shellRect.value = {
-      left: rect.left,
-      top: rect.top,
-      width: rect.width
-    }
-  }
-  if (liveStageEl.value && props.viewMode === 'default') {
-    placeholderHeight.value = Math.max(280, Math.ceil(liveStageEl.value.getBoundingClientRect().height || placeholderHeight.value))
-  }
-}
-
-onMounted(() => {
-  updateShellPlacement()
-  window.addEventListener('resize', updateShellPlacement)
-  window.addEventListener('scroll', updateShellPlacement, { passive: true })
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', updateShellPlacement)
-  window.removeEventListener('scroll', updateShellPlacement)
-})
-
-watch(() => props.viewMode, updateShellPlacement)
-watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
 </script>
 
 <template>
   <section class="official-media-hub">
-    <div
-      ref="placeholderEl"
-      class="official-live-placeholder"
-      :style="{ height: viewMode === 'default' ? `${placeholderHeight}px` : '0px' }"
-      aria-hidden="true"
-    ></div>
-
-    <Teleport to="body">
+    <Teleport to="body" :disabled="viewMode === 'default'">
       <article
         ref="liveStageEl"
         class="official-live-stage"
@@ -191,32 +212,21 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
           `mode-${viewMode}`,
           {
             'mobile-chat-open': mobileChatOpen,
+            'mobile-keyboard-open': keyboardOpen,
             'is-route-hidden': !shellVisible
           }
         ]"
-        :style="shellPlacementStyle"
+        :style="{ '--community-keyboard-vh': viewportHeight ? `${viewportHeight}px` : '100dvh' }"
       >
-      <Teleport to=".public-live-slot" :disabled="viewMode !== 'background'">
-        <button
-          v-if="viewMode === 'background'"
-          type="button"
-          class="player-nav-live-pill"
-          @click="setViewMode('floating')"
-        >
-          <i class="fas fa-circle"></i>
-          En vivo
-        </button>
-      </Teleport>
-
-      <div v-if="viewMode !== 'default' && viewMode !== 'background'" class="player-shell-topbar">
+      <div v-if="viewMode === 'theater'" class="player-shell-topbar">
         <strong>{{ youtubeStageTitle }}</strong>
         <div>
           <button
             type="button"
-            :aria-label="viewMode === 'floating' ? 'Segundo plano' : 'Minimizar reproductor'"
-            @click="viewMode === 'floating' ? setViewMode('background') : setViewMode('floating')"
+            aria-label="Minimizar en Hub"
+            @click="emit('featured-video-action')"
           >
-            <i :class="viewMode === 'floating' ? 'fas fa-arrow-up' : 'fas fa-minus'"></i>
+            <i class="fas fa-minus"></i>
           </button>
           <button
             type="button"
@@ -247,12 +257,13 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
         <div class="official-live-video-column">
           <div class="official-live-frame">
             <iframe
-              v-if="youtubeStageEmbedUrl"
+              v-if="youtubeStageEmbedUrl && viewMode !== 'background' && viewMode !== 'paused'"
               ref="playerFrame"
               :src="youtubeStageEmbedUrl"
               title="Directo o video destacado de Galaxia Nintendera"
               allowfullscreen
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              @load="registerPlayerFrame"
             ></iframe>
             <div v-else class="live-waiting-state">
               <span><i class="fas fa-satellite-dish"></i></span>
@@ -264,16 +275,6 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
               </button>
             </div>
           </div>
-
-          <button
-            v-if="viewMode === 'floating'"
-            type="button"
-            class="player-expand-discussion-btn"
-            @click="openMobileDiscussion"
-          >
-            <i class="fas fa-up-right-and-down-left-from-center"></i>
-            <span>Agrandar y chatear</span>
-          </button>
 
           <button
             v-if="currentLiveGoal"
@@ -358,7 +359,7 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
             </button>
           </header>
 
-          <div class="video-chat-list">
+          <div ref="videoChatListRef" class="video-chat-list">
             <article v-for="message in visibleVideoChatMessages" :key="message.id">
               <img v-if="message.authorImage" :src="message.authorImage" alt="" />
               <span v-else>{{ avatarInitial(message.author) }}</span>
@@ -405,14 +406,15 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
             </div>
           </div>
 
-          <form class="video-chat-form" @submit.prevent="emit('send-message')">
+          <form class="video-chat-form" @submit.prevent="submitVideoMessage">
             <input
+              ref="videoChatInputRef"
               v-model="videoChatDraft"
               maxlength="280"
               :disabled="!featuredYoutubeVideo"
               :placeholder="videoDiscussionPlaceholder"
             />
-            <button type="submit" :disabled="!featuredYoutubeVideo || !videoChatDraft.trim()">
+            <button type="submit" :disabled="!featuredYoutubeVideo || !videoChatDraft.trim()" @pointerdown.prevent>
               <i class="fas fa-paper-plane"></i>
               <span>Enviar</span>
             </button>
@@ -509,11 +511,6 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
   overflow: hidden;
 }
 
-.official-live-placeholder {
-  min-height: 0;
-  transition: height 0.2s ease;
-}
-
 .official-live-stage,
 .official-video-shelf {
   background:
@@ -528,7 +525,7 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
 }
 
 .official-live-stage {
-  position: fixed;
+  position: relative;
   transition: border-radius 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
   z-index: 20;
 }
@@ -625,13 +622,11 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
   z-index: 2147483600;
 }
 
-.official-live-stage.mode-theater .player-shell-topbar,
-.official-live-stage.mode-floating .player-shell-topbar {
+.official-live-stage.mode-theater .player-shell-topbar {
   display: flex;
 }
 
-.official-live-stage.mode-theater .official-section-title,
-.official-live-stage.mode-floating .official-section-title {
+.official-live-stage.mode-theater .official-section-title {
   display: none;
 }
 
@@ -681,51 +676,6 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
 
 .official-live-stage.mode-theater .video-chat-panel {
   min-height: 0;
-}
-
-.official-live-stage.mode-floating {
-  padding: 10px;
-  position: fixed;
-  right: 18px;
-  top: calc(var(--public-nav-offset, 72px) + 14px);
-  width: min(420px, calc(100vw - 28px));
-  z-index: 2600;
-}
-
-.official-live-stage.mode-floating .official-live-layout {
-  gap: 8px;
-  grid-template-columns: 1fr;
-  margin-top: 0;
-}
-
-.official-live-stage.mode-floating .official-live-copy,
-.official-live-stage.mode-floating .video-chat-panel {
-  display: none;
-}
-
-.official-live-stage.mode-floating .official-live-frame {
-  border-radius: 14px;
-}
-
-.player-expand-discussion-btn {
-  align-items: center;
-  background: rgba(15, 23, 42, 0.72);
-  border: 1px solid rgba(192, 132, 252, 0.28);
-  border-radius: 999px;
-  color: #ffffff;
-  display: none;
-  font-size: 12px;
-  font-weight: 950;
-  gap: 8px;
-  justify-content: center;
-  margin-top: 8px;
-  min-height: 38px;
-  padding: 0 14px;
-  width: 100%;
-}
-
-.official-live-stage.mode-floating .player-expand-discussion-btn {
-  display: inline-flex;
 }
 
 .official-section-title {
@@ -1032,6 +982,8 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   max-width: 100%;
+  max-height: clamp(520px, 68vh, 760px);
+  height: 100%;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -1090,13 +1042,14 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
 .video-chat-list {
   align-content: start;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   max-width: 100%;
   min-height: 240px;
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 14px;
+  padding: 12px 14px 24px;
+  scrollbar-gutter: stable;
 }
 
 .video-chat-list article {
@@ -1114,10 +1067,10 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
   display: flex;
   font-size: 11px;
   font-weight: 950;
-  height: 34px;
+  height: 32px;
   justify-content: center;
   object-fit: cover;
-  width: 34px;
+  width: 32px;
 }
 
 .video-chat-list p {
@@ -1152,8 +1105,8 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
 .video-comment-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 7px;
+  margin-top: 7px;
 }
 
 .video-comment-actions button {
@@ -1167,7 +1120,7 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
   font-weight: 900;
   gap: 6px;
   min-height: 30px;
-  padding: 0 10px;
+  padding: 0 9px;
 }
 
 .video-comment-actions button.active {
@@ -1232,12 +1185,15 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
 }
 
 .video-chat-form {
+  background: rgba(9, 11, 30, 0.98);
   border-top: 1px solid rgba(148, 163, 184, 0.16);
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) 44px;
   min-width: 0;
-  padding: 12px;
+  padding: 10px 12px;
+  position: relative;
+  z-index: 2;
 }
 
 .video-chat-form input {
@@ -1486,7 +1442,6 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
 }
 
 @media (max-width: 720px) {
-  :global(body.community-player-expanded .global-live-bubble),
   :global(body.community-player-expanded .direct-chat-fab),
   :global(body.community-player-expanded .direct-chat-panel),
   :global(body.community-player-expanded .music-bubble-fab),
@@ -1497,7 +1452,6 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
   :global(body.community-player-expanded .community-rail-card),
   :global(body.community-player-expanded .community-switcher),
   :global(body.community-player-expanded .community-rail-dots),
-  :global(body.community-player-expanded .public-live-slot),
   :global(body.community-player-expanded .public-bottom-nav),
   :global(body.community-player-expanded .bottom-nav) {
     display: none !important;
@@ -1526,13 +1480,6 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
     min-height: 100dvh;
     padding: max(8px, env(safe-area-inset-top)) 0 max(8px, env(safe-area-inset-bottom));
     top: 0;
-  }
-
-  .official-live-stage.mode-floating {
-    left: 12px;
-    right: 12px;
-    top: calc(var(--public-nav-offset, 86px) + 10px);
-    width: auto;
   }
 
   .official-live-stage.mode-theater .player-shell-topbar {
@@ -1763,26 +1710,32 @@ watch(() => props.youtubeStageEmbedUrl, updateShellPlacement)
     position: relative;
   }
 
-  .official-live-stage.mode-theater:focus-within {
-    min-height: var(--direct-chat-vvh, 100dvh);
+  .official-live-stage.mode-theater.mobile-keyboard-open {
+    height: var(--community-keyboard-vh, 100dvh);
+    min-height: var(--community-keyboard-vh, 100dvh);
+    overflow: hidden;
   }
 
-  .official-live-stage.mode-theater:focus-within .player-shell-topbar {
+  .official-live-stage.mode-theater.mobile-keyboard-open .player-shell-topbar {
     min-height: 36px;
   }
 
-  .official-live-stage.mode-theater:focus-within .official-live-layout {
-    grid-template-rows: minmax(120px, 30svh) minmax(0, 1fr);
+  .official-live-stage.mode-theater.mobile-keyboard-open .official-live-layout {
+    grid-template-rows: minmax(96px, 26%) minmax(0, 1fr);
   }
 
-  .official-live-stage.mode-theater:focus-within .video-chat-panel header {
+  .official-live-stage.mode-theater.mobile-keyboard-open .video-chat-panel header {
     padding-bottom: 8px;
-    padding-top: 12px;
+    padding-top: 10px;
   }
 
-  .official-live-stage.mode-theater:focus-within .video-chat-list {
-    max-height: 28svh;
-    padding-bottom: 8px;
+  .official-live-stage.mode-theater.mobile-keyboard-open .video-chat-list {
+    min-height: 0;
+    padding-bottom: 12px;
+  }
+
+  .official-live-stage.mode-theater.mobile-keyboard-open .video-chat-form {
+    padding-bottom: 10px;
   }
 
   .video-chat-form input {

@@ -551,9 +551,9 @@ const scoreTone = computed(() => {
 
 @media (max-width: 860px) {
   .post-cinematic-hero {
-    border-radius: 22px;
+    border-radius: 18px;
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
-    min-height: min(680px, calc(100dvh - 72px));
+    min-height: clamp(570px, 82svh, 660px);
   }
 
   .hero-backdrop {
@@ -581,8 +581,8 @@ const scoreTone = computed(() => {
   }
 
   .hero-content {
-    gap: 18px;
-    padding: 16px 14px 28px;
+    gap: 16px;
+    padding: 14px 18px 24px;
     grid-template-rows: auto auto 1fr auto auto;
   }
 
@@ -591,8 +591,11 @@ const scoreTone = computed(() => {
   }
 
   .hero-copy h1 {
-    font-size: clamp(30px, 10.2vw, 43px);
-    line-height: 1.04;
+    font-size: clamp(28px, 8.4vw, 38px);
+    line-height: 1.06;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    text-wrap: balance;
   }
 
   .hero-copy {
@@ -600,9 +603,9 @@ const scoreTone = computed(() => {
   }
 
   .hero-copy p {
-    font-size: 13px;
-    line-height: 1.65;
-    margin-top: 16px;
+    font-size: 13.5px;
+    line-height: 1.58;
+    margin-top: 14px;
   }
 
   .hero-mini-score {
@@ -612,7 +615,7 @@ const scoreTone = computed(() => {
   .hero-footer {
     align-items: flex-start;
     display: grid;
-    gap: 18px;
+    gap: 16px;
   }
 
   .hero-actions {
@@ -630,10 +633,38 @@ const scoreTone = computed(() => {
 }
 
 @media (max-width: 420px) {
+  .post-cinematic-hero {
+    border-radius: 17px;
+  }
+
+  .hero-content {
+    padding: 13px 16px 22px;
+  }
+
+  .hero-badges {
+    gap: 8px;
+  }
+
   .hero-pill {
     font-size: 10px;
     min-height: 30px;
     padding: 0 10px;
+  }
+
+  .hero-mini-score {
+    font-size: 15px;
+    min-height: 30px;
+    padding: 0 10px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(27px, 8.1vw, 34px);
+    line-height: 1.08;
+  }
+
+  .hero-copy p {
+    font-size: 13px;
+    line-height: 1.55;
   }
 
   .hero-actions {

@@ -1004,7 +1004,6 @@ onUnmounted(() => {
           <img :src="defaultLogoUrl" class="public-brand-logo" alt="Galaxia Nintendera" />
           <span>Galaxia Nintendera</span>
         </button>
-        <div class="public-live-slot"></div>
       </div>
 
       <div class="public-links">
@@ -1625,15 +1624,6 @@ onUnmounted(() => {
   flex: 0 0 auto;
   gap: 10px;
   min-width: 0;
-}
-
-.public-live-slot {
-  align-items: center;
-  display: inline-flex;
-  min-height: 36px;
-  min-width: 0;
-  overflow: visible;
-  padding: 8px;
 }
 
 .public-brand-logo {
@@ -2492,17 +2482,6 @@ onUnmounted(() => {
 
   .public-brand-zone {
     display: inline-flex;
-  }
-
-  .public-live-slot {
-    left: 50%;
-    min-height: 44px;
-    overflow: visible;
-    padding: 10px;
-    position: absolute;
-    top: calc(50% + 1px);
-    transform: translate(-50%, -50%) scale(0.96);
-    z-index: 6;
   }
 
   .public-brand span {
@@ -3854,8 +3833,7 @@ onUnmounted(() => {
   :global(body.quick-thread-sheet-open .music-bubble-panel),
   :global(body.quick-thread-sheet-open .direct-chat-fab),
   :global(body.quick-thread-sheet-open .direct-chat-panel),
-  :global(body.quick-thread-sheet-open .community-floating-access),
-  :global(body.quick-thread-sheet-open .global-live-bubble) {
+  :global(body.quick-thread-sheet-open .community-floating-access) {
     opacity: 0 !important;
     pointer-events: none !important;
     transform: translateY(16px) scale(0.94) !important;

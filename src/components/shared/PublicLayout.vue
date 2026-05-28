@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '@/firebase'
 import DirectChatBubble from '@/components/widgets/chat/DirectChatBubble.vue'
-import GlobalLiveBubble from '@/components/widgets/GlobalLiveBubble.vue'
 import GalaxiaHub from '@/components/shared/GalaxiaHub.vue'
 import PublicNavbar from '@/components/nav/PublicNavbar.vue'
 import { defaultLogoUrl } from '@/constants/assets'
@@ -136,7 +135,6 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
         </KeepAlive>
       </Transition>
     </router-view>
-    <GlobalLiveBubble />
     <GalaxiaHub
       :official-community="officialCommunity"
       :favorite-communities="favoriteCommunities"

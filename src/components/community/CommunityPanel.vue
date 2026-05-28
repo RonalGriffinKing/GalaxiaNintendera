@@ -21,6 +21,7 @@ import {
 import { auth, db } from '@/firebase'
 import { notifyThreadLike, notifyThreadReply } from '@/services/notifications'
 import {
+  allowFloatingPlayback,
   disableFloatingPlayback,
   playerState,
   setCurrentVideo,
@@ -106,7 +107,7 @@ const videoChatDraft = ref('')
 const videoReplyDrafts = ref({})
 const playerViewMode = ref('default')
 const mediaTheaterOpen = computed(() => playerViewMode.value === 'theater')
-const persistentPlayerModes = ['floating', 'background', 'paused']
+const persistentPlayerModes = ['background', 'paused']
 const liveClockNow = ref(Date.now())
 const liveSessionStartedAt = ref(0)
 const liveStageRef = ref(null)
@@ -192,7 +193,7 @@ const featuredYoutubeEmbedUrl = computed(() => {
     playsinline: '1',
     origin: youtubeEmbedOrigin.value
   })
-  const startAt = Math.max(0, Math.floor(Number(selectedYoutubeVideo.value?.startedAt || playerState.currentTime || 0)))
+  const startAt = Math.max(0, Math.floor(Number(selectedYoutubeVideo.value?.startedAt ?? 0)))
   if (selectedYoutubeVideo.value && startAt > 0) params.set('start', String(startAt))
   return `https://www.youtube.com/embed/${featuredYoutubeVideo.value.id}?${params.toString()}`
 })
@@ -213,25 +214,23 @@ const youtubeStageDescription = computed(() => {
   if (youtubeLiveVideo.value?.id) return 'La transmision esta activa. Entra al chat y comparte el momento con la comunidad.'
   return 'No hay transmision en vivo ahora. Revisa los horarios y eventos, o elige un video de la biblioteca para verlo aqui.'
 })
-const featuredVideoIsFloating = computed(() => (
+const featuredVideoIsInHub = computed(() => (
   Boolean(featuredYoutubeVideo.value?.id) &&
-  (playerViewMode.value === 'floating' || playerViewMode.value === 'background') &&
+  playerViewMode.value === 'background' &&
   playerState.currentVideo?.id === featuredYoutubeVideo.value.id
 ))
 const featuredVideoIsPlayingHere = computed(() => (
   Boolean(featuredYoutubeVideo.value?.id) &&
   selectedYoutubeVideo.value?.id === featuredYoutubeVideo.value.id &&
-  playerViewMode.value !== 'floating' &&
   playerViewMode.value !== 'background'
 ))
 const featuredVideoActionLabel = computed(() => {
-  if (playerViewMode.value === 'background') return 'Ver mini'
-  if (featuredVideoIsFloating.value) return 'Ver aqui'
+  if (featuredVideoIsInHub.value) return 'Abrir en Hub'
   if (featuredVideoIsPlayingHere.value) return 'Minimizar'
   return 'Reproducir aqui'
 })
 const featuredVideoActionIcon = computed(() => {
-  if (featuredVideoIsFloating.value) return 'fas fa-display'
+  if (featuredVideoIsInHub.value) return 'fas fa-circle-play'
   if (featuredVideoIsPlayingHere.value) return 'fas fa-window-minimize'
   return 'fas fa-play'
 })
@@ -832,7 +831,7 @@ const closeDiscoverModal = () => {
 }
 
 const viewDiscoveredCommunity = (community) => {
-  if (community?.id !== selectedCommunityId.value && playerViewMode.value !== 'floating') {
+  if (community?.id !== selectedCommunityId.value && playerViewMode.value !== 'background') {
     stopPlayback()
     selectedYoutubeVideo.value = null
   }
@@ -841,7 +840,7 @@ const viewDiscoveredCommunity = (community) => {
 }
 
 const selectRailCommunity = (community) => {
-  if (community?.id !== selectedCommunityId.value && playerViewMode.value !== 'floating') {
+  if (community?.id !== selectedCommunityId.value && playerViewMode.value !== 'background') {
     stopPlayback()
     selectedYoutubeVideo.value = null
   }
@@ -1200,20 +1199,27 @@ const openLiveChat = () => {
 
 const moveYoutubeVideoToFloating = (video) => {
   if (!video?.id) return
+  window.dispatchEvent(new CustomEvent('galaxy-media-stop'))
+  const handoffSecond = Math.max(0, Math.floor(Number(activeVideoSecond.value || playerState.currentTime || video.startedAt || 0)))
   setCurrentVideo({
     ...video,
-    startedAt: playerState.currentTime
+    startedAt: handoffSecond
   })
-  disableFloatingPlayback()
-  playerViewMode.value = 'floating'
+  setCurrentTime(handoffSecond)
+  playerViewMode.value = 'background'
+  window.setTimeout(() => {
+    allowFloatingPlayback({ minimized: true })
+    window.dispatchEvent(new CustomEvent('open-galaxia-hub-live'))
+  }, 120)
 }
 
 const handleFeaturedVideoAction = () => {
   const video = featuredYoutubeVideo.value
   if (!video?.id) return
 
-  if (featuredVideoIsFloating.value) {
-    playerViewMode.value = 'floating'
+  if (featuredVideoIsInHub.value) {
+    playerViewMode.value = 'background'
+    window.dispatchEvent(new CustomEvent('open-galaxia-hub-live'))
     return
   }
 
@@ -1252,6 +1258,23 @@ const returnPlayerToCommunity = () => {
     path: '/comunidad',
     query: { id: selectedCommunityId.value || OFFICIAL_COMMUNITY_ID }
   })
+}
+
+const restoreHubPlayerToCommunity = async (event = null) => {
+  const video = playerState.currentVideo
+  if (!video?.id) return
+  window.dispatchEvent(new CustomEvent('galaxy-media-stop'))
+  const handoffSecond = Math.max(0, Math.floor(Number(playerState.currentTime || video.startedAt || 0)))
+
+  selectedYoutubeVideo.value = {
+    ...video,
+    startedAt: handoffSecond
+  }
+  setCurrentTime(handoffSecond)
+  disableFloatingPlayback()
+  playerViewMode.value = event?.detail?.theater ? 'theater' : 'default'
+  await nextTick()
+  scrollToLiveStage()
 }
 
 const formatVideoChatTime = (seconds) => {
@@ -1340,6 +1363,7 @@ const deleteVideoMessage = async (message) => {
 
 const openVideoTheater = () => {
   if (!featuredYoutubeVideo.value?.id) return
+  window.dispatchEvent(new CustomEvent('galaxy-media-stop'))
   if (playerState.currentVideo?.id !== featuredYoutubeVideo.value.id) {
     playYoutubeVideo(featuredYoutubeVideo.value)
   }
@@ -1370,7 +1394,10 @@ const handleYoutubePlayerMessage = (event) => {
     setCurrentTime(Number(payload.info.currentTime))
   }
   const state = payload.info?.playerState
-  if (state === 1) setPlaybackStatus('playing')
+  if (state === 1) {
+    window.dispatchEvent(new CustomEvent('galaxy-media-stop'))
+    setPlaybackStatus('playing')
+  }
   if (state === 2) setPlaybackStatus('paused')
   if (state === 0) setPlaybackStatus('stopped')
 }
@@ -1931,6 +1958,7 @@ const syncLiveSessionClock = (video) => {
 
 onMounted(() => {
   window.addEventListener('message', handleYoutubePlayerMessage)
+  window.addEventListener('galaxia-live-return-community', restoreHubPlayerToCommunity)
   liveClockTimer = window.setInterval(() => {
     liveClockNow.value = Date.now()
   }, 1000)
@@ -1984,6 +2012,9 @@ watch([() => route.query.thread, threads], () => {
 watch([() => route.query.v, youtubeRecentVideos, youtubePastLives, youtubeLiveVideo], ([videoId]) => {
   if (!videoId) return
   const id = String(videoId)
+  const resumeAt = playerState.currentVideo?.id === id
+    ? Number(playerState.currentTime || playerState.currentVideo.startedAt || 0)
+    : Number(selectedYoutubeVideo.value?.id === id ? selectedYoutubeVideo.value.startedAt || 0 : 0)
   const video = [
     youtubeLiveVideo.value,
     ...youtubeRecentVideos.value,
@@ -1995,6 +2026,12 @@ watch([() => route.query.v, youtubeRecentVideos, youtubePastLives, youtubeLiveVi
     title: 'Video de Galaxia Nintendera',
     thumbnail: resolveAssetUrl(selectedCommunity.value?.bannerUrl, defaultBannerUrl),
     url: `https://www.youtube.com/watch?v=${id}`
+  }
+  if (resumeAt > 0) {
+    selectedYoutubeVideo.value = {
+      ...selectedYoutubeVideo.value,
+      startedAt: resumeAt
+    }
   }
   if (skipNextVideoRouteScroll) {
     skipNextVideoRouteScroll = false
@@ -2102,6 +2139,7 @@ onBeforeRouteUpdate((to, from, next) => {
 
 onUnmounted(() => {
   window.removeEventListener('message', handleYoutubePlayerMessage)
+  window.removeEventListener('galaxia-live-return-community', restoreHubPlayerToCommunity)
   window.clearInterval(liveClockTimer)
   unsubscribeThreads?.()
   unsubscribeCommunities?.()
@@ -2690,8 +2728,6 @@ onUnmounted(() => {
 
 <style scoped>
 :global(body.community-player-expanded .public-bottom-nav),
-:global(body.community-player-expanded .public-live-slot),
-:global(body.community-player-expanded .global-live-bubble),
 :global(body.community-player-expanded .direct-chat-fab),
 :global(body.community-player-expanded .direct-chat-panel),
 :global(body.community-player-expanded .music-bubble-fab),
