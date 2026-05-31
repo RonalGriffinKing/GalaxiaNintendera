@@ -71,28 +71,6 @@ const emit = defineEmits([
 
 <template>
   <aside class="community-side">
-    <div v-if="youtubeLiveUrl && !isOfficial" class="side-box live-box">
-      <span class="live-pill">
-        <i class="fas fa-circle"></i>
-        En vivo ahora
-      </span>
-      <div class="side-live-frame">
-        <iframe
-          :src="youtubeLiveUrl"
-          title="Directo de YouTube de GalaxiaNintendera"
-          allowfullscreen
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        ></iframe>
-      </div>
-      <a :href="youtubeChannelUrl" target="_blank" rel="noreferrer">Ver en YouTube</a>
-    </div>
-
-    <div v-else-if="isAdmin && !isOfficial" class="side-box live-box setup-only">
-      <span class="live-pill"><i class="fas fa-circle"></i> YouTube</span>
-      <h2>Falta configurar Channel ID</h2>
-      <p>Este aviso solo se muestra para admin. Agrega VITE_YOUTUBE_CHANNEL_ID en tus variables de entorno para activar el live.</p>
-    </div>
-
     <div class="side-box galaxy-calendar-box">
       <div class="side-box-head">
         <div>

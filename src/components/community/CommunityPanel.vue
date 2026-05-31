@@ -171,7 +171,7 @@ const youtubeLiveUrl = computed(() => (
     : ''
 ))
 const youtubeLiveFallbackVideo = computed(() => {
-  if (youtubeApiKey.value || !youtubeChannelId.value || selectedYoutubeVideo.value || youtubeLiveVideo.value) return null
+  if (!isOfficialSelectedCommunity.value || youtubeApiKey.value || !youtubeChannelId.value || selectedYoutubeVideo.value || youtubeLiveVideo.value) return null
   return {
     id: `channel-live-${youtubeChannelId.value}`,
     title: 'Live de Galaxia Nintendera',
@@ -182,7 +182,13 @@ const youtubeLiveFallbackVideo = computed(() => {
     isFallbackLive: true
   }
 })
-const featuredYoutubeVideo = computed(() => selectedYoutubeVideo.value || youtubeLiveVideo.value || youtubeLiveFallbackVideo.value || null)
+const featuredYoutubeVideo = computed(() => (
+  selectedYoutubeVideo.value
+  || youtubeLiveVideo.value
+  || youtubeLiveFallbackVideo.value
+  || defaultCommunityYoutubeVideo.value
+  || null
+))
 const activeVideoChatId = computed(() => featuredYoutubeVideo.value?.id || '')
 const featuredYoutubeEmbedUrl = computed(() => {
   if (!featuredYoutubeVideo.value?.id) return ''
@@ -207,7 +213,8 @@ const youtubeStageEmbedUrl = computed(() => {
   return featuredYoutubeEmbedUrl.value
 })
 const youtubeStageTitle = computed(() => (
-  featuredYoutubeVideo.value?.title || (youtubeUploadsUrl.value ? 'Videos oficiales de Galaxia Nintendera' : 'Galaxia Nintendera en directo')
+  featuredYoutubeVideo.value?.title
+  || (isOfficialSelectedCommunity.value ? 'Videos oficiales de Galaxia Nintendera' : `Videos de ${selectedCommunity.value?.name || 'la comunidad'}`)
 ))
 const youtubeStageDescription = computed(() => {
   if (featuredYoutubeVideo.value?.description) return featuredYoutubeVideo.value.description
@@ -269,6 +276,60 @@ const visibleVideoChatMessages = computed(() => {
 })
 const officialVideoPageSize = 5
 const youtubeSearchPageSize = 50
+const communityVideoProfiles = [
+  { id: 'kirby', label: 'Kirby', keywords: ['kirby', 'dream land', 'dreamland', 'waddle', 'dedede', 'meta knight', 'air riders'] },
+  { id: 'mario-kart', label: 'Mario Kart', keywords: ['mario kart', 'mariokart', 'kart', 'rainbow road', 'rainbow circuit', 'circuito arcoiris', 'carreras', 'atajos'] },
+  { id: 'mario', label: 'Mario', keywords: ['super mario', 'mario', 'luigi', 'peach', 'bowser', 'yoshi', 'mario galaxy', 'mario odyssey', 'mario wonder'] },
+  { id: 'pokemon', label: 'Pokemon', keywords: ['pokemon', 'pokémon', 'pikachu', 'pokeball', 'pokebola', 'shiny', 'pokemon league'] },
+  { id: 'zelda', label: 'Zelda', keywords: ['zelda', 'link', 'hyrule', 'ocarina', 'tears of the kingdom', 'breath of the wild'] },
+  { id: 'splatoon', label: 'Splatoon', keywords: ['splatoon', 'inkling', 'splat', 'calamar', 'turf'] },
+  { id: 'animal-crossing', label: 'Animal Crossing', keywords: ['animal crossing', 'acnh', 'tom nook', 'canela', 'isabelle'] },
+  { id: 'metroid', label: 'Metroid', keywords: ['metroid', 'samus'] },
+  { id: 'smash', label: 'Smash', keywords: ['smash', 'smash bros', 'super smash'] }
+]
+const normalizeVideoToken = (value = '') => normalizeText(value).replace(/[^a-z0-9]+/g, ' ').trim()
+const getVideoText = (video = {}) => normalizeVideoToken(`${video.title || ''} ${video.description || ''}`)
+const getCommunityVideoProfile = (community = {}) => {
+  if (!community || community.id === OFFICIAL_COMMUNITY_ID || community.isOfficial) {
+    return { id: 'all', label: 'Todos', keywords: [] }
+  }
+
+  const source = normalizeVideoToken([
+    community.name,
+    community.description,
+    community.category,
+    ...(Array.isArray(community.tags) ? community.tags : []),
+    ...(Array.isArray(community.threadTopics) ? community.threadTopics : [])
+  ].filter(Boolean).join(' '))
+  const match = communityVideoProfiles.find(profile => (
+    profile.keywords.some(keyword => source.includes(normalizeVideoToken(keyword)))
+  ))
+
+  if (match) return match
+
+  const fallbackKeywords = [
+    community.name,
+    ...(Array.isArray(community.tags) ? community.tags : []),
+    ...(Array.isArray(community.threadTopics) ? community.threadTopics : [])
+  ]
+    .map(normalizeVideoToken)
+    .filter(keyword => keyword && keyword.length > 2)
+
+  return {
+    id: normalizeVideoToken(community.id || community.name || 'community').replace(/\s+/g, '-') || 'community',
+    label: community.name || 'Comunidad',
+    keywords: fallbackKeywords
+  }
+}
+const communityVideoProfile = computed(() => getCommunityVideoProfile(selectedCommunity.value))
+const videoMatchesCommunity = (video, profile) => {
+  if (!profile?.keywords?.length) return true
+  const text = getVideoText(video)
+  return profile.keywords.some(keyword => {
+    const normalized = normalizeVideoToken(keyword)
+    return normalized && text.includes(normalized)
+  })
+}
 const officialLiveLibraryItem = computed(() => {
   const liveVideo = youtubeLiveVideo.value || youtubeLiveFallbackVideo.value
   if (!liveVideo?.id) return null
@@ -293,14 +354,41 @@ const officialVideoLibrary = computed(() => {
     return true
   })
 })
-const officialVideoFilters = computed(() => [
-  { id: 'all', label: 'Todos', icon: 'fas fa-layer-group', count: officialVideoLibrary.value.length },
-  { id: 'live', label: 'Directos', icon: 'fas fa-tower-broadcast', count: officialVideoLibrary.value.filter(video => video.streamKind === 'live-now' || video.streamKind === 'past-live').length },
-  { id: 'video', label: 'Videos', icon: 'far fa-video', count: officialVideoLibrary.value.filter(video => video.streamKind !== 'live-now' && video.streamKind !== 'past-live').length }
-].filter(filter => filter.id === 'all' || filter.count))
+const communityVideoLibrary = computed(() => {
+  if (isOfficialSelectedCommunity.value) return officialVideoLibrary.value
+  return officialVideoLibrary.value.filter(video => videoMatchesCommunity(video, communityVideoProfile.value))
+})
+const defaultCommunityYoutubeVideo = computed(() => {
+  if (isOfficialSelectedCommunity.value || selectedYoutubeVideo.value || youtubeLiveVideo.value || youtubeLiveFallbackVideo.value) return null
+  return communityVideoLibrary.value.find(video => video.streamKind !== 'live-now') || null
+})
+const activeVideoLibrary = computed(() => (
+  isOfficialSelectedCommunity.value || officialVideoFilter.value === 'all'
+    ? officialVideoLibrary.value
+    : communityVideoLibrary.value
+))
+const officialVideoFilters = computed(() => {
+  const communityFilters = isOfficialSelectedCommunity.value
+    ? []
+    : [{
+        id: 'community',
+        label: communityVideoProfile.value.label,
+        icon: 'fas fa-gamepad',
+        count: communityVideoLibrary.value.length
+      }]
+  const scopedLibrary = isOfficialSelectedCommunity.value ? officialVideoLibrary.value : communityVideoLibrary.value
+
+  return [
+    ...communityFilters,
+    { id: 'all', label: 'Todos', icon: 'fas fa-layer-group', count: officialVideoLibrary.value.length },
+    { id: 'live', label: 'Directos', icon: 'fas fa-tower-broadcast', count: scopedLibrary.filter(video => video.streamKind === 'live-now' || video.streamKind === 'past-live').length },
+    { id: 'video', label: 'Videos', icon: 'far fa-video', count: scopedLibrary.filter(video => video.streamKind !== 'live-now' && video.streamKind !== 'past-live').length }
+  ].filter(filter => filter.id === 'all' || filter.count)
+})
 const filteredOfficialVideos = computed(() => {
-  if (officialVideoFilter.value === 'live') return officialVideoLibrary.value.filter(video => video.streamKind === 'live-now' || video.streamKind === 'past-live')
-  if (officialVideoFilter.value === 'video') return officialVideoLibrary.value.filter(video => video.streamKind !== 'live-now' && video.streamKind !== 'past-live')
+  if (officialVideoFilter.value === 'community') return communityVideoLibrary.value
+  if (officialVideoFilter.value === 'live') return activeVideoLibrary.value.filter(video => video.streamKind === 'live-now' || video.streamKind === 'past-live')
+  if (officialVideoFilter.value === 'video') return activeVideoLibrary.value.filter(video => video.streamKind !== 'live-now' && video.streamKind !== 'past-live')
   return officialVideoLibrary.value
 })
 const officialVideoPageCount = computed(() => Math.max(1, Math.ceil(filteredOfficialVideos.value.length / officialVideoPageSize)))
@@ -2106,6 +2194,11 @@ watch(activeVideoChatId, subscribeVideoChat, { immediate: true })
 
 watch(selectedCommunity, (community) => {
   if (!community?.id) return
+  officialVideoFilter.value = (community.id === OFFICIAL_COMMUNITY_ID || community.isOfficial) ? 'all' : 'community'
+  officialVideoPage.value = 0
+  if (playerViewMode.value !== 'background') {
+    selectedYoutubeVideo.value = null
+  }
   if (selectedTopic.value !== 'Inicio' && !selectedCommunityTopics.value.includes(selectedTopic.value)) {
     selectedTopic.value = 'Inicio'
   }
@@ -2190,7 +2283,6 @@ onUnmounted(() => {
         />
 
         <CommunityLiveHub
-          v-if="isOfficialSelectedCommunity"
           ref="liveStageRef"
           v-model:video-chat-draft="videoChatDraft"
           v-model:video-reply-drafts="videoReplyDrafts"
