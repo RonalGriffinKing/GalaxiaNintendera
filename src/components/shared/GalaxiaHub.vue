@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { onAuthStateChanged } from 'firebase/auth'
 import { addDoc, collection, doc, getDoc, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
+import GiphyPicker from '@/components/shared/GiphyPicker.vue'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import {
@@ -64,6 +65,8 @@ const unreadCount = ref(0)
 const activeChatUser = ref(null)
 const rawHubMessages = ref([])
 const chatDraft = ref('')
+const selectedChatGif = ref(null)
+const chatGiphyOpen = ref(false)
 const chatMenuOpen = ref(false)
 const pendingChatAction = ref('')
 const localClearedAtByChat = ref({})
@@ -84,6 +87,8 @@ const showJumpToBottom = ref(false)
 const keyboardOffset = ref(0)
 const keyboardOpen = ref(false)
 const liveChatDraft = ref('')
+const selectedLiveGif = ref(null)
+const liveGiphyOpen = ref(false)
 const liveMessages = ref([])
 const liveUnreadCount = ref(0)
 const liveChatPinnedToBottom = ref(true)
@@ -102,6 +107,7 @@ let previousHtmlOverflow = ''
 
 const canUseChat = computed(() => (
   currentUser.value &&
+  !currentProfile.value.isBlocked &&
   (['admin', 'publisher'].includes(currentProfile.value.role) || currentProfile.value.canChat)
 ))
 
@@ -256,6 +262,10 @@ const closeHub = () => {
   activeChatUser.value = null
   rawHubMessages.value = []
   chatDraft.value = ''
+  selectedChatGif.value = null
+  chatGiphyOpen.value = false
+  selectedLiveGif.value = null
+  liveGiphyOpen.value = false
   chatMenuOpen.value = false
   pendingChatAction.value = ''
   unsubscribeHubMessages?.()
@@ -282,6 +292,8 @@ const openChat = (user = null) => {
   if (!canMessageUser(user)) return
   activeChatUser.value = user
   chatDraft.value = ''
+  selectedChatGif.value = null
+  chatGiphyOpen.value = false
   chatMenuOpen.value = false
   pendingChatAction.value = ''
   subscribeHubMessages()
@@ -293,6 +305,8 @@ const backToInbox = () => {
   activeChatUser.value = null
   rawHubMessages.value = []
   chatDraft.value = ''
+  selectedChatGif.value = null
+  chatGiphyOpen.value = false
   chatMenuOpen.value = false
   pendingChatAction.value = ''
   unsubscribeHubMessages?.()
@@ -328,6 +342,48 @@ const resizeChatInput = () => {
     input.style.height = 'auto'
     input.style.height = `${Math.min(input.scrollHeight, 104)}px`
   })
+}
+
+const gifPayload = (gif) => gif ? {
+  provider: gif.provider || 'giphy',
+  title: gif.title || '',
+  url: gif.url || '',
+  previewUrl: gif.previewUrl || ''
+} : null
+
+const insertIntoTextarea = (inputRef, draftRef, text) => {
+  const input = inputRef.value
+  const start = Number(input?.selectionStart ?? draftRef.value.length)
+  const end = Number(input?.selectionEnd ?? start)
+  draftRef.value = `${draftRef.value.slice(0, start)}${text}${draftRef.value.slice(end)}`.slice(0, 280)
+  nextTick(() => {
+    input?.focus?.({ preventScroll: true })
+    input?.setSelectionRange?.(start + text.length, start + text.length)
+    resizeChatInput()
+  })
+}
+
+const handleChatGiphySelect = (item) => {
+  if (item.type === 'emoji') {
+    insertIntoTextarea(chatInputRef, chatDraft, item.text)
+    chatGiphyOpen.value = false
+    return
+  }
+  selectedChatGif.value = item
+  chatGiphyOpen.value = false
+  nextTick(() => chatInputRef.value?.focus?.({ preventScroll: true }))
+}
+
+const handleLiveGiphySelect = (item) => {
+  if (item.type === 'emoji') {
+    liveChatDraft.value = `${liveChatDraft.value}${item.text}`.slice(0, 280)
+    liveGiphyOpen.value = false
+    nextTick(() => liveChatInputRef.value?.focus?.({ preventScroll: true }))
+    return
+  }
+  selectedLiveGif.value = item
+  liveGiphyOpen.value = false
+  nextTick(() => liveChatInputRef.value?.focus?.({ preventScroll: true }))
 }
 
 let lastMarkedRead = ''
@@ -367,22 +423,26 @@ const subscribeHubMessages = () => {
 
 const sendHubMessage = async () => {
   const body = chatDraft.value.trim()
+  const gif = selectedChatGif.value
   const user = currentUser.value
   const other = activeChatUser.value
   const chatId = chatIdForUser(other)
-  if (!body || !user || !other || !chatId || !canMessageUser(other)) return
+  if ((!body && !gif) || !user || !other || !chatId || !canMessageUser(other)) return
   chatDraft.value = ''
+  selectedChatGif.value = null
+  chatGiphyOpen.value = false
   resizeChatInput()
   const now = serverTimestamp()
   const messageRef = await addDoc(collection(db, 'directChats', chatId, 'messages'), {
     body,
+    gif: gifPayload(gif),
     authorId: user.uid,
     authorName: currentProfile.value.name || user.displayName || user.email || 'Usuario',
     createdAt: now
   })
   await setDoc(doc(db, 'directChats', chatId), {
     participants: [user.uid, other.id],
-    lastMessage: body,
+    lastMessage: body || 'GIF',
     lastMessageId: messageRef.id,
     lastMessageAuthorId: user.uid,
     updatedAt: now,
@@ -690,11 +750,14 @@ const subscribeLiveMessages = (videoId) => {
 
 const sendLiveMessage = async () => {
   const body = liveChatDraft.value.trim()
+  const gif = selectedLiveGif.value
   const video = playerState.currentVideo
   const user = currentUser.value
-  if (!body || !video?.id || !user) return
+  if ((!body && !gif) || !video?.id || !user) return
 
   liveChatDraft.value = ''
+  selectedLiveGif.value = null
+  liveGiphyOpen.value = false
   liveChatPinnedToBottom.value = true
   liveUnreadCount.value = 0
   await addDoc(collection(db, 'videoChats', video.id, 'messages'), {
@@ -702,6 +765,7 @@ const sendLiveMessage = async () => {
     videoTitle: video.title || 'Video de Galaxia Nintendera',
     videoSecond: Math.max(0, Math.floor(Number(playerState.currentTime || 0))),
     body: body.slice(0, 280),
+    gif: gifPayload(gif),
     authorId: user.uid,
     author: currentProfile.value.name || user.displayName || user.email || 'Usuario',
     authorImage: currentProfile.value.imageUrl || user.photoURL || '',
@@ -751,8 +815,9 @@ const loadProfile = async (user) => {
   const saved = snap?.exists?.() ? snap.data() : {}
   currentProfile.value = {
     ...saved,
-    role: saved.role || 'user',
-    canChat: Boolean(saved.canChat)
+    role: saved.isBlocked ? 'user' : (saved.role || 'user'),
+    canChat: !saved.isBlocked && Boolean(saved.canChat),
+    isBlocked: Boolean(saved.isBlocked)
   }
 }
 
@@ -763,6 +828,7 @@ const subscribeUsers = () => {
   unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
     users.value = snap.docs
       .map(item => ({ id: item.id, ...item.data() }))
+      .filter(user => !user.isBlocked)
       .filter(user => user.id !== currentUser.value?.uid)
       .sort((a, b) => (a.name || a.email || '').localeCompare(b.name || b.email || ''))
   })
@@ -1026,6 +1092,13 @@ onUnmounted(() => {
                   :class="{ mine: message.authorId === currentUser?.uid, 'has-status': isLastOwnMessage(message, index) }"
                 >
                   <p>{{ message.body }}</p>
+                  <img
+                    v-if="message.gif?.url"
+                    class="hub-message-gif"
+                    :src="message.gif.url"
+                    :alt="message.gif.title || 'GIF'"
+                    loading="lazy"
+                  />
                   <small v-if="isLastOwnMessage(message, index)" class="hub-message-status">
                     {{ messageReadLabel(message) }}
                   </small>
@@ -1043,6 +1116,13 @@ onUnmounted(() => {
                   <i class="fas fa-arrow-down"></i>
                 </button>
               </div>
+              <figure v-if="selectedChatGif" class="hub-media-preview">
+                <img :src="selectedChatGif.previewUrl || selectedChatGif.url" :alt="selectedChatGif.title || 'GIF'" />
+                <figcaption>{{ selectedChatGif.title || 'GIF' }}</figcaption>
+                <button type="button" aria-label="Quitar GIF" @click="selectedChatGif = null">
+                  <i class="fas fa-xmark"></i>
+                </button>
+              </figure>
               <form class="hub-chat-composer" @submit.prevent="sendHubMessage">
                 <textarea
                   ref="chatInputRef"
@@ -1053,13 +1133,23 @@ onUnmounted(() => {
                   @keydown.enter.exact.prevent="sendHubMessage"
                 ></textarea>
                 <button
+                  type="button"
+                  class="hub-giphy-btn"
+                  :class="{ active: chatGiphyOpen }"
+                  aria-label="GIFs y stickers"
+                  @click="chatGiphyOpen = !chatGiphyOpen"
+                >
+                  <i class="far fa-face-smile"></i>
+                </button>
+                <button
                   type="submit"
-                  :disabled="!chatDraft.trim()"
+                  :disabled="!chatDraft.trim() && !selectedChatGif"
                   aria-label="Enviar mensaje"
                   @pointerdown.prevent
                 >
                   <i class="fas fa-paper-plane"></i>
                 </button>
+                <GiphyPicker :open="chatGiphyOpen" @close="chatGiphyOpen = false" @select="handleChatGiphySelect" />
               </form>
               <div v-if="pendingChatAction" class="hub-chat-confirm" role="dialog" aria-modal="true">
                 <div>
@@ -1167,6 +1257,13 @@ onUnmounted(() => {
                     <span>
                       <small><strong>{{ message.author }}</strong> {{ formatLiveTime(message.videoSecond) }}</small>
                       <p>{{ message.body }}</p>
+                      <img
+                        v-if="message.gif?.url"
+                        class="hub-message-gif"
+                        :src="message.gif.url"
+                        :alt="message.gif.title || 'GIF'"
+                        loading="lazy"
+                      />
                     </span>
                   </article>
                   <div v-if="!liveMessages.length" class="hub-chat-placeholder">
@@ -1183,11 +1280,28 @@ onUnmounted(() => {
                   {{ liveUnreadCount }} {{ liveUnreadCount === 1 ? 'mensaje nuevo' : 'mensajes nuevos' }}
                 </button>
               </div>
+              <figure v-if="selectedLiveGif" class="hub-media-preview live">
+                <img :src="selectedLiveGif.previewUrl || selectedLiveGif.url" :alt="selectedLiveGif.title || 'GIF'" />
+                <figcaption>{{ selectedLiveGif.title || 'GIF' }}</figcaption>
+                <button type="button" aria-label="Quitar GIF" @click="selectedLiveGif = null">
+                  <i class="fas fa-xmark"></i>
+                </button>
+              </figure>
               <form class="hub-live-composer" @submit.prevent="sendLiveMessage">
                 <input ref="liveChatInputRef" v-model="liveChatDraft" maxlength="280" placeholder="Escribe en el chat..." @focus="updateKeyboardOffset" />
-                <button type="submit" :disabled="!liveChatDraft.trim()" aria-label="Enviar mensaje" @pointerdown.prevent>
+                <button
+                  type="button"
+                  class="hub-giphy-btn"
+                  :class="{ active: liveGiphyOpen }"
+                  aria-label="GIFs y stickers"
+                  @click="liveGiphyOpen = !liveGiphyOpen"
+                >
+                  <i class="far fa-face-smile"></i>
+                </button>
+                <button type="submit" :disabled="!liveChatDraft.trim() && !selectedLiveGif" aria-label="Enviar mensaje" @pointerdown.prevent>
                   <i class="fas fa-paper-plane"></i>
                 </button>
+                <GiphyPicker :open="liveGiphyOpen" @close="liveGiphyOpen = false" @select="handleLiveGiphySelect" />
               </form>
             </template>
             <div v-else class="hub-empty">
@@ -1651,7 +1765,7 @@ onUnmounted(() => {
   background: rgba(11, 16, 34, 0.98);
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) 46px;
+  grid-template-columns: minmax(0, 1fr) 46px 46px;
   margin-top: 0;
   padding-top: 0;
   position: relative;
@@ -1680,6 +1794,64 @@ onUnmounted(() => {
 
 .hub-live-composer button:disabled {
   opacity: 0.48;
+}
+
+.hub-live-composer .hub-giphy-btn,
+.hub-chat-composer .hub-giphy-btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e9d5ff;
+}
+
+.hub-live-composer .hub-giphy-btn.active,
+.hub-chat-composer .hub-giphy-btn.active {
+  background: rgba(124, 58, 237, 0.28);
+  border-color: rgba(192, 132, 252, 0.34);
+}
+
+.hub-message-gif {
+  border-radius: 12px;
+  display: block;
+  margin-top: 7px;
+  max-height: 190px;
+  max-width: min(280px, 100%);
+  object-fit: cover;
+}
+
+.hub-media-preview {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(192, 132, 252, 0.24);
+  border-radius: 14px;
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 62px minmax(0, 1fr) 34px;
+  margin: 0;
+  padding: 7px;
+}
+
+.hub-media-preview img {
+  border-radius: 10px;
+  height: 48px;
+  object-fit: cover;
+  width: 62px;
+}
+
+.hub-media-preview figcaption {
+  color: #e9d5ff;
+  font-size: 12px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hub-media-preview button {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: #fff;
+  height: 34px;
+  width: 34px;
 }
 
 .hub-section-title {
@@ -1989,10 +2161,11 @@ onUnmounted(() => {
   align-items: end;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) 44px 44px;
   min-height: 44px;
   min-width: 0;
-  overflow-x: hidden;
+  overflow: visible;
+  position: relative;
 }
 
 .hub-chat-composer textarea {
@@ -2379,7 +2552,7 @@ onUnmounted(() => {
   .galaxia-hub-panel.live-active.keyboard-open .hub-live-composer {
     align-items: stretch;
     background: rgba(11, 16, 34, 0.99);
-    grid-template-columns: minmax(0, 1fr) 52px;
+    grid-template-columns: minmax(0, 1fr) 52px 52px;
     padding-bottom: 0;
   }
 
@@ -2435,7 +2608,7 @@ onUnmounted(() => {
   }
 
   .hub-chat-composer {
-    grid-template-columns: minmax(0, 1fr) 44px;
+    grid-template-columns: minmax(0, 1fr) 44px 44px;
     padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
   }
 

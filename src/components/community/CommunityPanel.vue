@@ -331,8 +331,9 @@ const currentUserIconEffect = computed(() => {
     saga: meta.saga
   }
 })
-const isAdmin = computed(() => props.userRole === 'admin')
-const canManageOfficialContent = computed(() => ['admin', 'publisher'].includes(props.userRole))
+const currentUserBlocked = computed(() => Boolean(currentUserProfile.value?.isBlocked))
+const isAdmin = computed(() => !currentUserBlocked.value && props.userRole === 'admin')
+const canManageOfficialContent = computed(() => !currentUserBlocked.value && ['admin', 'publisher'].includes(props.userRole))
 const communityRef = collection(db, 'communityThreads')
 const communitiesRef = collection(db, 'communities')
 const eventsRef = collection(db, 'galaxyEvents')
@@ -376,6 +377,7 @@ const selectedCommunityThreads = computed(() => {
 const isJoinedSelectedCommunity = computed(() => selectedCommunity.value && joinedCommunityIds.value.includes(selectedCommunity.value.id))
 const isOfficialSelectedCommunity = computed(() => selectedCommunity.value?.id === OFFICIAL_COMMUNITY_ID || selectedCommunity.value?.isOfficial)
 const canCreateThreadInSelectedCommunity = computed(() => {
+  if (currentUserBlocked.value) return false
   if (!selectedCommunity.value) return false
   if (isOfficialSelectedCommunity.value) return canManageOfficialContent.value
   return isJoinedSelectedCommunity.value
@@ -579,10 +581,12 @@ const canPinThread = (thread) => {
 }
 
 const canDeleteComment = (comment) => {
+  if (currentUserBlocked.value) return false
   return isAdmin.value || Boolean(comment.authorId && comment.authorId === currentUserId.value)
 }
 
 const canEditComment = (comment) => {
+  if (currentUserBlocked.value) return false
   return Boolean(comment?.authorId && comment.authorId === currentUserId.value)
 }
 
@@ -781,8 +785,6 @@ const openCreateCommunity = () => {
 }
 
 const openThreadComposer = async () => {
-  await nextTick()
-  window.dispatchEvent(new CustomEvent('open-quick-thread-composer'))
   if (route.query.create === 'thread') {
     router.replace({ path: route.path, query: { ...route.query, create: undefined } })
   }
@@ -1289,7 +1291,7 @@ const sendVideoChatMessage = async () => {
   const body = videoChatDraft.value.trim()
   const video = featuredYoutubeVideo.value
   const userId = currentUserId.value
-  if (!body || !video?.id || !userId) return
+  if (currentUserBlocked.value || !body || !video?.id || !userId) return
 
   const videoSecond = activeVideoSecond.value
   const message = {
@@ -1722,7 +1724,7 @@ const toggleLiveMissionItem = async (goal, item) => {
 
 const addLiveGoalLike = async (goal) => {
   const userId = currentUserId.value
-  if (!userId || !goal?.id || goal.type === 'mission') return
+  if (currentUserBlocked.value || !userId || !goal?.id || goal.type === 'mission') return
 
   const likesBy = {
     ...(goal.likesBy || {}),
@@ -1749,7 +1751,7 @@ const toggleLiveGoalExpanded = (goal) => {
 
 const publishReply = async (thread) => {
   const body = replyDraft.value.trim()
-  if (!body) return
+  if (currentUserBlocked.value || !body) return
 
   const now = Date.now()
   const comment = {

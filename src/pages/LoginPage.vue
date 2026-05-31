@@ -52,8 +52,27 @@
         class="app-input"
       />
 
+      <div v-if="isRegister" class="legal-consent-box">
+        <label>
+          <input v-model="acceptLegal" type="checkbox" />
+          <span>
+            Acepto los
+            <RouterLink to="/terminos-condiciones" target="_blank">Terminos y Condiciones</RouterLink>
+            y la
+            <RouterLink to="/politica-privacidad" target="_blank">Politica de Privacidad</RouterLink>.
+          </span>
+        </label>
+        <label>
+          <input v-model="acceptAge" type="checkbox" />
+          <span>Confirmo tener la edad minima requerida en mi pais o contar con autorizacion de mi padre, madre o tutor legal.</span>
+        </label>
+      </div>
+
       <p v-if="error" class="error-text">
         {{ error }}
+      </p>
+      <p v-if="notice" class="notice-text">
+        {{ notice }}
       </p>
 
       <button
@@ -76,7 +95,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, GoogleAuthProvider, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { defaultLogoUrl } from '@/constants/assets'
@@ -88,7 +107,11 @@ const name = ref('')
 const email = ref('')
 const password = ref('')
 const error = ref('')
+const notice = ref('')
 const loading = ref(false)
+const acceptLegal = ref(false)
+const acceptAge = ref(false)
+const legalVersion = 'legal-2026-05'
 
 const isRegister = computed(() => route.query.mode === 'register')
 
@@ -114,6 +137,11 @@ const redirectAfterLogin = () => {
 
 const loginWithGoogle = async () => {
   error.value = ''
+  notice.value = ''
+  if (isRegister.value && (!acceptLegal.value || !acceptAge.value)) {
+    error.value = 'Debes aceptar los terminos y confirmar la edad/autorizacion para crear cuenta'
+    return
+  }
   loading.value = true
 
   try {
@@ -132,6 +160,15 @@ const loginWithGoogle = async () => {
       emailVerified: user.emailVerified,
       emailOptIn: true,
       updatedAt: Date.now()
+    }
+
+    if (isRegister.value) {
+      Object.assign(profile, {
+        legalAccepted: true,
+        legalAcceptedAt: Date.now(),
+        legalVersion,
+        parentalConsentConfirmed: true
+      })
     }
 
     if (!userSnap.exists()) {
@@ -172,9 +209,15 @@ const getAuthErrorMessage = (e, fallback) => {
 
 const submit = async () => {
   error.value = ''
+  notice.value = ''
 
   if (!email.value || !password.value || (isRegister.value && !name.value)) {
     error.value = 'Completa todos los campos'
+    return
+  }
+
+  if (isRegister.value && (!acceptLegal.value || !acceptAge.value)) {
+    error.value = 'Debes aceptar los terminos y confirmar la edad/autorizacion para crear cuenta'
     return
   }
 
@@ -195,7 +238,12 @@ const submit = async () => {
         imageUrl: '',
         provider: 'password',
         emailVerified: credential.user.emailVerified,
+        emailVerificationRequired: true,
         emailOptIn: true,
+        legalAccepted: true,
+        legalAcceptedAt: Date.now(),
+        legalVersion,
+        parentalConsentConfirmed: true,
         role: 'user',
         stars: 0,
         readPostsCount: 0,
@@ -205,8 +253,30 @@ const submit = async () => {
         createdAt: Date.now(),
         updatedAt: Date.now()
       })
+
+      await sendEmailVerification(credential.user)
+      await signOut(auth)
+      notice.value = 'Te enviamos un correo de verificacion. Revisa tu bandeja y vuelve a iniciar sesion cuando lo confirmes.'
+      return
     } else {
-      await signInWithEmailAndPassword(auth, email.value, password.value)
+      const credential = await signInWithEmailAndPassword(auth, email.value, password.value)
+      const userSnap = await getDoc(doc(db, 'users', credential.user.uid))
+      const profile = userSnap.data() || {}
+      const requiresVerification = profile.emailVerificationRequired !== false && profile.emailVerified !== true && profile.provider !== 'google'
+
+      if (requiresVerification && !credential.user.emailVerified) {
+        await sendEmailVerification(credential.user).catch(() => {})
+        await signOut(auth)
+        notice.value = 'Tu correo aun no esta verificado. Te enviamos otro correo de verificacion.'
+        return
+      }
+
+      if (credential.user.emailVerified && profile.emailVerified !== true) {
+        await setDoc(doc(db, 'users', credential.user.uid), {
+          emailVerified: true,
+          updatedAt: Date.now()
+        }, { merge: true })
+      }
     }
 
     redirectAfterLogin()
@@ -375,6 +445,49 @@ const submit = async () => {
 .error-text {
   color: #ef4444 !important;
   text-align: left !important;
+}
+
+.notice-text {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  border-radius: 12px;
+  color: #15803d !important;
+  padding: 10px 12px;
+  text-align: left !important;
+}
+
+.legal-consent-box {
+  background: rgba(124, 58, 237, 0.08);
+  border: 1px solid rgba(124, 58, 237, 0.18);
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.legal-consent-box label {
+  align-items: start;
+  color: #475569;
+  display: grid;
+  font-size: 11px;
+  font-weight: 850;
+  gap: 9px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  line-height: 1.45;
+}
+
+.legal-consent-box input {
+  accent-color: #7c3aed;
+  height: 16px;
+  margin: 2px 0 0;
+  width: 16px;
+}
+
+.legal-consent-box a {
+  color: #7c3aed;
+  font-weight: 950;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .auth-submit-btn {

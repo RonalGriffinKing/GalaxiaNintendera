@@ -1,110 +1,179 @@
 <template>
-  <div class="layout">
-    <header class="mobile-dashboard-bar">
-      <button class="mobile-menu-btn" @click="mobileMenuOpen = true" aria-label="Abrir menu">
-        <i class="fas fa-bars"></i>
-      </button>
-
+  <main class="global-manager-page">
+    <header class="global-manager-head">
       <div>
-        <strong>{{ currentViewLabel }}</strong>
-        <span>Dashboard</span>
+        <span>Galaxia Nintendera</span>
+        <h1>Gestor Global</h1>
+        <p>Administra la plataforma desde una sola seccion interna, sin salir del flujo normal de la web.</p>
       </div>
     </header>
 
-    <div
-      v-if="mobileMenuOpen"
-      class="mobile-menu-backdrop"
-      @click="mobileMenuOpen = false"
-    ></div>
+    <nav class="global-manager-tabs" aria-label="Modulos del gestor global">
+      <button
+        v-for="tab in visibleTabs"
+        :key="tab.id"
+        type="button"
+        :class="{ active: activeTab === tab.id }"
+        @click="setActiveTab(tab.id)"
+      >
+        <i :class="tab.icon"></i>
+        {{ tab.label }}
+      </button>
+    </nav>
 
-    <Sidebar
-      :role="currentRole"
-      :mobile-open="mobileMenuOpen"
-      @change="setView"
-      @close-mobile="mobileMenuOpen = false"
-    />
+    <section class="global-manager-shell">
+      <header class="module-head">
+        <div>
+          <span>{{ activeMeta.kicker }}</span>
+          <h2>{{ activeMeta.title }}</h2>
+          <p>{{ activeMeta.description }}</p>
+        </div>
 
-    <div class="content">
-      <div class="panel">
-        <component :is="currentComponent" :user-role="currentRole" />
-      </div>
-    </div>
-  </div>
+        <div v-if="activeActions.length" class="module-actions">
+          <button
+            v-for="action in activeActions"
+            :key="action.id"
+            type="button"
+            @click="runAction(action)"
+          >
+            <i :class="action.icon"></i>
+            {{ action.label }}
+          </button>
+        </div>
+      </header>
+
+      <Transition name="manager-fade" mode="out-in">
+        <section :key="activeTab" class="module-panel">
+          <component
+            :is="activeComponent"
+            :user-role="currentRole"
+            :show-embedded-tools="activeTab !== 'posts'"
+            embedded
+          />
+        </section>
+      </Transition>
+    </section>
+  </main>
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { doc, getDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 
-import Sidebar from '@/components/nav/AdminSidebar.vue'
-
-const HomePanel = defineAsyncComponent(() => import('@/components/shared/HomePanel.vue'))
 const PostPanel = defineAsyncComponent(() => import('@/components/shared/PostPanel.vue'))
+const SitePagesPanel = defineAsyncComponent(() => import('@/components/sitePages/SitePagesPanel.vue'))
 const UserPanel = defineAsyncComponent(() => import('@/components/shared/UserPanel.vue'))
 const OverlayPanel = defineAsyncComponent(() => import('@/components/shared/OverlayPanel.vue'))
-const FavoritesPanel = defineAsyncComponent(() => import('@/components/shared/FavoritesPanel.vue'))
-const CommunityPanel = defineAsyncComponent(() => import('@/components/community/CommunityPanel.vue'))
 
-const currentView = ref('home')
-const currentRole = ref('user')
-const mobileMenuOpen = ref(false)
 const route = useRoute()
+const router = useRouter()
+const currentRole = ref('user')
+const activeTab = ref('posts')
+
 const isAdmin = computed(() => currentRole.value === 'admin')
 const canPublish = computed(() => ['admin', 'publisher'].includes(currentRole.value))
 
-const views = {
-  home: HomePanel,
-  favorites: FavoritesPanel,
-  community: CommunityPanel,
-  posts: PostPanel,
-  users: UserPanel,
-  overlays: OverlayPanel
-}
+const tabs = computed(() => [
+  {
+    id: 'posts',
+    label: 'Gestionar posts',
+    icon: 'far fa-newspaper',
+    component: PostPanel,
+    publisher: true,
+    kicker: 'Publicaciones',
+    title: 'Gestion de posts',
+    description: 'Crea, edita, aprueba y organiza publicaciones sin mezclar otros modulos.'
+  },
+  {
+    id: 'pages',
+    label: 'Gestionar paginas',
+    icon: 'far fa-file-lines',
+    component: SitePagesPanel,
+    admin: true,
+    kicker: 'CMS del sitio',
+    title: 'Gestion de paginas',
+    description: 'Footer, legales, guias, landings y secciones dinamicas del sitio.'
+  },
+  {
+    id: 'users',
+    label: 'Gestionar usuarios',
+    icon: 'fas fa-users',
+    component: UserPanel,
+    admin: true,
+    kicker: 'Comunidad',
+    title: 'Gestion de usuarios',
+    description: 'Perfiles, roles, permisos, verificacion y bloqueo de cuentas.'
+  },
+  {
+    id: 'overlays',
+    label: 'Gestionar overlays',
+    icon: 'fas fa-layer-group',
+    component: OverlayPanel,
+    admin: true,
+    kicker: 'Directos',
+    title: 'Gestion de overlays',
+    description: 'Escenas, widgets y overlays para streams y contenido en vivo.'
+  }
+])
 
-const viewLabels = {
-  home: 'Inicio',
-  favorites: 'Favoritos',
-  community: 'Comunidades',
-  posts: 'Posts',
-  users: 'Usuarios',
-  overlays: 'Overlays'
-}
+const visibleTabs = computed(() => tabs.value.filter(tab => {
+  if (tab.admin) return isAdmin.value
+  if (tab.publisher) return canPublish.value
+  return true
+}))
 
-const currentViewLabel = computed(() => viewLabels[currentView.value] || 'Dashboard')
+const activeMeta = computed(() => visibleTabs.value.find(tab => tab.id === activeTab.value) || visibleTabs.value[0] || tabs.value[0])
+const activeComponent = computed(() => activeMeta.value.component)
 
-const currentComponent = computed(() => {
-  if (!isAdmin.value && ['users', 'overlays'].includes(currentView.value)) {
-    return canPublish.value ? PostPanel : FavoritesPanel
+const activeActions = computed(() => {
+  if (activeTab.value === 'posts') {
+    const actions = [
+      { id: 'post', label: 'Crear post', icon: 'fas fa-plus', create: 'post' },
+      { id: 'post-json', label: 'Pegar JSON', icon: 'fas fa-paste', create: 'post-json' },
+      { id: 'hero', label: 'Crear principal', icon: 'fas fa-bullhorn', create: 'hero' }
+    ]
+
+    if (isAdmin.value) {
+      actions.push({ id: 'categories', label: 'Categorias', icon: 'fas fa-tags', create: 'categories' })
+    }
+
+    return actions
   }
 
-  if (!canPublish.value && currentView.value === 'posts') {
-    return FavoritesPanel
+  if (activeTab.value === 'pages') return []
+
+  if (activeTab.value === 'users' && isAdmin.value) {
+    return [{ id: 'user', label: 'Crear usuario', icon: 'fas fa-user-plus', create: 'user' }]
   }
 
-  return views[currentView.value] || HomePanel
+  if (activeTab.value === 'overlays' && isAdmin.value) {
+    return [{ id: 'overlay', label: 'Crear overlay', icon: 'fas fa-layer-group', create: 'overlay' }]
+  }
+
+  return []
 })
 
-const setView = (view) => {
-  if (!isAdmin.value && ['users', 'overlays'].includes(view)) {
-    currentView.value = canPublish.value ? 'posts' : 'favorites'
-    return
-  }
-
-  if (!canPublish.value && view === 'posts') {
-    currentView.value = 'favorites'
-    return
-  }
-
-  currentView.value = view
+const normalizeTab = (value) => {
+  const requested = String(value || 'posts')
+  return visibleTabs.value.some(tab => tab.id === requested) ? requested : 'posts'
 }
 
-const applyRouteView = () => {
-  const view = String(route.query.view || '')
-  if (!view || !views[view]) return
+const setActiveTab = (tab) => {
+  activeTab.value = normalizeTab(tab)
+  router.replace({ path: route.path, query: { view: activeTab.value } })
+}
 
-  setView(view)
+const runAction = (action) => {
+  const query = { view: activeTab.value }
+  if (action.create) query.create = action.create
+  if (action.seed) query.seed = action.seed
+  router.replace({ path: route.path, query })
+}
+
+const applyRouteTab = () => {
+  activeTab.value = normalizeTab(route.query.view)
 }
 
 const loadRole = async () => {
@@ -113,127 +182,210 @@ const loadRole = async () => {
 
   const snap = await getDoc(doc(db, 'users', user.uid))
   currentRole.value = snap.data()?.role || 'user'
-  applyRouteView()
+
+  if (!['admin', 'publisher'].includes(currentRole.value)) {
+    router.replace('/')
+    return
+  }
+
+  applyRouteTab()
 }
 
-watch(currentRole, (role) => {
-  if (role !== 'admin' && ['users', 'overlays'].includes(currentView.value)) {
-    currentView.value = canPublish.value ? 'posts' : 'favorites'
+watch(() => route.query.view, applyRouteTab)
+watch(visibleTabs, () => {
+  if (!visibleTabs.value.some(tab => tab.id === activeTab.value)) {
+    activeTab.value = 'posts'
   }
-
-  if (!['admin', 'publisher'].includes(role) && currentView.value === 'posts') {
-    currentView.value = 'favorites'
-  }
-})
-
-watch(mobileMenuOpen, (isOpen) => {
-  document.body.style.overflow = isOpen ? 'hidden' : ''
 })
 
 onMounted(loadRole)
-
-watch(() => route.query.view, applyRouteView)
-
-onUnmounted(() => {
-  document.body.style.overflow = ''
-})
 </script>
 
 <style scoped>
-.layout {
-  background: #f8fafc;
+.global-manager-page {
+  background:
+    radial-gradient(circle at top left, rgba(168, 85, 247, 0.16), transparent 30%),
+    linear-gradient(180deg, #f8fafc 0%, #f3f4ff 100%);
+  min-height: 100vh;
+  padding: calc(var(--public-nav-offset, 0px) + 24px) 22px 36px;
+}
+
+.global-manager-head,
+.global-manager-tabs,
+.global-manager-shell {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 1280px;
+}
+
+.global-manager-head {
+  align-items: end;
   display: flex;
-  height: 100vh;
-  overflow-x: hidden;
+  justify-content: space-between;
+  margin-bottom: 18px;
 }
 
-.mobile-dashboard-bar,
-.mobile-menu-backdrop {
-  display: none;
+.global-manager-head span,
+.module-head span {
+  color: #7c3aed;
+  display: block;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
 }
 
-.content {
+.global-manager-head h1 {
+  color: #0f172a;
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 950;
+  line-height: 1.05;
+  margin-top: 4px;
+}
+
+.global-manager-head p,
+.module-head p {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.global-manager-tabs {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  box-shadow: 0 20px 46px rgba(88, 28, 135, 0.08);
   display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
+  gap: 8px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  padding: 8px;
 }
 
-.panel {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
+.global-manager-tabs button {
+  align-items: center;
+  border-radius: 14px;
+  color: #64748b;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 950;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.global-manager-tabs button.active {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  box-shadow: 0 12px 26px rgba(147, 51, 234, 0.24);
+  color: #ffffff;
+}
+
+.global-manager-shell {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid #e5e7eb;
+  border-radius: 24px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
+  overflow: visible;
+  padding: 18px;
+}
+
+.module-head {
+  align-items: end;
+  border-bottom: 1px solid #eef2f7;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+}
+
+.module-head h2 {
+  color: #0f172a;
+  font-size: 26px;
+  font-weight: 950;
+  line-height: 1.08;
+  margin-top: 4px;
+}
+
+.module-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.module-actions button {
+  align-items: center;
+  background: linear-gradient(135deg, #9333ea, #ec4899);
+  border-radius: 13px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 950;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+}
+
+.module-panel {
+  min-height: 360px;
+}
+
+.manager-fade-enter-active,
+.manager-fade-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.manager-fade-enter-from,
+.manager-fade-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 
 @media (max-width: 760px) {
-  .layout {
-    display: block;
-    min-height: 100vh;
-    overflow-x: clip;
+  .global-manager-page {
+    padding: calc(var(--public-nav-offset, 0px) + 16px) 12px 26px;
   }
 
-  .mobile-dashboard-bar {
-    align-items: center;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(14px);
-    border-bottom: 1px solid #e5e7eb;
-    display: flex;
-    gap: 12px;
-    height: 58px;
-    left: 0;
-    padding: 0 14px;
-    position: fixed;
-    right: 0;
-    top: 0;
-    z-index: 80;
+  .global-manager-head,
+  .module-head {
+    align-items: stretch;
+    display: grid;
   }
 
-  .mobile-menu-btn {
-    align-items: center;
-    background: #111827;
-    border-radius: 12px;
-    color: #ffffff;
-    display: flex;
-    height: 38px;
+  .global-manager-tabs {
+    border-radius: 16px;
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .global-manager-tabs button {
+    font-size: 12px;
+    min-height: 40px;
+    padding: 0 12px;
+  }
+
+  .global-manager-shell {
+    border-radius: 18px;
+    padding: 14px;
+  }
+
+  .module-head h2 {
+    font-size: 22px;
+  }
+
+  .module-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+    justify-content: stretch;
+  }
+
+  .module-actions button {
     justify-content: center;
-    width: 38px;
-  }
-
-  .mobile-dashboard-bar strong {
-    color: #111827;
-    display: block;
-    font-size: 14px;
-    font-weight: 900;
-  }
-
-  .mobile-dashboard-bar span {
-    color: #64748b;
-    display: block;
-    font-size: 10px;
-    font-weight: 900;
-    text-transform: uppercase;
-  }
-
-  .mobile-menu-backdrop {
-    background: rgba(15, 23, 42, 0.42);
-    display: block;
-    inset: 0;
-    position: fixed;
-    z-index: 90;
-  }
-
-  .content {
-    min-height: 100vh;
-  }
-
-  .panel {
-    padding: 72px 14px 14px;
-  }
-}
-
-@media (max-width: 520px) {
-  .panel {
-    padding: 68px 10px 10px;
   }
 }
 </style>

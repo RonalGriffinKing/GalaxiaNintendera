@@ -11,7 +11,27 @@ const replyDraft = defineModel('replyDraft', {
   default: ''
 })
 
-defineProps({
+const {
+  backgroundStyle,
+  canCreate,
+  initialCommunityId,
+  userRole,
+  isOfficial,
+  topicFilters,
+  selectedTopic,
+  isLoading,
+  threads,
+  openThreadId,
+  hasBackground,
+  community,
+  avatarInitial,
+  formatAgo,
+  hasLiked,
+  canPinThread,
+  canDeleteThread,
+  canDeleteComment,
+  canEditComment
+} = defineProps({
   backgroundStyle: {
     type: Object,
     default: () => ({})
@@ -107,6 +127,7 @@ const emit = defineEmits([
 const editingCommentId = ref('')
 const editingCommentBody = ref('')
 const openCommentMenuId = ref('')
+const openThreadActionMenuId = ref('')
 const expandedCommentThreads = ref(new Set())
 const INITIAL_VISIBLE_COMMENTS = 12
 
@@ -124,6 +145,17 @@ const showAllComments = (thread) => {
 
 const toggleCommentMenu = (comment) => {
   openCommentMenuId.value = openCommentMenuId.value === comment.id ? '' : comment.id
+}
+
+const hasThreadMenuActions = (thread) => canPinThread(thread) || canDeleteThread(thread)
+
+const toggleThreadActionMenu = (thread) => {
+  openThreadActionMenuId.value = openThreadActionMenuId.value === thread.id ? '' : thread.id
+}
+
+const emitThreadAction = (event, thread) => {
+  openThreadActionMenuId.value = ''
+  emit(event, thread)
 }
 
 const startEditComment = (comment) => {
@@ -225,11 +257,12 @@ const deleteComment = (thread, comment) => {
         </figure>
 
         <div class="thread-footer">
-          <button @click="emit('open-thread', thread)">
+          <button type="button" class="thread-primary-action" @click="emit('open-thread', thread)">
             <i class="far fa-comment"></i>
             {{ thread.replies }}
           </button>
           <button
+            type="button"
             class="like-thread"
             :class="{ active: hasLiked(thread) }"
             @click="emit('like-thread', thread)"
@@ -237,36 +270,83 @@ const deleteComment = (thread, comment) => {
             <i :class="hasLiked(thread) ? 'fas fa-heart' : 'far fa-heart'"></i>
             {{ thread.likes }}
           </button>
-          <button
-            v-if="canPinThread(thread)"
-            class="pin-thread"
-            :class="{ active: thread.pinnedCommunity }"
-            title="Fijar arriba en comunidad"
-            @click="emit('pin-thread', thread)"
-          >
-            <i class="fas fa-thumbtack"></i>
-            {{ thread.pinnedCommunity ? 'Fijado' : 'Fijar' }}
-          </button>
-          <button
-            v-if="canPinThread(thread)"
-            class="home-thread"
-            :class="{ active: thread.showOnHome || thread.pinnedHome }"
-            title="Mostrar este hilo destacado en Home"
-            @click="emit('home-thread', thread)"
-          >
-            <i class="fas fa-home"></i>
-            {{ (thread.showOnHome || thread.pinnedHome) ? 'En Home' : 'Mostrar en Home' }}
-          </button>
-          <button
-            v-if="canDeleteThread(thread)"
-            class="delete-thread"
-            title="Borrar hilo"
-            @click="emit('delete-thread', thread)"
-          >
-            <i class="fas fa-trash"></i>
-            Borrar
-          </button>
-          <span>{{ thread.topic }}</span>
+          <div class="thread-secondary-actions">
+            <button
+              v-if="canPinThread(thread)"
+              type="button"
+              class="pin-thread"
+              :class="{ active: thread.pinnedCommunity }"
+              title="Fijar arriba en comunidad"
+              @click="emit('pin-thread', thread)"
+            >
+              <i class="fas fa-thumbtack"></i>
+              {{ thread.pinnedCommunity ? 'Fijado' : 'Fijar' }}
+            </button>
+            <button
+              v-if="canPinThread(thread)"
+              type="button"
+              class="home-thread"
+              :class="{ active: thread.showOnHome || thread.pinnedHome }"
+              title="Mostrar este hilo destacado en Home"
+              @click="emit('home-thread', thread)"
+            >
+              <i class="fas fa-home"></i>
+              {{ (thread.showOnHome || thread.pinnedHome) ? 'En Home' : 'Mostrar en Home' }}
+            </button>
+            <button
+              v-if="canDeleteThread(thread)"
+              type="button"
+              class="delete-thread"
+              title="Borrar hilo"
+              @click="emit('delete-thread', thread)"
+            >
+              <i class="fas fa-trash"></i>
+              Borrar
+            </button>
+          </div>
+
+          <span class="thread-topic-pill">{{ thread.topic }}</span>
+
+          <div v-if="hasThreadMenuActions(thread)" class="thread-more-actions">
+            <button
+              type="button"
+              class="thread-more-button"
+              :aria-expanded="openThreadActionMenuId === thread.id"
+              aria-label="Mas acciones del hilo"
+              @click.stop="toggleThreadActionMenu(thread)"
+            >
+              <i class="fas fa-ellipsis"></i>
+            </button>
+            <div v-if="openThreadActionMenuId === thread.id" class="thread-more-menu">
+              <button
+                v-if="canPinThread(thread)"
+                type="button"
+                :class="{ active: thread.pinnedCommunity }"
+                @click="emitThreadAction('pin-thread', thread)"
+              >
+                <i class="fas fa-thumbtack"></i>
+                {{ thread.pinnedCommunity ? 'Quitar fijado' : 'Fijar' }}
+              </button>
+              <button
+                v-if="canPinThread(thread)"
+                type="button"
+                :class="{ active: thread.showOnHome || thread.pinnedHome }"
+                @click="emitThreadAction('home-thread', thread)"
+              >
+                <i class="fas fa-home"></i>
+                {{ (thread.showOnHome || thread.pinnedHome) ? 'Quitar de Home' : 'Mostrar en Home' }}
+              </button>
+              <button
+                v-if="canDeleteThread(thread)"
+                type="button"
+                class="danger"
+                @click="emitThreadAction('delete-thread', thread)"
+              >
+                <i class="fas fa-trash"></i>
+                Borrar
+              </button>
+            </div>
+          </div>
         </div>
 
         <section v-if="openThreadId === thread.id" class="thread-chat">
@@ -538,8 +618,10 @@ const deleteComment = (thread, comment) => {
 .thread-footer {
   align-items: center;
   display: flex;
-  gap: 16px;
+  gap: 12px;
   margin-top: 14px;
+  min-width: 0;
+  position: relative;
 }
 
 .thread-footer button {
@@ -549,6 +631,14 @@ const deleteComment = (thread, comment) => {
   font-size: 12px;
   font-weight: 900;
   gap: 7px;
+}
+
+.thread-secondary-actions {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
 }
 
 .thread-footer .delete-thread {
@@ -585,15 +675,76 @@ const deleteComment = (thread, comment) => {
   color: #dc2626;
 }
 
-.thread-footer span {
+.thread-topic-pill {
   background: #eef2ff;
   border-radius: 999px;
   color: #4f46e5;
+  flex: 0 1 auto;
   font-size: 10px;
   font-weight: 900;
   margin-left: auto;
+  max-width: 130px;
+  overflow: hidden;
   padding: 5px 8px;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.thread-more-actions {
+  display: none;
+  margin-left: auto;
+  position: relative;
+}
+
+.thread-more-button {
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  color: #cbd5e1;
+  height: 34px;
+  justify-content: center;
+  padding: 0;
+  width: 34px;
+}
+
+.thread-more-menu {
+  background: rgba(8, 10, 26, 0.98);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  border-radius: 14px;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.36);
+  display: grid;
+  gap: 4px;
+  min-width: 190px;
+  padding: 8px;
+  position: absolute;
+  right: 0;
+  z-index: 5;
+}
+
+.thread-more-menu button {
+  border-radius: 10px;
+  color: #dbeafe;
+  justify-content: flex-start;
+  min-height: 36px;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.thread-more-menu button:hover,
+.thread-more-menu button.active {
+  background: rgba(168, 85, 247, 0.16);
+  color: #ffffff;
+}
+
+.thread-more-menu .danger {
+  color: #fecaca;
+}
+
+.thread-more-menu .danger:hover {
+  background: rgba(239, 68, 68, 0.14);
+  color: #ffffff;
 }
 
 .thread-chat {
@@ -791,6 +942,40 @@ const deleteComment = (thread, comment) => {
 
   .thread-image {
     margin-left: 0;
+  }
+
+  .thread-footer {
+    flex-wrap: nowrap;
+    gap: 10px;
+  }
+
+  .thread-footer button {
+    flex: 0 0 auto;
+  }
+
+  .thread-primary-action,
+  .thread-footer .like-thread {
+    min-width: 34px;
+  }
+
+  .thread-secondary-actions {
+    display: none;
+  }
+
+  .thread-topic-pill {
+    margin-left: 2px;
+    max-width: 76px;
+    padding-inline: 7px;
+  }
+
+  .thread-more-actions {
+    display: block;
+  }
+}
+
+@media (max-width: 390px) {
+  .thread-topic-pill {
+    display: none;
   }
 }
 </style>

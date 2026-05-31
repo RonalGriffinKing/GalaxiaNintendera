@@ -58,6 +58,7 @@ const LIVE_CHAT_ID = 'galaxia-oficial'
 
 const canUseChat = computed(() => (
   currentUser.value &&
+  !currentProfile.value.isBlocked &&
   (['admin', 'publisher'].includes(currentProfile.value.role) || currentProfile.value.canChat)
 ))
 const visibleMessages = computed(() => {
@@ -105,8 +106,9 @@ const loadProfile = async (user) => {
   const saved = snap.exists() ? snap.data() : {}
   currentProfile.value = {
     ...saved,
-    role: saved.role || 'user',
-    canChat: Boolean(saved.canChat),
+    role: saved.isBlocked ? 'user' : (saved.role || 'user'),
+    canChat: !saved.isBlocked && Boolean(saved.canChat),
+    isBlocked: Boolean(saved.isBlocked),
     imageUrl: saved.imageUrl || user.photoURL || ''
   }
 }
@@ -118,9 +120,9 @@ const subscribeUsers = () => {
 
   unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
     users.value = snap.docs
-    .map(item => ({ ...item.data(), id: item.id }))
-    .filter(user => user.id !== currentUser.value.uid)
-    .sort((a, b) => (a.name || a.email || '').localeCompare(b.name || b.email || ''))
+      .map(item => ({ ...item.data(), id: item.id }))
+      .filter(user => !user.isBlocked && user.id !== currentUser.value.uid)
+      .sort((a, b) => (a.name || a.email || '').localeCompare(b.name || b.email || ''))
   })
 }
 

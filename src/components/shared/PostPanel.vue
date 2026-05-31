@@ -1,5 +1,12 @@
 <template>
   <div class="post-manager">
+    <SitePagesPanel
+      v-if="showSitePages"
+      :user-role="userRole"
+      embedded
+    />
+
+    <template v-else>
     <div v-if="!embedded" class="panel-header">
       <div>
         <span class="post-kicker">Galaxia Nintendera</span>
@@ -27,10 +34,6 @@
       </div>
 
       <div class="post-filters">
-        <button v-if="isAdmin" class="category-manage-btn" type="button" @click="showCategoryManager = true">
-          <i class="fas fa-tags"></i>
-          Categorias
-        </button>
         <select v-model="categoryFilter">
           <option value="all">Todas las categorias</option>
           <option v-for="category in managedCategories" :key="category" :value="category">{{ category }}</option>
@@ -39,6 +42,31 @@
           <option value="recent">Mas recientes</option>
           <option value="oldest">Mas antiguos</option>
         </select>
+        <div v-if="canPublish && showEmbeddedTools" class="post-tools-menu">
+          <button class="post-tools-btn" type="button" @click="showToolsMenu = !showToolsMenu">
+            <i class="fas fa-wand-magic-sparkles"></i>
+            Mas herramientas
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div v-if="showToolsMenu" class="post-tools-dropdown">
+            <button type="button" @click="runToolAction('pages')">
+              <i class="fas fa-file-lines"></i>
+              Gestionar paginas
+            </button>
+            <button type="button" @click="runToolAction('json')">
+              <i class="fas fa-paste"></i>
+              Pegar JSON
+            </button>
+            <button type="button" @click="runToolAction('hero')">
+              <i class="fas fa-bullhorn"></i>
+              Crear principal
+            </button>
+            <button v-if="isAdmin" type="button" @click="runToolAction('categories')">
+              <i class="fas fa-tags"></i>
+              Categorias
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -198,6 +226,7 @@
       @close="closeEditor"
       @created="loadPosts"
     />
+    </template>
   </div>
 </template>
 
@@ -207,6 +236,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, deleteField, doc, getDocs, updateDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import PostEditor from '@/components/posts/PostEditor.vue'
+import SitePagesPanel from '@/components/sitePages/SitePagesPanel.vue'
 import { notifyNewPost } from '@/services/notifications'
 import { DEFAULT_POST_CATEGORIES, loadPostCategories, postCategoryLabels, postMatchesCategory, savePostCategories } from '@/services/postCategories'
 
@@ -220,6 +250,10 @@ const props = defineProps({
   embedded: {
     type: Boolean,
     default: false
+  },
+  showEmbeddedTools: {
+    type: Boolean,
+    default: true
   }
 })
 
@@ -229,6 +263,7 @@ const categoryFilter = ref('all')
 const sortMode = ref('recent')
 const showEditor = ref(false)
 const showCategoryManager = ref(false)
+const showToolsMenu = ref(false)
 const editingPost = ref(null)
 const editorMode = ref('post')
 const pasteJsonOnOpen = ref(false)
@@ -239,6 +274,7 @@ const toast = ref({ show: false, message: '', type: 'success' })
 const confirmDialog = ref({ show: false, id: null, type: '', title: '', message: '', action: null })
 const isAdmin = computed(() => props.userRole === 'admin')
 const canPublish = computed(() => ['admin', 'publisher'].includes(props.userRole))
+const showSitePages = computed(() => route.query.section === 'pages' || route.query.create === 'page')
 const filterOptions = computed(() => isAdmin.value ? ['all', 'pending', 'approved', 'mine'] : ['mine', 'pending', 'approved'])
 
 const loadPosts = async () => {
@@ -257,6 +293,10 @@ onMounted(async () => {
   if (route.query.create === 'post') openCreate()
   if (route.query.create === 'post-json') openJsonCreate()
   if (route.query.create === 'hero') openHeroCreate()
+  if (route.query.create === 'categories' && isAdmin.value) {
+    showCategoryManager.value = true
+    router.replace({ path: route.path, query: { ...route.query, create: undefined } })
+  }
 })
 
 onUnmounted(() => {
@@ -310,6 +350,10 @@ watch(() => route.query.create, (createTarget) => {
   if (createTarget === 'post') openCreate()
   if (createTarget === 'post-json') openJsonCreate()
   if (createTarget === 'hero') openHeroCreate()
+  if (createTarget === 'categories' && isAdmin.value) {
+    showCategoryManager.value = true
+    router.replace({ path: route.path, query: { ...route.query, create: undefined } })
+  }
 })
 
 watch([showEditor, () => confirmDialog.value.show, showCategoryManager], ([isEditorOpen, isConfirmOpen, isCategoryOpen]) => {
@@ -359,6 +403,25 @@ const editPost = (post) => {
 
 const openSocialShare = (id) => {
   router.push(`/admin/post-share/${id}`)
+}
+
+const runToolAction = (target) => {
+  showToolsMenu.value = false
+  if (target === 'pages') {
+    router.replace({ path: route.path, query: { ...route.query, section: 'pages', create: undefined } })
+    return
+  }
+  if (target === 'json') {
+    openJsonCreate()
+    return
+  }
+  if (target === 'hero') {
+    openHeroCreate()
+    return
+  }
+  if (target === 'categories' && isAdmin.value) {
+    showCategoryManager.value = true
+  }
 }
 
 const closeEditor = () => {
@@ -490,20 +553,6 @@ const executeDelete = async (id) => {
   padding: 0 18px;
 }
 
-.category-manage-btn {
-  align-items: center;
-  background: #f5f3ff;
-  border: 1px solid #ddd6fe;
-  border-radius: 12px;
-  color: #7c3aed;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 950;
-  gap: 8px;
-  height: 42px;
-  padding: 0 14px;
-}
-
 .post-toolbar {
   align-items: center;
   display: flex;
@@ -536,6 +585,7 @@ const executeDelete = async (id) => {
 }
 
 .post-filters {
+  align-items: center;
   display: flex;
   gap: 10px;
 }
@@ -549,6 +599,58 @@ const executeDelete = async (id) => {
   font-weight: 800;
   height: 42px;
   padding: 0 12px;
+}
+
+.post-tools-menu {
+  position: relative;
+}
+
+.post-tools-btn {
+  align-items: center;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 12px;
+  color: #7c3aed;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 950;
+  gap: 8px;
+  height: 42px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.post-tools-dropdown {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 20px 46px rgba(15, 23, 42, 0.16);
+  display: grid;
+  gap: 4px;
+  min-width: 210px;
+  padding: 8px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 20;
+}
+
+.post-tools-dropdown button {
+  align-items: center;
+  border-radius: 10px;
+  color: #475569;
+  display: flex;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 9px;
+  min-height: 38px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.post-tools-dropdown button:hover {
+  background: #f5f3ff;
+  color: #7c3aed;
 }
 
 .post-table-wrap {
@@ -881,9 +983,24 @@ const executeDelete = async (id) => {
     width: 100%;
   }
 
-  .post-tabs,
-  .post-filters {
+  .post-tabs {
     overflow-x: auto;
+  }
+
+  .post-filters {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .post-tools-menu {
+    position: static;
+  }
+
+  .post-tools-dropdown {
+    left: 0;
+    right: auto;
+    top: auto;
+    width: min(280px, calc(100vw - 32px));
   }
 
   .category-add-row,

@@ -6,6 +6,7 @@ import { db } from '@/firebase'
 import DirectChatBubble from '@/components/widgets/chat/DirectChatBubble.vue'
 import GalaxiaHub from '@/components/shared/GalaxiaHub.vue'
 import PublicNavbar from '@/components/nav/PublicNavbar.vue'
+import SiteFooter from '@/components/sitePages/SiteFooter.vue'
 import { defaultLogoUrl } from '@/constants/assets'
 
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
@@ -17,6 +18,7 @@ const communities = ref([])
 const favoriteCommunityIds = ref([])
 const isWorkspace = computed(() => Boolean(route.meta.workspace))
 const isCreationRoute = computed(() => Boolean(route.query.create || route.query.mode === 'register'))
+const showSiteFooter = computed(() => !isWorkspace.value && !route.path.startsWith('/admin') && !route.path.startsWith('/login'))
 const showCommunityAccess = computed(() => {
   if (isWorkspace.value || isCreationRoute.value) return false
   if (route.path.startsWith('/admin') || route.path.startsWith('/login')) return false
@@ -135,6 +137,7 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
         </KeepAlive>
       </Transition>
     </router-view>
+    <SiteFooter v-if="showSiteFooter" />
     <GalaxiaHub
       :official-community="officialCommunity"
       :favorite-communities="favoriteCommunities"

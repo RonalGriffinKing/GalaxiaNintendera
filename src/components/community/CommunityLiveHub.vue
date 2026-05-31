@@ -366,6 +366,13 @@ const returnToCommunityPlayer = () => {
               <div>
                 <p><strong>{{ message.author }}</strong> <em>{{ formatVideoChatTime(message.videoSecond) }}</em></p>
                 <b>{{ message.body }}</b>
+                <img
+                  v-if="message.gif?.url"
+                  class="video-message-gif"
+                  :src="message.gif.url"
+                  :alt="message.gif.title || 'GIF'"
+                  loading="lazy"
+                />
                 <div v-if="!featuredVideoIsLive" class="video-comment-actions">
                   <button type="button" :class="{ active: hasLikedVideoMessage(message) }" @click="emit('like-message', message)">
                     <i :class="hasLikedVideoMessage(message) ? 'fas fa-heart' : 'far fa-heart'"></i>
@@ -1100,6 +1107,18 @@ const returnToCommunityPlayer = () => {
   min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.video-chat-list .video-message-gif {
+  background: transparent;
+  border-radius: 12px;
+  display: block;
+  height: auto;
+  margin-top: 7px;
+  max-height: 180px;
+  max-width: min(280px, 100%);
+  object-fit: cover;
+  width: auto;
 }
 
 .video-comment-actions {

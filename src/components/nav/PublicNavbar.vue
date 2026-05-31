@@ -2,27 +2,24 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth'
-import { addDoc, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
+import { addDoc, collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { deleteApp, initializeApp } from 'firebase/app'
 import { auth, db, firebaseConfig } from '@/firebase'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { resetPlayerSession } from '@/services/playerState'
 import PostEditor from '@/components/posts/PostEditor.vue'
-import ThreadComposer from '@/components/community/ThreadComposer.vue'
-import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
 import PublicCreateSheet from '@/components/nav/PublicCreateSheet.vue'
 import NotificationDropdown from '@/components/nav/NotificationDropdown.vue'
 import PublicQuickAdminModals from '@/components/nav/PublicQuickAdminModals.vue'
 import PublicSearchPanel from '@/components/nav/PublicSearchPanel.vue'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
+import GlobalThreadComposerLauncher from '@/components/thread/GlobalThreadComposerLauncher.vue'
 import { defaultLogoUrl } from '@/constants/assets'
 import { DEFAULT_POST_CATEGORIES, loadPostCategories, postCategoryLabels } from '@/services/postCategories'
 import {
   DEFAULT_QUICK_THREAD_TOPICS,
   PUBLIC_NAV_LINKS,
-  QUICK_EMOJI_POOL,
-  QUICK_STICKER_POOL,
-  QUICK_THREAD_TOPIC_ICONS
+  QUICK_THREAD_TOPIC_ICONS,
 } from '@/constants/nav'
 
 const router = useRouter()
@@ -45,32 +42,16 @@ const confirmLogoutOpen = ref(false)
 const isLoggingOut = ref(false)
 const currentProfile = ref({})
 const notificationButton = ref(null)
+const globalThreadLauncher = ref(null)
 const quickPostOpen = ref(false)
 const quickPostCategories = ref(DEFAULT_POST_CATEGORIES)
-const quickThreadOpen = ref(false)
 const quickCommunityOpen = ref(false)
 const quickUserOpen = ref(false)
 const quickCreateSaving = ref(false)
-const quickThreadText = ref('')
-const quickThreadImageUrl = ref('')
-const quickThreadSpoiler = ref(false)
-const quickThreadTopic = ref('Posts')
-const quickThreadCommunityId = ref('')
-const quickThreadPollOpen = ref(false)
-const quickThreadPollOptions = ref(['', ''])
-const quickThreadEmojiOpen = ref(false)
-const quickThreadStickerOpen = ref(false)
-const quickThreadContextLoading = ref(false)
-const quickThreadCommunityPickerOpen = ref(false)
-const quickThreadTopicPickerOpen = ref(false)
-const quickCommunities = ref([])
-const quickJoinedCommunityIds = ref([])
 const scrollY = ref(0)
 const navHidden = ref(false)
 const navCompact = ref(false)
 const readingProgress = ref(0)
-const quickStickerPool = QUICK_STICKER_POOL
-const quickEmojiPool = QUICK_EMOJI_POOL
 const quickCommunityDraft = ref({
   name: '',
   description: '',
@@ -118,7 +99,8 @@ const authLabel = computed(() => {
 })
 
 const unreadCount = computed(() => notifications.value.filter(notification => !notification.read).length)
-const canPublish = computed(() => ['admin', 'publisher'].includes(currentRole.value))
+const isCurrentUserBlocked = computed(() => Boolean(currentProfile.value?.isBlocked))
+const canPublish = computed(() => !isCurrentUserBlocked.value && ['admin', 'publisher'].includes(currentRole.value))
 const isAdmin = computed(() => currentRole.value === 'admin')
 const bottomNavItems = computed(() => PUBLIC_NAV_LINKS)
 const bottomNavColumns = computed(() => bottomNavItems.value.length + 1)
@@ -137,7 +119,9 @@ const activeBottomIndex = computed(() => {
 const bottomNavStyle = computed(() => ({
   gridTemplateColumns: `repeat(${bottomNavColumns.value}, minmax(0, 1fr))`,
   '--active-index': activeBottomIndex.value,
-  '--bottom-cols': bottomNavColumns.value
+  '--bottom-cols': bottomNavColumns.value,
+  '--bottom-nav-height': '82px',
+  '--mobile-bottom-nav-height': '82px'
 }))
 const createOptions = computed(() => {
   if (!currentUser.value) {
@@ -152,7 +136,10 @@ const manageOptions = computed(() => {
   const options = []
 
   if (canPublish.value) {
-    options.push({ label: 'Ver posts', icon: 'fas fa-newspaper', to: '/admin/posts' })
+    options.push(
+      { label: 'Gestor global', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' },
+      { label: 'Ver posts', icon: 'fas fa-newspaper', to: '/admin/posts' }
+    )
   }
 
   if (isAdmin.value) {
@@ -167,7 +154,6 @@ const manageOptions = computed(() => {
 const accountMenuItems = computed(() => {
   return [
     { label: 'Mi perfil', icon: 'far fa-user', to: currentUser.value ? `/perfil/${currentUser.value.uid}` : '/login?mode=register' },
-    { label: 'Mis publicaciones', icon: 'far fa-newspaper', to: canPublish.value ? '/admin/posts' : currentUser.value ? `/perfil/${currentUser.value.uid}` : '/login?mode=register' },
     { label: 'Guardados', icon: 'fas fa-bookmark', to: '/mis-favoritos' },
     { label: 'Comunidades', icon: 'fas fa-users', to: '/comunidad' }
   ]
@@ -176,23 +162,24 @@ const accountAdminItems = computed(() => {
   if (!currentUser.value || !canPublish.value) return []
 
   const items = []
-  if (canPublish.value) {
-    items.push({ label: 'Crear post', icon: 'fas fa-pen-nib', action: 'post' })
-  }
-
   if (isAdmin.value) {
     items.push(
-      { label: 'Crear comunidad', icon: 'fas fa-people-group', action: 'community' },
-      { label: 'Crear evento', icon: 'far fa-calendar-plus', to: '/eventos?create=event' },
+      { label: 'Gestor global', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' },
+      { label: 'Crear post', icon: 'fas fa-pen-nib', action: 'post' },
+      { label: 'Crear pagina', icon: 'fas fa-file-circle-plus', to: '/admin/posts?section=pages&create=page' },
       { label: 'Crear usuario', icon: 'fas fa-user-gear', action: 'user' },
-      { label: 'Ver usuarios', icon: 'fas fa-users-gear', to: '/admin/users' },
-      { label: 'Ver overlays', icon: 'fas fa-layer-group', to: '/admin/overlays' }
+      { label: 'Crear overlay', icon: 'fas fa-layer-group', to: '/admin/overlays?create=overlay' }
+    )
+  } else if (canPublish.value) {
+    items.push(
+      { label: 'Crear post', icon: 'fas fa-pen-nib', action: 'post' },
+      { label: 'Mis publicaciones', icon: 'far fa-newspaper', to: '/admin/posts' }
     )
   }
 
   return items
 })
-const accountAdminLabel = computed(() => (isAdmin.value ? 'Admin' : canPublish.value ? 'Publicador' : ''))
+const accountAdminLabel = computed(() => (isAdmin.value ? 'PANEL ADMIN' : canPublish.value ? 'PUBLISHER' : ''))
 
 const filteredPosts = computed(() => {
   const query = normalize(searchQuery.value)
@@ -217,18 +204,7 @@ const currentProfileIconMeta = computed(() => resolveProfileIconMeta({
   ...currentProfile.value,
   imageUrl: currentProfile.value.imageUrl || currentUser.value?.photoURL || ''
 }))
-const availableThreadStickers = computed(() => {
-  const unlockedCount = Math.max(1, Number(currentProfile.value?.unlockedIcons?.length || 1))
-  return quickStickerPool.slice(0, Math.min(quickStickerPool.length, unlockedCount))
-})
-const selectedThreadCommunity = computed(() => quickCommunities.value.find(item => item.id === quickThreadCommunityId.value) || null)
-const hasJoinedThreadCommunity = computed(() => quickJoinedCommunityIds.value.includes(quickThreadCommunityId.value))
-const quickThreadImagePreview = computed(() => quickThreadImageUrl.value.trim())
-const currentRouteCommunityId = computed(() => (route.path === '/comunidad' ? String(route.query.id || '') : ''))
-const quickThreadContextReady = computed(() => !quickThreadContextLoading.value && Boolean(selectedThreadCommunity.value))
-const quickThreadContextEmpty = computed(() => !quickThreadContextLoading.value && !selectedThreadCommunity.value)
 const defaultQuickThreadTopics = DEFAULT_QUICK_THREAD_TOPICS
-const quickThreadTopicIcons = QUICK_THREAD_TOPIC_ICONS
 const normalizeQuickThreadTopics = (items = []) => {
   const seen = new Set()
   const normalized = items
@@ -245,28 +221,7 @@ const normalizeQuickThreadTopics = (items = []) => {
 
   return normalized.length ? normalized : ['Posts']
 }
-const getQuickTopicIcon = (topic) => quickThreadTopicIcons[topic] || 'fas fa-hashtag'
-const getQuickTopicLabel = (topic) => (topic === 'Posts' ? 'Hilos' : topic)
-const quickThreadTopics = computed(() => normalizeQuickThreadTopics(selectedThreadCommunity.value?.threadTopics || defaultQuickThreadTopics).map(topic => ({
-  label: topic,
-  displayLabel: getQuickTopicLabel(topic),
-  icon: getQuickTopicIcon(topic)
-})))
-const fallbackThreadTopics = [
-  { label: 'Posts', icon: 'far fa-comment' },
-  { label: 'Fanarts', icon: 'fas fa-pen-nib' },
-  { label: 'Guias', icon: 'far fa-book-open' },
-  { label: 'Trucos', icon: 'far fa-lightbulb' },
-  { label: 'Preguntas', icon: 'far fa-circle-question' },
-  { label: 'Clips', icon: 'fas fa-clapperboard' },
-  { label: 'Eventos', icon: 'far fa-calendar' }
-]
-const selectedThreadTopicMeta = computed(() => quickThreadTopics.value.find(topic => topic.label === quickThreadTopic.value) || quickThreadTopics.value[0] || fallbackThreadTopics[0])
-const canPublishThread = computed(() => Boolean(
-  quickThreadText.value.trim()
-  && selectedThreadCommunity.value
-  && hasJoinedThreadCommunity.value
-))
+const getQuickTopicIcon = (topic) => QUICK_THREAD_TOPIC_ICONS[topic] || 'fas fa-hashtag'
 const normalize = (value) => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -346,22 +301,6 @@ const onScrollNavigation = () => {
   }
 }
 
-const updateQuickThreadKeyboardState = () => {
-  if (typeof window === 'undefined') return
-  document.documentElement.classList.remove('quick-thread-keyboard-open')
-  document.documentElement.style.removeProperty('--quick-thread-keyboard-overlap')
-}
-
-const lockPageScrollForComposer = () => {
-  document.body.style.overflow = 'hidden'
-  document.documentElement.style.overflow = 'hidden'
-}
-
-const unlockPageScrollForComposer = () => {
-  document.body.style.overflow = ''
-  document.documentElement.style.overflow = ''
-}
-
 const goAccount = () => {
   searchOpen.value = false
   notificationsOpen.value = false
@@ -404,7 +343,7 @@ const openAccountOption = async (item) => {
 }
 
 const rememberPublicPath = () => {
-  if (route.path.startsWith('/dashboard') || route.path.startsWith('/editor')) return
+  if (route.path.startsWith('/dashboard') || route.path.startsWith('/admin') || route.path.startsWith('/editor')) return
   sessionStorage.setItem('last-public-path', route.fullPath || '/')
 }
 
@@ -418,8 +357,8 @@ const loadUserRole = async (user) => {
     const snap = await getDoc(doc(db, 'users', user.uid))
     const data = snap.data() || {}
     currentProfile.value = data
-    currentRole.value = data.role || 'user'
-    currentCanChat.value = Boolean(data.canChat)
+    currentRole.value = data.isBlocked ? 'user' : (data.role || 'user')
+    currentCanChat.value = !data.isBlocked && Boolean(data.canChat)
   } catch (error) {
     console.error(error)
   }
@@ -431,8 +370,8 @@ const syncCurrentProfile = (event) => {
     ...currentProfile.value,
     ...(event.detail.profile || {})
   }
-  currentRole.value = currentProfile.value.role || currentRole.value || 'user'
-  currentCanChat.value = Boolean(currentProfile.value.canChat)
+  currentRole.value = currentProfile.value.isBlocked ? 'user' : (currentProfile.value.role || currentRole.value || 'user')
+  currentCanChat.value = !currentProfile.value.isBlocked && Boolean(currentProfile.value.canChat)
 }
 
 const goOwnProfile = () => {
@@ -576,182 +515,19 @@ const resetQuickUserDraft = () => {
   }
 }
 
-const resetQuickThreadDraft = () => {
-  quickThreadText.value = ''
-  quickThreadImageUrl.value = ''
-  quickThreadSpoiler.value = false
-  quickThreadTopic.value = 'Posts'
-  quickThreadPollOpen.value = false
-  quickThreadPollOptions.value = ['', '']
-  quickThreadEmojiOpen.value = false
-  quickThreadStickerOpen.value = false
-  quickThreadCommunityPickerOpen.value = false
-  quickThreadTopicPickerOpen.value = false
-}
-
-const closeQuickThread = () => {
-  if (quickCreateSaving.value) return
-  quickThreadOpen.value = false
-  quickThreadContextLoading.value = false
-  quickThreadCommunityPickerOpen.value = false
-  quickThreadTopicPickerOpen.value = false
-}
-
-const openQuickThreadComposer = async () => {
+const openGlobalThreadComposer = async () => {
   if (!currentUser.value) {
     await router.push('/login?mode=register')
     return
   }
-
+  if (isCurrentUserBlocked.value) return
   createMenuOpen.value = false
-  quickThreadOpen.value = true
-}
-
-const loadQuickThreadContext = async () => {
-  const user = currentUser.value
-  if (!user) return
-
-  quickThreadContextLoading.value = true
-  const [communitiesSnap, joinedSnap] = await Promise.all([
-    getDocs(collection(db, 'communities')).catch(() => ({ docs: [] })),
-    getDocs(collection(db, 'users', user.uid, 'communities')).catch(() => ({ docs: [] })),
-    new Promise(resolve => setTimeout(resolve, 320))
-  ])
-
-  quickCommunities.value = communitiesSnap.docs.map(item => ({ id: item.id, ...item.data() }))
-  quickJoinedCommunityIds.value = joinedSnap.docs.map(item => item.id)
-  const routeCommunityId = currentRouteCommunityId.value
-  const routeCommunityExists = routeCommunityId && quickCommunities.value.some(community => community.id === routeCommunityId)
-  quickThreadCommunityId.value = routeCommunityExists
-    ? routeCommunityId
-    : quickJoinedCommunityIds.value[0] || quickCommunities.value[0]?.id || ''
-  quickThreadContextLoading.value = false
-}
-
-const selectQuickThreadCommunity = (community) => {
-  if (!community?.id) return
-  quickThreadCommunityId.value = community.id
-  const communityTopics = normalizeQuickThreadTopics(community.threadTopics || defaultQuickThreadTopics)
-  if (!communityTopics.includes(quickThreadTopic.value)) {
-    quickThreadTopic.value = communityTopics[0]
-  }
-  quickThreadCommunityPickerOpen.value = false
-}
-
-const selectQuickThreadTopic = (topic) => {
-  quickThreadTopic.value = topic
-  quickThreadTopicPickerOpen.value = false
-}
-
-const joinThreadCommunity = async () => {
-  const user = currentUser.value
-  const community = selectedThreadCommunity.value
-  if (!user || !community || hasJoinedThreadCommunity.value || quickCreateSaving.value) return
-
-  quickCreateSaving.value = true
-  try {
-    const now = Date.now()
-    await Promise.all([
-      setDoc(doc(db, 'users', user.uid, 'communities', community.id), {
-        communityId: community.id,
-        name: community.name || '',
-        description: community.description || '',
-        bannerUrl: community.bannerUrl || '',
-        iconUrl: community.iconUrl || '',
-        role: 'Miembro',
-        joinedAt: now,
-        updatedAt: now
-      }, { merge: true }),
-      setDoc(doc(db, 'communities', community.id, 'members', user.uid), {
-        uid: user.uid,
-        name: currentProfile.value?.name || user.displayName || user.email || 'Usuario',
-        imageUrl: currentProfileIcon.value || '',
-        joinedAt: now,
-        updatedAt: now
-      }, { merge: true }),
-      updateDoc(doc(db, 'communities', community.id), {
-        membersCount: increment(1),
-        updatedAt: now
-      }).catch(() => {})
-    ])
-    quickJoinedCommunityIds.value = [...new Set([...quickJoinedCommunityIds.value, community.id])]
-  } finally {
-    quickCreateSaving.value = false
-  }
-}
-
-const toggleThreadPoll = () => {
-  quickThreadPollOpen.value = !quickThreadPollOpen.value
-  if (!quickThreadPollOpen.value) {
-    quickThreadPollOptions.value = ['', '']
-  }
-}
-
-const addThreadEmoji = (emoji) => {
-  quickThreadText.value = `${quickThreadText.value}${quickThreadText.value ? ' ' : ''}${emoji}`.slice(0, 240)
-  quickThreadEmojiOpen.value = false
-}
-
-const addThreadSticker = (sticker) => {
-  quickThreadText.value = `${quickThreadText.value}${quickThreadText.value ? ' ' : ''}${sticker}`.slice(0, 240)
-  quickThreadStickerOpen.value = false
-}
-
-const pasteQuickThreadImageUrl = async () => {
-  try {
-    const text = (await navigator.clipboard.readText()).trim()
-    if (!/^https?:\/\/\S+$/i.test(text)) return
-    quickThreadImageUrl.value = text
-  } catch (error) {
-    console.error(error)
-  }
-}
-
-const publishQuickThread = async () => {
-  const user = currentUser.value
-  const community = selectedThreadCommunity.value
-  const body = quickThreadText.value.trim()
-  if (!user || !community || !body || !hasJoinedThreadCommunity.value || quickCreateSaving.value) return
-  const communityTopics = normalizeQuickThreadTopics(community.threadTopics || defaultQuickThreadTopics)
-  const threadTopic = communityTopics.includes(quickThreadTopic.value) ? quickThreadTopic.value : communityTopics[0]
-
-  const pollOptions = quickThreadPollOpen.value
-    ? quickThreadPollOptions.value.map(item => item.trim()).filter(Boolean).slice(0, 4)
-    : []
-
-  quickCreateSaving.value = true
-  try {
-    const now = Date.now()
-    await addDoc(collection(db, 'communityThreads'), {
-      communityId: community.id,
-      communityName: community.name || '',
-      authorId: user.uid,
-      author: currentProfile.value?.name || user.displayName || user.email || 'Usuario',
-      authorImage: currentProfileIcon.value || '',
-      authorIconEffect: {
-        special: Boolean(currentProfileIconMeta.value.special),
-        effectColor: currentProfileIconMeta.value.effectColor,
-        saga: currentProfileIconMeta.value.saga
-      },
-      handle: '@tu_usuario',
-      topic: threadTopic,
-      title: body.length > 72 ? `${body.slice(0, 72)}...` : body,
-      body,
-      imageUrl: quickThreadImageUrl.value.trim(),
-      spoiler: quickThreadSpoiler.value,
-      poll: pollOptions.length ? { options: pollOptions, votes: {} } : null,
-      replies: 0,
-      likes: 0,
-      likedBy: [],
-      comments: [],
-      createdAt: now,
-      updatedAt: now
-    })
-    resetQuickThreadDraft()
-    quickThreadOpen.value = false
-  } finally {
-    quickCreateSaving.value = false
-  }
+  menuOpen.value = false
+  mobileAccountOpen.value = false
+  searchOpen.value = false
+  notificationsOpen.value = false
+  accountMenuOpen.value = false
+  globalThreadLauncher.value?.openGlobalThreadComposer()
 }
 
 const openCreateOption = async (item) => {
@@ -764,7 +540,7 @@ const openCreateOption = async (item) => {
   }
 
   if (item.action === 'thread') {
-    openQuickThreadComposer()
+    openGlobalThreadComposer()
     return
   }
 
@@ -869,8 +645,14 @@ const saveQuickUser = async () => {
         email,
         description: quickUserDraft.value.description.trim(),
         imageUrl: quickUserDraft.value.imageUrl.trim(),
+        provider: 'password',
         role: quickUserDraft.value.role,
         canChat: ['admin', 'publisher'].includes(quickUserDraft.value.role) || Boolean(quickUserDraft.value.canChat),
+        adminCreated: true,
+        emailVerified: true,
+        emailVerificationRequired: false,
+        isBlocked: false,
+        blockReason: '',
         emailOptIn: true,
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -933,37 +715,14 @@ onMounted(() => {
     await loadUserRole(user)
     subscribeNotifications(user)
   })
-  window.addEventListener('open-quick-thread-composer', openQuickThreadComposer)
   window.addEventListener('galaxy-profile-updated', syncCurrentProfile)
   window.addEventListener('scroll', onScrollNavigation, { passive: true })
   window.addEventListener('resize', updateScrollNavigation)
-  window.addEventListener('resize', updateQuickThreadKeyboardState)
-  window.addEventListener('focusin', updateQuickThreadKeyboardState)
-  window.addEventListener('focusout', updateQuickThreadKeyboardState)
-  window.visualViewport?.addEventListener('resize', updateQuickThreadKeyboardState)
-  window.visualViewport?.addEventListener('scroll', updateQuickThreadKeyboardState)
   updateScrollNavigation()
-  updateQuickThreadKeyboardState()
 })
 
-watch([menuOpen, createMenuOpen, accountMenuOpen, quickPostOpen, quickThreadOpen, quickCommunityOpen, quickUserOpen], ([isMenuOpen, isCreateOpen, isAccountOpen, isQuickPostOpen, isQuickThreadOpen, isQuickCommunityOpen, isQuickUserOpen]) => {
-  const mobileThreadSheetOpen = isQuickThreadOpen && isMobileNav()
-  if (mobileThreadSheetOpen) {
-    lockPageScrollForComposer()
-  } else {
-    unlockPageScrollForComposer()
-    document.body.style.overflow = isMenuOpen || isCreateOpen || (isAccountOpen && isMobileNav()) || isQuickPostOpen || isQuickThreadOpen || isQuickCommunityOpen || isQuickUserOpen ? 'hidden' : ''
-  }
-  document.body.classList.toggle('quick-thread-sheet-open', mobileThreadSheetOpen)
-  updateQuickThreadKeyboardState()
-})
-
-watch(selectedThreadCommunity, (community) => {
-  if (!community) return
-  const communityTopics = normalizeQuickThreadTopics(community.threadTopics || defaultQuickThreadTopics)
-  if (!communityTopics.includes(quickThreadTopic.value)) {
-    quickThreadTopic.value = communityTopics[0]
-  }
+watch([menuOpen, createMenuOpen, accountMenuOpen, quickPostOpen, quickCommunityOpen, quickUserOpen], ([isMenuOpen, isCreateOpen, isAccountOpen, isQuickPostOpen, isQuickCommunityOpen, isQuickUserOpen]) => {
+  document.body.style.overflow = isMenuOpen || isCreateOpen || (isAccountOpen && isMobileNav()) || isQuickPostOpen || isQuickCommunityOpen || isQuickUserOpen ? 'hidden' : ''
 })
 
 watch(() => route.fullPath, () => {
@@ -975,23 +734,13 @@ watch(() => route.fullPath, () => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('open-quick-thread-composer', openQuickThreadComposer)
   window.removeEventListener('galaxy-profile-updated', syncCurrentProfile)
   window.removeEventListener('scroll', onScrollNavigation)
   window.removeEventListener('resize', updateScrollNavigation)
-  window.removeEventListener('resize', updateQuickThreadKeyboardState)
-  window.removeEventListener('focusin', updateQuickThreadKeyboardState)
-  window.removeEventListener('focusout', updateQuickThreadKeyboardState)
-  window.visualViewport?.removeEventListener('resize', updateQuickThreadKeyboardState)
-  window.visualViewport?.removeEventListener('scroll', updateQuickThreadKeyboardState)
   unsubscribeAuth?.()
   unsubscribeNotifications?.()
-  unlockPageScrollForComposer()
   document.body.style.overflow = ''
   document.documentElement.style.overflow = ''
-  document.body.classList.remove('quick-thread-sheet-open')
-  document.documentElement.classList.remove('quick-thread-keyboard-open')
-  document.documentElement.style.removeProperty('--quick-thread-keyboard-overlap')
 })
 </script>
 
@@ -1049,6 +798,16 @@ onUnmounted(() => {
         </button>
 
         <div class="public-profile-nav">
+          <button
+            v-if="currentUser"
+            class="public-icon public-create-thread-desktop"
+            type="button"
+            aria-label="Crear hilo"
+            @click="openGlobalThreadComposer"
+          >
+            <i class="fas fa-plus"></i>
+          </button>
+
           <button
             v-if="currentUser"
             ref="notificationButton"
@@ -1304,7 +1063,7 @@ onUnmounted(() => {
           <span>{{ item.label }}</span>
         </button>
 
-        <button class="bottom-create-btn" type="button" aria-label="Crear hilo" @click="openQuickThreadComposer">
+        <button class="bottom-create-btn" type="button" aria-label="Crear hilo" @click="openGlobalThreadComposer">
           <i class="fas fa-plus"></i>
           <span>Hilo</span>
         </button>
@@ -1329,219 +1088,6 @@ onUnmounted(() => {
       @created="quickPostOpen = false"
     />
 
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="quickThreadOpen" class="quick-create-modal thread-composer-modal">
-          <button class="quick-create-backdrop" type="button" @click="quickThreadOpen = false"></button>
-          <ThreadComposer
-            variant="modal"
-            :initial-community-id="currentRouteCommunityId"
-            :user-role="currentRole"
-            autofocus
-            @close="quickThreadOpen = false"
-            @published="quickThreadOpen = false"
-          />
-        </div>
-      </Transition>
-    </Teleport>
-
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="false && quickThreadOpen" class="quick-create-modal quick-thread-modal">
-          <button class="quick-create-backdrop" type="button" @click="closeQuickThread"></button>
-          <section
-            class="quick-create-card quick-thread-card"
-            :class="{ 'loading-context': !quickThreadContextReady }"
-          >
-            <div class="quick-create-head quick-thread-head">
-              <strong>Nueva publicacion</strong>
-              <button type="button" @click="closeQuickThread">
-                <i class="fas fa-xmark"></i>
-              </button>
-            </div>
-
-            <div v-if="!quickThreadContextReady" class="quick-thread-loading">
-              <GalaxyLoader
-                compact
-                :title="quickThreadContextEmpty ? 'No hay comunidad disponible' : 'Preparando publicacion'"
-                :text="quickThreadContextEmpty ? 'Unete o crea una comunidad antes de publicar un hilo.' : 'Detectando la comunidad donde vas a crear el hilo...'"
-              />
-            </div>
-
-            <template v-else>
-              <div class="quick-thread-body">
-                <div class="quick-thread-destination-row">
-                  <div class="quick-thread-picker-wrap community">
-                    <div class="quick-thread-context">
-                      <button
-                        class="quick-thread-community-trigger"
-                        type="button"
-                        :aria-expanded="quickThreadCommunityPickerOpen"
-                        @click="quickThreadCommunityPickerOpen = !quickThreadCommunityPickerOpen; quickThreadTopicPickerOpen = false"
-                      >
-                        <span>
-                          <img v-if="selectedThreadCommunity.iconUrl" :src="selectedThreadCommunity.iconUrl" alt="" />
-                          <b v-else>{{ selectedThreadCommunity.name.slice(0, 2).toUpperCase() }}</b>
-                        </span>
-                      </button>
-                      <div>
-                        <small>Publicando en</small>
-                        <strong>{{ selectedThreadCommunity.name }}</strong>
-                      </div>
-                      <button
-                        class="quick-thread-picker-toggle"
-                        type="button"
-                        :aria-expanded="quickThreadCommunityPickerOpen"
-                        @click="quickThreadCommunityPickerOpen = !quickThreadCommunityPickerOpen; quickThreadTopicPickerOpen = false"
-                      >
-                        <i :class="quickThreadCommunityPickerOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-                      </button>
-                    </div>
-
-                    <div v-if="quickThreadCommunityPickerOpen" class="quick-thread-floating-picker community-picker">
-                      <button
-                        v-for="community in quickCommunities"
-                        :key="community.id"
-                        type="button"
-                        :class="{ active: community.id === quickThreadCommunityId }"
-                        @click="selectQuickThreadCommunity(community)"
-                      >
-                        <span>
-                          <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
-                          <b v-else>{{ community.name.slice(0, 2).toUpperCase() }}</b>
-                        </span>
-                        <strong>{{ community.name }}</strong>
-                        <small>{{ community.membersCount || 0 }} miembros</small>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="quick-thread-picker-wrap topic">
-                    <button
-                      class="quick-thread-topic-chip"
-                      type="button"
-                      :aria-expanded="quickThreadTopicPickerOpen"
-                      @click="quickThreadTopicPickerOpen = !quickThreadTopicPickerOpen; quickThreadCommunityPickerOpen = false"
-                    >
-                      <span>
-                        <i :class="selectedThreadTopicMeta.icon"></i>
-                      </span>
-                      <div>
-                        <small>Seccion</small>
-                        <strong>{{ selectedThreadTopicMeta.displayLabel || selectedThreadTopicMeta.label }}</strong>
-                      </div>
-                      <i :class="quickThreadTopicPickerOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-                    </button>
-
-                    <div v-if="quickThreadTopicPickerOpen" class="quick-thread-floating-picker topic-picker">
-                      <button
-                        v-for="topic in quickThreadTopics"
-                        :key="topic.label"
-                        type="button"
-                        :class="{ active: topic.label === quickThreadTopic }"
-                        @click="selectQuickThreadTopic(topic.label)"
-                      >
-                        <span><i :class="topic.icon"></i></span>
-                        <strong>{{ topic.displayLabel }}</strong>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  v-if="selectedThreadCommunity && !hasJoinedThreadCommunity"
-                  class="quick-thread-join"
-                  type="button"
-                  :disabled="quickCreateSaving"
-                  @click="joinThreadCommunity"
-                >
-                  {{ quickCreateSaving ? 'Uniendote...' : 'Unirme a la comunidad' }}
-                </button>
-
-                <p v-if="selectedThreadCommunity && !hasJoinedThreadCommunity" class="quick-thread-alert">
-                  Primero unete a {{ selectedThreadCommunity.name }} para poder publicar.
-                </p>
-
-                <div class="quick-thread-composer">
-                  <ProfileAvatar
-                    class="quick-thread-avatar"
-                    :src="currentProfileIcon"
-                    :alt="authLabel"
-                    :label="authLabel"
-                    :effect="currentProfileIconMeta"
-                  />
-                  <div class="quick-thread-input-wrap">
-                    <textarea
-                      v-model="quickThreadText"
-                      maxlength="240"
-                      rows="3"
-                      :placeholder="`¿Que quieres compartir sobre ${selectedThreadCommunity?.name || 'esta comunidad'} hoy?`"
-                    ></textarea>
-                  </div>
-                </div>
-
-                <div class="quick-thread-image-actions">
-                  <button type="button" @click="pasteQuickThreadImageUrl">
-                    <i class="far fa-clipboard"></i>
-                    Pegar URL imagen
-                  </button>
-                  <button v-if="quickThreadImageUrl" type="button" class="clear" @click="quickThreadImageUrl = ''">
-                    <i class="fas fa-xmark"></i>
-                  </button>
-                </div>
-
-                <figure v-if="quickThreadImagePreview" class="quick-thread-image-preview">
-                  <img :src="quickThreadImagePreview" alt="" />
-                </figure>
-
-                <div class="quick-thread-tools">
-                  <button type="button" :class="{ active: quickThreadPollOpen }" @click="toggleThreadPoll"><i class="fas fa-chart-simple"></i> Encuesta</button>
-                  <button type="button" :class="{ active: quickThreadEmojiOpen }" @click="quickThreadEmojiOpen = !quickThreadEmojiOpen; quickThreadStickerOpen = false"><i class="far fa-face-smile"></i> Emoji</button>
-                  <button type="button" :class="{ active: quickThreadStickerOpen }" @click="quickThreadStickerOpen = !quickThreadStickerOpen; quickThreadEmojiOpen = false"><i class="fas fa-star"></i> Sticker</button>
-                  <button type="button" :class="{ active: quickThreadSpoiler }" @click="quickThreadSpoiler = !quickThreadSpoiler"><i class="fas fa-eye-slash"></i> Spoiler</button>
-                </div>
-
-                <div v-if="quickThreadPollOpen" class="quick-picker-grid">
-                  <input v-model="quickThreadPollOptions[0]" placeholder="Opcion 1" />
-                  <input v-model="quickThreadPollOptions[1]" placeholder="Opcion 2" />
-                </div>
-
-                <div v-if="quickThreadEmojiOpen" class="quick-picker-grid">
-                  <button v-for="emoji in quickEmojiPool" :key="emoji" type="button" class="quick-icon-btn" @click="addThreadEmoji(emoji)">
-                    {{ emoji }}
-                  </button>
-                </div>
-
-                <div v-if="quickThreadStickerOpen" class="quick-picker-grid">
-                  <button v-for="sticker in availableThreadStickers" :key="sticker" type="button" class="quick-icon-btn" @click="addThreadSticker(sticker)">
-                    {{ sticker }}
-                  </button>
-                </div>
-              </div>
-
-              <div class="quick-thread-footer">
-                <span>{{ quickThreadText.length }}/240</span>
-                <button
-                  class="quick-create-submit"
-                  type="button"
-                  :disabled="quickCreateSaving || !canPublishThread"
-                  @click="publishQuickThread"
-                >
-                  {{ quickCreateSaving ? 'Publicando...' : 'Publicar hilo' }}
-                </button>
-              </div>
-            </template>
-
-            <Transition name="fade">
-              <div v-if="quickCreateSaving" class="quick-loading-cover">
-                <GalaxyLoader compact title="Guardando" text="Terminando la accion en la galaxia..." />
-              </div>
-            </Transition>
-          </section>
-        </div>
-      </Transition>
-    </Teleport>
-
     <PublicQuickAdminModals
       v-model:community-draft="quickCommunityDraft"
       v-model:user-draft="quickUserDraft"
@@ -1556,6 +1102,11 @@ onUnmounted(() => {
       @update-topic="updateQuickCommunityTopic"
       @remove-topic="removeQuickCommunityTopic"
       @add-topic="addQuickCommunityTopic"
+    />
+
+    <GlobalThreadComposerLauncher
+      ref="globalThreadLauncher"
+      :user-role="currentRole"
     />
 
   </nav>
@@ -1756,6 +1307,19 @@ onUnmounted(() => {
 
 .public-icon:hover {
   background: rgba(124, 58, 237, 0.24);
+}
+
+.public-create-thread-desktop {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.92), rgba(236, 72, 153, 0.88));
+  box-shadow: 0 10px 26px rgba(168, 85, 247, 0.22);
+}
+
+.public-create-thread-desktop:hover,
+.public-create-thread-desktop:focus-visible {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  box-shadow:
+    0 14px 34px rgba(168, 85, 247, 0.34),
+    0 0 0 3px rgba(168, 85, 247, 0.16);
 }
 
 .public-icon:active,
@@ -2509,6 +2073,10 @@ onUnmounted(() => {
     display: inline-flex;
   }
 
+  .public-create-thread-desktop {
+    display: none;
+  }
+
   .public-mobile-search-btn {
     display: inline-flex;
   }
@@ -2660,7 +2228,7 @@ onUnmounted(() => {
     backdrop-filter: blur(22px) saturate(1.25);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 24px;
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
     box-shadow:
       0 18px 48px rgba(0, 0, 0, 0.34),
       0 0 34px rgba(168, 85, 247, 0.12),
@@ -2668,11 +2236,13 @@ onUnmounted(() => {
     display: grid;
     gap: 2px;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    left: 10px;
+    left: 12px !important;
+    margin: 0;
     overflow: visible;
     padding: 7px 8px max(7px, env(safe-area-inset-bottom, 0px));
-    position: fixed;
-    right: 10px;
+    pointer-events: auto;
+    position: fixed !important;
+    right: 12px !important;
     transform: translate3d(0, 0, 0);
     transition:
       opacity 0.24s ease,
@@ -2680,7 +2250,14 @@ onUnmounted(() => {
       padding 0.22s ease,
       background 0.22s ease;
     will-change: transform;
-    z-index: 300;
+    z-index: 9000;
+  }
+
+  .public-bottom-nav.thread-open {
+    box-shadow:
+      0 20px 56px rgba(0, 0, 0, 0.42),
+      0 0 42px rgba(168, 85, 247, 0.26),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
 
   .public-bottom-nav.compact {
@@ -2773,8 +2350,17 @@ onUnmounted(() => {
     height: 54px;
     justify-content: center;
     animation: bottom-fab-pulse 4.2s ease-in-out infinite;
-    transition: box-shadow 0.22s ease, transform 0.18s cubic-bezier(0.2, 0.9, 0.2, 1);
+    transition: box-shadow 0.22s ease, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), background 0.22s ease;
     width: 54px;
+  }
+
+  .bottom-create-btn.open i {
+    animation: none;
+    background: linear-gradient(135deg, #9333ea, #d946ef);
+    box-shadow:
+      0 16px 38px rgba(168, 85, 247, 0.55),
+      0 0 0 9px rgba(216, 180, 254, 0.1);
+    transform: rotate(90deg) scale(1.04);
   }
 
   .bottom-create-btn:active i {
@@ -2801,1042 +2387,10 @@ onUnmounted(() => {
   display: none;
 }
 
-.mobile-create-layer {
-  display: flex;
-  align-items: center;
-  inset: 0;
-  justify-content: center;
-  padding: 18px 14px;
-  position: fixed;
-  z-index: 340;
-}
-
-.mobile-create-backdrop {
-  background: rgba(3, 6, 18, 0.54);
-  backdrop-filter: blur(10px);
-  inset: 0;
-  position: absolute;
-}
-
-.mobile-create-sheet {
-  background: rgba(11, 16, 32, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 22px;
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
-  color: #f8fafc;
-  display: grid;
-  gap: 9px;
-  max-width: 420px;
-  padding: 14px;
-  position: relative;
-  width: 100%;
-}
-
-.mobile-create-head {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-  padding: 2px 2px 6px;
-}
-
-.mobile-create-head strong {
-  font-size: 18px;
-  font-weight: 950;
-}
-
-.mobile-create-head button {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  color: #ffffff;
-  display: flex;
-  height: 36px;
-  justify-content: center;
-  width: 36px;
-}
-
-.mobile-create-option {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  color: #ffffff;
-  display: grid;
-  font-size: 14px;
-  font-weight: 950;
-  gap: 12px;
-  grid-template-columns: 38px minmax(0, 1fr) 16px;
-  min-height: 54px;
-  padding: 0 14px 0 10px;
-  text-align: left;
-}
-
-.mobile-create-option i:first-child {
-  align-items: center;
-  background: rgba(168, 85, 247, 0.18);
-  border-radius: 12px;
-  color: #c084fc;
-  display: flex;
-  height: 38px;
-  justify-content: center;
-  width: 38px;
-}
-
-.mobile-create-subtitle {
-  color: #a78bfa;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  padding: 4px 8px 0;
-  text-transform: uppercase;
-}
-
-.mobile-create-option.secondary i:first-child {
-  background: rgba(148, 163, 184, 0.16);
-  color: #cbd5e1;
-}
-
-.quick-create-modal {
-  align-items: center;
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  padding: 16px;
-  position: fixed;
-  z-index: 360;
-}
-
-.quick-create-backdrop {
-  background: rgba(3, 6, 18, 0.66);
-  backdrop-filter: blur(12px);
-  inset: 0;
-  position: absolute;
-  z-index: 0;
-}
-
-.thread-composer-modal {
-  align-items: center;
-  justify-content: center;
-  padding: 22px;
-}
-
-.thread-composer-modal .thread-composer {
-  max-height: calc(100dvh - 44px);
-  overflow: hidden;
-  position: relative;
-  width: min(100%, 1120px);
-  z-index: 2;
-}
-
-.thread-composer-modal :deep(.thread-composer) {
-  opacity: 1;
-  position: relative;
-  transform: none;
-  visibility: visible;
-  z-index: 2;
-}
-
-.quick-create-card {
-  background: #ffffff;
-  border: 1px solid #f1f5f9;
-  border-radius: 20px;
-  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.26);
-  color: #111827;
-  display: grid;
-  gap: 14px;
-  max-height: calc(100dvh - 32px);
-  max-width: 720px;
-  overflow-y: auto;
-  padding: 22px;
-  position: relative;
-  width: 100%;
-}
-
-.quick-create-card:not(.quick-thread-card) {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.quick-create-card:not(.quick-thread-card) .quick-create-head,
-.quick-create-card:not(.quick-thread-card) label:has(textarea),
-.quick-create-card:not(.quick-thread-card) .quick-create-check,
-.quick-create-card:not(.quick-thread-card) .quick-live-intro,
-.quick-create-card:not(.quick-thread-card) .quick-live-note,
-.quick-create-card:not(.quick-thread-card) .quick-topic-editor,
-.quick-create-card:not(.quick-thread-card) .quick-create-submit,
-.quick-create-card:not(.quick-thread-card) .quick-loading-cover {
-  grid-column: 1 / -1;
-}
-
-.quick-live-card {
-  background:
-    radial-gradient(circle at 12% 0%, rgba(147, 51, 234, 0.08), transparent 34%),
-    #ffffff;
-}
-
-.quick-live-intro,
-.quick-live-note {
-  border-radius: 14px;
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.45;
-  margin: 0;
-}
-
-.quick-live-intro {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  padding: 12px 14px;
-}
-
-.quick-live-note {
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  color: #9a3412;
-  padding: 10px 12px;
-}
-
-.quick-create-head {
-  align-items: center;
-  border-bottom: 1px solid #eef2f7;
-  display: flex;
-  justify-content: space-between;
-  margin: -4px -4px 4px;
-  padding: 0 0 14px;
-}
-
-.quick-create-head strong {
-  color: #1f2937;
-  font-size: 18px;
-  font-weight: 950;
-}
-
-.quick-create-head button {
-  align-items: center;
-  background: #f9fafb;
-  border: 1px solid #f3f4f6;
-  border-radius: 999px;
-  color: #94a3b8;
-  display: flex;
-  height: 40px;
-  justify-content: center;
-  width: 40px;
-}
-
-.quick-create-card label {
-  color: #64748b;
-  display: grid;
-  font-size: 11px;
-  font-weight: 900;
-  gap: 6px;
-  text-transform: uppercase;
-}
-
-.quick-create-card input,
-.quick-create-card textarea,
-.quick-create-card select {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  color: #111827;
-  font-size: 13px;
-  font-weight: 750;
-  outline: none;
-  min-height: 44px;
-  padding: 10px 12px;
-  text-transform: none;
-}
-
-.quick-create-card input:focus,
-.quick-create-card textarea:focus,
-.quick-create-card select:focus {
-  background: #ffffff;
-  border-color: #c084fc;
-  box-shadow: 0 0 0 3px #f3e8ff;
-}
-
-.quick-create-card input::placeholder,
-.quick-create-card textarea::placeholder {
-  color: #94a3b8;
-}
-
-.quick-create-card select {
-  appearance: none;
-  background-color: #f9fafb;
-  background-image: linear-gradient(45deg, transparent 50%, #9333ea 50%), linear-gradient(135deg, #9333ea 50%, transparent 50%);
-  background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 12px) calc(50% - 3px);
-  background-repeat: no-repeat;
-  background-size: 6px 6px, 6px 6px;
-  padding-right: 34px;
-}
-
-.quick-create-card option {
-  background: #ffffff;
-  color: #111827;
-}
-
-.quick-topic-editor {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  display: grid;
-  gap: 9px;
-  padding: 10px;
-}
-
-.quick-topic-head,
-.quick-topic-row,
-.quick-topic-add {
-  align-items: center;
-  display: grid;
-  gap: 8px;
-}
-
-.quick-topic-head {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.quick-topic-head strong {
-  color: #111827;
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.quick-topic-head span {
-  background: #ede9fe;
-  border-radius: 999px;
-  color: #7c3aed;
-  font-size: 10px;
-  font-weight: 950;
-  padding: 4px 8px;
-}
-
-.quick-topic-row {
-  grid-template-columns: 28px minmax(0, 1fr) 34px;
-  margin: 0;
-}
-
-.quick-topic-row i {
-  color: #9333ea;
-  text-align: center;
-}
-
-.quick-topic-row button,
-.quick-topic-add button {
-  align-items: center;
-  border-radius: 10px;
-  display: inline-flex;
-  font-size: 11px;
-  font-weight: 950;
-  gap: 7px;
-  justify-content: center;
-  min-height: 38px;
-}
-
-.quick-topic-row button {
-  background: #fff1f2;
-  color: #e11d48;
-}
-
-.quick-topic-add {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.quick-topic-add button {
-  background: #7c3aed;
-  color: #ffffff;
-  padding: 0 12px;
-}
-
-.quick-topic-row button:disabled,
-.quick-topic-add button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.quick-create-check {
-  align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  display: inline-flex !important;
-  gap: 8px;
-  min-height: 44px;
-  padding: 10px 12px;
-  text-transform: none !important;
-}
-
-.quick-create-check input {
-  accent-color: #7c3aed;
-  min-height: 18px;
-  width: 18px;
-}
-
-.quick-create-submit {
-  background: linear-gradient(to right, #9333ea, #ec4899);
-  border-radius: 12px;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 900;
-  margin-top: 4px;
-  min-height: 42px;
-  padding: 0 18px;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.quick-create-submit:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.quick-thread-card {
-  border-radius: 24px;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  max-width: min(1220px, calc(100vw - 96px));
-  overflow: hidden;
-  padding: 18px;
-  width: min(1220px, calc(100vw - 96px));
-}
-
-.quick-thread-card.loading-context {
-  overflow: hidden;
-}
-
-.quick-thread-loading {
-  min-height: 320px;
-}
-
-.quick-thread-loading :deep(.galaxy-loader) {
-  min-height: 320px;
-}
-
-.quick-thread-alert {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-radius: 10px;
-  color: #92400e;
-  font-size: 12px;
-  font-weight: 800;
-  padding: 8px 10px;
-}
-
-.quick-thread-join {
-  background: #f3e8ff;
-  border: 1px solid #ddd6fe;
-  border-radius: 12px;
-  color: #7c3aed;
-  font-size: 12px;
-  font-weight: 900;
-  min-height: 40px;
-  text-transform: uppercase;
-}
-
-.quick-thread-head strong {
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.quick-thread-body {
-  align-content: start;
-  display: grid;
-  gap: 14px;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
-.quick-thread-destination-row {
-  align-items: start;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(280px, 1.25fr) minmax(210px, 0.75fr);
-  position: relative;
-  z-index: 3;
-}
-
-.quick-thread-picker-wrap {
-  min-width: 0;
-  position: relative;
-}
-
-.quick-thread-context {
-  align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  color: #111827;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 44px minmax(0, 1fr) 36px;
-  min-height: 50px;
-  padding: 8px 10px;
-}
-
-.quick-thread-community-trigger,
-.quick-thread-picker-toggle,
-.quick-thread-topic-chip {
-  align-items: center;
-  display: flex;
-  justify-content: center;
-}
-
-.quick-thread-community-trigger {
-  border-radius: 14px;
-  height: 44px;
-  padding: 0;
-  width: 44px;
-}
-
-.quick-thread-community-trigger > span,
-.quick-thread-floating-picker button > span,
-.quick-thread-topic-chip > span {
-  align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border-radius: 12px;
-  color: #ffffff;
-  display: flex;
-  flex: 0 0 auto;
-  font-size: 11px;
-  font-weight: 950;
-  height: 100%;
-  justify-content: center;
-  overflow: hidden;
-  width: 100%;
-}
-
-.quick-thread-context img,
-.quick-thread-floating-picker img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.quick-thread-context div {
-  display: grid;
-  min-width: 0;
-}
-
-.quick-thread-context small {
-  color: #9333ea;
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.quick-thread-context strong {
-  color: #111827;
-  font-size: 13px;
-  font-weight: 950;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.quick-thread-picker-toggle {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  color: #d8b4fe;
-  height: 36px;
-  width: 36px;
-}
-
-.quick-thread-topic-chip {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  color: #111827;
-  display: grid;
-  gap: 14px;
-  grid-template-columns: 46px minmax(120px, 1fr) 24px;
-  min-height: 68px;
-  padding: 10px 18px 10px 12px;
-  text-align: left;
-  width: 100%;
-}
-
-.quick-thread-topic-chip > span {
-  height: 46px;
-  width: 46px;
-}
-
-.quick-thread-topic-chip > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.quick-thread-topic-chip small {
-  color: #9333ea;
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.quick-thread-topic-chip strong {
-  color: #111827;
-  font-size: 13px;
-  font-weight: 950;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.quick-thread-topic-chip > i {
-  align-self: center;
-  color: #d8b4fe;
-  justify-self: end;
-  padding-left: 4px;
-}
-
-.quick-thread-floating-picker {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  display: grid;
-  gap: 8px;
-  left: 0;
-  max-height: 220px;
-  overflow-y: auto;
-  padding: 10px;
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  z-index: 5;
-}
-
-.community-picker {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.topic-picker {
-  grid-template-columns: 1fr;
-  left: auto;
-  min-width: 240px;
-  width: min(280px, 48vw);
-}
-
-.quick-thread-floating-picker button {
-  align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  color: #111827;
-  display: grid;
-  gap: 2px 10px;
-  grid-template-columns: 42px minmax(0, 1fr);
-  min-height: 58px;
-  padding: 8px;
-  text-align: left;
-}
-
-.topic-picker button {
-  grid-template-columns: 36px minmax(96px, 1fr);
-}
-
-.quick-thread-floating-picker button.active {
-  background: rgba(124, 58, 237, 0.28);
-  border-color: rgba(196, 181, 253, 0.48);
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.14);
-}
-
-.quick-thread-floating-picker button > span {
-  grid-row: span 2;
-  height: 42px;
-  width: 42px;
-}
-
-.topic-picker button > span {
-  grid-row: auto;
-  height: 36px;
-  width: 36px;
-}
-
-.quick-thread-floating-picker strong {
-  color: #111827;
-  font-size: 12px;
-  font-weight: 950;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.quick-thread-floating-picker small {
-  color: #64748b;
-  font-size: 10px;
-  font-weight: 850;
-}
-
-.quick-thread-composer {
-  align-items: start;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 20px;
-  display: grid;
-  gap: 14px;
-  grid-template-columns: 50px minmax(0, 1fr);
-  min-height: 220px;
-  padding: 16px;
-}
-
-.quick-thread-avatar {
-  --avatar-size: 44px;
-  --avatar-border: 2px;
-}
-
-.quick-thread-input-wrap {
-  align-self: stretch;
-  display: grid;
-  min-width: 0;
-}
-
-.quick-thread-input-wrap textarea {
-  background: transparent;
-  border: 0;
-  color: #111827;
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.25;
-  min-height: 186px;
-  padding: 2px 0;
-  resize: none;
-  width: 100%;
-}
-
-.quick-thread-input-wrap textarea::placeholder {
-  color: #9ca3af;
-}
-
-.quick-thread-tools {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.quick-thread-tools button {
-  align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  color: #475569;
-  display: inline-flex;
-  font-size: 11px;
-  font-weight: 900;
-  gap: 6px;
-  justify-content: center;
-  min-height: 40px;
-}
-
-.quick-thread-image-preview {
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 16px;
-  margin: 0;
-  overflow: hidden;
-}
-
-.quick-thread-image-preview img {
-  aspect-ratio: 16 / 7;
-  background: #111827;
-  object-fit: cover;
-  width: 100%;
-}
-
-.quick-thread-tools button.active {
-  background: #f3e8ff;
-  border-color: #c084fc;
-  color: #7c3aed;
-}
-
-.quick-picker-grid {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.quick-icon-btn {
-  align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  color: #111827;
-  display: flex;
-  font-size: 18px;
-  height: 42px;
-  justify-content: center;
-}
-
-.quick-loading-cover {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.66);
-  backdrop-filter: blur(10px);
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  padding: 20px;
-  position: absolute;
-  z-index: 12;
-}
-
-.quick-loading-cover :deep(.galaxy-loader) {
-  min-height: min(340px, calc(100dvh - 80px));
-  max-width: 500px;
-}
-
-.quick-thread-footer {
-  align-items: center;
-  background: #ffffff;
-  border-top: 1px solid #eef2f7;
-  display: grid;
-  gap: 16px;
-  grid-template-columns: 1fr auto;
-  margin: 0 -18px -18px;
-  padding: 18px 22px 22px;
-  overflow: hidden;
-}
-
-.quick-thread-footer .quick-create-submit {
-  border-radius: 14px;
-  min-height: 52px;
-  min-width: 180px;
-  padding: 0 26px;
-}
-
-.quick-thread-footer span {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 900;
-}
-
 @media (max-width: 859px) {
-  .thread-composer-modal {
-    align-items: center;
-    bottom: 0;
-    display: grid;
-    height: 100dvh;
-    justify-content: center;
-    left: 0;
-    min-height: 100dvh;
-    padding: 12px;
-    place-items: center;
-    pointer-events: auto;
-    right: 0;
-    top: 0;
-    transform: translate3d(0, 0, 0);
-    z-index: 620;
-  }
 
-  .thread-composer-modal .quick-create-backdrop {
-    background: rgba(3, 6, 18, 0.3);
-    backdrop-filter: blur(6px);
-    pointer-events: auto;
-  }
-
-  .thread-composer-modal .thread-composer {
-    align-self: center;
-    justify-self: center;
-    margin: auto;
-    pointer-events: auto;
-    max-height: min(78dvh, calc(100dvh - 28px));
-    width: min(calc(100vw - 24px), 520px);
-  }
-
-  .thread-composer-modal :deep(.thread-composer) {
-    opacity: 1;
-    transform: none !important;
-    visibility: visible;
-  }
-
-  .quick-thread-modal {
-    align-items: center;
-    padding: 14px 10px calc(14px + env(safe-area-inset-bottom));
-  }
-
-  .quick-thread-card {
-    border-radius: 22px;
-    min-height: auto;
-    max-height: calc(100dvh - 28px);
-    max-width: calc(100% - 20px);
-    overflow: hidden;
-    padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
-    width: calc(100% - 20px);
-  }
-
-  .quick-create-card:not(.quick-thread-card) {
-    grid-template-columns: 1fr;
-    max-width: 520px;
-  }
-
-  .quick-thread-loading {
-    min-height: calc(100dvh - 82px - env(safe-area-inset-bottom));
-  }
-
-  .quick-thread-head {
-    display: grid;
-    grid-template-columns: 40px minmax(0, 1fr) 40px;
-    padding-bottom: 2px;
-  }
-
-  .quick-thread-head strong {
-    font-size: 10px;
-    justify-self: center;
-    letter-spacing: 0;
-    text-transform: none;
-  }
-
-  .quick-thread-head button {
-    grid-column: 1;
-    grid-row: 1;
-    height: 32px;
-    width: 32px;
-  }
-
-  .quick-thread-body {
-    gap: 10px;
-    overflow-x: hidden;
-    overflow-y: auto;
-    padding-bottom: 10px;
-    scrollbar-width: thin;
-  }
-
-  .quick-thread-destination-row {
-    gap: 7px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    position: sticky;
-    top: 0;
-    z-index: 6;
-  }
-
-  .quick-thread-context {
-    gap: 6px;
-    grid-template-columns: 34px minmax(0, 1fr) 28px;
-    min-height: 50px;
-    padding: 6px;
-  }
-
-  .quick-thread-community-trigger {
-    height: 34px;
-    width: 34px;
-  }
-
-  .quick-thread-picker-toggle {
-    height: 28px;
-    width: 28px;
-  }
-
-  .quick-thread-topic-chip {
-    gap: 7px;
-    grid-template-columns: 34px minmax(0, 1fr) 16px;
-    min-height: 50px;
-    padding: 6px 8px 6px 6px;
-  }
-
-  .quick-thread-topic-chip > span {
-    border-radius: 11px;
-    height: 34px;
-    width: 34px;
-  }
-
-  .quick-thread-topic-chip small {
-    font-size: 9px;
-  }
-
-  .quick-thread-topic-chip strong,
-  .quick-thread-context strong {
-    font-size: 10px;
-    line-height: 1.1;
-  }
-
-  .quick-thread-floating-picker {
-    max-height: min(34dvh, 260px);
-    position: absolute;
-  }
-
-  .topic-picker {
-    min-width: 210px;
-    width: min(240px, calc(100vw - 28px));
-  }
-
-  .community-picker {
-    grid-template-columns: 1fr;
-  }
-
-  .quick-thread-composer {
-    background: transparent;
-    border: 0;
-    border-radius: 14px;
-    grid-template-columns: 40px minmax(0, 1fr);
-    min-height: 0;
-    padding: 4px 0;
-  }
-
-  .quick-thread-avatar {
-    border-radius: 14px;
-    height: 38px;
-    width: 38px;
-  }
-
-  .quick-thread-input-wrap textarea {
-    font-size: 13px;
-    min-height: clamp(220px, 38dvh, 360px);
-  }
-
-  .quick-thread-tools {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .quick-thread-tools button {
-    font-size: 0;
-    min-height: 38px;
-  }
-
-  .quick-thread-tools button i {
-    font-size: 12px;
-  }
-
-  .quick-thread-footer {
-    grid-template-columns: 1fr;
-    margin: 0 -14px calc((14px + env(safe-area-inset-bottom)) * -1);
-    padding: 14px 14px calc(16px + env(safe-area-inset-bottom));
-    position: sticky;
-    bottom: 0;
-    z-index: 7;
-  }
-
-  .quick-thread-footer .quick-create-submit {
-    min-height: 50px;
-    width: 100%;
-  }
-}
-
-@media (max-width: 859px) {
   .public-bottom-nav {
     display: grid;
-  }
-
-  :global(body.quick-thread-sheet-open) .public-bottom-nav {
-    background: rgba(5, 8, 22, 0.58);
-    box-shadow:
-      0 12px 34px rgba(0, 0, 0, 0.28),
-      0 0 18px rgba(168, 85, 247, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    transform: translate3d(0, 3px, 0) scale(0.99);
-    z-index: 390;
-  }
-
-  :global(body.quick-thread-sheet-open .music-bubble-fab),
-  :global(body.quick-thread-sheet-open .music-bubble-panel),
-  :global(body.quick-thread-sheet-open .direct-chat-fab),
-  :global(body.quick-thread-sheet-open .direct-chat-panel),
-  :global(body.quick-thread-sheet-open .community-floating-access) {
-    opacity: 0 !important;
-    pointer-events: none !important;
-    transform: translateY(16px) scale(0.94) !important;
   }
 
   .mobile-create-layer {
@@ -3892,14 +2446,6 @@ onUnmounted(() => {
     top: 0;
   }
 
-  .quick-thread-tools,
-  .quick-picker-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .quick-thread-footer {
-    grid-template-columns: 1fr;
-  }
 }
 
 .mobile-drawer-head {
@@ -4175,22 +2721,14 @@ onUnmounted(() => {
   opacity: 0;
 }
 
-@media (max-width: 859px) {
-  .thread-composer-modal.fade-enter-active,
-  .thread-composer-modal.fade-leave-active {
-    transition: opacity 0.2s ease;
-  }
+.mobile-create-backdrop-enter-active,
+.mobile-create-backdrop-leave-active {
+  transition: opacity 0.22s ease;
+}
 
-  .thread-composer-modal.fade-enter-active .thread-composer,
-  .thread-composer-modal.fade-leave-active .thread-composer {
-    transition: opacity 0.2s ease;
-  }
-
-  .thread-composer-modal.fade-enter-from .thread-composer,
-  .thread-composer-modal.fade-leave-to .thread-composer {
-    opacity: 0;
-    transform: none !important;
-  }
+.mobile-create-backdrop-enter-from,
+.mobile-create-backdrop-leave-to {
+  opacity: 0;
 }
 
 .mobile-drawer-enter-from,

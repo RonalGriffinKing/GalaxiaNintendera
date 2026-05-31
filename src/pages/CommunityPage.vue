@@ -44,7 +44,8 @@ const loadRole = async (user) => {
   if (!user) return
 
   const snap = await getDoc(doc(db, 'users', user.uid))
-  currentRole.value = snap.data()?.role || 'user'
+  const profile = snap.data() || {}
+  currentRole.value = profile.isBlocked ? 'user' : (profile.role || 'user')
 }
 
 const goJoin = () => {

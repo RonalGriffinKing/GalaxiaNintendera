@@ -66,25 +66,54 @@ const panels = {
 const page = computed(() => panels[props.panel] || panels.favorites)
 const canManageUsers = computed(() => currentRole.value === 'admin')
 const canCreateContent = computed(() => ['admin', 'publisher'].includes(currentRole.value))
+const managingSitePages = computed(() => props.panel === 'posts' && route.query.section === 'pages')
 const headerActions = computed(() => {
   if (props.panel === 'posts' && canCreateContent.value) {
-    const actions = [
-      { label: 'Crear post', icon: 'fas fa-plus', create: 'post' },
-      { label: 'Pegar JSON', icon: 'fas fa-paste', create: 'post-json' },
-      { label: 'Crear principal', icon: 'fas fa-bullhorn', create: 'hero' }
-    ]
+    if (managingSitePages.value) {
+      return [
+        { label: 'Panel admin', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' },
+        { label: 'Gestionar posts', icon: 'fas fa-newspaper', create: 'posts-section' },
+        { label: 'Crear pagina', icon: 'fas fa-file-circle-plus', create: 'page' },
+        { label: 'Crear legales', icon: 'fas fa-scale-balanced', create: 'legal-seed' }
+      ]
+    }
 
-    return actions
+    return [
+      { label: 'Panel admin', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' },
+      { label: 'Crear post', icon: 'fas fa-plus', create: 'post' }
+    ]
   }
 
   if (props.panel === 'users' && canManageUsers.value) {
-    return [{ label: 'Crear usuario', icon: 'fas fa-user-plus', create: 'user' }]
+    return [
+      { label: 'Panel admin', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' },
+      { label: 'Crear usuario', icon: 'fas fa-user-plus', create: 'user' }
+    ]
+  }
+
+  if (props.panel === 'overlays' && canManageUsers.value) {
+    return [
+      { label: 'Panel admin', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' },
+      { label: 'Crear overlay', icon: 'fas fa-layer-group', create: 'overlay' }
+    ]
   }
 
   return []
 })
 
 const openCreate = (target) => {
+  if (target === 'posts-section') {
+    router.replace({ path: route.path, query: { ...route.query, section: undefined, create: undefined } })
+    return
+  }
+  if (target === 'pages-section') {
+    router.replace({ path: route.path, query: { ...route.query, section: 'pages', create: undefined } })
+    return
+  }
+  if (target === 'legal-seed') {
+    router.replace({ path: route.path, query: { ...route.query, section: 'pages', seed: 'legal', create: undefined } })
+    return
+  }
   router.replace({ path: route.path, query: { ...route.query, create: target } })
 }
 

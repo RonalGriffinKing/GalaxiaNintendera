@@ -36,6 +36,8 @@
             <span :class="['role-pill', user.role || 'user']">
               {{ user.role || 'user' }}
             </span>
+            <span v-if="user.emailVerified" class="status-pill verified">Verificado</span>
+            <span v-if="user.isBlocked" class="status-pill blocked">Solo lectura</span>
           </div>
 
           <p>{{ user.description || 'Sin descripcion' }}</p>
@@ -44,7 +46,7 @@
 
         <div class="user-actions">
           <button
-            v-if="user.id !== currentUid"
+            v-if="user.id !== currentUid && !user.isBlocked"
             class="mini-btn-xs btn-message"
             title="Enviar mensaje"
             @click="openDirectChat(user)"
@@ -133,6 +135,27 @@
               <strong>Permitir chat</strong>
               <small>Los admins y publicadores pueden chatear siempre.</small>
             </span>
+          </label>
+
+          <label class="chat-toggle">
+            <input v-model="form.emailVerified" type="checkbox" />
+            <span>
+              <strong>Correo verificado manualmente</strong>
+              <small>Util para cuentas creadas por admin con correos internos o no reales.</small>
+            </span>
+          </label>
+
+          <label class="chat-toggle danger-toggle">
+            <input v-model="form.isBlocked" type="checkbox" />
+            <span>
+              <strong>Bloquear acciones</strong>
+              <small>El usuario podra leer, pero no crear hilos, comentar, chatear ni publicar acciones sociales.</small>
+            </span>
+          </label>
+
+          <label v-if="form.isBlocked" class="field">
+            Motivo del bloqueo
+            <textarea v-model="form.blockReason" rows="2" placeholder="Ej: spam, acoso, incumplimiento de normas..." />
           </label>
         </div>
 
@@ -241,7 +264,10 @@ const form = ref({
   description: '',
   imageUrl: '',
   role: 'user',
-  canChat: false
+  canChat: false,
+  emailVerified: true,
+  isBlocked: false,
+  blockReason: ''
 })
 
 const currentUid = computed(() => auth.currentUser?.uid || '')
@@ -266,6 +292,9 @@ const loadUsers = async () => {
       imageUrl: user.photoURL || '',
       role: 'admin',
       canChat: true,
+      adminCreated: true,
+      emailVerified: true,
+      emailVerificationRequired: false,
       emailOptIn: true,
       createdAt: Date.now(),
       updatedAt: Date.now()
@@ -274,7 +303,8 @@ const loadUsers = async () => {
     return
   }
 
-  currentRole.value = currentSnap.data()?.role || 'user'
+  const currentProfile = currentSnap.data() || {}
+  currentRole.value = currentProfile.isBlocked ? 'user' : (currentProfile.role || 'user')
 }
 
 const showToast = (message, type = 'success') => {
@@ -294,7 +324,10 @@ const openCreate = () => {
     description: '',
     imageUrl: '',
     role: 'user',
-    canChat: false
+    canChat: false,
+    emailVerified: true,
+    isBlocked: false,
+    blockReason: ''
   }
   showPanel.value = true
   if (route.query.create === 'user') {
@@ -312,7 +345,10 @@ const openEdit = (user) => {
     description: user.description || '',
     imageUrl: user.imageUrl || '',
     role: user.role || 'user',
-    canChat: Boolean(user.canChat)
+    canChat: Boolean(user.canChat),
+    emailVerified: Boolean(user.emailVerified),
+    isBlocked: Boolean(user.isBlocked),
+    blockReason: user.blockReason || ''
   }
   showPanel.value = true
 }
@@ -350,6 +386,10 @@ const saveUser = async () => {
         await setDoc(doc(db, 'users', credential.user.uid), {
           ...userPayload(form.value),
           email: form.value.email.trim(),
+          provider: 'password',
+          adminCreated: true,
+          emailVerified: Boolean(form.value.emailVerified),
+          emailVerificationRequired: !form.value.emailVerified,
           createdAt: Date.now()
         })
 
@@ -374,7 +414,10 @@ const saveUser = async () => {
         description: '',
         imageUrl: '',
         role: 'user',
-        canChat: false
+        canChat: false,
+        emailVerified: true,
+        isBlocked: false,
+        blockReason: ''
       }
     }
   } catch (error) {
@@ -390,7 +433,12 @@ const userPayload = (source) => ({
   description: source.description.trim(),
   imageUrl: source.imageUrl.trim(),
   role: source.role,
-  canChat: ['admin', 'publisher'].includes(source.role) || Boolean(source.canChat),
+  canChat: !source.isBlocked && (['admin', 'publisher'].includes(source.role) || Boolean(source.canChat)),
+  emailVerified: Boolean(source.emailVerified),
+  emailVerificationRequired: !source.emailVerified,
+  isBlocked: Boolean(source.isBlocked),
+  blockReason: source.isBlocked ? source.blockReason.trim() : '',
+  blockedAt: source.isBlocked ? Date.now() : null,
   emailOptIn: true,
   updatedAt: Date.now()
 })
@@ -539,6 +587,24 @@ onUnmounted(() => {
   color: #16a34a;
 }
 
+.status-pill {
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 950;
+  padding: 3px 7px;
+  text-transform: uppercase;
+}
+
+.status-pill.verified {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-pill.blocked {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
 .user-actions {
   display: flex;
   gap: 6px;
@@ -668,6 +734,15 @@ onUnmounted(() => {
   accent-color: #7c3aed;
   height: 18px;
   width: 18px;
+}
+
+.danger-toggle {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
+.danger-toggle input {
+  accent-color: #e11d48;
 }
 
 .chat-toggle strong {

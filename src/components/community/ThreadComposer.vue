@@ -3,30 +3,20 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { addDoc, collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
+import GiphyPicker from '@/components/shared/GiphyPicker.vue'
+import { DEFAULT_THREAD_TOPICS, CONTENT_TAB_ICONS, OFFICIAL_COMMUNITY_ID } from '@/constants/community'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { playPublishSound } from '@/services/uiSounds'
 import officialLogo from '@/iconos/logo.png'
 
 const props = defineProps({
-  variant: {
-    type: String,
-    default: 'inline'
-  },
-  initialCommunityId: {
-    type: String,
-    default: ''
-  },
-  userRole: {
-    type: String,
-    default: 'user'
-  },
-  autofocus: {
-    type: Boolean,
-    default: false
-  }
+  variant: { type: String, default: 'inline' },
+  initialCommunityId: { type: String, default: '' },
+  userRole: { type: String, default: 'user' },
+  autofocus: Boolean
 })
 
-const emit = defineEmits(['close', 'published'])
+const emit = defineEmits(['published'])
 
 const router = useRouter()
 const isLoading = ref(false)
@@ -35,39 +25,33 @@ const communities = ref([])
 const joinedCommunityIds = ref([])
 const currentProfile = ref({})
 const selectedCommunityId = ref('')
-const selectedTopic = ref('')
+const selectedTopic = ref('Posts')
 const body = ref('')
 const imageUrl = ref('')
+const selectedGif = ref(null)
 const spoiler = ref(false)
 const pollOpen = ref(false)
 const communityPickerOpen = ref(false)
+const giphyOpen = ref(false)
 const textAreaRef = ref(null)
-const sheetDragY = ref(0)
-const sheetDragging = ref(false)
-const sheetStartY = ref(0)
+const caretIndex = ref(0)
 
-const defaultTopics = ['Posts', 'Fanarts', 'Guias', 'Trucos', 'Preguntas', 'Clips', 'Eventos']
+const defaultTopics = [...DEFAULT_THREAD_TOPICS]
+const topicIcons = { ...CONTENT_TAB_ICONS, Torneos: 'fas fa-trophy' }
 const officialFallback = {
-  id: 'galaxia-oficial',
+  id: OFFICIAL_COMMUNITY_ID,
   name: 'Galaxia Nintendera',
   description: 'Noticias, eventos, analisis y todo lo relacionado con Nintendo.',
   iconUrl: officialLogo,
   isOfficial: true,
   threadTopics: defaultTopics
 }
-const topicIcons = {
-  Posts: 'far fa-comment',
-  Fanarts: 'fas fa-wand-magic-sparkles',
-  Guias: 'fas fa-book-open',
-  Trucos: 'far fa-lightbulb',
-  Preguntas: 'far fa-circle-question',
-  Clips: 'fas fa-clapperboard',
-  Eventos: 'far fa-calendar',
-  Torneos: 'fas fa-trophy'
-}
 
 const canManageOfficial = computed(() => ['admin', 'publisher'].includes(props.userRole))
+const isCurrentUserBlocked = computed(() => Boolean(currentProfile.value?.isBlocked))
 const user = computed(() => auth.currentUser)
+const displayName = computed(() => currentProfile.value?.name || user.value?.displayName || user.value?.email || 'Usuario')
+const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const currentProfileIcon = computed(() => resolveProfileIcon({
   ...currentProfile.value,
   imageUrl: currentProfile.value.imageUrl || user.value?.photoURL || ''
@@ -76,32 +60,40 @@ const currentProfileIconMeta = computed(() => resolveProfileIconMeta({
   ...currentProfile.value,
   imageUrl: currentProfile.value.imageUrl || user.value?.photoURL || ''
 }))
-const displayName = computed(() => currentProfile.value?.name || user.value?.displayName || user.value?.email || 'Usuario')
-const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
-const selectedCommunity = computed(() => allowedCommunities.value.find(item => item.id === selectedCommunityId.value) || allowedCommunities.value[0] || null)
-const topics = computed(() => normalizeTopics(selectedCommunity.value?.threadTopics || defaultTopics))
-const selectedTopicMeta = computed(() => ({
-  label: selectedTopic.value || topics.value[0] || 'Posts',
-  displayLabel: getTopicLabel(selectedTopic.value || topics.value[0] || 'Posts'),
-  icon: getTopicIcon(selectedTopic.value || topics.value[0] || 'Posts')
-}))
+
 const allowedCommunities = computed(() => {
+  if (isCurrentUserBlocked.value) return []
   const joined = new Set(joinedCommunityIds.value)
   return communities.value.filter((community) => {
     if (community.isOfficial || community.id === officialFallback.id) return canManageOfficial.value
     return joined.has(community.id)
   })
 })
-const canPublish = computed(() => Boolean(user.value && selectedCommunity.value && body.value.trim() && !isPublishing.value))
-const placeholder = computed(() => {
-  const topic = selectedTopicMeta.value.label
-  const community = selectedCommunity.value?.name || 'esta comunidad'
-  if (topic === 'Preguntas') return `Haz una pregunta a la comunidad ${community}...`
-  if (topic === 'Fanarts') return 'Sube tu fanart y cuentanos que lo inspiro...'
-  if (topic === 'Eventos') return 'Comparte un evento, quedada o partida con fecha...'
-  return `Comparte una idea o abre conversacion con ${community}...`
+const selectedCommunity = computed(() => allowedCommunities.value.find(item => item.id === selectedCommunityId.value) || allowedCommunities.value[0] || null)
+const topics = computed(() => normalizeTopics(selectedCommunity.value?.threadTopics || defaultTopics))
+const selectedTopicMeta = computed(() => topicMeta(selectedTopic.value || 'Posts'))
+const activeHashtags = computed(() => extractHashtags(body.value))
+const hashtagRange = computed(() => {
+  const beforeCaret = body.value.slice(0, caretIndex.value)
+  const match = beforeCaret.match(/(^|\s)#([^\s#]*)$/)
+  if (!match) return null
+  return {
+    start: beforeCaret.length - match[0].trimStart().length,
+    end: caretIndex.value,
+    query: normalizeKey(match[2] || '')
+  }
 })
-const title = computed(() => 'Que quieres compartir?')
+const hashtagSuggestions = computed(() => {
+  const query = hashtagRange.value?.query || ''
+  return topics.value
+    .map(topicMeta)
+    .filter(topic => !query || topic.key.includes(query) || topic.hashtagKey.includes(query))
+    .slice(0, 6)
+})
+const showHashtagSuggestions = computed(() => Boolean(hashtagRange.value && hashtagSuggestions.value.length))
+const mediaPreview = computed(() => selectedGif.value?.url || imageUrl.value)
+const canPublish = computed(() => Boolean(!isCurrentUserBlocked.value && user.value && selectedCommunity.value && (body.value.trim() || selectedGif.value || imageUrl.value.trim()) && !isPublishing.value))
+const placeholder = computed(() => `Escribe una idea para ${selectedCommunity.value?.name || 'la comunidad'}... usa # para etiquetar`)
 
 const normalizeTopics = (items = []) => {
   const seen = new Set()
@@ -110,31 +102,66 @@ const normalizeTopics = (items = []) => {
     .filter(Boolean)
     .map(item => item.slice(0, 24))
     .filter((item) => {
-      const key = item.toLowerCase()
+      const key = normalizeKey(item)
       if (seen.has(key)) return false
       seen.add(key)
       return true
     })
-    .slice(0, 8)
-
+    .slice(0, 10)
   return normalized.length ? normalized : ['Posts']
 }
 
-const getTopicIcon = (topic) => topicIcons[topic] || 'fas fa-hashtag'
+const normalizeKey = (value = '') => String(value)
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]/g, '')
+
+const singularLabel = (topic) => ({
+  Posts: 'Hilo',
+  Fanarts: 'Fanart',
+  Guias: 'Guia',
+  Trucos: 'Truco',
+  Preguntas: 'Pregunta',
+  Clips: 'Clip',
+  Eventos: 'Evento',
+  Torneos: 'Torneo'
+}[topic] || topic)
+
 const getTopicLabel = (topic) => (topic === 'Posts' ? 'Hilos' : topic)
+const getTopicIcon = (topic) => topicIcons[topic] || 'fas fa-hashtag'
+const topicMeta = (topic) => ({
+  label: topic,
+  displayLabel: getTopicLabel(topic),
+  hashtag: singularLabel(topic).replace(/\s+/g, ''),
+  key: normalizeKey(topic),
+  hashtagKey: normalizeKey(singularLabel(topic)),
+  icon: getTopicIcon(topic)
+})
+
+const extractHashtags = (value = '') => {
+  const tags = String(value).match(/#[\w-]+/g) || []
+  return [...new Set(tags.map(tag => normalizeKey(tag.slice(1))).filter(Boolean))]
+}
+
+const deriveTopicFromText = (value = '') => {
+  const tags = extractHashtags(value)
+  const match = topics.value
+    .map(topicMeta)
+    .find(topic => tags.includes(topic.key) || tags.includes(topic.hashtagKey))
+  return match?.label || selectedTopic.value || topics.value[0] || 'Posts'
+}
 
 const loadContext = async () => {
   const activeUser = user.value
   if (!activeUser) return
   isLoading.value = true
-
   try {
     const [communitySnap, joinedSnap, userSnap] = await Promise.all([
       getDocs(collection(db, 'communities')).catch(() => ({ docs: [] })),
       getDocs(collection(db, 'users', activeUser.uid, 'communities')).catch(() => ({ docs: [] })),
       getDoc(doc(db, 'users', activeUser.uid)).catch(() => null)
     ])
-
     const savedCommunities = communitySnap.docs.map(item => ({ id: item.id, ...item.data() }))
     const official = savedCommunities.find(item => item.id === officialFallback.id)
     communities.value = [
@@ -159,27 +186,14 @@ const selectCommunity = (community) => {
   selectedCommunityId.value = community.id
   selectedTopic.value = normalizeTopics(community.threadTopics || defaultTopics)[0]
   communityPickerOpen.value = false
+  focusComposer()
 }
 
-const pasteImageUrl = async () => {
-  try {
-    const text = (await navigator.clipboard.readText()).trim()
-    if (!/^https?:\/\/\S+$/i.test(text)) return
-    imageUrl.value = text
-  } catch (error) {
-    console.error(error)
-  }
-}
+const focusComposer = () => nextTick(() => textAreaRef.value?.focus())
 
-const addSticker = () => {
-  body.value = `${body.value}${body.value ? ' ' : ''}⭐`.slice(0, 240)
-}
-
-const togglePoll = () => {
-  pollOpen.value = !pollOpen.value
-  if (pollOpen.value && !body.value.includes('Encuesta:')) {
-    body.value = `${body.value.trim()}${body.value.trim() ? '\n' : ''}Encuesta: opcion A / opcion B`.slice(0, 240)
-  }
+const syncCaret = (event) => {
+  const target = event?.target || textAreaRef.value
+  caretIndex.value = Number(target?.selectionStart || body.value.length)
 }
 
 const resizeTextarea = () => {
@@ -189,47 +203,96 @@ const resizeTextarea = () => {
   textarea.style.height = `${Math.min(textarea.scrollHeight, 220)}px`
 }
 
-const handleComposerInput = () => {
+const handleComposerInput = (event) => {
+  syncCaret(event)
+  if (body.value.endsWith('#')) caretIndex.value = body.value.length
+  selectedTopic.value = deriveTopicFromText(body.value)
   resizeTextarea()
 }
 
-const openImageTool = () => {
-  pasteImageUrl()
+const insertHashtag = (topic) => {
+  const meta = topicMeta(topic)
+  const token = `#${meta.hashtag} `
+  const range = hashtagRange.value
+  if (!range) {
+    body.value = `${body.value}${body.value && !body.value.endsWith(' ') ? ' ' : ''}${token}`.slice(0, 240)
+  } else {
+    body.value = `${body.value.slice(0, range.start)}${token}${body.value.slice(range.end)}`.slice(0, 240)
+    caretIndex.value = range.start + token.length
+  }
+  selectedTopic.value = topic
+  nextTick(() => {
+    if (textAreaRef.value) {
+      textAreaRef.value.focus()
+      textAreaRef.value.setSelectionRange(caretIndex.value, caretIndex.value)
+    }
+    resizeTextarea()
+  })
+}
+
+const quickTag = (topic) => {
+  insertHashtag(topic)
+}
+
+const pasteImageUrl = async () => {
+  try {
+    const text = (await navigator.clipboard.readText()).trim()
+    if (!/^https?:\/\/\S+$/i.test(text)) return
+    imageUrl.value = text
+    selectedGif.value = null
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+const insertTextAtCaret = (text) => {
+  const start = Number(textAreaRef.value?.selectionStart ?? body.value.length)
+  const end = Number(textAreaRef.value?.selectionEnd ?? start)
+  const before = body.value.slice(0, start)
+  const after = body.value.slice(end)
+  body.value = `${before}${text}${after}`.slice(0, 240)
+  caretIndex.value = Math.min(start + text.length, body.value.length)
+  nextTick(() => {
+    textAreaRef.value?.focus()
+    textAreaRef.value?.setSelectionRange(caretIndex.value, caretIndex.value)
+    resizeTextarea()
+  })
+}
+
+const handleGiphySelect = (item) => {
+  if (item.type === 'emoji') {
+    insertTextAtCaret(item.text)
+    giphyOpen.value = false
+    return
+  }
+  selectedGif.value = item
+  imageUrl.value = ''
+  giphyOpen.value = false
+  focusComposer()
+}
+
+const togglePoll = () => {
+  pollOpen.value = !pollOpen.value
+  if (pollOpen.value && !activeHashtags.value.includes('encuesta')) {
+    body.value = `${body.value.trim()}${body.value.trim() ? ' ' : ''}#Encuesta`.slice(0, 240)
+  }
+  focusComposer()
 }
 
 const chooseQuestionType = () => {
-  const questionTopic = topics.value.find(topic => topic.toLowerCase() === 'preguntas')
-  selectedTopic.value = questionTopic || selectedTopic.value
-}
-
-const startSheetDrag = (event) => {
-  if (props.variant !== 'modal' || event.pointerType === 'mouse') return
-  sheetDragging.value = true
-  sheetStartY.value = event.clientY
-  sheetDragY.value = 0
-  event.currentTarget.setPointerCapture?.(event.pointerId)
-}
-
-const moveSheetDrag = (event) => {
-  if (!sheetDragging.value) return
-  sheetDragY.value = Math.max(0, event.clientY - sheetStartY.value)
-}
-
-const endSheetDrag = (event) => {
-  if (!sheetDragging.value) return
-  event.currentTarget.releasePointerCapture?.(event.pointerId)
-  const shouldClose = sheetDragY.value > 86
-  sheetDragging.value = false
-  sheetDragY.value = 0
-  if (shouldClose) emit('close')
+  const questionTopic = topics.value.find(topic => normalizeKey(topic) === 'preguntas')
+  quickTag(questionTopic || 'Preguntas')
 }
 
 const publish = async () => {
   const activeUser = user.value
   const community = selectedCommunity.value
   const text = body.value.trim()
-  if (!activeUser || !community || !text || isPublishing.value) return
+  const gif = selectedGif.value
+  const mediaUrl = imageUrl.value.trim() || gif?.url || ''
+  if (!activeUser || !community || (!text && !mediaUrl) || isPublishing.value) return
 
+  const threadTopic = deriveTopicFromText(text)
   isPublishing.value = true
   try {
     const now = Date.now()
@@ -245,11 +308,20 @@ const publish = async () => {
         saga: currentProfileIconMeta.value.saga
       },
       handle: '@tu_usuario',
-      topic: topics.value.includes(selectedTopic.value) ? selectedTopic.value : topics.value[0],
-      title: text.length > 72 ? `${text.slice(0, 72)}...` : text,
-      body: text,
-      imageUrl: imageUrl.value.trim(),
+      topic: topics.value.includes(threadTopic) ? threadTopic : topics.value[0],
+      hashtags: extractHashtags(text),
+      title: text ? (text.length > 72 ? `${text.slice(0, 72)}...` : text) : (gif?.title || 'GIF compartido'),
+      body: text || gif?.title || '',
+      imageUrl: mediaUrl,
+      mediaType: gif ? 'gif' : (mediaUrl ? 'image' : ''),
+      gif: gif ? {
+        provider: gif.provider || 'giphy',
+        title: gif.title || '',
+        url: gif.url || '',
+        previewUrl: gif.previewUrl || ''
+      } : null,
       spoiler: spoiler.value,
+      poll: pollOpen.value ? { options: [], votes: {} } : null,
       isOfficial: community.isOfficial || community.id === officialFallback.id,
       lockedThread: community.isOfficial || community.id === officialFallback.id,
       replies: 0,
@@ -259,21 +331,20 @@ const publish = async () => {
       createdAt: now,
       updatedAt: now
     })
-
     body.value = ''
     imageUrl.value = ''
+    selectedGif.value = null
     spoiler.value = false
     pollOpen.value = false
+    giphyOpen.value = false
     playPublishSound()
     emit('published')
-    if (props.variant === 'modal') emit('close')
   } finally {
     isPublishing.value = false
   }
 }
 
 const exploreCommunities = () => {
-  emit('close')
   router.push('/comunidad?explore=1')
 }
 
@@ -296,119 +367,99 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section
-    class="thread-composer"
-    :class="[`is-${variant}`, { 'picker-open': communityPickerOpen, dragging: sheetDragging }]"
-    :style="{ '--sheet-drag-y': `${sheetDragY}px` }"
-  >
-    <button
-      v-if="variant === 'modal'"
-      class="composer-drag-handle"
-      type="button"
-      aria-label="Cerrar deslizando"
-      @pointerdown="startSheetDrag"
-      @pointermove="moveSheetDrag"
-      @pointerup="endSheetDrag"
-      @pointercancel="endSheetDrag"
-    >
-      <span></span>
-    </button>
-    <button v-if="variant === 'modal'" class="composer-close" type="button" aria-label="Cerrar" @click="$emit('close')">
-      <i class="fas fa-xmark"></i>
-    </button>
-
-    <div v-if="isLoading" class="composer-loading">
-      Preparando comunidades...
-    </div>
+  <section class="thread-composer" :class="[`is-${variant}`, { 'picker-open': communityPickerOpen, 'sticker-open': giphyOpen }]">
+    <div v-if="isLoading" class="composer-loading">Preparando comunidades...</div>
 
     <template v-else-if="allowedCommunities.length">
-      <div class="composer-main">
-        <div class="composer-steps">
-          <div class="composer-step community-step">
-            <small>1. Elige la comunidad</small>
-            <button class="community-select" type="button" @click="communityPickerOpen = true">
-              <span>
-                <img v-if="selectedCommunity?.iconUrl" :src="selectedCommunity.iconUrl" alt="" />
-                <b v-else>{{ selectedCommunity?.name?.slice(0, 2).toUpperCase() }}</b>
-              </span>
-              <strong>{{ selectedCommunity?.name }}</strong>
-              <i class="fas fa-chevron-down"></i>
-            </button>
-            <p>Elige donde quieres publicar tu contenido.</p>
-          </div>
+      <div class="composer-shell">
+        <button class="community-select" type="button" @click="communityPickerOpen = true">
+          <span>
+            <img v-if="selectedCommunity?.iconUrl" :src="selectedCommunity.iconUrl" alt="" />
+            <b v-else>{{ selectedCommunity?.name?.slice(0, 2).toUpperCase() }}</b>
+          </span>
+          <strong>{{ selectedCommunity?.name }}</strong>
+          <i class="fas fa-chevron-down"></i>
+        </button>
 
-          <div class="composer-step type-step">
-            <small>2. Elige el tipo de publicacion</small>
-            <div class="topic-row">
-              <button
-                v-for="topic in topics"
-                :key="topic"
-                type="button"
-                :class="{ active: selectedTopic === topic }"
-                @click="selectedTopic = topic"
-              >
-                <i :class="getTopicIcon(topic)"></i>
-                {{ getTopicLabel(topic) }}
-              </button>
-            </div>
+        <div class="composer-content">
+        <div class="composer-row">
+          <div class="composer-avatar" :style="currentProfileIcon ? { backgroundImage: `url(${currentProfileIcon})` } : null">
+            <span v-if="!currentProfileIcon">{{ userInitial }}</span>
           </div>
+          <label class="composer-textarea">
+            <textarea
+              ref="textAreaRef"
+              v-model="body"
+              maxlength="240"
+              :placeholder="placeholder"
+              @click="syncCaret"
+              @keyup="syncCaret"
+              @select="syncCaret"
+              @input="handleComposerInput"
+            ></textarea>
+            <small>{{ body.length }}/240</small>
+          </label>
         </div>
 
-        <h2>{{ title }}</h2>
-
-        <div class="mobile-composer-type-row" aria-label="Tipo de publicacion">
-          <button type="button" :class="{ active: selectedTopicMeta.label === 'Posts' }" @click="selectedTopic = topics.includes('Posts') ? 'Posts' : topics[0]">
-            <i class="far fa-comment"></i>
-            Hilo
-          </button>
-          <button type="button" :class="{ active: pollOpen }" @click="togglePoll">
-            <i class="fas fa-chart-simple"></i>
-            Encuesta
-          </button>
-          <button type="button" @click="openImageTool">
-            <i class="far fa-image"></i>
-            Imagen
-          </button>
-          <button type="button" :class="{ active: spoiler }" @click="spoiler = !spoiler">
-            <i class="fas fa-eye-slash"></i>
-            Spoiler
-          </button>
-          <button type="button" :class="{ active: selectedTopicMeta.label === 'Preguntas' }" @click="chooseQuestionType">
-            <i class="far fa-circle-question"></i>
-            Pregunta
+        <div v-if="showHashtagSuggestions" class="hashtag-suggestions">
+          <button v-for="topic in hashtagSuggestions" :key="topic.label" type="button" @pointerdown.prevent="insertHashtag(topic.label)">
+            <i :class="topic.icon"></i>
+            <span>#{{ topic.hashtag }}</span>
+            <small>{{ topic.displayLabel }}</small>
           </button>
         </div>
 
-        <label class="composer-textarea">
-          <textarea ref="textAreaRef" v-model="body" maxlength="240" :placeholder="placeholder" @input="handleComposerInput"></textarea>
-          <span>{{ body.length }}/240</span>
-        </label>
-
-        <figure v-if="imageUrl" class="composer-image">
-          <img :src="imageUrl" alt="" />
-          <button type="button" aria-label="Quitar imagen" @click="imageUrl = ''">
-            <i class="fas fa-xmark"></i>
-          </button>
+        <figure v-if="mediaPreview" class="composer-image">
+          <img :src="mediaPreview" alt="" />
+          <figcaption v-if="selectedGif">GIPHY · {{ selectedGif.title }}</figcaption>
+          <button type="button" aria-label="Quitar imagen" @click="imageUrl = ''; selectedGif = null"><i class="fas fa-xmark"></i></button>
         </figure>
+
+        <div class="active-tags" v-if="activeHashtags.length || spoiler || pollOpen">
+          <span>
+            <i :class="selectedTopicMeta.icon"></i>
+            #{{ selectedTopicMeta.hashtag }}
+          </span>
+          <em v-if="spoiler"><i class="fas fa-eye-slash"></i> Spoiler</em>
+          <em v-if="pollOpen"><i class="fas fa-chart-simple"></i> Encuesta</em>
+        </div>
 
         <div class="composer-footer">
           <div class="tool-row">
-            <button type="button" @click="pasteImageUrl"><i class="far fa-image"></i><span>Imagen</span></button>
-            <button type="button" :class="{ active: spoiler }" @click="spoiler = !spoiler"><i class="fas fa-eye-slash"></i><span>Spoiler</span></button>
-            <button type="button" :class="{ active: pollOpen }" @click="togglePoll"><i class="fas fa-chart-simple"></i><span>Encuesta</span></button>
-            <button type="button" @click="addSticker"><i class="far fa-face-smile"></i><span>Sticker</span></button>
+            <button type="button" title="Imagen" @click="pasteImageUrl"><i class="far fa-image"></i></button>
+            <button type="button" :class="{ active: pollOpen }" title="Encuesta" @click="togglePoll"><i class="fas fa-chart-simple"></i></button>
+            <button type="button" :class="{ active: spoiler }" title="Spoiler" @click="spoiler = !spoiler"><i class="fas fa-eye-slash"></i></button>
+            <button type="button" title="Pregunta" @click="chooseQuestionType"><i class="far fa-circle-question"></i></button>
+            <button type="button" :class="{ active: giphyOpen }" title="GIF / stickers" @click="giphyOpen = !giphyOpen"><i class="far fa-face-smile"></i></button>
           </div>
 
           <button class="publish-btn" type="button" :disabled="!canPublish" @click="publish">
             <i class="fas fa-paper-plane"></i>
-            {{ isPublishing ? 'Publicando...' : 'Publicar' }}
+            <span>{{ isPublishing ? 'Publicando...' : 'Publicar' }}</span>
           </button>
+        </div>
+
+        <div class="quick-tags">
+          <button v-for="topic in topics.map(topicMeta).slice(0, 6)" :key="topic.label" type="button" @click="quickTag(topic.label)">
+            #{{ topic.hashtag }}
+          </button>
+        </div>
+        </div>
+
+        <div v-if="giphyOpen" class="composer-sticker-overlay">
+          <GiphyPicker
+            embedded
+            :open="giphyOpen"
+            title="GIFs y stickers"
+            @close="giphyOpen = false"
+            @select="handleGiphySelect"
+          />
         </div>
       </div>
 
       <aside class="community-picker-panel">
         <div class="picker-head">
-          <strong>Elige la comunidad</strong>
+          <strong>Elige comunidad</strong>
           <button type="button" aria-label="Cerrar comunidades" @click="communityPickerOpen = false">
             <i class="fas fa-xmark"></i>
           </button>
@@ -441,7 +492,7 @@ onMounted(async () => {
 
     <div v-else class="composer-empty">
       <strong>No tienes comunidades disponibles</strong>
-      <p>Unete a una comunidad para publicar hilos. Los comunicados oficiales solo pueden crearlos admins o publicadores.</p>
+      <p>Unete a una comunidad para publicar hilos.</p>
       <button type="button" @click="exploreCommunities">Explorar comunidades</button>
     </div>
   </section>
@@ -449,53 +500,95 @@ onMounted(async () => {
 
 <style scoped>
 .thread-composer {
+  color: #f8fafc;
+  position: relative;
+  width: 100%;
+}
+
+.composer-shell {
   background:
-    radial-gradient(circle at 76% 0%, rgba(168, 85, 247, 0.22), transparent 34%),
-    linear-gradient(135deg, rgba(8, 12, 30, 0.98), rgba(12, 10, 32, 0.96));
-  border: 1px solid rgba(168, 85, 247, 0.26);
-  border-radius: 20px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+    radial-gradient(circle at 82% 0%, rgba(236, 72, 153, 0.24), transparent 34%),
+    radial-gradient(circle at 12% 12%, rgba(124, 58, 237, 0.32), transparent 38%),
+    linear-gradient(145deg, rgba(14, 18, 44, 0.98), rgba(22, 13, 48, 0.98));
+  border: 1px solid rgba(168, 85, 247, 0.34);
+  border-radius: 34px;
+  box-shadow: 0 24px 70px rgba(2, 6, 23, 0.32);
   color: #f8fafc;
   display: grid;
-  gap: 18px;
-  grid-template-columns: minmax(0, 1fr);
-  overflow: hidden;
-  padding: 22px;
+  gap: 12px;
+  padding: 18px;
   position: relative;
+  overflow: visible;
+  z-index: 2;
 }
 
-.thread-composer.is-modal {
-  max-height: min(760px, calc(100dvh - 48px));
-  overflow-y: auto;
-  width: min(1180px, calc(100vw - 36px));
-}
-
-.composer-close {
-  align-items: center;
-  color: #cbd5e1;
-  display: none;
-  font-size: 22px;
-  height: 40px;
-  justify-content: center;
+.composer-sticker-overlay {
+  background:
+    radial-gradient(circle at 22% 0%, rgba(168, 85, 247, 0.22), transparent 36%),
+    radial-gradient(circle at 84% 10%, rgba(236, 72, 153, 0.18), transparent 34%),
+    rgba(8, 12, 30, 0.98);
+  border-radius: inherit;
+  display: grid;
+  inset: 0;
+  overflow: hidden;
+  padding: 18px;
   position: absolute;
-  right: 16px;
-  top: 14px;
-  width: 40px;
-  z-index: 4;
+  z-index: 26;
 }
 
-.composer-drag-handle,
-.mobile-composer-type-row {
-  display: none;
+.composer-sticker-overlay :deep(.giphy-picker.embedded) {
+  display: grid;
+  gap: 12px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.composer-sticker-overlay :deep(.giphy-grid),
+.composer-sticker-overlay :deep(.giphy-picker.embedded .giphy-grid) {
+  max-height: none;
+  min-height: 0;
+}
+
+.composer-sticker-overlay :deep(.giphy-fallback) {
+  align-content: start;
+  overflow-y: auto;
+}
+
+.composer-content {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.community-select {
+  align-items: center;
+  background: rgba(5, 8, 22, 0.55);
+  border: 1px solid rgba(168, 85, 247, 0.52);
+  border-radius: 999px;
+  color: #f8fafc;
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  min-height: 42px;
+  padding: 5px 14px 5px 5px;
+  text-align: left;
+  width: min(330px, 100%);
 }
 
 .community-select span,
-.community-list button > span {
+.community-list button > span,
+.composer-avatar {
   background: linear-gradient(135deg, #7c3aed, #ec4899);
   border-radius: 999px;
   display: grid;
   overflow: hidden;
   place-items: center;
+}
+
+.community-select span {
+  height: 34px;
+  width: 34px;
 }
 
 .community-select img,
@@ -505,149 +598,127 @@ onMounted(async () => {
   width: 100%;
 }
 
-.community-select b,
-.community-list b {
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 950;
-}
-
-.composer-main {
-  display: grid;
-  gap: 18px;
-  min-width: 0;
-}
-
-.composer-main h2 {
-  font-size: clamp(24px, 2.6vw, 34px);
-  font-weight: 950;
-  line-height: 1.05;
-  order: -1;
-}
-
-.composer-steps {
-  display: grid;
-  gap: 18px;
-}
-
-.composer-step {
-  display: grid;
-  gap: 10px;
-}
-
-.composer-step small {
-  color: #cbd5e1;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.community-step {
-  align-items: center;
-  grid-template-columns: minmax(260px, 330px) minmax(160px, 1fr);
-}
-
-.community-step small {
-  grid-column: 1 / -1;
-}
-
-.community-step p {
-  color: #aeb8d3;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.4;
-}
-
-.community-select {
-  align-items: center;
-  background: rgba(124, 58, 237, 0.16);
-  border: 1px solid rgba(192, 132, 252, 0.54);
-  border-radius: 18px;
-  box-shadow: 0 0 28px rgba(168, 85, 247, 0.18);
-  color: #ffffff;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 40px minmax(0, 1fr) 20px;
-  min-height: 58px;
-  padding: 8px 14px 8px 8px;
-  text-align: left;
-}
-
-.community-select span {
-  height: 40px;
-  width: 40px;
-}
-
 .community-select strong {
+  font-size: 13px;
+  font-weight: 950;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.topic-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
+.composer-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 48px minmax(0, 1fr);
 }
 
-.topic-row button,
-.tool-row button {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 999px;
-  color: #cbd5e1;
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: 900;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 16px;
-}
-
-.topic-row button.active,
-.topic-row button:hover,
-.tool-row button.active,
-.tool-row button:hover {
-  background: linear-gradient(135deg, #7c3aed, #c026d3);
-  border-color: rgba(216, 180, 254, 0.46);
-  color: #ffffff;
+.composer-avatar {
+  background-color: rgba(124, 58, 237, 0.18);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  flex: 0 0 auto;
+  font-weight: 950;
+  height: 48px;
+  min-height: 48px;
+  min-width: 48px;
+  width: 48px;
 }
 
 .composer-textarea {
-  background: rgba(5, 8, 22, 0.56);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 16px;
   display: grid;
-  min-height: 132px;
-  padding: 16px;
+  gap: 5px;
+  min-width: 0;
 }
 
 .composer-textarea textarea {
   background: transparent;
   border: 0;
   color: #f8fafc;
-  font-size: 18px;
-  font-weight: 800;
-  min-height: 86px;
+  font-size: 19px;
+  font-weight: 750;
+  line-height: 1.25;
+  max-height: 150px;
+  min-height: 72px;
   outline: 0;
   resize: none;
 }
 
 .composer-textarea textarea::placeholder {
-  color: #8c96ad;
+  color: #9aa6bc;
+  font-weight: 650;
 }
 
-.composer-textarea span {
-  align-self: end;
+.composer-textarea small {
   color: #aeb8d3;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
   justify-self: end;
 }
 
+.hashtag-suggestions,
+.quick-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hashtag-suggestions {
+  background: rgba(5, 8, 22, 0.92);
+  border: 1px solid rgba(168, 85, 247, 0.34);
+  border-radius: 18px;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
+  padding: 8px;
+}
+
+.hashtag-suggestions button,
+.quick-tags button,
+.active-tags span,
+.active-tags em {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 950;
+  gap: 7px;
+}
+
+.hashtag-suggestions button {
+  background: rgba(124, 58, 237, 0.18);
+  color: #f8fafc;
+  min-height: 34px;
+  padding: 0 11px;
+}
+
+.hashtag-suggestions small {
+  color: #aeb8d3;
+  font-size: 10px;
+}
+
+.active-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.active-tags span,
+.active-tags em,
+.quick-tags button {
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.active-tags span {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.3), rgba(236, 72, 153, 0.18));
+  color: #fff;
+}
+
 .composer-image {
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 16px;
+  border-radius: 18px;
   margin: 0;
   overflow: hidden;
   position: relative;
@@ -659,10 +730,23 @@ onMounted(async () => {
   width: 100%;
 }
 
+.composer-image figcaption {
+  background: linear-gradient(90deg, rgba(3, 6, 18, 0.72), transparent);
+  bottom: 0;
+  color: #e9d5ff;
+  font-size: 11px;
+  font-weight: 950;
+  left: 0;
+  margin: 0;
+  padding: 10px 12px;
+  position: absolute;
+  right: 0;
+}
+
 .composer-image button {
-  background: rgba(8, 12, 30, 0.86);
+  background: rgba(15, 23, 42, 0.72);
   border-radius: 999px;
-  color: #ffffff;
+  color: #fff;
   height: 34px;
   position: absolute;
   right: 10px;
@@ -673,7 +757,7 @@ onMounted(async () => {
 .composer-footer {
   align-items: center;
   display: grid;
-  gap: 14px;
+  gap: 12px;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -683,48 +767,65 @@ onMounted(async () => {
   gap: 10px;
 }
 
+.tool-row button {
+  align-items: center;
+  background: transparent;
+  border-radius: 999px;
+  color: #cbd5e1;
+  display: inline-flex;
+  font-size: 20px;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.tool-row button.active,
+.tool-row button:hover {
+  background: rgba(124, 58, 237, 0.12);
+  color: #7c3aed;
+}
+
 .publish-btn {
   align-items: center;
-  background: linear-gradient(135deg, #5b21e8, #ec4899);
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
   border-radius: 999px;
-  box-shadow: 0 14px 34px rgba(236, 72, 153, 0.24);
-  color: #ffffff;
+  color: #fff;
   display: inline-flex;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 950;
-  gap: 10px;
+  gap: 8px;
   justify-content: center;
-  min-height: 54px;
-  min-width: 170px;
-  padding: 0 26px;
+  min-height: 50px;
+  min-width: 128px;
+  padding: 0 22px;
 }
 
 .publish-btn:disabled {
   cursor: not-allowed;
-  opacity: 0.48;
+  filter: grayscale(0.2);
+  opacity: 0.45;
 }
 
 .community-picker-panel {
   background:
     radial-gradient(circle at 24% 0%, rgba(168, 85, 247, 0.18), transparent 32%),
-    rgba(8, 12, 30, 0.96);
+    rgba(8, 12, 30, 0.98);
   border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 18px;
+  border-radius: 22px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
   display: grid;
   gap: 12px;
   max-height: min(560px, calc(100dvh - 80px));
-  min-width: 0;
   opacity: 0;
   padding: 16px;
   pointer-events: none;
   position: absolute;
-  right: 18px;
-  top: 18px;
+  right: 0;
+  top: 0;
   transform: translateY(8px) scale(0.98);
   transition: opacity 0.18s ease, transform 0.18s ease;
-  width: min(520px, calc(100% - 36px));
-  z-index: 5;
+  width: min(520px, 100%);
+  z-index: 8;
 }
 
 .thread-composer.picker-open .community-picker-panel {
@@ -740,13 +841,13 @@ onMounted(async () => {
 }
 
 .picker-head strong {
+  color: #fff;
   font-size: 18px;
   font-weight: 950;
 }
 
 .picker-head button {
   color: #cbd5e1;
-  font-size: 18px;
   height: 34px;
   width: 34px;
 }
@@ -756,14 +857,13 @@ onMounted(async () => {
   gap: 8px;
   max-height: 360px;
   overflow-y: auto;
-  padding-right: 4px;
 }
 
 .community-list button {
   align-items: center;
   border: 1px solid transparent;
   border-radius: 16px;
-  color: #ffffff;
+  color: #fff;
   display: grid;
   gap: 10px;
   grid-template-columns: 46px minmax(0, 1fr) 22px;
@@ -795,7 +895,6 @@ onMounted(async () => {
   font-size: 11px;
   font-weight: 750;
   line-height: 1.25;
-  max-height: 2.5em;
 }
 
 .community-list button > i {
@@ -814,21 +913,12 @@ onMounted(async () => {
 
 .explore-btn,
 .composer-empty button {
-  align-items: center;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 14px;
   color: #e9d5ff;
-  display: inline-flex;
   font-size: 13px;
   font-weight: 950;
-  gap: 8px;
-  justify-content: center;
   min-height: 42px;
-}
-
-.composer-loading,
-.composer-empty {
-  grid-column: 1 / -1;
 }
 
 .composer-loading,
@@ -846,335 +936,8 @@ onMounted(async () => {
 }
 
 .composer-empty strong {
-  color: #ffffff;
+  color: #fff;
   font-size: 18px;
-}
-
-.composer-empty p {
-  max-width: 460px;
-}
-
-@media (max-width: 980px) {
-  .thread-composer {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 18px;
-  }
-
-  .community-picker-panel {
-    background: #080c1e;
-    border-radius: 0;
-    bottom: 0;
-    box-shadow: -18px 0 60px rgba(0, 0, 0, 0.42);
-    max-height: none;
-    opacity: 0;
-    padding: 20px;
-    pointer-events: none;
-    position: fixed;
-    right: 0;
-    top: 0;
-    transform: translateX(100%);
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    width: min(420px, 88vw);
-    z-index: 2200;
-  }
-
-  .thread-composer.picker-open .community-picker-panel {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateX(0);
-  }
-
-  .community-step {
-    grid-template-columns: 1fr;
-  }
-
-  .community-step p {
-    display: none;
-  }
-
-  .composer-footer {
-    grid-template-columns: 1fr auto;
-  }
-
-  .tool-row button span {
-    display: none;
-  }
-
-  .tool-row button {
-    height: 42px;
-    justify-content: center;
-    padding: 0;
-    width: 42px;
-  }
-}
-
-@media (max-width: 859px) {
-  .thread-composer.is-modal {
-    border-radius: 26px;
-    grid-template-columns: minmax(0, 1fr);
-    min-height: auto;
-    max-height: min(78dvh, calc(100dvh - 28px));
-    overflow-y: auto;
-    padding: 16px;
-    transform: none;
-    transition:
-      border-radius 0.22s ease,
-      box-shadow 0.22s ease;
-    width: 100%;
-  }
-
-  .thread-composer.is-modal {
-    background:
-      radial-gradient(circle at 82% 0%, rgba(236, 72, 153, 0.2), transparent 34%),
-      radial-gradient(circle at 14% 4%, rgba(124, 58, 237, 0.28), transparent 36%),
-      linear-gradient(145deg, rgba(6, 9, 24, 0.98), rgba(17, 12, 42, 0.97));
-    border-color: rgba(192, 132, 252, 0.42);
-    box-shadow:
-      0 -18px 68px rgba(0, 0, 0, 0.42),
-      0 0 0 1px rgba(255, 255, 255, 0.04),
-      0 0 36px rgba(168, 85, 247, 0.2);
-  }
-
-  .thread-composer.dragging {
-    transition: none;
-  }
-
-  .composer-drag-handle {
-    display: none;
-  }
-
-  .composer-drag-handle span {
-    background: rgba(216, 180, 254, 0.5);
-    border-radius: 999px;
-    box-shadow: 0 0 12px rgba(168, 85, 247, 0.3);
-    display: block;
-    height: 4px;
-    width: 42px;
-  }
-
-  .composer-close {
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 999px;
-    display: inline-flex;
-    font-size: 16px;
-    height: 34px;
-    right: 16px;
-    top: 21px;
-    width: 34px;
-  }
-
-  .composer-main {
-    gap: 12px;
-    padding-top: 2px;
-  }
-
-  .composer-main h2 {
-    font-size: 18px;
-    order: 0;
-    padding-right: 38px;
-  }
-
-  .composer-steps {
-    gap: 0;
-  }
-
-  .composer-step small,
-  .community-step p,
-  .type-step {
-    display: none;
-  }
-
-  .community-step {
-    grid-template-columns: 1fr;
-  }
-
-  .community-select {
-    background: rgba(8, 12, 30, 0.72);
-    border-color: rgba(168, 85, 247, 0.52);
-    border-radius: 999px;
-    box-shadow:
-      0 14px 34px rgba(0, 0, 0, 0.24),
-      0 0 26px rgba(168, 85, 247, 0.18);
-    gap: 9px;
-    grid-template-columns: 30px minmax(0, 1fr) 20px;
-    min-height: 44px;
-    padding: 6px 16px 6px 6px;
-    width: min(330px, calc(100% - 48px));
-  }
-
-  .community-select > i {
-    justify-self: center;
-  }
-
-  .community-select span {
-    height: 30px;
-    width: 30px;
-  }
-
-  .community-select strong {
-    font-size: 14px;
-  }
-
-  .mobile-composer-type-row {
-    display: flex;
-    gap: 7px;
-    margin-right: -16px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-
-  .mobile-composer-type-row::-webkit-scrollbar {
-    display: none;
-  }
-
-  .mobile-composer-type-row button {
-    align-items: center;
-    background: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    border-radius: 999px;
-    color: #cbd5e1;
-    display: inline-flex;
-    flex: 0 0 auto;
-    font-size: 11px;
-    font-weight: 900;
-    gap: 6px;
-    min-height: 32px;
-    padding: 0 10px;
-  }
-
-  .mobile-composer-type-row button.active {
-    background: linear-gradient(135deg, #7c3aed, #c026d3);
-    border-color: rgba(216, 180, 254, 0.48);
-    color: #ffffff;
-    box-shadow: 0 0 18px rgba(168, 85, 247, 0.18);
-  }
-
-  .community-picker-panel {
-    background:
-      radial-gradient(circle at 18% 0%, rgba(168, 85, 247, 0.18), transparent 34%),
-      linear-gradient(145deg, rgba(6, 9, 24, 0.99), rgba(13, 10, 34, 0.99));
-    border-color: rgba(192, 132, 252, 0.24);
-    border-radius: inherit;
-    bottom: 0;
-    box-shadow: 0 22px 52px rgba(0, 0, 0, 0.4);
-    display: flex;
-    flex-direction: column;
-    left: 0;
-    max-height: none;
-    min-height: 100%;
-    padding: 18px;
-    position: absolute;
-    right: 0;
-    top: 0;
-    transform: translateY(10px) scale(0.98);
-    width: auto;
-    z-index: 12;
-  }
-
-  .thread-composer.picker-open .community-picker-panel {
-    transform: translateY(0) scale(1);
-  }
-
-  .community-list {
-    gap: 6px;
-    flex: 1;
-    max-height: none;
-    min-height: 0;
-    overflow-y: auto;
-    padding-right: 2px;
-  }
-
-  .picker-head {
-    margin-bottom: 8px;
-  }
-
-  .picker-head strong {
-    font-size: 15px;
-  }
-
-  .picker-head button {
-    height: 32px;
-    width: 32px;
-  }
-
-  .community-list button {
-    border-radius: 14px;
-    gap: 9px;
-    grid-template-columns: 42px minmax(0, 1fr) 18px;
-    min-height: 56px;
-    padding: 6px;
-  }
-
-  .community-list button > span {
-    height: 42px;
-    width: 42px;
-  }
-
-  .community-list strong {
-    font-size: 12px;
-  }
-
-  .community-list small {
-    font-size: 10px;
-    line-height: 1.2;
-    max-height: 2.4em;
-  }
-
-  .explore-btn {
-    border-radius: 13px;
-    font-size: 12px;
-    min-height: 38px;
-    margin-top: 10px;
-  }
-
-  .topic-row {
-    flex-wrap: nowrap;
-    margin-right: -16px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-  }
-
-  .topic-row button {
-    flex: 0 0 auto;
-    min-height: 38px;
-    padding: 0 12px;
-  }
-
-  .composer-textarea {
-    background: rgba(5, 8, 22, 0.42);
-    min-height: 112px;
-    padding: 13px;
-  }
-
-  .composer-textarea textarea {
-    font-size: 15px;
-    line-height: 1.35;
-    min-height: 68px;
-  }
-
-  .composer-footer {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .tool-row {
-    flex-wrap: nowrap;
-    gap: 8px;
-  }
-
-  .tool-row button {
-    height: 36px;
-    min-height: 36px;
-    width: 36px;
-  }
-
-  .publish-btn {
-    font-size: 13px;
-    min-height: 40px;
-    min-width: 104px;
-    padding: 0 14px;
-  }
 }
 
 </style>

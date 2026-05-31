@@ -46,6 +46,16 @@ const routes = [
         component: () => import('@/pages/PostPage.vue')
       },
       {
+        path: 'p/:slug',
+        name: 'site-page',
+        component: () => import('@/pages/SitePage.vue')
+      },
+      {
+        path: ':slug(politica-privacidad|terminos-condiciones|normas-comunidad|politica-cookies|contacto-reportes|aviso-legal)',
+        name: 'legal-site-page',
+        component: () => import('@/pages/SitePage.vue')
+      },
+      {
         path: 'perfil/:uid',
         name: 'profile',
         component: () => import('@/pages/ProfilePage.vue')
@@ -59,6 +69,16 @@ const routes = [
         path: 'mis-favoritos',
         component: () => import('@/pages/WorkspacePage.vue'),
         props: { panel: 'favorites' }
+      },
+      {
+        path: 'admin',
+        redirect: '/admin/dashboard',
+        meta: { publisherOnly: true, workspace: true }
+      },
+      {
+        path: 'admin/dashboard',
+        component: Dashboard,
+        meta: { publisherOnly: true, workspace: true }
       },
       {
         path: 'admin/posts',
@@ -86,7 +106,7 @@ const routes = [
     ]
   },
 
-  { path: '/dashboard', component: Dashboard },
+  { path: '/dashboard', redirect: '/admin/dashboard', meta: { publisherOnly: true } },
   { path: '/editor', component: Editor, meta: { adminOnly: true } },
   { path: '/overlay/:id', component: OverlayView },
   { path: '/login', component: Login },
@@ -117,7 +137,7 @@ const router = createRouter({
 })
 
 const publicRoutes = ['/', '/login']
-const publicPrefixes = ['/overlay', '/post', '/perfil', '/categoria', '/noticias', '/rumores', '/guias', '/comunidad', '/eventos']
+const publicPrefixes = ['/overlay', '/post', '/p', '/politica-privacidad', '/terminos-condiciones', '/normas-comunidad', '/politica-cookies', '/contacto-reportes', '/aviso-legal', '/perfil', '/categoria', '/noticias', '/rumores', '/guias', '/comunidad', '/eventos']
 let authReady = false
 let authUser = null
 let authReadyPromise = new Promise((resolve) => {
@@ -144,7 +164,7 @@ const getAuthUser = async () => {
 router.beforeEach(async (to, from, next) => {
   if (to.path === '/login') {
     const user = await getAuthUser()
-    return next(user ? '/dashboard' : undefined)
+    return next(user ? '/admin/dashboard' : undefined)
   }
 
   if (

@@ -173,13 +173,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { collection, getDocs, deleteDoc, doc, setDoc, updateDoc } from "firebase/firestore"
 import { db, auth } from "@/firebase"
 import WidgetRenderer from '@/components/widgets/WidgetRenderer.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 const overlays = ref([])
 const showPanel = ref(false)
@@ -202,7 +203,19 @@ const loadOverlays = async () => {
   }))
 }
 
-onMounted(loadOverlays)
+onMounted(() => {
+  loadOverlays()
+  if (route.query.create === 'overlay') {
+    openCreate()
+    router.replace({ path: route.path, query: { ...route.query, create: undefined } })
+  }
+})
+
+watch(() => route.query.create, (target) => {
+  if (target !== 'overlay') return
+  openCreate()
+  router.replace({ path: route.path, query: { ...route.query, create: undefined } })
+})
 
 const showToast = (msg, type = 'success') => {
   toast.value = { show: true, message: msg, type }
