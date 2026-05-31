@@ -410,7 +410,7 @@ onMounted(async () => {
           </button>
         </div>
 
-        <figure v-if="mediaPreview" class="composer-image">
+        <figure v-if="mediaPreview" class="composer-image" :class="{ 'is-gif': selectedGif }">
           <img :src="mediaPreview" alt="" />
           <figcaption v-if="selectedGif">GIPHY · {{ selectedGif.title }}</figcaption>
           <button type="button" aria-label="Quitar imagen" @click="imageUrl = ''; selectedGif = null"><i class="fas fa-xmark"></i></button>
@@ -746,14 +746,26 @@ onMounted(async () => {
 .composer-image {
   border-radius: 18px;
   margin: 0;
+  max-width: min(360px, 100%);
   overflow: hidden;
   position: relative;
 }
 
 .composer-image img {
+  background: rgba(5, 8, 22, 0.72);
+  display: block;
+  max-height: 220px;
+  object-fit: contain;
+  width: 100%;
+}
+
+.composer-image:not(.is-gif) {
+  max-width: 100%;
+}
+
+.composer-image:not(.is-gif) img {
   aspect-ratio: 16 / 7;
   object-fit: cover;
-  width: 100%;
 }
 
 .composer-image figcaption {

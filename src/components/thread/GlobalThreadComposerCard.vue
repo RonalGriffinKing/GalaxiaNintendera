@@ -571,7 +571,7 @@ onUnmounted(() => {
             </button>
           </div>
 
-          <figure v-if="mediaPreview" class="global-thread-media">
+          <figure v-if="mediaPreview" class="global-thread-media" :class="{ 'is-gif': selectedGif }">
             <img :src="mediaPreview" alt="" />
             <figcaption v-if="selectedGif">{{ selectedGif.title }}</figcaption>
             <button type="button" aria-label="Quitar media" @click="imageUrl = ''; selectedGif = null">
@@ -1046,15 +1046,26 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
   margin: 0;
+  max-width: min(360px, 100%);
   overflow: hidden;
   position: relative;
 }
 
 .global-thread-media img {
-  aspect-ratio: 16 / 8;
   background: #050816;
-  object-fit: cover;
+  display: block;
+  max-height: 220px;
+  object-fit: contain;
   width: 100%;
+}
+
+.global-thread-media:not(.is-gif) {
+  max-width: 100%;
+}
+
+.global-thread-media:not(.is-gif) img {
+  aspect-ratio: 16 / 8;
+  object-fit: cover;
 }
 
 .global-thread-media figcaption {

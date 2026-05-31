@@ -252,7 +252,7 @@ const deleteComment = (thread, comment) => {
         <h2>{{ thread.title }}</h2>
         <small v-if="thread.spoiler" class="spoiler-badge"><i class="fas fa-eye-slash"></i> Spoiler</small>
         <p>{{ thread.body }}</p>
-        <figure v-if="thread.imageUrl" class="thread-image">
+        <figure v-if="thread.imageUrl" class="thread-image" :class="{ 'is-gif': thread.mediaType === 'gif' || thread.gif?.url }">
           <img :src="thread.imageUrl" alt="" />
         </figure>
 
@@ -601,18 +601,29 @@ const deleteComment = (thread, comment) => {
 }
 
 .thread-image {
-  margin: 0 0 0 66px;
+  margin: 10px 0 0;
+  max-width: min(420px, 100%);
   overflow: hidden;
   position: relative;
 }
 
 .thread-image img {
-  aspect-ratio: 16 / 8;
-  background: #e5e7eb;
-  border: 1px solid #e5e7eb;
+  background: rgba(226, 232, 240, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.72);
   border-radius: 14px;
+  display: block;
+  max-height: 280px;
+  object-fit: contain;
+  width: 100%;
+}
+
+.thread-image:not(.is-gif) {
+  max-width: min(520px, 100%);
+}
+
+.thread-image:not(.is-gif) img {
+  aspect-ratio: 16 / 8;
   object-fit: cover;
-  width: min(420px, 100%);
 }
 
 .thread-footer {

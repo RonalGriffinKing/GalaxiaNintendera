@@ -1,4 +1,6 @@
 <script setup>
+import { computed, ref, watch } from 'vue'
+
 const props = defineProps({
   src: { type: String, default: '' },
   alt: { type: String, default: '' },
@@ -9,7 +11,13 @@ const props = defineProps({
   decorative: { type: Boolean, default: false }
 })
 
+const imageFailed = ref(false)
+const imageSrc = computed(() => imageFailed.value ? '' : (props.src || props.fallback || ''))
 const initial = () => String(props.label || props.alt || '?').trim().slice(0, 1).toUpperCase() || '?'
+
+watch(() => [props.src, props.fallback], () => {
+  imageFailed.value = false
+})
 </script>
 
 <template>
@@ -21,10 +29,11 @@ const initial = () => String(props.label || props.alt || '?').trim().slice(0, 1)
     <span class="profile-avatar-ui-frame">
       <span class="profile-avatar-ui-clip">
         <img
-          v-if="src || fallback"
-          :src="src || fallback"
+          v-if="imageSrc"
+          :src="imageSrc"
           :alt="decorative ? '' : alt"
           :aria-hidden="decorative ? 'true' : undefined"
+          @error="imageFailed = true"
         />
         <b v-else>{{ initial() }}</b>
       </span>
