@@ -842,6 +842,11 @@ onUnmounted(() => {
             <i class="fas fa-chevron-down"></i>
           </button>
 
+          <button v-if="!currentUser" class="public-mobile-join-top is-login" type="button" @click="goAccountItem('/login?mode=login')">
+            <i class="fas fa-right-to-bracket"></i>
+            Entrar
+          </button>
+
           <button v-if="!currentUser" class="public-mobile-join-top" type="button" @click="goAccountItem('/login?mode=register')">
             <i class="fas fa-user-plus"></i>
             Unete
@@ -1024,10 +1029,16 @@ onUnmounted(() => {
           ></button>
         </Transition>
 
-        <button v-if="!currentUser" class="public-mobile-account" @click="goAccountItem('/login?mode=register')">
-          <i class="fas fa-user-plus"></i>
-          Unete
-        </button>
+        <div v-if="!currentUser" class="public-mobile-auth-actions">
+          <button class="public-mobile-account is-login" @click="goAccountItem('/login?mode=login')">
+            <i class="fas fa-right-to-bracket"></i>
+            Entrar
+          </button>
+          <button class="public-mobile-account" @click="goAccountItem('/login?mode=register')">
+            <i class="fas fa-user-plus"></i>
+            Unete
+          </button>
+        </div>
 
         <div class="mobile-primary-links">
           <button
@@ -1366,6 +1377,13 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.public-mobile-join-top.is-login {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(216, 180, 254, 0.24);
+  box-shadow: none;
+  color: #f5f3ff;
+}
+
 .public-mobile-join-top:hover,
 .public-mobile-join-top:focus-visible {
   box-shadow: 0 14px 34px rgba(236, 72, 153, 0.34), 0 0 0 3px rgba(168, 85, 247, 0.18);
@@ -1505,6 +1523,18 @@ onUnmounted(() => {
   padding: 0 14px;
   text-transform: uppercase;
   width: fit-content;
+}
+
+.public-mobile-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.public-mobile-account.is-login {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(216, 180, 254, 0.24);
+  color: #ffffff;
 }
 
 .public-mobile-account-block {
