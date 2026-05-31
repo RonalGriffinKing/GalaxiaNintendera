@@ -111,6 +111,17 @@ const mobileNavClass = computed(() => ({
   reading: isReadingRoute.value,
   'account-open': accountMenuOpen.value
 }))
+const bottomNavClass = computed(() => ({
+  compact: isReadingRoute.value,
+  suppressed: menuOpen.value
+    || createMenuOpen.value
+    || accountMenuOpen.value
+    || searchOpen.value
+    || notificationsOpen.value
+    || quickPostOpen.value
+    || quickCommunityOpen.value
+    || quickUserOpen.value
+}))
 const activeBottomIndex = computed(() => {
   const index = bottomNavItems.value.findIndex(item => isActivePath(item.to))
   if (index < 0) return 0
@@ -1050,7 +1061,7 @@ onUnmounted(() => {
     />
 
     <Teleport to="body">
-      <div class="public-bottom-nav" :class="{ compact: isReadingRoute }" aria-label="Navegacion movil" :style="bottomNavStyle">
+      <div class="public-bottom-nav" :class="bottomNavClass" aria-label="Navegacion movil" :style="bottomNavStyle">
         <span class="bottom-nav-indicator" aria-hidden="true"></span>
         <button
           v-for="item in bottomNavItems.slice(0, 2)"
@@ -2250,7 +2261,7 @@ onUnmounted(() => {
       padding 0.22s ease,
       background 0.22s ease;
     will-change: transform;
-    z-index: 9000;
+    z-index: 240;
   }
 
   .public-bottom-nav.thread-open {
@@ -2264,6 +2275,12 @@ onUnmounted(() => {
     background: rgba(5, 8, 22, 0.58);
     padding: 5px 8px;
     transform: translate3d(0, 4px, 0) scale(0.985);
+  }
+
+  .public-bottom-nav.suppressed {
+    opacity: 0;
+    pointer-events: none;
+    transform: translate3d(0, 120%, 0) scale(0.96);
   }
 
   .bottom-nav-indicator {
