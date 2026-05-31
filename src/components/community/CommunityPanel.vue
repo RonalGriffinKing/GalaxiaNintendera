@@ -603,6 +603,8 @@ let unsubscribeLiveGoals = null
 let unsubscribeVideoChat = null
 let skipNextVideoRouteScroll = false
 let liveClockTimer = null
+let threadsLoadVersion = 0
+const authorProfileCache = new Map()
 
 const filteredThreads = computed(() => {
   const base = selectedCommunityThreads.value
@@ -701,6 +703,64 @@ const getMillis = (value) => {
 
 const avatarInitial = (name = '') => {
   return name.trim().charAt(0).toUpperCase() || 'U'
+}
+
+const collectThreadAuthorIds = (items = []) => {
+  const ids = new Set()
+  items.forEach((thread) => {
+    if (thread.authorId) ids.add(thread.authorId)
+    ;(thread.comments || []).forEach((comment) => {
+      if (comment.authorId) ids.add(comment.authorId)
+    })
+  })
+  return [...ids]
+}
+
+const loadThreadAuthorProfiles = async (ids = []) => {
+  const profiles = new Map()
+  await Promise.all(ids.map(async (uid) => {
+    if (!uid) return
+    if (authorProfileCache.has(uid)) {
+      profiles.set(uid, authorProfileCache.get(uid))
+      return
+    }
+
+    try {
+      const snap = await getDoc(doc(db, 'users', uid))
+      if (!snap.exists()) return
+      const profile = { uid, id: uid, ...snap.data() }
+      authorProfileCache.set(uid, profile)
+      profiles.set(uid, profile)
+    } catch (error) {
+      console.error(error)
+    }
+  }))
+  return profiles
+}
+
+const resolveThreadAuthorImage = (profile, fallback = '') => {
+  if (!profile) return fallback || ''
+  return resolveProfileIcon({
+    ...profile,
+    imageUrl: profile.imageUrl || fallback || ''
+  })
+}
+
+const enrichThreadAuthorProfiles = (thread, profiles) => {
+  const authorProfile = profiles.get(thread.authorId)
+  return {
+    ...thread,
+    authorImage: resolveThreadAuthorImage(authorProfile, thread.authorImage),
+    authorIconEffect: authorProfile ? resolveProfileIconMeta(authorProfile) : (thread.authorIconEffect || {}),
+    comments: (thread.comments || []).map((comment) => {
+      const commentProfile = profiles.get(comment.authorId)
+      return {
+        ...comment,
+        authorImage: resolveThreadAuthorImage(commentProfile, comment.authorImage),
+        authorIconEffect: commentProfile ? resolveProfileIconMeta(commentProfile) : (comment.authorIconEffect || {})
+      }
+    })
+  }
 }
 
 const loadCurrentUserProfile = async () => {
@@ -1944,8 +2004,9 @@ const deleteComment = async (thread, comment) => {
 const subscribeThreads = () => {
   const threadsQuery = query(communityRef, orderBy('updatedAt', 'desc'), limit(40))
 
-  unsubscribeThreads = onSnapshot(threadsQuery, (snap) => {
-    threads.value = snap.docs.map(item => ({
+  unsubscribeThreads = onSnapshot(threadsQuery, async (snap) => {
+    const loadVersion = ++threadsLoadVersion
+    const rawThreads = snap.docs.map(item => ({
       id: item.id,
       replies: 0,
       likes: 0,
@@ -1953,6 +2014,9 @@ const subscribeThreads = () => {
       comments: [],
       ...item.data()
     }))
+    const profiles = await loadThreadAuthorProfiles(collectThreadAuthorIds(rawThreads))
+    if (loadVersion !== threadsLoadVersion) return
+    threads.value = rawThreads.map(thread => enrichThreadAuthorProfiles(thread, profiles))
     isLoading.value = false
   }, (error) => {
     console.error(error)

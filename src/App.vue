@@ -61,7 +61,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <router-view />
+  <router-view v-slot="{ Component, route }">
+    <Transition name="route-page" mode="out-in">
+      <component :is="Component" :key="route.fullPath" class="route-page-shell" />
+    </Transition>
+  </router-view>
 
   <Transition name="global-loader">
     <section v-if="isRouteLoading" class="global-loader-screen">
@@ -100,5 +104,52 @@ onUnmounted(() => {
   filter: blur(18px) saturate(1.08);
   opacity: 0;
   transform: scale(1.03);
+}
+
+.route-page-shell {
+  min-height: 100dvh;
+}
+
+.route-page-enter-active {
+  transition:
+    opacity 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.route-page-leave-active {
+  transition:
+    opacity 0.2s ease,
+    filter 0.2s ease,
+    transform 0.2s ease;
+}
+
+.route-page-enter-from {
+  filter: blur(10px);
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.route-page-leave-to {
+  filter: blur(6px);
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .global-loader-enter-active,
+  .global-loader-leave-active,
+  .route-page-enter-active,
+  .route-page-leave-active {
+    transition: opacity 0.01ms linear;
+  }
+
+  .global-loader-enter-from,
+  .global-loader-leave-to,
+  .route-page-enter-from,
+  .route-page-leave-to {
+    filter: none;
+    transform: none;
+  }
 }
 </style>

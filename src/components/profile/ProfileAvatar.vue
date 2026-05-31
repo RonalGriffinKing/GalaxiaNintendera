@@ -115,7 +115,9 @@ watch(() => [props.src, props.fallback], () => {
 
 .profile-avatar-ui-clip {
   align-items: center;
-  background: #ffffff;
+  background:
+    radial-gradient(circle at 35% 28%, rgba(236, 72, 153, 0.36), transparent 42%),
+    linear-gradient(135deg, #1f1148, #050816 72%);
   border-radius: inherit;
   display: flex;
   height: 100%;
@@ -138,7 +140,9 @@ watch(() => [props.src, props.fallback], () => {
 }
 
 .profile-avatar-ui b {
+  color: #ffffff;
   position: relative;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.32);
   z-index: 1;
 }
 
