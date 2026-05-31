@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { addDoc, collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
-import GiphyPicker from '@/components/shared/GiphyPicker.vue'
+import GlobalGifStickerPicker from '@/components/thread/GlobalGifStickerPicker.vue'
 import { DEFAULT_THREAD_TOPICS, CONTENT_TAB_ICONS, OFFICIAL_COMMUNITY_ID } from '@/constants/community'
 import { resolveAssetUrl } from '@/constants/assets'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
@@ -448,10 +448,8 @@ onMounted(async () => {
         </div>
 
         <div v-if="giphyOpen" class="composer-sticker-overlay">
-          <GiphyPicker
-            embedded
+          <GlobalGifStickerPicker
             :open="giphyOpen"
-            title="GIFs y stickers"
             @close="giphyOpen = false"
             @select="handleGiphySelect"
           />
@@ -556,29 +554,30 @@ onMounted(async () => {
   overflow-y: auto;
 }
 
+.composer-sticker-overlay :deep(.global-gif-picker) {
+  border: 0;
+  box-shadow: none;
+  height: 100%;
+  padding: 0;
+}
+
 @media (min-width: 860px) {
   .thread-composer.sticker-open .composer-shell {
-    min-height: min(560px, calc(100dvh - 132px));
+    min-height: min(620px, calc(100dvh - 132px));
   }
 
   .thread-composer.sticker-open .composer-sticker-overlay {
     padding: 20px;
   }
 
-  .composer-sticker-overlay :deep(.giphy-picker.embedded) {
+  .composer-sticker-overlay :deep(.global-gif-picker) {
     gap: 14px;
   }
 
-  .composer-sticker-overlay :deep(.giphy-grid),
-  .composer-sticker-overlay :deep(.giphy-picker.embedded .giphy-grid) {
+  .composer-sticker-overlay :deep(.global-gif-grid) {
+    --gif-card-size: minmax(132px, 1fr);
     gap: 12px;
-    grid-auto-rows: minmax(126px, 1fr);
-  }
-
-  .composer-sticker-overlay :deep(.giphy-grid button) {
-    aspect-ratio: 1 / 1;
-    height: auto;
-    min-height: 126px;
+    grid-auto-rows: minmax(132px, 1fr);
   }
 }
 
