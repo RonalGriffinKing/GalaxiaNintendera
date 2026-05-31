@@ -1,5 +1,33 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 const IGDB_AUTH_URL = 'https://id.twitch.tv/oauth2/token'
 const IGDB_API_URL = 'https://api.igdb.com/v4/games'
+const LOCAL_ENV_PATH = resolve(process.cwd(), '.env')
+
+const readLocalEnvValue = (key) => {
+  if (!existsSync(LOCAL_ENV_PATH)) return ''
+
+  const content = readFileSync(LOCAL_ENV_PATH, 'utf8')
+  const line = content
+    .split(/\r?\n/)
+    .find(item => item.trim().startsWith(`${key}=`))
+
+  if (!line) return ''
+
+  return line
+    .slice(line.indexOf('=') + 1)
+    .trim()
+    .replace(/^["']|["']$/g, '')
+}
+
+const getEnvValue = (...keys) => {
+  for (const key of keys) {
+    const value = process.env[key] || readLocalEnvValue(key)
+    if (value) return value
+  }
+  return ''
+}
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -54,8 +82,8 @@ const pickBestGame = (games, search) => {
 }
 
 const getAccessToken = async () => {
-  const clientId = process.env.IGDB_CLIENT_ID
-  const clientSecret = process.env.IGDB_CLIENT_SECRET
+  const clientId = getEnvValue('IGDB_CLIENT_ID', 'TWITCH_CLIENT_ID')
+  const clientSecret = getEnvValue('IGDB_CLIENT_SECRET', 'TWITCH_CLIENT_SECRET')
 
   if (!clientId || !clientSecret) {
     throw new Error('Faltan IGDB_CLIENT_ID o IGDB_CLIENT_SECRET en el entorno.')
@@ -87,7 +115,7 @@ export const handler = async (event) => {
     if (!search) return json(400, { error: 'Falta el nombre del juego.' })
 
     const token = await getAccessToken()
-    const clientId = process.env.IGDB_CLIENT_ID
+    const clientId = getEnvValue('IGDB_CLIENT_ID', 'TWITCH_CLIENT_ID')
     const escaped = search.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
     const body = [
       'fields name,cover.url,screenshots.url,artworks.url;',

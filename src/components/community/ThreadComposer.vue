@@ -556,6 +556,32 @@ onMounted(async () => {
   overflow-y: auto;
 }
 
+@media (min-width: 860px) {
+  .thread-composer.sticker-open .composer-shell {
+    min-height: min(560px, calc(100dvh - 132px));
+  }
+
+  .thread-composer.sticker-open .composer-sticker-overlay {
+    padding: 20px;
+  }
+
+  .composer-sticker-overlay :deep(.giphy-picker.embedded) {
+    gap: 14px;
+  }
+
+  .composer-sticker-overlay :deep(.giphy-grid),
+  .composer-sticker-overlay :deep(.giphy-picker.embedded .giphy-grid) {
+    gap: 12px;
+    grid-auto-rows: minmax(126px, 1fr);
+  }
+
+  .composer-sticker-overlay :deep(.giphy-grid button) {
+    aspect-ratio: 1 / 1;
+    height: auto;
+    min-height: 126px;
+  }
+}
+
 .composer-content {
   display: grid;
   gap: 12px;
