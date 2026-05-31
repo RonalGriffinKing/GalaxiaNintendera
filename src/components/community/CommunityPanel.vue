@@ -356,7 +356,7 @@ const officialVideoLibrary = computed(() => {
 })
 const communityVideoLibrary = computed(() => {
   if (isOfficialSelectedCommunity.value) return officialVideoLibrary.value
-  return officialVideoLibrary.value.filter(video => videoMatchesCommunity(video, communityVideoProfile.value))
+  return officialVideoLibrary.value.filter(video => video.streamKind === 'live-now' || videoMatchesCommunity(video, communityVideoProfile.value))
 })
 const defaultCommunityYoutubeVideo = computed(() => {
   if (isOfficialSelectedCommunity.value || selectedYoutubeVideo.value || youtubeLiveVideo.value || youtubeLiveFallbackVideo.value) return null

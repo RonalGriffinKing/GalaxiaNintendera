@@ -34,10 +34,12 @@ const props = defineProps({
 const emit = defineEmits(['open-community', 'toggle-favorite', 'open-explore'])
 
 const open = ref(false)
+const showCommunityHint = ref(false)
 const rootRef = ref(null)
 let previousBodyOverflow = ''
 let previousBodyOverscroll = ''
 let previousHtmlOverflow = ''
+const communityHintKey = 'galaxy-community-switcher-tip-seen'
 
 const officialFallback = {
   id: OFFICIAL_COMMUNITY_ID,
@@ -88,15 +90,18 @@ const initials = (name = '') => String(name || 'C')
   .toUpperCase()
 
 const togglePopup = () => {
+  dismissCommunityHint()
   open.value = !open.value
 }
 
 const openCommunity = (community) => {
+  dismissCommunityHint()
   open.value = false
   emit('open-community', community)
 }
 
 const openExplore = () => {
+  dismissCommunityHint()
   open.value = false
   emit('open-explore')
 }
@@ -118,6 +123,16 @@ const closeOnEscape = (event) => {
 const handleExternalPanelOpen = (event) => {
   if (event.detail?.source !== 'community') {
     open.value = false
+  }
+}
+
+const dismissCommunityHint = () => {
+  if (!showCommunityHint.value) return
+  showCommunityHint.value = false
+  try {
+    window.localStorage?.setItem(communityHintKey, '1')
+  } catch (error) {
+    console.warn('No se pudo guardar el aviso de comunidades', error)
   }
 }
 
@@ -148,6 +163,11 @@ watch(open, (isOpen) => {
 })
 
 onMounted(() => {
+  try {
+    showCommunityHint.value = window.localStorage?.getItem(communityHintKey) !== '1'
+  } catch (error) {
+    showCommunityHint.value = true
+  }
   document.addEventListener('pointerdown', closeFromOutside, true)
   document.addEventListener('keydown', closeOnEscape)
   window.addEventListener('floating-panel-opened', handleExternalPanelOpen)
@@ -163,6 +183,17 @@ onUnmounted(() => {
 
 <template>
   <div ref="rootRef" class="community-floating-access" :class="{ open }">
+    <Transition name="community-hint">
+      <button
+        v-if="showCommunityHint && !open"
+        class="community-floating-hint"
+        type="button"
+        @click.stop="dismissCommunityHint"
+      >
+        Cambia entre comunidades aqui
+      </button>
+    </Transition>
+
     <button
       class="community-floating-button"
       :class="{ open }"
@@ -235,6 +266,42 @@ onUnmounted(() => {
 
 .community-floating-access.open {
   z-index: 2200;
+}
+
+.community-floating-hint {
+  align-items: center;
+  background:
+    linear-gradient(145deg, rgba(13, 18, 42, 0.98), rgba(35, 15, 62, 0.98)) padding-box,
+    linear-gradient(135deg, rgba(236, 72, 153, 0.78), rgba(168, 85, 247, 0.78), rgba(34, 211, 238, 0.54)) border-box;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  bottom: 8px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4), 0 0 24px rgba(168, 85, 247, 0.24);
+  color: #ffffff;
+  display: flex;
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1.2;
+  max-width: 210px;
+  min-height: 42px;
+  padding: 10px 14px;
+  position: absolute;
+  right: 66px;
+  text-align: left;
+  width: max-content;
+}
+
+.community-floating-hint::after {
+  background: linear-gradient(135deg, rgba(35, 15, 62, 0.98), rgba(13, 18, 42, 0.98));
+  border-right: 1px solid rgba(168, 85, 247, 0.5);
+  border-top: 1px solid rgba(168, 85, 247, 0.5);
+  content: "";
+  height: 12px;
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  width: 12px;
 }
 
 .community-floating-button {
@@ -453,9 +520,33 @@ onUnmounted(() => {
   transform: translateY(10px) scale(0.98);
 }
 
+.community-hint-enter-active,
+.community-hint-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.community-hint-enter-from,
+.community-hint-leave-to {
+  opacity: 0;
+  transform: translateX(10px) scale(0.96);
+}
+
 @media (max-width: 859px) {
   .community-floating-access {
     right: var(--galaxy-dock-community-right, 78px);
+  }
+
+  .community-floating-hint {
+    bottom: 62px;
+    max-width: min(230px, calc(100vw - 112px));
+    right: 0;
+  }
+
+  .community-floating-hint::after {
+    bottom: -6px;
+    right: 18px;
+    top: auto;
+    transform: rotate(135deg);
   }
 
   .community-floating-button {
