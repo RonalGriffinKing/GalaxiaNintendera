@@ -1,4 +1,6 @@
 <script setup>
+import { resolveAssetUrl } from '@/constants/assets'
+
 defineProps({
   isOfficial: {
     type: Boolean,
@@ -27,7 +29,7 @@ const emit = defineEmits(['create'])
     :class="{ 'with-background': hasBackground }"
   >
     <div class="empty-thread-visual">
-      <img v-if="community?.iconUrl" :src="community.iconUrl" alt="" />
+      <img v-if="community?.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
       <i v-else class="fas fa-wand-magic-sparkles"></i>
     </div>
     <h2>{{ isOfficial ? 'Aun no hay comunicados oficiales' : 'No hay hilos todavia en esta seccion' }}</h2>

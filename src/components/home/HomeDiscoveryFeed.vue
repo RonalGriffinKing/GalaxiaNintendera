@@ -1,4 +1,6 @@
 <script setup>
+import { resolveAssetUrl } from '@/constants/assets'
+
 defineProps({
   officialCommunity: {
     type: Object,
@@ -47,7 +49,7 @@ const emit = defineEmits(['open-community', 'open-archive', 'open-post'])
     </div>
 
     <article v-if="officialCommunity" class="official-community-strip" @click="emit('open-community', officialCommunity)">
-      <img v-if="officialCommunity.iconUrl" :src="officialCommunity.iconUrl" alt="" />
+      <img v-if="officialCommunity.iconUrl" :src="resolveAssetUrl(officialCommunity.iconUrl)" alt="" />
       <span v-else>{{ officialCommunity.name.slice(0, 2).toUpperCase() }}</span>
       <div>
         <small>Comunidad oficial</small>
@@ -58,7 +60,7 @@ const emit = defineEmits(['open-community', 'open-archive', 'open-post'])
 
     <div class="community-home-grid">
       <button v-for="community in communities" :key="community.id" type="button" class="community-home-card" @click="emit('open-community', community)">
-        <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+        <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
         <span v-else>{{ community.name.slice(0, 2).toUpperCase() }}</span>
         <div>
           <strong>{{ community.name }}</strong>

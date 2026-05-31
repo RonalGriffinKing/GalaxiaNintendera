@@ -5,6 +5,7 @@ import { addDoc, collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import GiphyPicker from '@/components/shared/GiphyPicker.vue'
 import { DEFAULT_THREAD_TOPICS, CONTENT_TAB_ICONS, OFFICIAL_COMMUNITY_ID } from '@/constants/community'
+import { resolveAssetUrl } from '@/constants/assets'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { playPublishSound } from '@/services/uiSounds'
 import officialLogo from '@/iconos/logo.png'
@@ -374,7 +375,7 @@ onMounted(async () => {
       <div class="composer-shell">
         <button class="community-select" type="button" @click="communityPickerOpen = true">
           <span>
-            <img v-if="selectedCommunity?.iconUrl" :src="selectedCommunity.iconUrl" alt="" />
+            <img v-if="selectedCommunity?.iconUrl" :src="resolveAssetUrl(selectedCommunity.iconUrl)" alt="" />
             <b v-else>{{ selectedCommunity?.name?.slice(0, 2).toUpperCase() }}</b>
           </span>
           <strong>{{ selectedCommunity?.name }}</strong>
@@ -473,7 +474,7 @@ onMounted(async () => {
             @click="selectCommunity(community)"
           >
             <span>
-              <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+              <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
               <b v-else>{{ community.name.slice(0, 2).toUpperCase() }}</b>
             </span>
             <div>

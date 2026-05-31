@@ -470,8 +470,8 @@ const canCreateThreadInSelectedCommunity = computed(() => {
   if (isOfficialSelectedCommunity.value) return canManageOfficialContent.value
   return isJoinedSelectedCommunity.value
 })
-const communityBannerPreview = computed(() => communityDraft.value.bannerUrl.trim())
-const communityIconPreview = computed(() => communityDraft.value.iconUrl.trim())
+const communityBannerPreview = computed(() => resolveAssetUrl(communityDraft.value.bannerUrl.trim()))
+const communityIconPreview = computed(() => resolveAssetUrl(communityDraft.value.iconUrl.trim()))
 const communityMusicPreview = computed(() => communityDraft.value.musicPlaylistUrl.trim())
 const communityMusicVolumePreview = computed(() => Number(communityDraft.value.musicVolume || 35))
 const communityThreadBackgroundPreview = computed(() => communityDraft.value.threadBackgroundUrl.trim())
@@ -2558,7 +2558,7 @@ onUnmounted(() => {
 
             <div v-if="filteredDiscoveryCommunities.length" class="discover-grid">
               <article v-for="community in filteredDiscoveryCommunities" :key="community.id" class="discover-mini-card">
-                <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+                <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
                 <span v-else>{{ community.name.slice(0, 2).toUpperCase() }}</span>
                 <div>
                   <strong>{{ community.name }}</strong>

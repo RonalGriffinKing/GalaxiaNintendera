@@ -12,6 +12,7 @@ import {
   setCurrentTime,
   setPlaybackStatus
 } from '@/services/playerState'
+import { resolveAssetUrl } from '@/constants/assets'
 import officialLogo from '@/iconos/logo.png'
 
 const props = defineProps({
@@ -1028,7 +1029,7 @@ onUnmounted(() => {
             </div>
             <div class="hub-community-grid">
               <button v-for="community in favoritePreview" :key="community.id" type="button" @click="selectCommunity(community)">
-                <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+                <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
                 <b v-else>{{ String(community.name || 'GN').slice(0, 2).toUpperCase() }}</b>
                 <strong>{{ community.name }}</strong>
                 <small>{{ formatMembers(community.membersCount) }}</small>
@@ -1040,7 +1041,7 @@ onUnmounted(() => {
             </div>
             <div class="hub-list">
               <button v-for="community in recentPreview" :key="`recent-${community.id}`" type="button" @click="selectCommunity(community)">
-                <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+                <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
                 <span>
                   <strong>{{ community.name }}</strong>
                   <small>Actividad reciente</small>

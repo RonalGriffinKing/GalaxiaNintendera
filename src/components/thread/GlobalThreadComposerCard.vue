@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { addDoc, collection, doc, getDoc, getDocs, increment, setDoc, updateDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { DEFAULT_THREAD_TOPICS, CONTENT_TAB_ICONS, OFFICIAL_COMMUNITY_ID } from '@/constants/community'
-import { defaultLogoUrl } from '@/constants/assets'
+import { defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { playPublishSound } from '@/services/uiSounds'
 import GlobalGifStickerPicker from '@/components/thread/GlobalGifStickerPicker.vue'
@@ -445,7 +445,7 @@ onUnmounted(() => {
     <header class="global-thread-header">
       <button class="global-thread-community" type="button" @click="mode = mode === 'communityPicker' ? 'compose' : 'communityPicker'">
         <span>
-          <img v-if="selectedCommunity?.iconUrl" :src="selectedCommunity.iconUrl" alt="" />
+          <img v-if="selectedCommunity?.iconUrl" :src="resolveAssetUrl(selectedCommunity.iconUrl)" alt="" />
           <b v-else>{{ selectedCommunity?.name?.slice(0, 2).toUpperCase() || 'GN' }}</b>
         </span>
         <strong>{{ selectedCommunity?.name || 'Galaxia Nintendera' }}</strong>
@@ -503,7 +503,7 @@ onUnmounted(() => {
               @click="selectCommunity(community)"
             >
               <span>
-                <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+                <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
                 <b v-else>{{ community.name?.slice(0, 2).toUpperCase() }}</b>
               </span>
               <div>

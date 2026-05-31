@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { addDoc, collection, doc, updateDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
+import { resolveAssetUrl } from '@/constants/assets'
 
 const props = defineProps({
   event: {
@@ -166,7 +167,7 @@ const saveEvent = async () => {
                     ? form.communityIds.filter(id => id !== community.id)
                     : [...form.communityIds, community.id]"
                 >
-                  <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+                  <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
                   <i v-else class="fas fa-users"></i>
                   {{ community.name }}
                 </button>

@@ -1,4 +1,6 @@
 <script setup>
+import { resolveAssetUrl } from '@/constants/assets'
+
 const props = defineProps({
   communities: {
     type: Array,
@@ -32,7 +34,7 @@ defineEmits(['select', 'create', 'explore'])
       @click="$emit('select', community)"
     >
       <span>
-        <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+        <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
         <b v-else>{{ community.name.slice(0, 2).toUpperCase() }}</b>
       </span>
       <strong>{{ community.name }}</strong>

@@ -59,7 +59,7 @@ const run = (eventName) => {
       <footer>
         <div class="event-community-stack">
           <span v-for="community in communities.slice(0, 3)" :key="community.id">
-            <img v-if="community.iconUrl" :src="community.iconUrl" alt="" />
+            <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
             <i v-else class="fas fa-users"></i>
           </span>
           <em v-if="communities.length > 3">+{{ communities.length - 3 }}</em>

@@ -10,6 +10,7 @@ import ProfileIconEditor from '@/components/profile/ProfileIconEditor.vue'
 import ProfileRelationModal from '@/components/profile/ProfileRelationModal.vue'
 import ProfileStatsPanel from '@/components/profile/ProfileStatsPanel.vue'
 import ProfileFavoritesPreview from '@/components/shared/ProfileFavoritesPreview.vue'
+import { resolveAssetUrl } from '@/constants/assets'
 import { notifyNewFollower } from '@/services/notifications'
 import {
   ICON_COST,
@@ -1335,7 +1336,7 @@ onUnmounted(() => {
               type="button"
               @click="router.push(`/comunidad?id=${community.id}`)"
             >
-              <img v-if="community.iconUrl || community.bannerUrl" :src="community.iconUrl || community.bannerUrl" alt="" />
+              <img v-if="community.iconUrl || community.bannerUrl" :src="resolveAssetUrl(community.iconUrl || community.bannerUrl)" alt="" />
               <span v-else class="community-letter">{{ community.name?.slice(0, 2).toUpperCase() }}</span>
               <span class="community-overlay"></span>
               <strong>{{ community.name }}</strong>
