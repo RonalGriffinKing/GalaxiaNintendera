@@ -9,6 +9,7 @@ import ProfileHeaderCard from '@/components/profile/ProfileHeaderCard.vue'
 import ProfileIconEditor from '@/components/profile/ProfileIconEditor.vue'
 import ProfileRelationModal from '@/components/profile/ProfileRelationModal.vue'
 import ProfileStatsPanel from '@/components/profile/ProfileStatsPanel.vue'
+import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import ProfileFavoritesPreview from '@/components/shared/ProfileFavoritesPreview.vue'
 import { resolveAssetUrl } from '@/constants/assets'
 import { notifyNewFollower } from '@/services/notifications'
@@ -477,7 +478,7 @@ const loadProfileExtras = async (requestId) => {
     getDocs(query(collection(db, 'users', profileId.value, 'favorites'), limit(6))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'communityThreads'), limit(80))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'posts'), limit(120))).catch(() => ({ docs: [] })),
-    getDocs(query(collection(db, 'users'), limit(24))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'users'), limit(120))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'users', profileId.value, 'communities'), limit(12))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'users', profileId.value, 'followers'), limit(500))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'users', profileId.value, 'following'), limit(500))).catch(() => ({ docs: [] })),
@@ -510,10 +511,24 @@ const loadProfileExtras = async (requestId) => {
   followingTotal.value = Number(profile.value.followingCount ?? followingSnap.docs.length)
   isFollowing.value = followSnap.exists()
   const usersById = new Map(usersSnap.docs.map(item => [item.id, { id: item.id, ...item.data() }]))
+  const allThreads = threadsSnap.docs.map(item => ({ id: item.id, ...item.data() }))
+  const followerIds = new Set(followersSnap.docs.map(item => relationIdFromDoc(item)).filter(Boolean))
+  const followingIds = new Set(followingSnap.docs.map(item => relationIdFromDoc(item)).filter(Boolean))
+  const { orderedIds: connectedIds } = collectPublicProfileIds({
+    threads: allThreads,
+    followerIds,
+    followingIds
+  })
+  const missingUserIds = [...connectedIds].filter(id => id && !usersById.has(id)).slice(0, 24)
+  const missingUserSnaps = await Promise.all(missingUserIds.map(id => getDoc(doc(db, 'users', id)).catch(() => null)))
+  missingUserSnaps.forEach((snap, index) => {
+    if (snap?.exists?.()) {
+      usersById.set(missingUserIds[index], { id: missingUserIds[index], ...snap.data() })
+    }
+  })
   followersList.value = followersSnap.docs.map(item => relationFromDoc(item, usersById))
   followingList.value = followingSnap.docs.map(item => relationFromDoc(item, usersById))
-  threads.value = threadsSnap.docs
-    .map(item => ({ id: item.id, ...item.data() }))
+  threads.value = allThreads
     .filter(thread => thread.authorId === profileId.value)
     .sort((a, b) => getTime(b.updatedAt || b.createdAt) - getTime(a.updatedAt || a.createdAt))
     .slice(0, 6)
@@ -522,12 +537,18 @@ const loadProfileExtras = async (requestId) => {
     .filter(post => post.authorId === profileId.value && post.status === 'approved' && post.visibility !== 'private' && post.visibility !== 'unlisted' && post.placement !== 'hero' && !post.isMainEntry)
     .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
     .slice(0, 6)
-  publicProfiles.value = usersSnap.docs
-    .map(item => ({ id: item.id, role: 'user', readPostsCount: 0, ...item.data() }))
-    .filter(user => user.id !== profileId.value)
-    .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
-    .slice(0, 8)
+  publicProfiles.value = buildPublicProfiles({
+    threads: allThreads,
+    usersById,
+    followerIds,
+    followingIds
+  })
 }
+const relationIdFromDoc = (item) => {
+  const data = item.data?.() || {}
+  return data.userId || item.id || ''
+}
+
 const relationFromDoc = (item, usersById) => {
   const data = item.data()
   const id = data.userId || item.id
@@ -542,6 +563,77 @@ const relationFromDoc = (item, usersById) => {
     imageUrl: data.imageUrl || resolveProfileIcon(liveProfile),
     canChat: Boolean(liveProfile.canChat)
   }
+}
+
+const likedByIds = (thread) => {
+  if (Array.isArray(thread?.likedBy)) return thread.likedBy.filter(Boolean)
+  if (thread?.likedBy && typeof thread.likedBy === 'object') return Object.keys(thread.likedBy).filter(Boolean)
+  return []
+}
+
+const isRealPublicProfile = (user) => {
+  if (!user?.id || user.id === profileId.value || user.isDeleted || user.deleted) return false
+  const name = String(user.name || user.displayName || user.email || '').trim()
+  return Boolean(name)
+}
+
+const publicProfileName = (user) => {
+  return user.name || user.displayName || user.email?.split('@')[0] || 'Usuario'
+}
+
+const publicProfileRelationLabel = (user, followerIds, followingIds, interactionIds) => {
+  if (followingIds.has(user.id)) return 'Siguiendo'
+  if (followerIds.has(user.id)) return 'Te sigue'
+  if (interactionIds.has(user.id)) return 'Interaccion reciente'
+  return 'Perfil'
+}
+
+const collectPublicProfileIds = ({ threads = [], followerIds = new Set(), followingIds = new Set() } = {}) => {
+  const interactionIds = new Set()
+
+  threads.forEach((thread) => {
+    const threadAuthorId = thread.authorId || ''
+    const likes = likedByIds(thread)
+    const comments = thread.comments || []
+
+    if (threadAuthorId === profileId.value) {
+      likes.forEach(id => interactionIds.add(id))
+      comments.forEach(comment => {
+        if (comment.authorId) interactionIds.add(comment.authorId)
+      })
+      return
+    }
+
+    if (likes.includes(profileId.value)) interactionIds.add(threadAuthorId)
+    if (comments.some(comment => comment.authorId === profileId.value)) interactionIds.add(threadAuthorId)
+  })
+
+  const orderedIds = [...new Set([
+    ...followingIds,
+    ...followerIds,
+    ...interactionIds
+  ])].filter(id => id && id !== profileId.value)
+
+  return { orderedIds, interactionIds }
+}
+
+const buildPublicProfiles = ({ threads = [], usersById = new Map(), followerIds = new Set(), followingIds = new Set() } = {}) => {
+  const { orderedIds, interactionIds } = collectPublicProfileIds({ threads, followerIds, followingIds })
+
+  return orderedIds
+    .map(id => usersById.get(id))
+    .filter(isRealPublicProfile)
+    .map(user => ({
+      ...user,
+      name: publicProfileName(user),
+      iconMeta: resolveProfileIconMeta(user),
+      relationLabel: publicProfileRelationLabel(user, followerIds, followingIds, interactionIds)
+    }))
+    .sort((a, b) => {
+      const rank = (user) => followingIds.has(user.id) ? 0 : followerIds.has(user.id) ? 1 : 2
+      return rank(a) - rank(b) || getTime(b.createdAt) - getTime(a.createdAt)
+    })
+    .slice(0, 8)
 }
 
 const getTime = (value) => {
@@ -1504,11 +1596,15 @@ onUnmounted(() => {
             type="button"
             @click="router.push(`/perfil/${user.id}`)"
           >
-            <span>
-              <img :src="resolveProfileIcon(user)" alt="" />
-            </span>
+            <ProfileAvatar
+              class="directory-profile-avatar"
+              :src="resolveProfileIcon(user)"
+              :alt="user.name || user.email || 'Usuario'"
+              :label="user.name || user.email || 'Usuario'"
+              :effect="user.iconMeta"
+            />
             <strong>{{ user.name || user.email || 'Usuario' }}</strong>
-            <small>{{ user.readPostsCount || 0 }} posts leidos</small>
+            <small>{{ user.relationLabel }}</small>
           </button>
         </div>
       </section>
@@ -2461,34 +2557,23 @@ onUnmounted(() => {
 }
 
 .profile-directory-grid button {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(168, 85, 247, 0.18), transparent 54%),
+    rgba(9, 12, 30, 0.82);
+  border: 1px solid rgba(216, 180, 254, 0.16);
   border-radius: 14px;
   padding: 14px;
   text-align: center;
 }
 
-.profile-directory-grid span {
-  background: #ffffff;
-  border-radius: 999px;
-  display: block;
-  height: 74px;
+.profile-directory-grid .directory-profile-avatar {
+  --avatar-size: 74px;
+  display: flex;
   margin: 0 auto 9px;
-  overflow: hidden;
-  width: 74px;
-}
-
-.profile-directory-grid img {
-  height: 136%;
-  margin-left: -18%;
-  margin-top: -17%;
-  max-width: none;
-  object-fit: cover;
-  width: 136%;
 }
 
 .profile-directory-grid strong {
-  color: #111827;
+  color: #ffffff;
   display: block;
   font-size: 13px;
   font-weight: 950;
@@ -3396,6 +3481,10 @@ onUnmounted(() => {
     padding-bottom: 2px;
   }
 
+}
+
+.profile-directory-grid small {
+  color: #cbd5e1;
 }
 
 @media (max-width: 760px) {

@@ -19,10 +19,12 @@ defineProps({
 
 <style scoped>
 .profile-hero-stats {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(168, 85, 247, 0.18), transparent 58%),
+    rgba(6, 9, 24, 0.72);
+  border: 1px solid rgba(216, 180, 254, 0.14);
   border-radius: 16px;
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 18px 50px rgba(2, 6, 23, 0.18);
   display: grid;
   gap: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -43,7 +45,7 @@ defineProps({
 }
 
 .profile-hero-stats div + div::before {
-  background: #e5e7eb;
+  background: rgba(216, 180, 254, 0.14);
   content: '';
   height: 42px;
   left: 0;
@@ -58,13 +60,13 @@ defineProps({
 }
 
 .profile-hero-stats strong {
-  color: #111827;
+  color: #ffffff;
   font-size: 21px;
   font-weight: 950;
 }
 
 .profile-hero-stats span {
-  color: #64748b;
+  color: #dbeafe;
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;

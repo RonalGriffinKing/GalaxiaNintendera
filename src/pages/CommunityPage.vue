@@ -1,43 +1,21 @@
 <script setup>
 import { onMounted, onUnmounted, ref, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import CommunityPanel from '@/components/community/CommunityPanel.vue'
-import CommunityGuestLanding from '@/components/community/CommunityGuestLanding.vue'
 
 defineOptions({
   name: 'CommunityPage'
 })
 
-const router = useRouter()
 const route = useRoute()
 const selectedCommunityId = computed(() => route.query.id || '')
-const activeLive = ref('Directo Nintendo')
 const currentUser = ref(auth.currentUser)
 const currentRole = ref('user')
 const isCheckingAuth = ref(true)
 let unsubscribeAuth = null
-
-const lives = [
-  { title: 'Directo Nintendo', host: 'Galaxia Live', viewers: '1.8k', topic: 'Reaccionando al ultimo trailer y rumores de Switch.', accent: '#ef4444' },
-  { title: 'Mesa Zelda', host: 'Hyrule Club', viewers: '642', topic: 'Teorias, builds y secretos encontrados por la comunidad.', accent: '#16a34a' },
-  { title: 'Charlas Pokemon', host: 'Ruta 01', viewers: '914', topic: 'Opiniones en vivo sobre eventos, competitivo y coleccion.', accent: '#f59e0b' }
-]
-
-const chatMessages = [
-  { name: 'Marta', text: 'El directo esta buenisimo, ese anuncio me sorprendio.' },
-  { name: 'Neo', text: 'Yo quiero un hilo solo para teorias de Zelda.' },
-  { name: 'Luna', text: 'Que alguien comparta clips del live despues.' },
-  { name: 'Alex', text: 'Esto en el dashboard seria perfecto para seguir conversaciones.' }
-]
-
-const communityThreads = [
-  { title: 'Que juego deberia tener remake este ano?', author: 'PixelFan', replies: 48, tag: 'Debate' },
-  { title: 'Comparte tu setup para streams de Nintendo', author: 'StreamKit', replies: 23, tag: 'Lives' },
-  { title: 'Hilo de opiniones del ultimo Indie World', author: 'NaviNews', replies: 71, tag: 'Opinion' }
-]
 
 const loadRole = async (user) => {
   currentRole.value = 'user'
@@ -46,10 +24,6 @@ const loadRole = async (user) => {
   const snap = await getDoc(doc(db, 'users', user.uid))
   const profile = snap.data() || {}
   currentRole.value = profile.isBlocked ? 'user' : (profile.role || 'user')
-}
-
-const goJoin = () => {
-  router.push(currentUser.value ? '/dashboard' : '/login?mode=register&redirect=%2Fcomunidad')
 }
 
 onMounted(() => {
@@ -71,20 +45,9 @@ onUnmounted(() => {
 <template>
   <div>
     <Transition name="community-content" appear>
-      <main v-if="!isCheckingAuth && currentUser" class="community-member-page">
+      <main v-if="!isCheckingAuth" class="community-member-page">
         <CommunityPanel :user-role="currentRole" :initial-community-id="selectedCommunityId" :show-rail="false" />
       </main>
-    </Transition>
-
-    <Transition name="community-content" appear>
-      <CommunityGuestLanding
-        v-if="!isCheckingAuth && !currentUser"
-        v-model:active-live="activeLive"
-        :lives="lives"
-        :chat-messages="chatMessages"
-        :community-threads="communityThreads"
-        @join="goJoin"
-      />
     </Transition>
   </div>
 </template>

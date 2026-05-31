@@ -1207,7 +1207,10 @@ const hasLiked = (thread) => {
 
 const toggleLike = async (thread) => {
   const userId = currentUserId.value
-  if (!userId) return
+  if (!userId) {
+    router.push('/login?mode=login')
+    return
+  }
 
   const likedBy = thread.likedBy || []
 
@@ -1900,6 +1903,10 @@ const toggleLiveGoalExpanded = (goal) => {
 const publishReply = async (thread) => {
   const body = replyDraft.value.trim()
   if (currentUserBlocked.value || !body) return
+  if (!currentUserId.value) {
+    router.push('/login?mode=login')
+    return
+  }
 
   const now = Date.now()
   const comment = {
