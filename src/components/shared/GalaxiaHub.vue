@@ -1095,14 +1095,15 @@ onUnmounted(() => {
                   :key="message.id"
                   :class="{ mine: message.authorId === currentUser?.uid, 'has-status': isLastOwnMessage(message, index), 'has-gif': message.gif?.url }"
                 >
-                  <p>{{ message.body }}</p>
-                  <img
-                    v-if="message.gif?.url"
-                    class="hub-message-gif"
-                    :src="message.gif.url"
-                    :alt="message.gif.title || 'GIF'"
-                    loading="lazy"
-                  />
+                  <p v-if="message.body">{{ message.body }}</p>
+                  <figure v-if="message.gif?.url" class="hub-message-media">
+                    <img
+                      class="hub-message-gif"
+                      :src="message.gif.url"
+                      :alt="message.gif.title || 'GIF'"
+                      loading="lazy"
+                    />
+                  </figure>
                   <small v-if="isLastOwnMessage(message, index)" class="hub-message-status">
                     {{ messageReadLabel(message) }}
                   </small>
@@ -1260,14 +1261,15 @@ onUnmounted(() => {
                     <b v-else>{{ String(message.author || 'GN').slice(0, 2).toUpperCase() }}</b>
                     <span>
                       <small><strong>{{ message.author }}</strong> {{ formatLiveTime(message.videoSecond) }}</small>
-                      <p>{{ message.body }}</p>
-                      <img
-                        v-if="message.gif?.url"
-                        class="hub-message-gif"
-                        :src="message.gif.url"
-                        :alt="message.gif.title || 'GIF'"
-                        loading="lazy"
-                      />
+                      <p v-if="message.body">{{ message.body }}</p>
+                      <figure v-if="message.gif?.url" class="hub-message-media live">
+                        <img
+                          class="hub-message-gif"
+                          :src="message.gif.url"
+                          :alt="message.gif.title || 'GIF'"
+                          loading="lazy"
+                        />
+                      </figure>
                     </span>
                   </article>
                   <div v-if="!liveMessages.length" class="hub-chat-placeholder">
@@ -1818,22 +1820,40 @@ onUnmounted(() => {
   border-color: rgba(192, 132, 252, 0.34);
 }
 
-.hub-message-gif {
+.hub-message-media {
   background: rgba(15, 23, 42, 0.58);
   border-radius: 12px;
-  display: block;
-  height: clamp(150px, 34vw, 240px);
+  display: flex;
+  aspect-ratio: 4 / 3;
+  align-items: center;
+  justify-content: center;
   margin-top: 7px;
   max-height: 260px;
+  max-width: 100%;
+  min-height: 150px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.hub-message-gif {
+  display: block;
+  height: 100%;
+  max-height: none;
   max-width: 100%;
   object-fit: contain;
   width: 100%;
 }
 
-.hub-live-chat-list .hub-message-gif {
-  height: clamp(130px, 30vw, 220px);
+.hub-live-chat-list .hub-message-media {
+  aspect-ratio: 4 / 3;
   max-height: 220px;
   max-width: min(280px, 100%);
+  min-height: 130px;
+  width: 100%;
+}
+
+.hub-live-chat-list .hub-message-gif {
+  height: 100%;
   min-height: 0;
   object-fit: contain;
   width: 100%;
@@ -2117,7 +2137,11 @@ onUnmounted(() => {
 }
 
 .hub-chat-messages article.has-gif {
-  width: min(78%, 340px);
+  max-width: min(82%, 360px);
+  overflow: visible;
+  padding: 8px;
+  white-space: normal;
+  width: min(82%, 360px);
 }
 
 .hub-chat-messages article.mine {
@@ -2634,11 +2658,12 @@ onUnmounted(() => {
   }
 
   .hub-chat-messages article.has-gif {
-    width: min(82vw, 340px);
+    max-width: min(86vw, 360px);
+    width: min(86vw, 360px);
   }
 
-  .hub-message-gif {
-    height: clamp(150px, 44vw, 230px);
+  .hub-message-media {
+    min-height: 170px;
   }
 
   .hub-chat-messages p {
