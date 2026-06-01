@@ -530,7 +530,14 @@ onUnmounted(() => {
 
         <section v-else key="compose" class="global-thread-compose">
           <div class="global-thread-prompt">
-            <strong>Que quieres compartir?</strong>
+            <div class="global-thread-prompt-head">
+              <strong>Que quieres compartir?</strong>
+              <div class="global-thread-mobile-tools" aria-label="Herramientas rapidas">
+                <button type="button" title="Imagen" @click="pasteImageUrl"><i class="far fa-image"></i></button>
+                <button type="button" :class="{ active: spoiler }" title="Spoiler" @click="spoiler = !spoiler"><i class="fas fa-eye-slash"></i></button>
+                <button type="button" :class="{ active: mode === 'gifPicker' }" title="GIF / stickers" @click="mode = mode === 'gifPicker' ? 'compose' : 'gifPicker'"><i class="far fa-face-smile"></i></button>
+              </div>
+            </div>
             <div class="global-thread-topic-row">
               <button
                 v-for="topic in topics.map(topicMeta).slice(0, 5)"
@@ -940,10 +947,23 @@ onUnmounted(() => {
   gap: 10px;
 }
 
+.global-thread-prompt-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.global-thread-prompt-head > strong,
 .global-thread-prompt > strong {
   color: #fff;
   font-size: 20px;
   font-weight: 950;
+}
+
+.global-thread-mobile-tools {
+  display: none;
 }
 
 .global-thread-topic-row {
@@ -968,7 +988,8 @@ onUnmounted(() => {
 }
 
 .global-thread-topic-row button.active,
-.global-thread-tools button.active {
+.global-thread-tools button.active,
+.global-thread-mobile-tools button.active {
   background: linear-gradient(135deg, #9333ea, #ec4899);
   color: #fff;
 }
@@ -1140,6 +1161,18 @@ onUnmounted(() => {
   width: 38px;
 }
 
+.global-thread-mobile-tools button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: #d8dcef;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
 .global-thread-chip {
   margin-left: auto;
   white-space: nowrap;
@@ -1209,8 +1242,33 @@ onUnmounted(() => {
     padding: 8px 14px;
   }
 
+  .global-thread-prompt {
+    gap: 8px;
+  }
+
+  .global-thread-prompt-head > strong,
   .global-thread-prompt > strong {
     font-size: 18px;
+  }
+
+  .global-thread-prompt-head {
+    gap: 8px;
+  }
+
+  .global-thread-mobile-tools {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    margin-left: auto;
+  }
+
+  .global-thread-mobile-tools button {
+    height: 32px;
+    width: 32px;
+  }
+
+  .global-thread-topic-row {
+    display: none;
   }
 
   .global-thread-editor {
@@ -1242,27 +1300,21 @@ onUnmounted(() => {
   }
 
   .global-thread-footer {
-    display: grid;
-    gap: 10px;
-    grid-template-columns: minmax(0, 1fr) auto;
-    padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 14px calc(10px + env(safe-area-inset-bottom, 0px));
   }
 
   .global-thread-tools {
-    display: grid;
-    grid-template-columns: repeat(5, 38px);
-    overflow-x: auto;
+    display: none;
   }
 
   .global-thread-chip {
-    grid-column: 1;
-    justify-self: start;
-    margin: 0;
+    display: none;
   }
 
   .global-thread-publish {
-    grid-column: 2;
-    grid-row: 1 / span 2;
+    height: 50px;
     min-width: 46px;
     padding: 0 14px;
   }
