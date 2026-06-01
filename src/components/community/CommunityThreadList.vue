@@ -442,6 +442,7 @@ const deleteComment = (thread, comment) => {
 
 .community-thread-composer {
   margin: 30px 0 30px;
+  width: 100%;
 }
 
 .official-readonly-note {
@@ -510,8 +511,8 @@ const deleteComment = (thread, comment) => {
   border-radius: 20px;
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
   display: block;
-  margin: 0 auto 14px;
-  max-width: min(900px, 100%);
+  margin: 0 0 14px;
+  max-width: none;
   padding: 18px;
   width: 100%;
 }
@@ -525,8 +526,9 @@ const deleteComment = (thread, comment) => {
 }
 
 .thread-main {
-  margin-left: 60px;
+  margin-left: 0;
   min-width: 0;
+  padding-left: 60px;
 }
 
 .thread-avatar,
@@ -612,8 +614,8 @@ const deleteComment = (thread, comment) => {
 }
 
 .thread-image {
-  margin: 12px auto 0;
-  max-width: min(620px, 100%);
+  margin: 12px 0 0;
+  max-width: min(680px, 100%);
   overflow: hidden;
   position: relative;
 }
@@ -629,7 +631,7 @@ const deleteComment = (thread, comment) => {
 }
 
 .thread-image:not(.is-gif) {
-  max-width: min(620px, 100%);
+  max-width: min(680px, 100%);
 }
 
 .thread-image:not(.is-gif) img {
@@ -952,6 +954,7 @@ const deleteComment = (thread, comment) => {
 
   .thread-main {
     margin-left: 0;
+    padding-left: 0;
   }
 
   .thread-meta {

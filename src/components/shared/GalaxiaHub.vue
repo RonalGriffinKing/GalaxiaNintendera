@@ -1090,7 +1090,7 @@ onUnmounted(() => {
                 <article
                   v-for="(message, index) in hubMessages"
                   :key="message.id"
-                  :class="{ mine: message.authorId === currentUser?.uid, 'has-status': isLastOwnMessage(message, index) }"
+                  :class="{ mine: message.authorId === currentUser?.uid, 'has-status': isLastOwnMessage(message, index), 'has-gif': message.gif?.url }"
                 >
                   <p>{{ message.body }}</p>
                   <img
@@ -1493,6 +1493,10 @@ onUnmounted(() => {
   width: min(520px, calc(100vw - 36px));
 }
 
+.galaxia-hub-panel.chat-active .hub-segments {
+  display: none;
+}
+
 .galaxia-hub-panel.live-active {
   grid-template-rows: auto auto minmax(0, 1fr);
   width: min(560px, calc(100vw - 36px));
@@ -1811,12 +1815,23 @@ onUnmounted(() => {
 }
 
 .hub-message-gif {
+  background: rgba(15, 23, 42, 0.58);
   border-radius: 12px;
   display: block;
   margin-top: 7px;
-  max-height: 190px;
+  max-height: 260px;
+  max-width: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.hub-live-chat-list .hub-message-gif {
+  height: auto;
+  max-height: 220px;
   max-width: min(280px, 100%);
-  object-fit: cover;
+  min-height: 0;
+  object-fit: contain;
+  width: 100%;
 }
 
 .hub-media-preview {
@@ -2095,6 +2110,10 @@ onUnmounted(() => {
   word-break: break-word;
 }
 
+.hub-chat-messages article.has-gif {
+  width: min(78%, 340px);
+}
+
 .hub-chat-messages article.mine {
   align-self: flex-end;
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.84), rgba(192, 38, 211, 0.72));
@@ -2167,6 +2186,16 @@ onUnmounted(() => {
   min-width: 0;
   overflow: visible;
   position: relative;
+}
+
+.hub-chat-composer :deep(.giphy-picker),
+.hub-live-composer :deep(.giphy-picker) {
+  bottom: calc(100% + 10px);
+  max-height: min(360px, 54dvh);
+  right: 0;
+  top: auto;
+  width: min(360px, calc(100vw - 40px));
+  z-index: 20;
 }
 
 .hub-chat-composer textarea {
@@ -2410,7 +2439,7 @@ onUnmounted(() => {
 
   .galaxia-hub-panel.chat-active {
     bottom: var(--hub-keyboard-offset);
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     height: calc(100dvh - var(--hub-keyboard-offset));
     max-height: calc(100dvh - var(--hub-keyboard-offset));
     padding: calc(12px + env(safe-area-inset-top, 0px)) 10px calc(16px + env(safe-area-inset-bottom, 0px));
@@ -2455,12 +2484,6 @@ onUnmounted(() => {
     min-height: 32px;
     padding: 0 8px;
     white-space: nowrap;
-  }
-
-  .galaxia-hub-panel.chat-active .hub-segments {
-    position: relative;
-    top: auto;
-    z-index: 1;
   }
 
   .hub-content {
@@ -2602,6 +2625,10 @@ onUnmounted(() => {
   .hub-chat-messages article {
     max-width: min(78vw, 520px);
     padding: 8px 12px;
+  }
+
+  .hub-chat-messages article.has-gif {
+    width: min(82vw, 340px);
   }
 
   .hub-chat-messages p {
