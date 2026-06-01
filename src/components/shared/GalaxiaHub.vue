@@ -1824,13 +1824,13 @@ onUnmounted(() => {
   background: rgba(15, 23, 42, 0.58);
   border-radius: 12px;
   display: flex;
-  aspect-ratio: 4 / 3;
   align-items: center;
+  flex: 0 0 auto;
+  height: 220px;
   justify-content: center;
-  margin-top: 7px;
-  max-height: 260px;
+  margin: 7px 0 0;
   max-width: 100%;
-  min-height: 150px;
+  min-height: 0;
   overflow: hidden;
   width: 100%;
 }
@@ -1845,10 +1845,8 @@ onUnmounted(() => {
 }
 
 .hub-live-chat-list .hub-message-media {
-  aspect-ratio: 4 / 3;
-  max-height: 220px;
+  height: 180px;
   max-width: min(280px, 100%);
-  min-height: 130px;
   width: 100%;
 }
 
@@ -2137,8 +2135,9 @@ onUnmounted(() => {
 }
 
 .hub-chat-messages article.has-gif {
+  display: block;
   max-width: min(82%, 360px);
-  overflow: visible;
+  overflow: hidden;
   padding: 8px;
   white-space: normal;
   width: min(82%, 360px);
@@ -2663,7 +2662,7 @@ onUnmounted(() => {
   }
 
   .hub-message-media {
-    min-height: 170px;
+    height: 210px;
   }
 
   .hub-chat-messages p {
