@@ -569,6 +569,9 @@ onUnmounted(() => {
               ></textarea>
               <small>{{ body.length }}/240</small>
             </label>
+            <button class="global-thread-publish-mobile" type="button" :disabled="!canPublish" aria-label="Publicar hilo" @click="publish">
+              <i class="fas fa-paper-plane"></i>
+            </button>
           </div>
 
           <div v-if="showHashtagSuggestions" class="global-thread-suggestions">
@@ -1002,6 +1005,7 @@ onUnmounted(() => {
   gap: 12px;
   padding: 14px;
   min-height: 0;
+  position: relative;
 }
 
 .global-thread-avatar {
@@ -1191,7 +1195,12 @@ onUnmounted(() => {
   padding: 0 18px;
 }
 
-.global-thread-publish:disabled {
+.global-thread-publish-mobile {
+  display: none;
+}
+
+.global-thread-publish:disabled,
+.global-thread-publish-mobile:disabled {
   cursor: not-allowed;
   filter: grayscale(0.25);
   opacity: 0.55;
@@ -1273,12 +1282,35 @@ onUnmounted(() => {
 
   .global-thread-editor {
     gap: 10px;
-    padding: 12px;
+    padding: 12px 12px 14px;
   }
 
   .global-thread-editor textarea {
     font-size: 15px;
     min-height: min(30dvh, 210px);
+    padding-bottom: 58px;
+    padding-right: 6px;
+  }
+
+  .global-thread-editor small {
+    justify-self: start;
+    padding-right: 56px;
+  }
+
+  .global-thread-publish-mobile {
+    align-items: center;
+    background: linear-gradient(135deg, #7c3aed, #ec4899);
+    border-radius: 999px;
+    bottom: 12px;
+    box-shadow: 0 12px 30px rgba(168, 85, 247, 0.34);
+    color: #ffffff;
+    display: inline-flex;
+    height: 48px;
+    justify-content: center;
+    position: absolute;
+    right: 12px;
+    width: 48px;
+    z-index: 2;
   }
 
   .global-thread-community-list button {
@@ -1300,9 +1332,7 @@ onUnmounted(() => {
   }
 
   .global-thread-footer {
-    display: flex;
-    justify-content: flex-end;
-    padding: 8px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+    display: none;
   }
 
   .global-thread-tools {
