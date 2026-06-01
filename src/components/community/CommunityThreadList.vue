@@ -511,8 +511,8 @@ const deleteComment = (thread, comment) => {
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
   display: block;
   margin: 0 auto 14px;
-  max-width: min(760px, 100%);
-  padding: 16px;
+  max-width: min(900px, 100%);
+  padding: 18px;
   width: 100%;
 }
 
@@ -613,7 +613,7 @@ const deleteComment = (thread, comment) => {
 
 .thread-image {
   margin: 12px auto 0;
-  max-width: min(520px, 100%);
+  max-width: min(620px, 100%);
   overflow: hidden;
   position: relative;
 }
@@ -629,7 +629,7 @@ const deleteComment = (thread, comment) => {
 }
 
 .thread-image:not(.is-gif) {
-  max-width: min(520px, 100%);
+  max-width: min(620px, 100%);
 }
 
 .thread-image:not(.is-gif) img {

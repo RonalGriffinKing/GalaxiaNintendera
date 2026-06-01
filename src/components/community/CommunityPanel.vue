@@ -459,7 +459,7 @@ const selectedCommunityThreads = computed(() => {
     .sort((a, b) => {
       const pinnedDelta = Number(Boolean(b.pinnedCommunity)) - Number(Boolean(a.pinnedCommunity))
       if (pinnedDelta) return pinnedDelta
-      return getMillis(b.updatedAt || b.createdAt) - getMillis(a.updatedAt || a.createdAt)
+      return getMillis(b.createdAt) - getMillis(a.createdAt)
     })
 })
 const isJoinedSelectedCommunity = computed(() => selectedCommunity.value && joinedCommunityIds.value.includes(selectedCommunity.value.id))
