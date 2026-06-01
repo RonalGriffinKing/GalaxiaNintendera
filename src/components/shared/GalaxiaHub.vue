@@ -1085,6 +1085,9 @@ onUnmounted(() => {
                     </button>
                   </div>
                 </div>
+                <button class="hub-chat-close-btn" type="button" aria-label="Cerrar Galaxia Hub" @click="closeHub">
+                  <i class="fas fa-xmark"></i>
+                </button>
               </div>
               <div ref="chatMessagesRef" class="hub-chat-messages" @scroll="handleChatScroll">
                 <article
@@ -1488,11 +1491,12 @@ onUnmounted(() => {
 }
 
 .galaxia-hub-panel.chat-active {
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   max-height: min(780px, calc(100dvh - 36px));
   width: min(520px, calc(100vw - 36px));
 }
 
+.galaxia-hub-panel.chat-active .hub-head,
 .galaxia-hub-panel.chat-active .hub-segments {
   display: none;
 }
@@ -1818,6 +1822,7 @@ onUnmounted(() => {
   background: rgba(15, 23, 42, 0.58);
   border-radius: 12px;
   display: block;
+  height: clamp(150px, 34vw, 240px);
   margin-top: 7px;
   max-height: 260px;
   max-width: 100%;
@@ -1826,7 +1831,7 @@ onUnmounted(() => {
 }
 
 .hub-live-chat-list .hub-message-gif {
-  height: auto;
+  height: clamp(130px, 30vw, 220px);
   max-height: 220px;
   max-width: min(280px, 100%);
   min-height: 0;
@@ -1987,14 +1992,15 @@ onUnmounted(() => {
   align-items: center;
   display: grid;
   column-gap: 12px;
-  grid-template-columns: 40px 54px minmax(0, 1fr) 40px;
+  grid-template-columns: 40px 54px minmax(0, 1fr) 40px 40px;
   min-height: 56px;
   overflow: visible;
   position: relative;
 }
 
 .hub-chat-room-head > button,
-.hub-chat-menu-wrap > button {
+.hub-chat-menu-wrap > button,
+.hub-chat-close-btn {
   background: rgba(255, 255, 255, 0.07);
   border-radius: 999px;
   color: #ffffff;
@@ -2439,7 +2445,7 @@ onUnmounted(() => {
 
   .galaxia-hub-panel.chat-active {
     bottom: var(--hub-keyboard-offset);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     height: calc(100dvh - var(--hub-keyboard-offset));
     max-height: calc(100dvh - var(--hub-keyboard-offset));
     padding: calc(12px + env(safe-area-inset-top, 0px)) 10px calc(16px + env(safe-area-inset-bottom, 0px));
@@ -2611,7 +2617,7 @@ onUnmounted(() => {
 
   .hub-chat-room-head {
     column-gap: 10px;
-    grid-template-columns: 40px 52px minmax(0, 1fr) 40px;
+    grid-template-columns: 40px 52px minmax(0, 1fr) 40px 40px;
     min-height: 56px;
   }
 
@@ -2629,6 +2635,10 @@ onUnmounted(() => {
 
   .hub-chat-messages article.has-gif {
     width: min(82vw, 340px);
+  }
+
+  .hub-message-gif {
+    height: clamp(150px, 44vw, 230px);
   }
 
   .hub-chat-messages p {
