@@ -173,6 +173,12 @@ const displayAuthorName = (item = {}) => {
   return `@${cleanName || 'usuario'}`
 }
 
+const threadTypeLabel = (thread = {}) => {
+  if (thread.pollOpen || thread.poll) return 'Encuesta'
+  if (thread.topic) return thread.topic
+  return 'Posts'
+}
+
 const toggleThreadActionMenu = (thread) => {
   openThreadActionMenuId.value = openThreadActionMenuId.value === thread.id ? '' : thread.id
 }
@@ -251,27 +257,32 @@ const deleteComment = (thread, comment) => {
     />
 
     <article v-for="thread in threads" v-else :key="thread.id" class="thread-card">
-      <button
-        class="thread-avatar profile-trigger"
-        type="button"
-        @click="emit('open-profile', thread)"
-      >
-        <ProfileAvatar
-          :src="thread.authorImage"
-          :alt="thread.author"
-          :label="thread.author"
-          :effect="thread.authorIconEffect"
-        />
-      </button>
+      <header class="thread-card-header">
+        <button
+          class="thread-avatar profile-trigger"
+          type="button"
+          @click="emit('open-profile', thread)"
+        >
+          <ProfileAvatar
+            :src="thread.authorImage"
+            :alt="thread.author"
+            :label="thread.author"
+            :effect="thread.authorIconEffect"
+          />
+        </button>
 
-      <div class="thread-main">
         <div class="thread-meta">
           <button type="button" @click="emit('open-profile', thread)">
             <strong>{{ displayAuthorName(thread) }}</strong>
           </button>
+          <span aria-hidden="true">·</span>
           <span>{{ formatAgo(thread.createdAt) }}</span>
         </div>
 
+        <span class="thread-topic-pill">{{ threadTypeLabel(thread) }}</span>
+      </header>
+
+      <div class="thread-main">
         <h2 v-if="visibleThreadTitle(thread)">{{ visibleThreadTitle(thread) }}</h2>
         <small v-if="thread.spoiler" class="spoiler-badge"><i class="fas fa-eye-slash"></i> Spoiler</small>
         <p v-if="thread.body">{{ thread.body }}</p>
@@ -280,55 +291,21 @@ const deleteComment = (thread, comment) => {
         </figure>
 
         <div class="thread-footer">
-          <button
-            type="button"
-            class="like-thread"
-            :class="{ active: hasLiked(thread) }"
-            @click="emit('like-thread', thread)"
-          >
-            <i :class="hasLiked(thread) ? 'fas fa-heart' : 'far fa-heart'"></i>
-            {{ thread.likes }}
-          </button>
-          <button type="button" class="thread-primary-action" @click="emit('open-thread', thread)">
-            <i class="far fa-comment"></i>
-            {{ thread.replies }}
-          </button>
-          <div class="thread-secondary-actions">
+          <div class="thread-interactions">
             <button
-              v-if="canPinThread(thread)"
               type="button"
-              class="pin-thread"
-              :class="{ active: thread.pinnedCommunity }"
-              title="Fijar arriba en comunidad"
-              @click="emit('pin-thread', thread)"
+              class="like-thread"
+              :class="{ active: hasLiked(thread) }"
+              @click="emit('like-thread', thread)"
             >
-              <i class="fas fa-thumbtack"></i>
-              {{ thread.pinnedCommunity ? 'Fijado' : 'Fijar' }}
+              <i :class="hasLiked(thread) ? 'fas fa-heart' : 'far fa-heart'"></i>
+              {{ thread.likes }}
             </button>
-            <button
-              v-if="canPinThread(thread)"
-              type="button"
-              class="home-thread"
-              :class="{ active: thread.showOnHome || thread.pinnedHome }"
-              title="Mostrar este hilo destacado en Home"
-              @click="emit('home-thread', thread)"
-            >
-              <i class="fas fa-home"></i>
-              {{ (thread.showOnHome || thread.pinnedHome) ? 'En Home' : 'Mostrar en Home' }}
-            </button>
-            <button
-              v-if="canDeleteThread(thread)"
-              type="button"
-              class="delete-thread"
-              title="Borrar hilo"
-              @click="emit('delete-thread', thread)"
-            >
-              <i class="fas fa-trash"></i>
-              Borrar
+            <button type="button" class="thread-primary-action" @click="emit('open-thread', thread)">
+              <i class="far fa-comment"></i>
+              {{ thread.replies }}
             </button>
           </div>
-
-          <span class="thread-topic-pill">{{ thread.topic }}</span>
 
           <div v-if="hasThreadMenuActions(thread)" class="thread-more-actions">
             <button
@@ -526,18 +503,29 @@ const deleteComment = (thread, comment) => {
 
 .thread-card {
   align-items: start;
-  background: rgba(9, 11, 30, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 18px;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
-  display: grid;
-  gap: 16px;
-  grid-template-columns: 58px minmax(0, 1fr);
-  margin-bottom: 12px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(124, 58, 237, 0.18), transparent 36%),
+    rgba(8, 11, 28, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 20px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
+  display: block;
+  margin: 0 auto 14px;
+  max-width: min(760px, 100%);
   padding: 16px;
+  width: 100%;
+}
+
+.thread-card-header {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+  min-width: 0;
 }
 
 .thread-main {
+  margin-left: 60px;
   min-width: 0;
 }
 
@@ -549,9 +537,9 @@ const deleteComment = (thread, comment) => {
 .thread-avatar {
   align-items: center;
   display: flex;
-  height: 58px;
+  height: 50px;
   justify-content: center;
-  width: 58px;
+  width: 50px;
 }
 
 .profile-trigger {
@@ -561,8 +549,8 @@ const deleteComment = (thread, comment) => {
 }
 
 .thread-avatar :deep(.profile-avatar-ui) {
-  --avatar-size: 58px;
-  --avatar-border: 3px;
+  --avatar-size: 50px;
+  --avatar-border: 2px;
 }
 
 .thread-meta {
@@ -602,10 +590,11 @@ const deleteComment = (thread, comment) => {
 
 .thread-card p {
   color: #dbeafe;
-  font-size: 13px;
-  font-weight: 650;
+  font-size: 15px;
+  font-weight: 720;
   line-height: 1.55;
   margin-top: 8px;
+  overflow-wrap: anywhere;
 }
 
 .spoiler-badge {
@@ -623,18 +612,18 @@ const deleteComment = (thread, comment) => {
 }
 
 .thread-image {
-  margin: 10px 0 0;
-  max-width: min(420px, 100%);
+  margin: 12px auto 0;
+  max-width: min(520px, 100%);
   overflow: hidden;
   position: relative;
 }
 
 .thread-image img {
   background: rgba(226, 232, 240, 0.08);
-  border: 1px solid rgba(226, 232, 240, 0.72);
+  border: 1px solid rgba(226, 232, 240, 0.48);
   border-radius: 14px;
   display: block;
-  max-height: 280px;
+  max-height: 360px;
   object-fit: contain;
   width: 100%;
 }
@@ -644,88 +633,59 @@ const deleteComment = (thread, comment) => {
 }
 
 .thread-image:not(.is-gif) img {
-  aspect-ratio: 16 / 8;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .thread-footer {
   align-items: center;
   display: flex;
-  gap: 12px;
-  margin-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  gap: 16px;
+  justify-content: space-between;
+  margin-top: 16px;
   min-width: 0;
+  padding-top: 12px;
   position: relative;
 }
 
-.thread-footer button {
-  align-items: center;
-  color: #64748b;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 900;
-  gap: 7px;
-}
-
-.thread-secondary-actions {
+.thread-interactions {
   align-items: center;
   display: inline-flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  gap: 18px;
   min-width: 0;
 }
 
-.thread-footer .delete-thread {
-  color: #ef4444;
+.thread-footer button,
+.thread-interactions button {
+  align-items: center;
+  color: #a9b4ca;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 7px;
 }
 
 .thread-footer .like-thread.active {
   color: #ec4899;
 }
 
-.thread-footer .pin-thread {
-  color: #facc15;
-}
-
-.thread-footer .pin-thread.active {
-  background: rgba(250, 204, 21, 0.14);
-  border-radius: 999px;
-  color: #fde68a;
-  padding: 5px 8px;
-}
-
-.thread-footer .home-thread {
-  color: #c084fc;
-}
-
-.thread-footer .home-thread.active {
-  background: rgba(168, 85, 247, 0.16);
-  border-radius: 999px;
-  color: #f0abfc;
-  padding: 5px 8px;
-}
-
-.thread-footer .delete-thread:hover {
-  color: #dc2626;
-}
-
 .thread-topic-pill {
-  background: #eef2ff;
+  background: rgba(124, 58, 237, 0.26);
+  border: 1px solid rgba(168, 85, 247, 0.32);
   border-radius: 999px;
-  color: #4f46e5;
+  color: #e9d5ff;
   flex: 0 1 auto;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
-  margin-left: auto;
-  max-width: 130px;
+  max-width: 112px;
   overflow: hidden;
-  padding: 5px 8px;
+  padding: 6px 10px;
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
 .thread-more-actions {
-  display: none;
   margin-left: auto;
   position: relative;
 }
@@ -970,24 +930,32 @@ const deleteComment = (thread, comment) => {
 
 @media (max-width: 620px) {
   .thread-card {
-    gap: 10px;
-    grid-template-columns: 48px minmax(0, 1fr);
+    border-radius: 18px;
+    max-width: 100%;
     padding: 14px;
   }
 
+  .thread-card-header {
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    gap: 9px;
+  }
+
   .thread-avatar {
-    height: 48px;
-    width: 48px;
+    height: 46px;
+    width: 46px;
   }
 
   .thread-avatar :deep(.profile-avatar-ui) {
-    --avatar-size: 48px;
+    --avatar-size: 46px;
     --avatar-border: 2px;
+  }
+
+  .thread-main {
+    margin-left: 0;
   }
 
   .thread-meta {
     gap: 7px;
-    min-height: 48px;
   }
 
   .thread-meta strong {
@@ -995,11 +963,17 @@ const deleteComment = (thread, comment) => {
   }
 
   .thread-card h2 {
-    margin-top: 2px;
+    margin-top: 12px;
   }
 
   .thread-image {
-    margin-left: 0;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+  }
+
+  .thread-image img {
+    max-height: 420px;
   }
 
   .thread-footer {
@@ -1016,18 +990,9 @@ const deleteComment = (thread, comment) => {
     min-width: 34px;
   }
 
-  .thread-secondary-actions {
-    display: none;
-  }
-
   .thread-topic-pill {
-    margin-left: 2px;
-    max-width: 76px;
+    max-width: 88px;
     padding-inline: 7px;
-  }
-
-  .thread-more-actions {
-    display: block;
   }
 }
 
