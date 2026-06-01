@@ -22,6 +22,7 @@ const {
   isLoading,
   threads,
   openThreadId,
+  currentUserId,
   hasBackground,
   community,
   avatarInitial,
@@ -71,6 +72,10 @@ const {
   openThreadId: {
     type: String,
     default: null
+  },
+  currentUserId: {
+    type: String,
+    default: ''
   },
   hasBackground: {
     type: Boolean,
@@ -148,6 +153,25 @@ const toggleCommentMenu = (comment) => {
 }
 
 const hasThreadMenuActions = (thread) => canPinThread(thread) || canDeleteThread(thread)
+
+const normalizeCopy = (value = '') => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase()
+
+const visibleThreadTitle = (thread) => {
+  const title = String(thread.title || '').trim()
+  if (!title) return ''
+  return normalizeCopy(title) === normalizeCopy(thread.body) ? '' : title
+}
+
+const displayAuthorName = (item = {}) => {
+  if (item.authorId && currentUserId && item.authorId === currentUserId) return 'Yo'
+  const savedHandle = String(item.handle || '').trim()
+  if (savedHandle && savedHandle !== '@tu_usuario') return savedHandle.startsWith('@') ? savedHandle : `@${savedHandle}`
+  const cleanName = String(item.author || item.name || 'usuario')
+    .trim()
+    .replace(/^@+/, '')
+    .replace(/\s+/g, '')
+  return `@${cleanName || 'usuario'}`
+}
 
 const toggleThreadActionMenu = (thread) => {
   openThreadActionMenuId.value = openThreadActionMenuId.value === thread.id ? '' : thread.id
@@ -243,24 +267,19 @@ const deleteComment = (thread, comment) => {
       <div class="thread-main">
         <div class="thread-meta">
           <button type="button" @click="emit('open-profile', thread)">
-            <strong>{{ thread.author }}</strong>
+            <strong>{{ displayAuthorName(thread) }}</strong>
           </button>
-          <span>{{ thread.handle }}</span>
           <span>{{ formatAgo(thread.createdAt) }}</span>
         </div>
 
-        <h2>{{ thread.title }}</h2>
+        <h2 v-if="visibleThreadTitle(thread)">{{ visibleThreadTitle(thread) }}</h2>
         <small v-if="thread.spoiler" class="spoiler-badge"><i class="fas fa-eye-slash"></i> Spoiler</small>
-        <p>{{ thread.body }}</p>
+        <p v-if="thread.body">{{ thread.body }}</p>
         <figure v-if="thread.imageUrl" class="thread-image" :class="{ 'is-gif': thread.mediaType === 'gif' || thread.gif?.url }">
           <img :src="thread.imageUrl" alt="" />
         </figure>
 
         <div class="thread-footer">
-          <button type="button" class="thread-primary-action" @click="emit('open-thread', thread)">
-            <i class="far fa-comment"></i>
-            {{ thread.replies }}
-          </button>
           <button
             type="button"
             class="like-thread"
@@ -269,6 +288,10 @@ const deleteComment = (thread, comment) => {
           >
             <i :class="hasLiked(thread) ? 'fas fa-heart' : 'far fa-heart'"></i>
             {{ thread.likes }}
+          </button>
+          <button type="button" class="thread-primary-action" @click="emit('open-thread', thread)">
+            <i class="far fa-comment"></i>
+            {{ thread.replies }}
           </button>
           <div class="thread-secondary-actions">
             <button
@@ -382,9 +405,8 @@ const deleteComment = (thread, comment) => {
               <div class="comment-body">
                 <div class="comment-meta">
                   <button type="button" @click="emit('open-profile', comment)">
-                    <strong>{{ comment.author }}</strong>
+                    <strong>{{ displayAuthorName(comment) }}</strong>
                   </button>
-                  <span>{{ comment.handle }}</span>
                   <span>{{ formatAgo(comment.createdAt) }}</span>
                   <span v-if="comment.editedAt">Editado</span>
                 </div>
@@ -948,7 +970,32 @@ const deleteComment = (thread, comment) => {
 
 @media (max-width: 620px) {
   .thread-card {
-    grid-template-columns: 1fr;
+    gap: 10px;
+    grid-template-columns: 48px minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .thread-avatar {
+    height: 48px;
+    width: 48px;
+  }
+
+  .thread-avatar :deep(.profile-avatar-ui) {
+    --avatar-size: 48px;
+    --avatar-border: 2px;
+  }
+
+  .thread-meta {
+    gap: 7px;
+    min-height: 48px;
+  }
+
+  .thread-meta strong {
+    font-size: 12px;
+  }
+
+  .thread-card h2 {
+    margin-top: 2px;
   }
 
   .thread-image {

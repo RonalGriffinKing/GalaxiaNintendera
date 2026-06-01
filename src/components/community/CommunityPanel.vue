@@ -2417,6 +2417,7 @@ onUnmounted(() => {
           :is-loading="isLoading"
           :threads="filteredThreads"
           :open-thread-id="openThreadId"
+          :current-user-id="currentUserId"
           :has-background="hasThreadBackground"
           :community="selectedCommunity"
           :avatar-initial="avatarInitial"
