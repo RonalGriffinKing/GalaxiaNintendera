@@ -1096,14 +1096,14 @@ onUnmounted(() => {
                   :class="{ mine: message.authorId === currentUser?.uid, 'has-status': isLastOwnMessage(message, index), 'has-gif': message.gif?.url }"
                 >
                   <p v-if="message.body">{{ message.body }}</p>
-                  <figure v-if="message.gif?.url" class="hub-message-media">
+                  <div v-if="message.gif?.url" class="hub-message-media">
                     <img
                       class="hub-message-gif"
                       :src="message.gif.url"
                       :alt="message.gif.title || 'GIF'"
                       loading="lazy"
                     />
-                  </figure>
+                  </div>
                   <small v-if="isLastOwnMessage(message, index)" class="hub-message-status">
                     {{ messageReadLabel(message) }}
                   </small>
@@ -1262,14 +1262,14 @@ onUnmounted(() => {
                     <span>
                       <small><strong>{{ message.author }}</strong> {{ formatLiveTime(message.videoSecond) }}</small>
                       <p v-if="message.body">{{ message.body }}</p>
-                      <figure v-if="message.gif?.url" class="hub-message-media live">
+                      <div v-if="message.gif?.url" class="hub-message-media live">
                         <img
                           class="hub-message-gif"
                           :src="message.gif.url"
                           :alt="message.gif.title || 'GIF'"
                           loading="lazy"
                         />
-                      </figure>
+                      </div>
                     </span>
                   </article>
                   <div v-if="!liveMessages.length" class="hub-chat-placeholder">
@@ -1823,6 +1823,7 @@ onUnmounted(() => {
 .hub-message-media {
   background: rgba(15, 23, 42, 0.58);
   border-radius: 12px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   flex: 0 0 auto;
@@ -2122,6 +2123,7 @@ onUnmounted(() => {
   border-radius: 14px 14px 14px 7px;
   color: #e2e8f0;
   box-sizing: border-box;
+  flex: 0 0 auto;
   max-width: min(72%, 520px);
   min-height: 30px;
   min-width: 0;
@@ -2135,7 +2137,10 @@ onUnmounted(() => {
 }
 
 .hub-chat-messages article.has-gif {
-  display: block;
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 0;
   max-width: min(82%, 360px);
   overflow: hidden;
   padding: 8px;
