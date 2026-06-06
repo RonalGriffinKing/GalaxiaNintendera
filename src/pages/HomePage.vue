@@ -659,8 +659,9 @@ const loadHomeCommunityData = async () => {
         <main class="home-shell">
           <HomeMediaPanel
             :items="livePodcastItems"
+            :communities="communities"
             :format-date="formatCalendarDate"
-            @open-community="router.push('/comunidad')"
+            @open-community="(community) => community ? goCommunity(community) : router.push('/comunidad')"
             @open-item="openCalendarItem"
           />
 
