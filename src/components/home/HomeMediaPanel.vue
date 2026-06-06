@@ -348,7 +348,7 @@ onMounted(loadYoutubeFeed)
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 28px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
-  overflow: visible;
+  overflow: hidden;
   padding: 18px;
 }
 
@@ -392,7 +392,7 @@ onMounted(loadYoutubeFeed)
     rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 24px;
-  min-height: 260px;
+  min-height: 0;
   padding: 18px;
 }
 
@@ -400,7 +400,8 @@ onMounted(loadYoutubeFeed)
   align-items: stretch;
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(0, 0.94fr) minmax(280px, 1.06fr);
+  grid-template-columns: 1fr;
+  min-width: 0;
 }
 
 .media-copy {
@@ -419,7 +420,7 @@ onMounted(loadYoutubeFeed)
 
 .media-copy h3 {
   display: -webkit-box;
-  font-size: clamp(22px, 2.4vw, 32px);
+  font-size: clamp(22px, 7cqw, 32px);
   font-weight: 950;
   line-height: 1.05;
   margin-top: 14px;
@@ -482,6 +483,7 @@ onMounted(loadYoutubeFeed)
   min-height: 0;
   overflow: hidden;
   position: relative;
+  width: 100%;
 }
 
 .media-preview iframe,
@@ -610,9 +612,36 @@ onMounted(loadYoutubeFeed)
   font-weight: 800;
 }
 
-@media (max-width: 900px) {
+@container (min-width: 920px) {
   .media-spotlight {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 0.94fr) minmax(360px, 1.06fr);
+  }
+
+  .media-copy h3 {
+    font-size: clamp(24px, 4cqw, 38px);
+  }
+}
+
+@container (max-width: 919px) {
+  .media-hero-card {
+    padding: 16px;
+  }
+
+  .media-copy {
+    align-content: start;
+  }
+
+  .media-copy h3 {
+    -webkit-line-clamp: 2;
+    font-size: clamp(22px, 6.4cqw, 32px);
+  }
+
+  .media-copy p {
+    -webkit-line-clamp: 2;
+  }
+
+  .media-actions {
+    margin-top: 14px;
   }
 }
 
