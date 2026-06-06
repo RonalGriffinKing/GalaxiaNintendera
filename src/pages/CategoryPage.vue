@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter } from "firebase/firestore"
 import { auth, db } from "@/firebase"
+import { resolveAssetUrl } from '@/constants/assets'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { categoryIcon, loadPostCategories, normalizeCategory as normalize, postCategoryLabels, postMatchesCategory } from '@/services/postCategories'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
@@ -383,7 +384,7 @@ watch(() => route.fullPath, () => {
               :class="['news-row', { analysis: isAnalysisPost(post) }]"
               @click="goPost(post.id)"
             >
-              <img v-if="post.image" :src="post.image" alt="" />
+              <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
               <div v-else class="post-placeholder"></div>
 
               <div class="listing-author-overlay">
@@ -468,7 +469,7 @@ watch(() => route.fullPath, () => {
               class="popular-post"
               @click="goPost(post.id)"
             >
-              <img v-if="post.image" :src="post.image" alt="" />
+              <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
               <div v-else class="popular-placeholder"></div>
               <span>
                 <strong>{{ post.title }}</strong>

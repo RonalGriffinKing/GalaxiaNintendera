@@ -75,7 +75,7 @@ const emit = defineEmits(['open-community', 'open-archive', 'open-post'])
         <button type="button" @click="emit('open-archive')">Ver todas</button>
       </div>
       <button v-for="post in posts" :key="post.id" type="button" class="featured-news-row" @click="emit('open-post', post.id)">
-        <img v-if="post.image" :src="post.image" alt="" />
+        <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
         <span v-else><i :class="cardActionIcon(post)"></i></span>
         <div>
           <strong>{{ cardTitle(post) }}</strong>

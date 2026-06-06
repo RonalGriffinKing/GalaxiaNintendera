@@ -1,3 +1,5 @@
+import { proxiedImageUrl } from '@/constants/assets'
+
 const VIDEO_EXTENSIONS = /\.(mp4|webm|ogg|mov|m4v)(?:[?#].*)?$/i
 
 export const youtubeIdFromUrl = (value = '') => {
@@ -39,7 +41,7 @@ export const mediaFromUrl = (value = '') => {
       url,
       id: youtubeId,
       embedUrl: `https://www.youtube.com/embed/${youtubeId}?rel=0`,
-      thumbUrl: `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
+      thumbUrl: proxiedImageUrl(`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`)
     }
   }
 
@@ -47,7 +49,7 @@ export const mediaFromUrl = (value = '') => {
     return { type: 'video', url }
   }
 
-  return { type: 'image', url }
+  return { type: 'image', url: proxiedImageUrl(url) }
 }
 
 export const isVideoMedia = (media) => media?.type === 'youtube' || media?.type === 'video'

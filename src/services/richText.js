@@ -61,7 +61,7 @@ export const renderRichText = (value = '') => {
       return
     }
 
-    const unordered = trimmed.match(/^[-*]\s+(.+)/)
+    const unordered = trimmed.match(/^(?:[-*]\s+|[•·]\s*)(.+)/)
     if (unordered) {
       if (listState.type !== 'ul') output.push(closeList(listState), '<ul>')
       listState.type = 'ul'
@@ -69,7 +69,7 @@ export const renderRichText = (value = '') => {
       return
     }
 
-    const ordered = trimmed.match(/^\d+\.\s+(.+)/)
+    const ordered = trimmed.match(/^\d+[.)]\s+(.+)/)
     if (ordered) {
       if (listState.type !== 'ol') output.push(closeList(listState), '<ol>')
       listState.type = 'ol'

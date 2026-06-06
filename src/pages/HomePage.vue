@@ -633,7 +633,7 @@ const loadHomeCommunityData = async () => {
                   </div>
                 </template>
                 <template v-else-if="activeHeroSlide.kind === 'thread'">
-                  <img v-if="activeHeroSlide.visualImage || activeHeroSlide.image" :src="activeHeroSlide.visualImage || activeHeroSlide.image" alt="" />
+                  <img v-if="activeHeroSlide.visualImage || activeHeroSlide.image" :src="resolveAssetUrl(activeHeroSlide.visualImage || activeHeroSlide.image, bannerImage)" alt="" />
                   <div class="hero-thread-preview">
                     <img v-if="activeHeroSlide.communityIcon" :src="activeHeroSlide.communityIcon" alt="" />
                     <span v-else>{{ (activeHeroSlide.communityName || 'G').charAt(0) }}</span>
@@ -643,7 +643,7 @@ const loadHomeCommunityData = async () => {
                     </div>
                   </div>
                 </template>
-                <img v-else-if="activeHeroSlide.image" :src="activeHeroSlide.image" alt="" />
+                <img v-else-if="activeHeroSlide.image" :src="resolveAssetUrl(activeHeroSlide.image, bannerImage)" alt="" />
                 <div v-else class="hero-empty-state">
                   <div class="hero-empty-content">
                     <h2>{{ activeHeroSlide.title }}</h2>
@@ -707,7 +707,7 @@ const loadHomeCommunityData = async () => {
           >
             <img
               v-if="post.image"
-              :src="post.image"
+              :src="resolveAssetUrl(post.image)"
               alt=""
             />
             <div v-else class="news-placeholder"></div>

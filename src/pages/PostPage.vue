@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from "firebase/firestore"
 import { auth, db } from "@/firebase"
+import { resolveAssetUrl } from '@/constants/assets'
 import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
 import { READ_REWARD_STARS, awardPostRead, getReadRewardDelayMs, resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { renderRichText } from '@/services/richText'
@@ -664,7 +665,7 @@ onUnmounted(() => {
             >
               <img
                 v-if="item.image"
-                :src="item.image"
+                :src="resolveAssetUrl(item.image)"
                 class="related-image"
               />
               <div v-else class="related-image related-placeholder"></div>
@@ -790,9 +791,12 @@ onUnmounted(() => {
 .rich-content :deep(strong) { color: #ffffff; font-weight: 950; }
 .rich-content :deep(em) { font-style: italic; }
 .rich-content :deep(u) { text-decoration: underline; text-decoration-color: #c084fc; text-decoration-thickness: 2px; text-underline-offset: 3px; }
-.rich-content :deep(ul), .rich-content :deep(ol) { display: grid; gap: 8px; margin: 10px 0 16px 22px; padding: 0; }
-.rich-content :deep(ul) { list-style: disc; }
-.rich-content :deep(ol) { list-style: decimal; }
+.rich-content :deep(ul), .rich-content :deep(ol) { counter-reset: article-list; display: grid; gap: 10px; margin: 14px 0 18px; padding: 0; }
+.rich-content :deep(li) { list-style: none; padding: 0 0 8px 28px; position: relative; }
+.rich-content :deep(li::before) { background: radial-gradient(circle, #fde68a 0 28%, #f59e0b 38%, #a855f7 76%); border-radius: 999px; box-shadow: 0 0 14px rgba(250, 204, 21, 0.42), 0 0 26px rgba(168, 85, 247, 0.22); content: ""; height: 9px; left: 4px; position: absolute; top: 0.72em; transform: translateY(-50%); width: 9px; }
+.rich-content :deep(li::after) { background: linear-gradient(90deg, rgba(250, 204, 21, 0.38), rgba(168, 85, 247, 0.16), transparent); border-radius: 999px; bottom: 0; content: ""; height: 1px; left: 28px; position: absolute; right: 0; }
+.rich-content :deep(ol > li) { counter-increment: article-list; padding-left: 40px; }
+.rich-content :deep(ol > li::before) { align-items: center; background: linear-gradient(135deg, #facc15, #a855f7); color: #ffffff; content: counter(article-list); display: inline-flex; font-size: 11px; font-weight: 950; height: 23px; justify-content: center; left: 0; line-height: 1; top: 0.76em; width: 23px; }
 .rich-content :deep(blockquote) { background: rgba(168, 85, 247, 0.12); border-left: 4px solid #a855f7; border-radius: 10px; margin: 14px 0; padding: 12px 14px; }
 .rich-content :deep(a) { color: #d8b4fe; font-weight: 900; text-decoration: underline; text-underline-offset: 3px; }
 .rich-content :deep(hr) { border: 0; border-top: 1px solid rgba(216, 180, 254, 0.35); margin: 18px 0; }

@@ -2646,18 +2646,63 @@ const savePost = async (targetStatus = 'pending') => {
 
 .rich-content :deep(ul),
 .rich-content :deep(ol) {
+  counter-reset: editor-list;
   display: grid;
-  gap: 6px;
-  margin: 8px 0 12px 20px;
+  gap: 8px;
+  margin: 10px 0 14px;
   padding: 0;
 }
 
-.rich-content :deep(ul) {
-  list-style: disc;
+.rich-content :deep(li) {
+  color: #475569;
+  list-style: none;
+  padding: 0 0 7px 28px;
+  position: relative;
 }
 
-.rich-content :deep(ol) {
-  list-style: decimal;
+.rich-content :deep(li::before) {
+  background: radial-gradient(circle, #fef3c7 0 28%, #f59e0b 42%, #a855f7 82%);
+  border-radius: 999px;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.28), 0 0 22px rgba(168, 85, 247, 0.2);
+  content: "";
+  height: 8px;
+  left: 4px;
+  position: absolute;
+  top: 0.72em;
+  transform: translateY(-50%);
+  width: 8px;
+}
+
+.rich-content :deep(li::after) {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.28), rgba(168, 85, 247, 0.14), transparent);
+  border-radius: 999px;
+  bottom: 0;
+  content: "";
+  height: 1px;
+  left: 28px;
+  position: absolute;
+  right: 0;
+}
+
+.rich-content :deep(ol > li) {
+  counter-increment: editor-list;
+  padding-left: 38px;
+}
+
+.rich-content :deep(ol > li::before) {
+  align-items: center;
+  background: linear-gradient(135deg, #facc15, #a855f7);
+  color: #ffffff;
+  content: counter(editor-list);
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 950;
+  height: 22px;
+  justify-content: center;
+  left: 0;
+  line-height: 1;
+  top: 0.76em;
+  width: 22px;
 }
 
 .rich-content :deep(blockquote) {

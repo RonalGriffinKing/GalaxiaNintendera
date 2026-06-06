@@ -2,7 +2,7 @@ const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024
 
 export const handler = async (event) => {
-  const rawUrl = event.queryStringParameters?.url || ''
+  const rawUrl = decodeProxySource(event.queryStringParameters?.src) || event.queryStringParameters?.url || ''
   const target = parseTargetUrl(rawUrl)
 
   if (!target) {
@@ -50,6 +50,19 @@ export const handler = async (event) => {
     }
   } catch (error) {
     return jsonResponse(502, { error: 'proxy-error' })
+  }
+}
+
+function decodeProxySource(value = '') {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+
+  try {
+    const normalized = raw.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+    return Buffer.from(padded, 'base64').toString('utf8')
+  } catch (error) {
+    return ''
   }
 }
 

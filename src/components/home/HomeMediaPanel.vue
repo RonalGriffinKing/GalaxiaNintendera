@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { proxiedImageUrl } from '@/constants/assets'
 
 const props = defineProps({
   items: {
@@ -147,7 +148,7 @@ const mapFeedItem = (item) => ({
   description: item.description || '',
   publishedAt: item.publishedAt || '',
   startsAt: item.publishedAt || '',
-  thumbnail: item.thumbnail || '',
+  thumbnail: proxiedImageUrl(item.thumbnail || ''),
   url: item.url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : channelUrl.value),
   mediaType: 'video'
 })
@@ -166,7 +167,7 @@ const mapYoutubeSearchItem = (item) => ({
   description: item.snippet?.description || '',
   publishedAt: item.snippet?.publishedAt || '',
   startsAt: item.snippet?.publishedAt || '',
-  thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || '',
+  thumbnail: proxiedImageUrl(item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || ''),
   url: item.id?.videoId ? `https://www.youtube.com/watch?v=${item.id.videoId}` : channelUrl.value,
   mediaType: 'video'
 })
