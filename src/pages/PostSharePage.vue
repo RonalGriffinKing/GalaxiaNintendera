@@ -26,7 +26,9 @@ const editorOpen = ref(false)
 const selectedSlideIndex = ref(0)
 const applyScope = ref('all')
 const selectedTemplate = ref('official')
-const activeDrawerSection = ref('logo')
+const activeDrawerSection = ref('image')
+const globalImageOverride = ref('')
+const slideImageOverrides = ref({})
 const sourceType = computed(() => route.query.type === 'event' ? 'event' : 'post')
 
 const fontOptions = [
@@ -286,6 +288,46 @@ function resetTemplate() {
   slideTemplateOverrides.value = {}
 }
 
+function setTemporaryImage(value) {
+  if (applyScope.value === 'all') {
+    globalImageOverride.value = value
+    return
+  }
+
+  slideImageOverrides.value = {
+    ...slideImageOverrides.value,
+    [selectedSlideIndex.value]: value
+  }
+}
+
+function selectedTemporaryImage() {
+  if (applyScope.value === 'all') return globalImageOverride.value
+  return slideImageOverrides.value[selectedSlideIndex.value] || globalImageOverride.value || ''
+}
+
+function handleTemporaryImageUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  setTemporaryImage(URL.createObjectURL(file))
+  event.target.value = ''
+}
+
+function handleTemporaryImageUrl(event) {
+  setTemporaryImage(event.target.value.trim())
+}
+
+function clearTemporaryImage() {
+  if (applyScope.value === 'all') {
+    globalImageOverride.value = ''
+    slideImageOverrides.value = {}
+    return
+  }
+
+  const next = { ...slideImageOverrides.value }
+  delete next[selectedSlideIndex.value]
+  slideImageOverrides.value = next
+}
+
 function toggleDrawerSection(section) {
   activeDrawerSection.value = activeDrawerSection.value === section ? '' : section
 }
@@ -467,6 +509,8 @@ function markImageBroken(slide) {
 }
 
 function slideImage(slide) {
+  const override = slideImageOverrides.value[slide.index] || globalImageOverride.value
+  if (override) return isLocalOrInlineImage(override) ? override : proxiedImageUrl(override)
   return brokenImages.value[slide.id] ? fallbackCover : proxiedImageUrl(slide.image)
 }
 
@@ -837,6 +881,26 @@ function slugify(value) {
       </div>
 
       <div class="drawer-sections">
+        <details :open="activeDrawerSection === 'image'">
+          <summary @click.prevent="toggleDrawerSection('image')">Imagen de fondo</summary>
+          <div class="image-override-preview">
+            <img :src="selectedTemporaryImage() || (selectedSlide ? slideImage(selectedSlide) : fallbackCover)" alt="" />
+            <div>
+              <strong>{{ selectedTemporaryImage() ? 'Imagen temporal activa' : 'Usando imagen del post' }}</strong>
+              <small>{{ applyScope === 'all' ? 'Se aplicara al carrusel completo.' : `Se aplicara solo al slide ${selectedSlide?.number || 1}.` }}</small>
+            </div>
+          </div>
+          <label class="file-control">
+            Subir imagen temporal
+            <input type="file" accept="image/*" @change="handleTemporaryImageUpload" />
+          </label>
+          <label>URL de imagen <input :value="selectedTemporaryImage()" placeholder="https://..." @input="handleTemporaryImageUrl" /></label>
+          <button type="button" class="drawer-ghost-action" @click="clearTemporaryImage">
+            <i class="fas fa-rotate-left"></i>
+            Volver a imagen original
+          </button>
+        </details>
+
         <details :open="activeDrawerSection === 'logo'">
           <summary @click.prevent="toggleDrawerSection('logo')">Logo Galaxia</summary>
           <label><input type="checkbox" :checked="settingValue('logo.visible')" @change="setSetting('logo.visible', $event.target.checked)" /> Mostrar logo</label>
@@ -1668,6 +1732,66 @@ function slugify(value) {
   font-size: 11px;
   font-weight: 800;
   margin-top: 3px;
+}
+
+.image-override-preview {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 58px 1fr;
+  padding: 9px;
+}
+
+.image-override-preview img {
+  border-radius: 9px;
+  height: 72px;
+  object-fit: cover;
+  width: 58px;
+}
+
+.image-override-preview strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.image-override-preview small {
+  color: rgba(255, 255, 255, 0.58);
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  margin-top: 3px;
+}
+
+.file-control {
+  background: rgba(192, 38, 211, 0.14);
+  border: 1px dashed rgba(216, 180, 254, 0.42);
+  border-radius: 12px;
+  color: #f5d0fe;
+  cursor: pointer;
+  padding: 12px;
+  text-align: center;
+}
+
+.file-control input {
+  display: none;
+}
+
+.drawer-ghost-action {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 950;
+  gap: 8px;
+  justify-content: center;
+  min-height: 38px;
 }
 
 .drawer-panel small {
