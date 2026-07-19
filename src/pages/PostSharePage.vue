@@ -45,6 +45,7 @@ const arrowIcons = [
 ]
 
 const defaultTemplateSettings = {
+  image: { visible: true },
   logo: { visible: true, size: 120, x: 50, y: 34, opacity: 1 },
   author: { visible: true, avatar: true, name: true, date: true, size: 100, x: 82, y: 86, opacity: 1 },
   arrow: { visible: true, icon: 'fa-arrow-right', size: 96, color: '#9333ea', x: 34, y: 56, opacity: 1 },
@@ -177,7 +178,7 @@ const carouselSlides = computed(() => {
 
   const baseSlide = {
     id: 'resumen',
-    eyebrow: category.value,
+    eyebrow: 'Parte 1',
     title: title.value,
     subtitle: post.value?.subtitle || category.value,
     description: description.value,
@@ -191,7 +192,7 @@ const carouselSlides = computed(() => {
         .filter(section => section?.title || section?.content || section?.image)
         .map((section, index) => ({
           id: `seccion-${index + 1}`,
-          eyebrow: `Parte ${index + 1}`,
+          eyebrow: `Parte ${index + 2}`,
           title: section.title || title.value,
           subtitle: section.subtitle || section.category || category.value,
           description: trimText(stripHtml(section.content || description.value), 230),
@@ -762,6 +763,7 @@ function slugify(value) {
                 :style="cardStyleFor(index)"
               >
                 <img
+                  v-if="settingsForSlide(index).image.visible"
                   :key="`${slide.id}-${slideImage(slide)}`"
                   class="social-card-bg"
                   :src="slideImage(slide)"
@@ -890,6 +892,7 @@ function slugify(value) {
               <small>{{ applyScope === 'all' ? 'Se aplicara al carrusel completo.' : `Se aplicara solo al slide ${selectedSlide?.number || 1}.` }}</small>
             </div>
           </div>
+          <label><input type="checkbox" :checked="settingValue('image.visible')" @change="setSetting('image.visible', $event.target.checked)" /> Mostrar imagen de fondo</label>
           <label class="file-control">
             Subir imagen temporal
             <input type="file" accept="image/*" @change="handleTemporaryImageUpload" />
