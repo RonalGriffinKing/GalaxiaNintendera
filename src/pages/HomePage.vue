@@ -3963,7 +3963,11 @@ const loadHomeCommunityData = async () => {
 
   .home-page-content {
     gap: 14px 16px;
+    grid-template-areas:
+      "featured news"
+      "stories stories";
     grid-template-columns: minmax(500px, 0.98fr) minmax(430px, 1.02fr);
+    grid-template-rows: auto auto;
     max-width: 1280px;
     width: min(1280px, calc(100vw - 36px));
   }
@@ -4001,6 +4005,9 @@ const loadHomeCommunityData = async () => {
   }
 
   .news-panel {
+    align-self: start;
+    max-height: 540px;
+    overflow: hidden;
     padding: 14px;
   }
 
@@ -4014,7 +4021,19 @@ const loadHomeCommunityData = async () => {
 
   .news-grid {
     gap: 12px;
-    grid-template-rows: minmax(0, 1.12fr) minmax(0, 0.88fr);
+    grid-template-rows: minmax(250px, 0.9fr) minmax(120px, 0.52fr);
+    max-height: 450px;
+  }
+
+  .news-card.featured,
+  .news-card.featured.analysis,
+  .news-card.featured:not(.analysis) {
+    max-height: 300px;
+  }
+
+  .news-card.analysis:not(.featured),
+  .news-card:not(.analysis):not(.featured) {
+    max-height: 136px;
   }
 
   .analysis-card-overlay,
@@ -4050,6 +4069,7 @@ const loadHomeCommunityData = async () => {
 
   .home-shell :deep(.media-center-panel),
   .home-shell :deep(.community-stories-panel) {
+    grid-column: 1 / -1;
     padding: 14px;
   }
 
