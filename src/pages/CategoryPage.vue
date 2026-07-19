@@ -262,6 +262,7 @@ const readState = (postId) => {
 }
 
 const cardTitle = (post) => post.analysis?.hypeTitle || post.title
+const cardActionIcon = (post) => categoryIcon(post.category)
 const authorProfile = (post) => authorProfiles.value[post.authorId] || {}
 const authorIcon = (post) => {
   const profile = authorProfile(post)
@@ -387,45 +388,33 @@ watch(() => route.fullPath, () => {
               <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
               <div v-else class="post-placeholder"></div>
 
-              <div class="listing-author-overlay">
-                <ProfileAvatar
-                  class="listing-author-avatar"
-                  :src="authorIcon(post)"
-                  :alt="post.authorName || 'Redactor'"
-                  :label="post.authorName || 'Redactor'"
-                  :effect="authorIconMeta(post)"
-                />
-                <div>
-                  <strong>{{ post.authorName || 'Redactor' }}</strong>
-                  <small>{{ formatAgo(post.createdAt) }}</small>
-                </div>
-              </div>
+              <span class="listing-card-category">
+                <i :class="cardActionIcon(post)"></i>
+                {{ post.category || 'General' }}
+              </span>
 
               <span v-if="isAnalysisPost(post)" class="listing-analysis-score">
                 <i class="fas fa-star"></i>
                 <b>{{ post.analysis?.score || '--' }}</b>
                 <small>Nota</small>
-                <em>Nota final del analisis</em>
               </span>
 
               <div class="post-copy">
-                <span>{{ post.category || 'General' }}</span>
+                <div class="listing-card-author">
+                  <ProfileAvatar
+                    class="listing-author-avatar"
+                    :src="authorIcon(post)"
+                    :alt="post.authorName || 'Redactor'"
+                    :label="post.authorName || 'Redactor'"
+                    :effect="authorIconMeta(post)"
+                  />
+                  <div>
+                    <strong>{{ post.authorName || 'Redactor' }}</strong>
+                    <small>{{ formatAgo(post.createdAt) }}</small>
+                  </div>
+                </div>
                 <h2>{{ cardTitle(post) }}</h2>
                 <p v-if="pageConfig.type === 'news'">{{ post.content }}</p>
-                <div class="post-mobile-meta">
-                  <span>
-                    <ProfileAvatar
-                      class="listing-author-avatar"
-                      :src="authorIcon(post)"
-                      :alt="post.authorName || 'Redactor'"
-                      :label="post.authorName || 'Redactor'"
-                      :effect="authorIconMeta(post)"
-                    />
-                    <strong>{{ post.authorName || 'Redactor' }}</strong>
-                  </span>
-                  <small>{{ formatAgo(post.createdAt) }}</small>
-                </div>
-                <small>{{ formatAgo(post.createdAt) }}</small>
               </div>
             </button>
           </div>
@@ -2619,6 +2608,182 @@ watch(() => route.fullPath, () => {
     font-size: 9px;
     min-height: 24px;
     padding: 4px 7px;
+  }
+}
+
+/* Card layout: categoria en esquina, autor sobre titulo, nota centrada */
+.news-row {
+  position: relative;
+}
+
+.listing-card-category {
+  align-items: center;
+  background: rgba(124, 58, 237, 0.72);
+  border-radius: 999px;
+  color: #e9d5ff;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 900;
+  gap: 6px;
+  left: 14px;
+  max-width: min(220px, calc(100% - 110px));
+  overflow: hidden;
+  padding: 6px 10px;
+  position: absolute;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  top: 14px;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+.listing-card-category i {
+  color: #facc15;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.news-row.analysis .listing-card-category {
+  background: rgba(113, 63, 18, 0.9);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  color: #fef3c7;
+}
+
+.listing-card-author {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  margin-bottom: 10px;
+}
+
+.listing-card-author strong {
+  color: #f8fafc;
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.listing-card-author small {
+  color: #94a3b8;
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+
+.listing-card-author .listing-author-avatar {
+  --avatar-size: 32px;
+  --avatar-border: 2px;
+}
+
+.news-row.analysis .listing-card-author strong {
+  color: #fef3c7;
+}
+
+.news-row .post-copy,
+.news-row.analysis .post-copy,
+.news-row.featured-latest .post-copy,
+.news-row.grid-card .post-copy,
+.news-row.grid-card.analysis .post-copy {
+  padding-bottom: 16px;
+  padding-top: 0;
+}
+
+.news-row .post-copy h2,
+.news-row.analysis .post-copy h2 {
+  margin-top: 0;
+}
+
+.listing-analysis-score {
+  justify-items: center;
+  text-align: center;
+}
+
+.listing-analysis-score small {
+  display: block;
+  grid-column: 1 / -1;
+  justify-self: center;
+  margin-top: -4px;
+  text-align: center;
+  width: 100%;
+}
+
+@media (min-width: 761px) {
+  .news-row.grid-card .post-copy,
+  .news-row.grid-card.analysis .post-copy {
+    grid-row: 2;
+    padding: 14px 16px 18px;
+  }
+
+  .news-row.featured-latest .listing-analysis-score,
+  .news-row.grid-card .listing-analysis-score,
+  .news-row.grid-card.analysis .listing-analysis-score {
+    grid-column: auto;
+    grid-row: auto;
+    position: absolute;
+    right: 14px;
+    top: 14px;
+    z-index: 6;
+  }
+
+  .news-row.featured-latest .listing-card-category {
+    left: 18px;
+    top: 18px;
+  }
+}
+
+@media (max-width: 760px) {
+  .news-row:first-child .listing-card-category,
+  .news-row.featured-latest .listing-card-category {
+    left: 18px;
+    top: 18px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-card-category {
+    font-size: 8px;
+    left: 12px;
+    max-width: 72px;
+    padding: 4px 6px;
+    top: 12px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-card-category i {
+    display: none;
+  }
+
+  .news-row:first-child .listing-card-author,
+  .news-row.featured-latest .listing-card-author {
+    margin-bottom: 8px;
+  }
+
+  .news-row:first-child .listing-card-author .listing-author-avatar,
+  .news-row.featured-latest .listing-card-author .listing-author-avatar {
+    --avatar-size: 36px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-card-author {
+    margin-bottom: 6px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-card-author .listing-author-avatar {
+    --avatar-size: 24px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-card-author strong {
+    font-size: 10px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-card-author small {
+    display: none;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-analysis-score {
+    left: 66px;
+    right: auto;
+    top: 10px;
   }
 }
 </style>
