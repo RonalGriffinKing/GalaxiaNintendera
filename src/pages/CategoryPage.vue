@@ -2307,4 +2307,199 @@ watch(() => route.fullPath, () => {
     filter: drop-shadow(0 0 14px rgba(168, 85, 247, 0.46));
   }
 }
+
+@media (max-width: 760px) {
+  .news-list {
+    gap: 9px;
+  }
+
+  .news-row,
+  .news-row.analysis {
+    border-width: 1px;
+    border-radius: 14px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 108px minmax(0, 1fr);
+    min-height: 0;
+    padding: 8px;
+  }
+
+  .news-row:first-child,
+  .news-row.analysis:first-child {
+    grid-template-columns: 1fr;
+    padding: 9px;
+  }
+
+  .news-row > img,
+  .news-row > .post-placeholder,
+  .news-row.analysis > img,
+  .news-row.analysis > .post-placeholder {
+    aspect-ratio: auto;
+    border-radius: 10px;
+    grid-column: 1;
+    height: 92px;
+    min-height: 0;
+    object-fit: cover;
+    order: 1;
+    width: 108px;
+  }
+
+  .news-row:first-child > img,
+  .news-row:first-child > .post-placeholder,
+  .news-row.analysis:first-child > img,
+  .news-row.analysis:first-child > .post-placeholder {
+    grid-column: 1;
+    height: clamp(132px, 37vw, 176px);
+    width: 100%;
+  }
+
+  .post-copy,
+  .news-row .post-copy,
+  .news-row.analysis .post-copy {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    grid-column: 2;
+    margin: 0;
+    min-width: 0;
+    order: 2;
+    padding: 0;
+  }
+
+  .news-row:first-child .post-copy,
+  .news-row.analysis:first-child .post-copy {
+    grid-column: 1;
+    padding: 2px 2px 0;
+  }
+
+  .post-copy > span,
+  .news-row .post-copy > span,
+  .news-row.analysis .post-copy > span {
+    border-radius: 7px;
+    font-size: 9px;
+    gap: 5px;
+    margin-bottom: 6px;
+    padding: 4px 7px;
+  }
+
+  .post-copy h2,
+  .news-row.analysis .post-copy h2 {
+    display: -webkit-box;
+    font-size: 14px;
+    line-height: 1.18;
+    margin: 0;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .news-row:first-child .post-copy h2,
+  .news-row.analysis:first-child .post-copy h2 {
+    font-size: clamp(18px, 5.4vw, 23px);
+    line-height: 1.12;
+  }
+
+  .post-copy p,
+  .news-row.analysis .post-copy p {
+    color: rgba(226, 232, 240, 0.86);
+    display: -webkit-box;
+    font-size: 11px;
+    line-height: 1.28;
+    margin: 5px 0 0;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .news-row:not(:first-child) .post-copy p,
+  .news-row.analysis:not(:first-child) .post-copy p {
+    -webkit-line-clamp: 1;
+  }
+
+  .post-mobile-meta {
+    align-items: center;
+    border-top: 0;
+    color: rgba(203, 213, 225, 0.82);
+    display: flex;
+    flex-wrap: nowrap;
+    font-size: 10px;
+    gap: 5px;
+    justify-content: flex-start;
+    margin-top: 7px;
+    min-width: 0;
+    padding-top: 0;
+  }
+
+  .post-mobile-meta .listing-author-avatar {
+    display: none;
+  }
+
+  .post-mobile-meta > span {
+    display: inline-flex;
+    flex: 0 1 auto;
+    gap: 0;
+    max-width: 55%;
+    min-width: 0;
+  }
+
+  .post-mobile-meta > span::after {
+    content: "•";
+    margin: 0 5px;
+    opacity: 0.7;
+  }
+
+  .post-mobile-meta strong,
+  .post-mobile-meta small {
+    color: rgba(226, 232, 240, 0.82);
+    display: block;
+    font-size: 10px;
+    font-weight: 850;
+    line-height: 1.1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .listing-analysis-score {
+    border-radius: 10px;
+    display: inline-grid;
+    gap: 3px;
+    grid-template-columns: auto auto;
+    height: auto;
+    margin: 0;
+    min-width: 0;
+    padding: 6px 8px;
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    width: auto;
+    z-index: 6;
+  }
+
+  .listing-analysis-score i {
+    font-size: 10px;
+  }
+
+  .listing-analysis-score b {
+    font-size: 15px;
+    line-height: 1;
+  }
+
+  .listing-analysis-score small,
+  .listing-analysis-score em {
+    display: none;
+  }
+
+  .post-sticker,
+  .news-row .post-sticker,
+  .news-row.analysis .post-sticker,
+  .read-mark {
+    border-radius: 7px;
+    font-size: 9px;
+    min-height: 24px;
+    padding: 4px 7px;
+  }
+}
 </style>
