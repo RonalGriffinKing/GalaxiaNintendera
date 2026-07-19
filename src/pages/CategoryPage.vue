@@ -1632,10 +1632,46 @@ watch(() => route.fullPath, () => {
   .news-row.featured-latest > .post-placeholder {
     height: 100%;
     min-height: 260px;
+    object-fit: cover;
+    position: static;
+  }
+
+  .news-row.grid-card::after {
+    backdrop-filter: blur(1.5px);
+    background:
+      linear-gradient(180deg, rgba(5, 8, 22, 0.08) 0%, rgba(5, 8, 22, 0.3) 34%, rgba(5, 8, 22, 0.78) 68%, rgba(5, 8, 22, 0.96) 100%),
+      radial-gradient(circle at 80% 18%, rgba(168, 85, 247, 0.22), transparent 30%);
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: 1;
+  }
+
+  .news-row.featured-latest .listing-author-overlay {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0 0 14px;
+    max-width: 220px;
+    width: 220px;
+  }
+
+  .news-row.featured-latest .post-copy {
+    align-self: center;
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
+    padding: 0;
+    padding-top: 56px;
+  }
+
+  .news-row.featured-latest .post-copy > span {
+    margin-bottom: initial;
   }
 
   .news-row.featured-latest .post-copy h2 {
     font-size: clamp(30px, 3.2vw, 42px);
+    margin-top: 12px;
     -webkit-line-clamp: 3;
   }
 
@@ -1646,7 +1682,7 @@ watch(() => route.fullPath, () => {
 
   .news-row.grid-card,
   .news-row.grid-card.analysis {
-    align-content: start;
+    align-content: end;
     display: grid;
     gap: 0;
     grid-template-columns: 1fr;
@@ -1670,36 +1706,65 @@ watch(() => route.fullPath, () => {
   .news-row.grid-card > .post-placeholder,
   .news-row.grid-card.analysis > img,
   .news-row.grid-card.analysis > .post-placeholder {
-    border-radius: 14px 14px 0 0;
-    grid-column: 1;
-    grid-row: 1;
-    height: 190px;
+    border-radius: inherit;
+    height: 100%;
+    inset: 0;
     min-height: 0;
+    object-fit: cover;
+    position: absolute;
+    width: 100%;
+    z-index: 0;
   }
 
   .news-row.grid-card .listing-author-overlay,
   .news-row.grid-card.analysis .listing-author-overlay {
-    grid-column: 1;
-    grid-row: 2;
-    margin: 14px 16px 0;
+    align-self: auto;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    bottom: 118px;
+    grid-column: auto;
+    grid-row: auto;
+    margin: 0;
     max-width: calc(100% - 32px);
+    position: absolute;
+    right: 16px;
     width: auto;
+    z-index: 2;
   }
 
   .news-row.grid-card .post-copy,
   .news-row.grid-card.analysis .post-copy {
+    align-self: end;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-column: 1;
-    grid-row: 3;
-    padding: 12px 16px 18px;
+    grid-row: 1;
+    padding: 0 16px 18px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .news-row.grid-card .post-copy > span,
+  .news-row.grid-card.analysis .post-copy > span {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    margin-bottom: 0;
+    max-width: calc(100% - 160px);
   }
 
   .news-row.grid-card .post-copy h2,
   .news-row.grid-card.analysis .post-copy h2 {
+    grid-column: 1 / -1;
     font-size: clamp(20px, 1.55vw, 25px);
+    margin-top: 0;
     -webkit-line-clamp: 2;
   }
 
   .news-row.grid-card .post-copy p {
+    grid-column: 1 / -1;
     font-size: 14px;
     -webkit-line-clamp: 2;
   }
@@ -1718,7 +1783,9 @@ watch(() => route.fullPath, () => {
   .news-row.grid-card.analysis .post-sticker {
     left: auto;
     right: 14px;
-    top: 174px;
+    top: 14px;
+    transform: none;
+    z-index: 3;
   }
 }
 
