@@ -262,6 +262,12 @@ const readState = (postId) => {
 }
 
 const cardTitle = (post) => post.analysis?.hypeTitle || post.title
+const cardSurfaceStyle = (post, index) => {
+  if (index === 0 || !post.image) return null
+  const image = resolveAssetUrl(post.image)
+  if (!image) return null
+  return { '--post-card-image': `url("${String(image).replace(/"/g, '\\"')}")` }
+}
 const authorProfile = (post) => authorProfiles.value[post.authorId] || {}
 const authorIcon = (post) => {
   const profile = authorProfile(post)
@@ -382,6 +388,7 @@ watch(() => route.fullPath, () => {
               v-for="(post, index) in displayedPosts"
               :key="post.id"
               :class="['news-row', { analysis: isAnalysisPost(post), 'featured-latest': index === 0, 'grid-card': index > 0 }]"
+              :style="cardSurfaceStyle(post, index)"
               @click="goPost(post.id)"
             >
               <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
@@ -1682,6 +1689,12 @@ watch(() => route.fullPath, () => {
   .news-row.grid-card,
   .news-row.grid-card.analysis {
     align-content: end;
+    background:
+      linear-gradient(180deg, rgba(5, 8, 22, 0.1), rgba(5, 8, 22, 0.22)),
+      var(--post-card-image),
+      #050816;
+    background-position: center;
+    background-size: cover;
     display: grid;
     gap: 0;
     grid-template-columns: 1fr;
@@ -1709,7 +1722,8 @@ watch(() => route.fullPath, () => {
     height: 100%;
     inset: 0;
     min-height: 0;
-    object-fit: cover;
+    object-fit: contain;
+    object-position: center;
     position: absolute;
     width: 100%;
     z-index: 0;
@@ -2692,6 +2706,23 @@ watch(() => route.fullPath, () => {
     font-size: 9px;
     min-height: 24px;
     padding: 4px 7px;
+  }
+}
+
+@media (min-width: 761px) {
+  .news-row.grid-card.analysis {
+    background:
+      linear-gradient(180deg, rgba(5, 8, 22, 0.08), rgba(5, 8, 22, 0.24)),
+      var(--post-card-image),
+      #050816 !important;
+    background-position: center !important;
+    background-size: cover !important;
+  }
+
+  .news-row.grid-card.analysis > img {
+    filter: none !important;
+    object-fit: contain !important;
+    object-position: center !important;
   }
 }
 </style>
