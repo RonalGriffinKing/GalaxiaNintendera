@@ -487,7 +487,6 @@
 
             <section v-for="(section, index) in visibleSections" :key="index" class="preview-section">
               <h2>{{ section.title || `Seccion ${index + 1}` }}</h2>
-              <div class="preview-section-copy rich-content" v-html="richText(section.content || 'El contenido de esta seccion se vera aqui cuando lo escribas.')"></div>
               <div v-if="section.image" class="preview-section-media">
                 <iframe
                   v-if="mediaFor(section.image).type === 'youtube'"
@@ -498,8 +497,10 @@
                   allowfullscreen
                 ></iframe>
                 <video v-else-if="mediaFor(section.image).type === 'video'" :src="mediaFor(section.image).url" controls playsinline></video>
-                <img v-else :src="mediaFor(section.image).url" :alt="section.title || `Seccion ${index + 1}`" />
+                <img v-else :src="mediaFor(section.image).url" :alt="section.title || `Seccion ${index + 1}`" loading="lazy" decoding="async" />
               </div>
+              <p v-if="sectionSubtitle(section)" class="preview-section-subtitle">{{ sectionSubtitle(section) }}</p>
+              <div class="preview-section-copy rich-content" v-html="richText(section.content || 'El contenido de esta seccion se vera aqui cuando lo escribas.')"></div>
             </section>
 
             <div v-if="isAnalysisPost" class="preview-score-card">
@@ -757,6 +758,7 @@ const initialFlowMessage = computed(() => {
 const visibleSections = computed(() => post.value.sections.filter(section => !section.hidden))
 const postCoverMedia = computed(() => mediaFromUrl(post.value.image))
 const mediaFor = (url) => mediaFromUrl(url)
+const sectionSubtitle = (section = {}) => String(section.subtitle || '').trim()
 const autoSlug = computed(() => slugify(post.value.title || ''))
 const autoMetaDescription = computed(() => String(post.value.content || '').slice(0, 155))
 const autoKeywords = computed(() => selectedCategories.value.map(item => item.trim()).filter(Boolean).slice(0, 8).join(', '))
@@ -2749,6 +2751,7 @@ const savePost = async (targetStatus = 'pending') => {
 .preview-section-media {
   aspect-ratio: 16 / 9;
   background: #020617;
+  margin: 6px 0 4px;
   overflow: hidden;
 }
 
@@ -2777,6 +2780,14 @@ const savePost = async (targetStatus = 'pending') => {
   display: grid;
   gap: 8px;
   padding: 0 4px;
+}
+
+.preview-section-subtitle {
+  color: #7c3aed;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.35;
+  margin: 0;
 }
 
 .preview-section h2 {

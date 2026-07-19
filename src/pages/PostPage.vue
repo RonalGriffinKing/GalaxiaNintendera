@@ -36,6 +36,7 @@ const publicPostPath = computed(() => `/post/${post.value.slug || post.value.id 
 const postSections = computed(() => Array.isArray(post.value.sections) ? post.value.sections : [])
 const mediaFor = (url) => mediaFromUrl(url)
 const richText = (value) => renderRichText(value)
+const sectionSubtitle = (section = {}) => String(section.subtitle || '').trim()
 const postReleaseTime = computed(() => getTime(post.value.releaseAt || post.value.scheduledAt))
 const isUpcomingPost = computed(() => postReleaseTime.value > Date.now())
 const readRewardStars = computed(() => {
@@ -522,8 +523,6 @@ onUnmounted(() => {
               {{ section.title }}
             </h2>
 
-            <div class="post-paragraph rich-content" v-html="richText(section.content)"></div>
-
             <div
               v-if="section.image"
               class="post-section-image post-section-media post-content-image"
@@ -538,8 +537,14 @@ onUnmounted(() => {
                 allowfullscreen
               ></iframe>
               <video v-else-if="mediaFor(section.image).type === 'video'" :src="mediaFor(section.image).url" controls playsinline></video>
-              <img v-else :src="mediaFor(section.image).url" alt="" />
+              <img v-else :src="mediaFor(section.image).url" alt="" loading="lazy" decoding="async" />
             </div>
+
+            <p v-if="sectionSubtitle(section)" class="post-section-subtitle">
+              {{ sectionSubtitle(section) }}
+            </p>
+
+            <div class="post-paragraph rich-content" v-html="richText(section.content)"></div>
           </section>
         </template>
 
@@ -836,6 +841,14 @@ onUnmounted(() => {
   margin: 0;
 }
 
+.post-section-subtitle {
+  color: #d8b4fe;
+  font-size: clamp(17px, 2vw, 22px);
+  font-weight: 900;
+  line-height: 1.35;
+  margin: 0;
+}
+
 .post-section-image,
 .post-section-media {
   aspect-ratio: 21 / 9;
@@ -844,6 +857,7 @@ onUnmounted(() => {
     linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(3, 7, 18, 0.98));
   border-radius: 14px;
   justify-self: center;
+  margin: 8px 0 4px;
   max-height: 430px;
   max-width: 100%;
   overflow: hidden;
