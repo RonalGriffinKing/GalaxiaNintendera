@@ -1637,10 +1637,9 @@ watch(() => route.fullPath, () => {
   }
 
   .news-row.grid-card::after {
-    backdrop-filter: blur(1.5px);
     background:
-      linear-gradient(180deg, rgba(5, 8, 22, 0.08) 0%, rgba(5, 8, 22, 0.3) 34%, rgba(5, 8, 22, 0.78) 68%, rgba(5, 8, 22, 0.96) 100%),
-      radial-gradient(circle at 80% 18%, rgba(168, 85, 247, 0.22), transparent 30%);
+      linear-gradient(180deg, rgba(5, 8, 22, 0.22) 0%, rgba(5, 8, 22, 0.1) 34%, rgba(5, 8, 22, 0.58) 63%, rgba(5, 8, 22, 0.94) 100%),
+      radial-gradient(circle at 80% 18%, rgba(168, 85, 247, 0.16), transparent 30%);
     content: "";
     inset: 0;
     pointer-events: none;
@@ -1719,64 +1718,71 @@ watch(() => route.fullPath, () => {
   .news-row.grid-card .listing-author-overlay,
   .news-row.grid-card.analysis .listing-author-overlay {
     align-self: auto;
-    background: transparent;
-    border: 0;
-    box-shadow: none;
-    bottom: 118px;
+    background: rgba(5, 8, 22, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
     grid-column: auto;
     grid-row: auto;
     margin: 0;
-    max-width: calc(100% - 32px);
+    max-width: calc(100% - 178px);
     position: absolute;
-    right: 16px;
+    right: 102px;
+    top: 14px;
     width: auto;
     z-index: 2;
+  }
+
+  .news-row.grid-card:not(.analysis) .listing-author-overlay {
+    max-width: calc(100% - 132px);
+    right: 16px;
   }
 
   .news-row.grid-card .post-copy,
   .news-row.grid-card.analysis .post-copy {
     align-self: end;
-    display: grid;
-    gap: 8px;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: block;
     grid-column: 1;
     grid-row: 1;
-    padding: 0 16px 18px;
+    padding: 58px 16px 18px;
     position: relative;
     z-index: 2;
   }
 
   .news-row.grid-card .post-copy > span,
   .news-row.grid-card.analysis .post-copy > span {
-    grid-column: 1;
-    grid-row: 1;
-    justify-self: start;
-    margin-bottom: 0;
-    max-width: calc(100% - 160px);
+    left: 16px;
+    margin: 0;
+    max-width: 130px;
+    overflow: hidden;
+    position: absolute;
+    text-overflow: ellipsis;
+    top: 14px;
+    white-space: nowrap;
+    z-index: 3;
   }
 
   .news-row.grid-card .post-copy h2,
   .news-row.grid-card.analysis .post-copy h2 {
-    grid-column: 1 / -1;
     font-size: clamp(20px, 1.55vw, 25px);
     margin-top: 0;
     -webkit-line-clamp: 2;
   }
 
   .news-row.grid-card .post-copy p {
-    grid-column: 1 / -1;
     font-size: 14px;
     -webkit-line-clamp: 2;
   }
 
   .news-row.grid-card .listing-analysis-score {
     border-radius: 12px;
-    height: 58px;
+    height: 54px;
     position: absolute;
     right: 14px;
     top: 14px;
     transform: none;
-    width: 86px;
+    width: 78px;
+    z-index: 4;
   }
 
   .news-row.grid-card .post-sticker,
