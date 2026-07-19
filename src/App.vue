@@ -5,8 +5,10 @@ import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
 
 const router = useRouter()
 const isRouteLoading = ref(false)
+const ROUTE_LOADER_DELAY_MS = 250
 const MIN_LOADER_TIME_MS = 420
 let loadingStartedAt = Date.now()
+let showTimer = null
 let hideTimer = null
 let removeBeforeGuard = null
 let removeAfterGuard = null
@@ -18,14 +20,26 @@ const clearHideTimer = () => {
   hideTimer = null
 }
 
+const clearShowTimer = () => {
+  if (!showTimer) return
+  clearTimeout(showTimer)
+  showTimer = null
+}
+
 const showLoader = () => {
+  clearShowTimer()
   clearHideTimer()
-  loadingStartedAt = Date.now()
-  isRouteLoading.value = true
+  showTimer = setTimeout(() => {
+    loadingStartedAt = Date.now()
+    isRouteLoading.value = true
+    showTimer = null
+  }, ROUTE_LOADER_DELAY_MS)
 }
 
 const hideLoader = () => {
+  clearShowTimer()
   clearHideTimer()
+  if (!isRouteLoading.value) return
   const elapsed = Date.now() - loadingStartedAt
   const wait = Math.max(0, MIN_LOADER_TIME_MS - elapsed)
   hideTimer = setTimeout(() => {
@@ -35,7 +49,9 @@ const hideLoader = () => {
 
 onMounted(() => {
   removeBeforeGuard = router.beforeEach((to, from, next) => {
-    if (to.fullPath !== from.fullPath) showLoader()
+    const isQueryOnlyNavigation = to.path === from.path
+    const canUseFullScreenLoader = to.fullPath !== from.fullPath && !isQueryOnlyNavigation
+    if (canUseFullScreenLoader) showLoader()
     next()
   })
 
@@ -53,6 +69,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearShowTimer()
   clearHideTimer()
   removeBeforeGuard?.()
   removeAfterGuard?.()
@@ -63,7 +80,7 @@ onUnmounted(() => {
 <template>
   <router-view v-slot="{ Component, route }">
     <Transition name="route-page" mode="out-in">
-      <component :is="Component" :key="route.fullPath" class="route-page-shell" />
+      <component :is="Component" :key="route.path" class="route-page-shell" />
     </Transition>
   </router-view>
 

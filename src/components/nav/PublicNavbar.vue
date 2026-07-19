@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth'
-import { addDoc, collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
+import { addDoc, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { deleteApp, initializeApp } from 'firebase/app'
 import { auth, db, firebaseConfig } from '@/firebase'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
@@ -15,6 +15,7 @@ import PublicSearchPanel from '@/components/nav/PublicSearchPanel.vue'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import GlobalThreadComposerLauncher from '@/components/thread/GlobalThreadComposerLauncher.vue'
 import { defaultLogoUrl } from '@/constants/assets'
+import { createOfficialCommunity } from '@/constants/community'
 import { DEFAULT_POST_CATEGORIES, loadPostCategories, postCategoryLabels } from '@/services/postCategories'
 import {
   DEFAULT_QUICK_THREAD_TOPICS,
@@ -30,6 +31,13 @@ const createMenuOpen = ref(false)
 const searchOpen = ref(false)
 const searchQuery = ref('')
 const searchPosts = ref([])
+const searchCommunities = ref([])
+const searchUsers = ref([])
+const searchFollowingIds = ref(new Set())
+const searchFilter = ref('all')
+const searchExpanded = ref(false)
+const debouncedSearchQuery = ref('')
+const recentSearches = ref([])
 const loadingSearch = ref(false)
 const currentUser = ref(auth.currentUser)
 const notificationsOpen = ref(false)
@@ -76,6 +84,10 @@ let unsubscribeAuth = null
 let unsubscribeNotifications = null
 let lastScrollY = 0
 let scrollTicking = false
+let searchDebounceTimer = null
+let searchRequestId = 0
+const searchCache = new Map()
+const RECENT_SEARCHES_KEY = 'galaxia-global-search-recents'
 
 const links = PUBLIC_NAV_LINKS
 const mobileDrawerLinks = computed(() => links.filter(link => link.to !== '/comunidad'))
@@ -192,16 +204,55 @@ const accountAdminItems = computed(() => {
 })
 const accountAdminLabel = computed(() => (isAdmin.value ? 'PANEL ADMIN' : canPublish.value ? 'PUBLISHER' : ''))
 
-const filteredPosts = computed(() => {
-  const query = normalize(searchQuery.value)
-  if (!query) return []
+const searchPreview = computed(() => {
+  const queryText = normalize(debouncedSearchQuery.value)
+  const filter = searchFilter.value
+  const expanded = searchExpanded.value
+  const sectionLimit = expanded && filter !== 'all' ? 9 : 3
+  const cacheKey = `${filter}:${queryText}:${expanded ? 'expanded' : 'preview'}`
 
-  return searchPosts.value
-    .filter(post => {
-      const text = normalize(`${post.title || ''} ${post.content || ''} ${postCategoryLabels(post).join(' ')}`)
-      return text.includes(query)
-    })
-    .slice(0, 5)
+  if (searchCache.has(cacheKey)) return searchCache.get(cacheKey)
+
+  const posts = pickSearchItems({
+    items: searchPosts.value,
+    queryText,
+    limitCount: sectionLimit,
+    searchText: (post) => `${post.title || ''} ${post.content || ''} ${post.description || ''} ${postCategoryLabels(post).join(' ')}`
+  })
+
+  const communities = pickSearchItems({
+    items: searchCommunities.value,
+    queryText,
+    limitCount: sectionLimit,
+    searchText: (community) => `${community.name || ''} ${community.description || ''} ${(community.threadTopics || []).join(' ')} ${community.category || ''}`
+  })
+
+  const users = pickSearchItems({
+    items: searchUsers.value,
+    queryText,
+    limitCount: sectionLimit,
+    searchText: (user) => `${user.name || ''} ${user.email || ''} ${user.username || ''} ${user.displayName || ''} ${user.description || ''}`
+  })
+
+  const result = {
+    posts: filter === 'all' || filter === 'posts' ? posts : [],
+    communities: filter === 'all' || filter === 'communities' ? communities : [],
+    users: filter === 'all' || filter === 'users' ? users : []
+  }
+
+  searchCache.set(cacheKey, result)
+  return result
+})
+
+const searchSuggestions = computed(() => {
+  const filter = searchFilter.value
+  const limitCount = searchExpanded.value && filter !== 'all' ? 9 : 3
+
+  return {
+    posts: filter === 'all' || filter === 'posts' ? searchPosts.value.slice(0, limitCount) : [],
+    communities: filter === 'all' || filter === 'communities' ? searchCommunities.value.slice(0, limitCount) : [],
+    users: filter === 'all' || filter === 'users' ? searchUsers.value.slice(0, limitCount) : []
+  }
 })
 
 const currentProfileIcon = computed(() => {
@@ -239,18 +290,70 @@ const normalize = (value) => String(value || '')
   .toLowerCase()
   .trim()
 
-const loadSearchPosts = async () => {
-  if (searchPosts.value.length || loadingSearch.value) return
+const pickSearchItems = ({ items, queryText, limitCount, searchText }) => {
+  const source = queryText
+    ? items.filter(item => normalize(searchText(item)).includes(queryText))
+    : items
 
+  return source.slice(0, limitCount)
+}
+
+const loadRecentSearches = () => {
+  if (typeof window === 'undefined') return
+  try {
+    const saved = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || '[]')
+    recentSearches.value = Array.isArray(saved) ? saved.filter(Boolean).slice(0, 5) : []
+  } catch (error) {
+    recentSearches.value = []
+  }
+}
+
+const saveRecentSearch = (value) => {
+  const text = String(value || '').trim()
+  if (!text || typeof window === 'undefined') return
+  const next = [text, ...recentSearches.value.filter(item => normalize(item) !== normalize(text))].slice(0, 5)
+  recentSearches.value = next
+  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next))
+}
+
+const loadSearchIndex = async () => {
+  if ((searchPosts.value.length || searchCommunities.value.length || searchUsers.value.length) || loadingSearch.value) return
+
+  const requestId = ++searchRequestId
   loadingSearch.value = true
 
   try {
-    const snap = await getDocs(collection(db, 'posts'))
-    searchPosts.value = snap.docs
+    const [postsSnap, communitiesSnap, usersSnap, followingSnap] = await Promise.all([
+      getDocs(collection(db, 'posts')).catch(() => ({ docs: [] })),
+      getDocs(collection(db, 'communities')).catch(() => ({ docs: [] })),
+      getDocs(collection(db, 'users')).catch(() => ({ docs: [] })),
+      currentUser.value ? getDocs(collection(db, 'users', currentUser.value.uid, 'following')).catch(() => ({ docs: [] })) : Promise.resolve({ docs: [] })
+    ])
+
+    if (requestId !== searchRequestId) return
+
+    searchPosts.value = postsSnap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(post => post.status === 'approved' && post.visibility !== 'private' && post.visibility !== 'unlisted' && post.placement !== 'hero' && !post.isMainEntry)
+      .sort((a, b) => Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0))
+
+    const savedCommunities = communitiesSnap.docs.map(d => ({ id: d.id, membersCount: 0, ...d.data() }))
+    const official = createOfficialCommunity()
+    const hasOfficial = savedCommunities.some(community => community.id === official.id)
+    searchCommunities.value = [
+      ...(hasOfficial ? [] : [official]),
+      ...savedCommunities
+    ].sort((a, b) => Number(b.membersCount || 0) - Number(a.membersCount || 0))
+
+    searchUsers.value = usersSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(user => !user.isBlocked)
+      .sort((a, b) => Number(b.followersCount || 0) - Number(a.followersCount || 0))
+
+    searchFollowingIds.value = new Set(followingSnap.docs.map(item => item.data()?.userId || item.id))
+    searchCache.clear()
   } finally {
-    loadingSearch.value = false
+    if (requestId === searchRequestId) loadingSearch.value = false
   }
 }
 
@@ -260,20 +363,111 @@ const toggleSearch = async () => {
   createMenuOpen.value = false
 
   if (searchOpen.value) {
-    await loadSearchPosts()
+    loadRecentSearches()
+    await loadSearchIndex()
   }
 }
 
-const goSearchResult = (id) => {
+const closeSearch = () => {
   searchOpen.value = false
   searchQuery.value = ''
+  debouncedSearchQuery.value = ''
+  searchFilter.value = 'all'
+  searchExpanded.value = false
+}
+
+const goSearchResult = ({ type, id }) => {
+  if (!id) return
+  saveRecentSearch(searchQuery.value)
+  closeSearch()
+
+  if (type === 'community') {
+    router.push(`/comunidad?id=${encodeURIComponent(id)}`)
+    return
+  }
+
+  if (type === 'user') {
+    router.push(`/perfil/${id}`)
+    return
+  }
+
   router.push(`/post/${id}`)
 }
 
-const submitSearch = () => {
-  if (filteredPosts.value[0]) {
-    goSearchResult(filteredPosts.value[0].id)
+const goSearchSection = (type) => {
+  if (searchExpanded.value && searchFilter.value === type) {
+    searchExpanded.value = false
+    searchFilter.value = 'all'
+    return
   }
+
+  searchExpanded.value = true
+  if (type === 'posts') {
+    searchFilter.value = 'posts'
+    return
+  }
+
+  if (type === 'communities') {
+    searchFilter.value = 'communities'
+    return
+  }
+
+  if (type === 'users') {
+    searchFilter.value = 'users'
+  }
+}
+
+const goAllSearchResults = () => {
+  const queryText = searchQuery.value.trim()
+  debouncedSearchQuery.value = searchQuery.value
+  if (!searchExpanded.value) {
+    searchExpanded.value = true
+    searchFilter.value = 'all'
+    return
+  }
+  if (queryText) saveRecentSearch(queryText)
+
+  if (searchPreview.value.posts[0]) {
+    goSearchResult({ type: 'post', id: searchPreview.value.posts[0].id })
+    return
+  }
+
+  if (searchPreview.value.communities[0]) {
+    goSearchResult({ type: 'community', id: searchPreview.value.communities[0].id })
+    return
+  }
+
+  if (searchPreview.value.users[0]) {
+    goSearchResult({ type: 'user', id: searchPreview.value.users[0].id })
+  }
+}
+
+const submitSearch = () => {
+  goAllSearchResults()
+}
+
+const applyRecentSearch = (value) => {
+  searchQuery.value = value
+}
+
+const followSearchUser = async (user) => {
+  const viewer = currentUser.value
+  if (!viewer || !user?.id || viewer.uid === user.id || searchFollowingIds.value.has(user.id)) return
+
+  searchFollowingIds.value = new Set([...searchFollowingIds.value, user.id])
+
+  await Promise.all([
+    setDoc(doc(db, 'users', user.id, 'followers', viewer.uid), {
+      userId: viewer.uid,
+      createdAt: Date.now()
+    }, { merge: true }),
+    setDoc(doc(db, 'users', viewer.uid, 'following', user.id), {
+      userId: user.id,
+      createdAt: Date.now()
+    }, { merge: true }),
+    updateDoc(doc(db, 'users', user.id), { followersCount: increment(1) }).catch(() => {}),
+    updateDoc(doc(db, 'users', viewer.uid), { followingCount: increment(1) }).catch(() => {})
+  ])
 }
 
 const isMobileNav = () => {
@@ -720,6 +914,7 @@ const openNotification = async (notification) => {
 }
 
 onMounted(() => {
+  loadRecentSearches()
   unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
     if (!user) resetPlayerSession()
     currentUser.value = user
@@ -744,7 +939,26 @@ watch(() => route.fullPath, () => {
   }
 })
 
+watch(searchQuery, (value) => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    debouncedSearchQuery.value = value
+  }, 300)
+})
+
+watch(currentUser, () => {
+  searchRequestId += 1
+  searchFollowingIds.value = new Set()
+  searchPosts.value = []
+  searchCommunities.value = []
+  searchUsers.value = []
+  searchExpanded.value = false
+  searchCache.clear()
+})
+
 onUnmounted(() => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchRequestId += 1
   window.removeEventListener('galaxy-profile-updated', syncCurrentProfile)
   window.removeEventListener('scroll', onScrollNavigation)
   window.removeEventListener('resize', updateScrollNavigation)
@@ -776,31 +990,16 @@ onUnmounted(() => {
           {{ link.label }}
         </button>
 
-        <form
+        <button
           class="public-nav-search"
           :class="{ open: searchOpen }"
-          @submit.prevent="submitSearch"
+          type="button"
+          aria-label="Buscar"
+          :aria-expanded="searchOpen"
+          @click="toggleSearch"
         >
-          <button type="button" aria-label="Buscar" @click="toggleSearch">
-            <i class="fas fa-search"></i>
-          </button>
-          <input
-            v-if="searchOpen"
-            v-model="searchQuery"
-            autofocus
-            placeholder="Buscar..."
-            @focus="loadSearchPosts"
-          />
-          <button
-            v-if="searchOpen"
-            class="search-close"
-            type="button"
-            aria-label="Cerrar busqueda"
-            @click="searchOpen = false; searchQuery = ''"
-          >
-            <i class="fas fa-xmark"></i>
-          </button>
-        </form>
+          <i class="fas fa-search"></i>
+        </button>
       </div>
 
       <div class="public-actions">
@@ -875,13 +1074,23 @@ onUnmounted(() => {
 
     <PublicSearchPanel
       v-model:query="searchQuery"
+      v-model:filter="searchFilter"
       :open="searchOpen"
-      :posts="filteredPosts"
+      :results="searchPreview"
+      :suggestions="searchSuggestions"
+      :following-ids="searchFollowingIds"
+      :current-user-id="currentUser?.uid || ''"
+      :recent-searches="recentSearches"
+      :expanded="searchExpanded"
       :loading="loadingSearch"
       :mobile-visible="isMobileNav()"
-      @close="searchOpen = false"
+      @close="closeSearch"
       @submit="submitSearch"
-      @open-post="goSearchResult"
+      @open-result="goSearchResult"
+      @open-section="goSearchSection"
+      @open-all="goAllSearchResults"
+      @recent="applyRecentSearch"
+      @follow-user="followSearchUser"
     />
 
     <NotificationDropdown
@@ -1248,47 +1457,20 @@ onUnmounted(() => {
 
 .public-nav-search {
   align-items: center;
+  color: #ffffff;
   border-radius: 999px;
-  display: inline-grid;
-  grid-template-columns: 34px 0 0;
+  display: inline-flex;
+  font-size: 15px;
+  height: 34px;
+  justify-content: center;
   min-height: 34px;
-  overflow: hidden;
-  transition: background 0.22s ease, grid-template-columns 0.22s ease, width 0.22s ease;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.18s cubic-bezier(0.2, 0.9, 0.2, 1);
   width: 34px;
 }
 
 .public-nav-search.open {
-  background: rgba(5, 8, 22, 0.74);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  grid-template-columns: 34px minmax(120px, 180px) 30px;
-  width: 248px;
-}
-
-.public-nav-search button {
-  align-items: center;
-  color: #ffffff;
-  display: inline-flex;
-  height: 34px;
-  justify-content: center;
-  width: 34px;
-}
-
-.public-nav-search input {
-  background: transparent;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 800;
-  min-width: 0;
-  outline: 0;
-}
-
-.public-nav-search input::placeholder {
-  color: #94a3b8;
-}
-
-.public-nav-search .search-close {
-  color: #cbd5e1;
-  width: 30px;
+  background: rgba(124, 58, 237, 0.28);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.12);
 }
 
 .public-nav-link:hover,

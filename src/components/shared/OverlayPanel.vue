@@ -181,6 +181,7 @@ import WidgetRenderer from '@/components/widgets/WidgetRenderer.vue'
 
 const router = useRouter()
 const route = useRoute()
+const emit = defineEmits(['loading', 'ready'])
 
 const overlays = ref([])
 const showPanel = ref(false)
@@ -203,8 +204,10 @@ const loadOverlays = async () => {
   }))
 }
 
-onMounted(() => {
-  loadOverlays()
+onMounted(async () => {
+  emit('loading', 'overlays')
+  await loadOverlays()
+  emit('ready', 'overlays')
   if (route.query.create === 'overlay') {
     openCreate()
     router.replace({ path: route.path, query: { ...route.query, create: undefined } })

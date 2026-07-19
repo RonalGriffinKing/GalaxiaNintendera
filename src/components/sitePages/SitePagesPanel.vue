@@ -8,6 +8,7 @@ const props = defineProps({
   embedded: Boolean,
   userRole: { type: String, default: 'user' }
 })
+const emit = defineEmits(['loading', 'ready'])
 
 const route = useRoute()
 const router = useRouter()
@@ -29,12 +30,14 @@ const filteredPages = computed(() => {
   return list.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
 })
 
-const loadPages = async () => {
+const loadPages = async ({ signal = false } = {}) => {
+  if (signal) emit('loading', 'pages')
   loading.value = true
   try {
     pages.value = await listSitePages()
   } finally {
     loading.value = false
+    if (signal) emit('ready', 'pages')
   }
 }
 
@@ -123,7 +126,7 @@ watch(() => route.query.seed, async (target) => {
   router.replace({ path: route.path, query: { ...route.query, seed: undefined, section: 'pages' } })
 }, { immediate: true })
 
-onMounted(loadPages)
+onMounted(() => loadPages({ signal: true }))
 </script>
 
 <template>

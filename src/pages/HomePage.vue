@@ -2113,10 +2113,11 @@ const loadHomeCommunityData = async () => {
 
 @media (min-width: 1180px) {
   .home-page {
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
-    padding: var(--public-page-top, 88px) 16px 18px;
+    height: auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: visible;
+    padding: var(--public-page-top, 88px) 16px 36px;
   }
 
   .home-page-content {
@@ -2126,8 +2127,8 @@ const loadHomeCommunityData = async () => {
       "featured news"
       "stories news";
     grid-template-columns: minmax(460px, 0.84fr) minmax(560px, 1.16fr);
-    grid-template-rows: minmax(0, 0.6fr) minmax(0, 0.4fr);
-    height: calc(100dvh - 94px);
+    grid-template-rows: auto auto;
+    height: auto;
     margin: 0 auto;
     max-width: 1500px;
     width: min(1500px, calc(100vw - 48px));
@@ -2136,9 +2137,9 @@ const loadHomeCommunityData = async () => {
   .home-hero {
     grid-area: featured;
     border-radius: 16px;
+    height: auto;
     max-width: none;
-    min-height: 0;
-    height: 100%;
+    min-height: clamp(460px, 48vw, 680px);
   }
 
   .hero-content {
@@ -2210,9 +2211,9 @@ const loadHomeCommunityData = async () => {
 
   .community-stories-panel {
     grid-area: stories;
+    max-height: none;
     min-height: 0;
-    max-height: 100%;
-    overflow: auto;
+    overflow: visible;
     padding: 18px;
   }
 
@@ -2237,7 +2238,7 @@ const loadHomeCommunityData = async () => {
   .media-center-panel {
     align-content: start;
     min-height: 0;
-    overflow: auto;
+    overflow: visible;
   }
 
   .media-hero-card {
@@ -3936,7 +3937,7 @@ const loadHomeCommunityData = async () => {
 @media (min-width: 1180px) {
   .home-page-content {
     grid-template-columns: minmax(620px, 1.08fr) minmax(420px, 0.92fr);
-    grid-template-rows: minmax(0, 0.68fr) minmax(0, 0.32fr);
+    grid-template-rows: auto auto;
   }
 
   .home-hero,

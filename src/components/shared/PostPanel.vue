@@ -256,6 +256,7 @@ const props = defineProps({
     default: true
   }
 })
+const emit = defineEmits(['loading', 'ready'])
 
 const posts = ref([])
 const filter = ref('all')
@@ -288,8 +289,12 @@ const loadCategories = async () => {
 }
 
 onMounted(async () => {
-  await loadPosts()
-  await loadCategories()
+  emit('loading', 'posts')
+  await Promise.all([
+    loadPosts(),
+    loadCategories()
+  ])
+  emit('ready', 'posts')
   if (route.query.create === 'post') openCreate()
   if (route.query.create === 'post-json') openJsonCreate()
   if (route.query.create === 'hero') openHeroCreate()

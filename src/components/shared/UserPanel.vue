@@ -241,6 +241,7 @@ defineProps({
     default: false
   }
 })
+const emit = defineEmits(['loading', 'ready'])
 
 const fallbackAvatar = 'https://i.pravatar.cc/120'
 const profileIcon = (user) => resolveProfileIcon(user)
@@ -479,7 +480,9 @@ const executeDelete = async () => {
 }
 
 onMounted(async () => {
+  emit('loading', 'users')
   await loadUsers()
+  emit('ready', 'users')
   if (route.query.create === 'user' && canManageUsers.value) openCreate()
 })
 

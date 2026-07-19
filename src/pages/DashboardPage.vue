@@ -43,13 +43,34 @@
       </header>
 
       <Transition name="manager-fade" mode="out-in">
-        <section :key="activeTab" class="module-panel">
-          <component
-            :is="activeComponent"
-            :user-role="currentRole"
-            :show-embedded-tools="activeTab !== 'posts'"
-            embedded
-          />
+        <section :key="activeTab" class="module-panel" :class="{ 'is-loading': isContentLoading }">
+          <KeepAlive>
+            <component
+              :is="activeComponent"
+              :user-role="currentRole"
+              :show-embedded-tools="activeTab !== 'posts'"
+              embedded
+              @loading="handleModuleLoading"
+              @ready="handleModuleReady"
+            />
+          </KeepAlive>
+
+          <Transition name="content-loading-fade">
+            <ContentLoading
+              v-if="isInlineLoading"
+              :module="activeTab"
+              variant="inline"
+              class="module-loading-layer"
+            />
+          </Transition>
+
+          <Transition name="content-loading-fade">
+            <ContentLoading
+              v-if="isSkeletonLoading"
+              :module="activeTab"
+              class="module-loading-layer"
+            />
+          </Transition>
         </section>
       </Transition>
     </section>
@@ -57,10 +78,12 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { doc, getDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
+import ContentLoading from '@/components/shared/ContentLoading.vue'
+import { createLoadingManager } from '@/composables/useLoadingManager'
 
 const PostPanel = defineAsyncComponent(() => import('@/components/shared/PostPanel.vue'))
 const SitePagesPanel = defineAsyncComponent(() => import('@/components/sitePages/SitePagesPanel.vue'))
@@ -71,6 +94,12 @@ const route = useRoute()
 const router = useRouter()
 const currentRole = ref('user')
 const activeTab = ref('posts')
+const loadedTabs = ref(new Set())
+const currentLoadToken = ref(null)
+const contentLoading = createLoadingManager()
+const isContentLoading = computed(() => contentLoading.active.value)
+const isInlineLoading = computed(() => contentLoading.isInline.value)
+const isSkeletonLoading = computed(() => contentLoading.isSkeleton.value)
 
 const isAdmin = computed(() => currentRole.value === 'admin')
 const canPublish = computed(() => ['admin', 'publisher'].includes(currentRole.value))
@@ -161,8 +190,13 @@ const normalizeTab = (value) => {
 }
 
 const setActiveTab = (tab) => {
-  activeTab.value = normalizeTab(tab)
-  router.replace({ path: route.path, query: { view: activeTab.value } })
+  const nextTab = normalizeTab(tab)
+  if (nextTab === activeTab.value && route.query.view === nextTab) return
+  activeTab.value = nextTab
+  if (!loadedTabs.value.has(nextTab)) {
+    currentLoadToken.value = contentLoading.start({ id: nextTab })
+  }
+  router.replace({ path: route.path, query: { ...route.query, view: activeTab.value } })
 }
 
 const runAction = (action) => {
@@ -173,7 +207,25 @@ const runAction = (action) => {
 }
 
 const applyRouteTab = () => {
-  activeTab.value = normalizeTab(route.query.view)
+  const nextTab = normalizeTab(route.query.view)
+  if (nextTab === activeTab.value) return
+  activeTab.value = nextTab
+  if (!loadedTabs.value.has(nextTab)) {
+    currentLoadToken.value = contentLoading.start({ id: nextTab })
+  }
+}
+
+const handleModuleLoading = (moduleId = activeTab.value) => {
+  if (loadedTabs.value.has(moduleId)) return
+  currentLoadToken.value = contentLoading.start({ id: moduleId })
+}
+
+const handleModuleReady = async (moduleId = activeTab.value) => {
+  loadedTabs.value = new Set([...loadedTabs.value, moduleId])
+  await nextTick()
+  if (moduleId === activeTab.value) {
+    contentLoading.finish(currentLoadToken.value)
+  }
 }
 
 const loadRole = async () => {
@@ -333,11 +385,36 @@ onMounted(loadRole)
 
 .module-panel {
   min-height: 360px;
+  position: relative;
+}
+
+.module-panel.is-loading > :deep(:first-child) {
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+.module-loading-layer {
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 16px;
+  inset: 0;
+  padding: 0;
+  position: absolute;
+  z-index: 4;
+}
+
+.content-loading-fade-enter-active,
+.content-loading-fade-leave-active {
+  transition: opacity 0.16s ease;
+}
+
+.content-loading-fade-enter-from,
+.content-loading-fade-leave-to {
+  opacity: 0;
 }
 
 .manager-fade-enter-active,
 .manager-fade-leave-active {
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .manager-fade-enter-from,
