@@ -3956,6 +3956,170 @@ const loadHomeCommunityData = async () => {
   }
 }
 
+@media (min-width: 1180px) and (max-width: 1450px) {
+  .home-page {
+    padding: var(--public-page-top, 82px) 14px 30px;
+  }
+
+  .home-page-content {
+    gap: 14px 16px;
+    grid-template-columns: minmax(500px, 0.98fr) minmax(430px, 1.02fr);
+    max-width: 1280px;
+    width: min(1280px, calc(100vw - 36px));
+  }
+
+  .home-hero {
+    min-height: clamp(380px, 39vw, 520px);
+  }
+
+  .hero-content {
+    gap: 20px;
+    padding: clamp(30px, 3.2vw, 42px);
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(34px, 3.4vw, 46px);
+    line-height: 1.04;
+    max-width: 680px;
+  }
+
+  .hero-copy p {
+    font-size: 14px;
+    line-height: 1.45;
+    margin-top: 18px;
+    -webkit-line-clamp: 2;
+  }
+
+  .hero-actions {
+    margin-top: 14px;
+  }
+
+  .hero-primary,
+  .hero-secondary {
+    min-height: 36px;
+    padding: 0 14px;
+  }
+
+  .news-panel {
+    padding: 14px;
+  }
+
+  .panel-heading {
+    margin-bottom: 8px;
+  }
+
+  .latest-progress-row {
+    margin-bottom: 8px;
+  }
+
+  .news-grid {
+    gap: 12px;
+    grid-template-rows: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  }
+
+  .analysis-card-overlay,
+  .featured-news-overlay,
+  .standard-news-overlay {
+    padding: 14px;
+  }
+
+  .analysis-card-copy h3,
+  .featured-news-copy h3 {
+    font-size: clamp(23px, 2vw, 30px);
+  }
+
+  .news-card.analysis:not(.featured) .analysis-card-copy h3,
+  .standard-news-copy h3 {
+    font-size: clamp(17px, 1.45vw, 21px);
+  }
+
+  .featured-news-topline > span,
+  .analysis-card-topline > span {
+    font-size: 10px;
+    padding: 9px 12px;
+  }
+
+  .analysis-card-score {
+    min-height: 60px;
+    min-width: 66px;
+  }
+
+  .analysis-card-score b {
+    font-size: 28px;
+  }
+
+  .home-shell :deep(.media-center-panel),
+  .home-shell :deep(.community-stories-panel) {
+    padding: 14px;
+  }
+
+  .home-shell :deep(.media-hero-card) {
+    border-radius: 18px;
+    padding: 14px;
+  }
+
+  .home-shell :deep(.media-copy h3) {
+    font-size: clamp(20px, 2vw, 26px);
+    margin-top: 10px;
+  }
+
+  .home-shell :deep(.media-copy p) {
+    font-size: 12px;
+    line-height: 1.38;
+    margin-top: 8px;
+    -webkit-line-clamp: 2;
+  }
+
+  .home-shell :deep(.media-actions) {
+    margin-top: 12px;
+  }
+
+  .home-shell :deep(.media-actions button),
+  .home-shell :deep(.media-actions a) {
+    min-height: 36px;
+    padding: 8px 14px;
+  }
+}
+
+@media (min-width: 1180px) and (max-height: 850px) {
+  .home-page {
+    padding-bottom: 24px;
+  }
+
+  .home-page-content {
+    gap: 12px 14px;
+  }
+
+  .home-hero {
+    min-height: clamp(340px, 43vh, 430px);
+  }
+
+  .hero-content {
+    padding: 30px 34px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(32px, 3vw, 42px);
+  }
+
+  .hero-copy p {
+    font-size: 13px;
+    margin-top: 14px;
+  }
+
+  .news-panel {
+    padding: 12px;
+  }
+
+  .news-grid {
+    gap: 10px;
+  }
+
+  .home-shell :deep(.media-hero-card) {
+    padding: 12px;
+  }
+}
+
 @media (min-width: 681px) and (max-width: 1179px) {
   .home-page {
     overflow-x: hidden;
