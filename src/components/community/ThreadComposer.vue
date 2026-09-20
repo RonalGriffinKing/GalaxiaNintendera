@@ -42,7 +42,7 @@ const topicIcons = { ...CONTENT_TAB_ICONS, Torneos: 'fas fa-trophy' }
 const officialFallback = {
   id: OFFICIAL_COMMUNITY_ID,
   name: 'Galaxia Nintendera',
-  description: 'Noticias, eventos, analisis y todo lo relacionado con Nintendo.',
+  description: 'Noticias, eventos, análisis y todo lo relacionado con Nintendo.',
   iconUrl: officialLogo,
   isOfficial: true,
   threadTopics: defaultTopics
@@ -491,7 +491,7 @@ onMounted(async () => {
 
     <div v-else class="composer-empty">
       <strong>No tienes comunidades disponibles</strong>
-      <p>Unete a una comunidad para publicar hilos.</p>
+      <p>Únete a una comunidad para publicar hilos.</p>
       <button type="button" @click="exploreCommunities">Explorar comunidades</button>
     </div>
   </section>
@@ -510,8 +510,8 @@ onMounted(async () => {
     radial-gradient(circle at 12% 12%, rgba(124, 58, 237, 0.32), transparent 38%),
     linear-gradient(145deg, rgba(14, 18, 44, 0.98), rgba(22, 13, 48, 0.98));
   border: 1px solid rgba(168, 85, 247, 0.34);
-  border-radius: 34px;
-  box-shadow: 0 24px 70px rgba(2, 6, 23, 0.32);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow);
   color: #f8fafc;
   display: grid;
   gap: 12px;
@@ -583,7 +583,7 @@ onMounted(async () => {
 
 .composer-content {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
 }
 
@@ -663,9 +663,9 @@ onMounted(async () => {
   background: transparent;
   border: 0;
   color: #f8fafc;
-  font-size: 19px;
-  font-weight: 750;
-  line-height: 1.25;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.42;
   max-height: 150px;
   min-height: 72px;
   outline: 0;
@@ -814,13 +814,15 @@ onMounted(async () => {
   font-size: 20px;
   height: 42px;
   justify-content: center;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
   width: 42px;
 }
 
 .tool-row button.active,
 .tool-row button:hover {
-  background: rgba(124, 58, 237, 0.12);
-  color: #7c3aed;
+  background: rgba(139, 92, 246, 0.16);
+  color: #e9d5ff;
+  transform: translateY(-1px);
 }
 
 .publish-btn {
@@ -830,12 +832,22 @@ onMounted(async () => {
   color: #fff;
   display: inline-flex;
   font-size: 15px;
-  font-weight: 950;
+  font-weight: 900;
   gap: 8px;
   justify-content: center;
   min-height: 50px;
   min-width: 128px;
   padding: 0 22px;
+  transition: box-shadow var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) ease;
+}
+
+.publish-btn:not(:disabled):hover {
+  box-shadow: 0 12px 30px rgba(139, 92, 246, 0.28);
+  transform: translateY(-1px);
+}
+
+.publish-btn:not(:disabled):active {
+  transform: scale(0.97);
 }
 
 .publish-btn:disabled {

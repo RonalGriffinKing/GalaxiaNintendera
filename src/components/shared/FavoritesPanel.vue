@@ -12,9 +12,9 @@
         v-for="post in favorites"
         :key="post.id"
         class="favorite-card"
-        @click="goPost(post.postId || post.id)"
+        @click="goPost(post.postSlug || post.postId || post.id)"
       >
-        <img v-if="post.image" :src="post.image" alt="" />
+        <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
         <div v-else class="favorite-placeholder"></div>
 
         <div>
@@ -36,6 +36,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { collection, getDocs } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
+import { resolveAssetUrl } from '@/constants/assets'
 
 const router = useRouter()
 const favorites = ref([])

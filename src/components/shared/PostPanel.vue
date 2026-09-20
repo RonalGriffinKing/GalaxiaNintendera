@@ -33,16 +33,23 @@
         </button>
       </div>
 
-      <div class="post-filters">
-        <select v-model="categoryFilter">
-          <option value="all">Todas las categorias</option>
-          <option v-for="category in managedCategories" :key="category" :value="category">{{ category }}</option>
-        </select>
-        <select v-model="sortMode">
-          <option value="recent">Mas recientes</option>
-          <option value="oldest">Mas antiguos</option>
-        </select>
-        <div v-if="canPublish && showEmbeddedTools" class="post-tools-menu">
+      <ListControls
+        v-model:search="searchQuery"
+        v-model:sort="sortMode"
+        v-model:page-size="postPageSize"
+        search-placeholder="Buscar publicaciones..."
+        :sort-options="postSortOptions"
+      >
+        <template #filters>
+          <select v-model="categoryFilter">
+            <option value="all">Todas las categorias</option>
+            <option v-for="category in managedCategories" :key="category" :value="category">{{ category }}</option>
+          </select>
+        </template>
+      </ListControls>
+
+      <div v-if="canPublish && showEmbeddedTools" class="post-filters">
+        <div class="post-tools-menu">
           <button class="post-tools-btn" type="button" @click="showToolsMenu = !showToolsMenu">
             <i class="fas fa-wand-magic-sparkles"></i>
             Mas herramientas
@@ -70,7 +77,19 @@
       </div>
     </div>
 
-    <div class="post-table-wrap">
+    <div v-if="isLoadingPosts" class="post-empty-results">
+      <i class="fas fa-circle-notch fa-spin"></i>
+      <strong>Cargando publicaciones</strong>
+      <span>Conectando con la base de datos...</span>
+    </div>
+
+    <div v-else-if="loadError" class="post-empty-results">
+      <i class="fas fa-triangle-exclamation"></i>
+      <strong>No se pudieron cargar las publicaciones</strong>
+      <span>{{ loadError }}</span>
+    </div>
+
+    <div v-else-if="filteredPosts.length" class="post-table-wrap">
       <table class="post-table">
         <thead>
           <tr>
@@ -83,10 +102,10 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="post in filteredPosts" :key="post.id">
+          <tr v-for="post in paginatedPosts" :key="post.id">
             <td>
               <div class="post-title-cell">
-                <img v-if="post.image" :src="post.image" alt="" />
+                <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
                 <span v-else><i class="far fa-image"></i></span>
                 <strong>{{ post.title || 'Sin titulo' }}</strong>
               </div>
@@ -121,9 +140,15 @@
       </table>
     </div>
 
-    <div class="post-mobile-list">
-      <article v-for="post in filteredPosts" :key="post.id" class="post-mobile-card">
-        <img v-if="post.image" :src="post.image" alt="" />
+    <div v-if="!isLoadingPosts && !loadError && !filteredPosts.length" class="post-empty-results">
+      <i class="fas fa-magnifying-glass"></i>
+      <strong>No hay publicaciones con esos criterios</strong>
+      <span>Prueba con otra búsqueda, filtro u ordenación.</span>
+    </div>
+
+    <div v-if="!isLoadingPosts && !loadError && filteredPosts.length" class="post-mobile-list">
+      <article v-for="post in paginatedPosts" :key="post.id" class="post-mobile-card">
+        <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
         <span v-else><i class="far fa-image"></i></span>
         <div>
           <strong>{{ post.title || 'Sin titulo' }}</strong>
@@ -145,6 +170,18 @@
         </div>
       </article>
     </div>
+
+    <PaginationNav
+      v-if="!isLoadingPosts && !loadError && filteredPosts.length"
+      :current-page="postPagination.currentPage"
+      :total-pages="postPagination.totalPages"
+      :total-items="postPagination.totalItems"
+      :start-item="postPagination.startItem"
+      :end-item="postPagination.endItem"
+      :page-tokens="postPagination.pageTokens"
+      item-label="publicaciones"
+      @page="postPager.setPage"
+    />
 
     <Transition name="fade">
       <div v-if="confirmDialog.show" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -235,9 +272,13 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, deleteField, doc, getDocs, updateDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
+import { resolveAssetUrl } from '@/constants/assets'
 import PostEditor from '@/components/posts/PostEditor.vue'
+import ListControls from '@/components/shared/ListControls.vue'
+import PaginationNav from '@/components/shared/PaginationNav.vue'
 import SitePagesPanel from '@/components/sitePages/SitePagesPanel.vue'
 import { notifyNewPost } from '@/services/notifications'
+import { useListNavigation } from '@/composables/useListNavigation'
 import { DEFAULT_POST_CATEGORIES, loadPostCategories, postCategoryLabels, postMatchesCategory, savePostCategories } from '@/services/postCategories'
 
 const route = useRoute()
@@ -259,9 +300,12 @@ const props = defineProps({
 const emit = defineEmits(['loading', 'ready'])
 
 const posts = ref([])
+const isLoadingPosts = ref(false)
+const loadError = ref('')
 const filter = ref('all')
 const categoryFilter = ref('all')
 const sortMode = ref('recent')
+const searchQuery = ref('')
 const showEditor = ref(false)
 const showCategoryManager = ref(false)
 const showToolsMenu = ref(false)
@@ -277,24 +321,47 @@ const isAdmin = computed(() => props.userRole === 'admin')
 const canPublish = computed(() => ['admin', 'publisher'].includes(props.userRole))
 const showSitePages = computed(() => route.query.section === 'pages' || route.query.create === 'page')
 const filterOptions = computed(() => isAdmin.value ? ['all', 'pending', 'approved', 'mine'] : ['mine', 'pending', 'approved'])
+const postSortOptions = [
+  { value: 'recent', label: 'Más recientes' },
+  { value: 'oldest', label: 'Más antiguos' },
+  { value: 'az', label: 'A-Z' }
+]
 
 const loadPosts = async () => {
-  const snap = await getDocs(collection(db, 'posts'))
-  posts.value = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  isLoadingPosts.value = true
+  loadError.value = ''
+  try {
+    const snap = await getDocs(collection(db, 'posts'))
+    posts.value = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  } catch (error) {
+    console.error(error)
+    loadError.value = 'Revisa permisos o conexión de Firestore.'
+    posts.value = []
+  } finally {
+    isLoadingPosts.value = false
+  }
 }
 
 const loadCategories = async () => {
-  const saved = await loadPostCategories()
-  managedCategories.value = saved
+  try {
+    const saved = await loadPostCategories()
+    managedCategories.value = saved
+  } catch (error) {
+    console.error(error)
+    managedCategories.value = DEFAULT_POST_CATEGORIES
+  }
 }
 
 onMounted(async () => {
   emit('loading', 'posts')
-  await Promise.all([
-    loadPosts(),
-    loadCategories()
-  ])
-  emit('ready', 'posts')
+  try {
+    await Promise.all([
+      loadPosts(),
+      loadCategories()
+    ])
+  } finally {
+    emit('ready', 'posts')
+  }
   if (route.query.create === 'post') openCreate()
   if (route.query.create === 'post-json') openJsonCreate()
   if (route.query.create === 'hero') openHeroCreate()
@@ -311,17 +378,56 @@ onUnmounted(() => {
 const filteredPosts = computed(() => {
   const user = auth.currentUser
   let visiblePosts = isAdmin.value ? posts.value : posts.value.filter(p => p.authorId === user?.uid)
+  const query = normalizeSearch(searchQuery.value)
 
   if (filter.value === 'mine') visiblePosts = visiblePosts.filter(p => p.authorId === user?.uid)
   if (['pending', 'approved'].includes(filter.value)) visiblePosts = visiblePosts.filter(p => p.status === filter.value)
   if (categoryFilter.value !== 'all') visiblePosts = visiblePosts.filter(p => postMatchesCategory(p, categoryFilter.value))
+  if (query) {
+    visiblePosts = visiblePosts.filter((post) => normalizeSearch([
+      post.id,
+      post.title,
+      post.name,
+      post.body,
+      post.excerpt,
+      post.content,
+      post.authorName,
+      postCategories(post).join(' ')
+    ].filter(Boolean).join(' ')).includes(query))
+  }
 
   return [...visiblePosts].sort((a, b) => {
+    if (sortMode.value === 'az') return String(a.title || '').localeCompare(String(b.title || ''), 'es', { sensitivity: 'base' })
     const left = Number(a.updatedAt || a.createdAt || 0)
     const right = Number(b.updatedAt || b.createdAt || 0)
     return sortMode.value === 'recent' ? right - left : left - right
   })
 })
+
+const postPager = useListNavigation(filteredPosts, { initialPageSize: 20 })
+const paginatedPosts = computed(() => postPager.pageItems.value)
+const postPageSize = computed({
+  get: () => postPager.pageSize.value,
+  set: (value) => {
+    postPager.pageSize.value = Number(value) || 20
+  }
+})
+const postPagination = computed(() => ({
+  currentPage: postPager.currentPage.value,
+  totalPages: postPager.totalPages.value,
+  totalItems: postPager.totalItems.value,
+  startItem: postPager.startItem.value,
+  endItem: postPager.endItem.value,
+  pageTokens: postPager.pageTokens.value
+}))
+
+function normalizeSearch(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
 
 const tabLabel = (value) => ({
   all: 'Todos',
@@ -350,6 +456,8 @@ watch(isAdmin, (admin) => {
   if (admin && !filterOptions.value.includes(filter.value)) filter.value = 'all'
   if (!admin && filter.value === 'all') filter.value = 'mine'
 }, { immediate: true })
+
+watch([searchQuery, filter, categoryFilter, sortMode], postPager.resetPage)
 
 watch(() => route.query.create, (createTarget) => {
   if (createTarget === 'post') openCreate()
@@ -505,8 +613,16 @@ const triggerApprove = (post) => {
 
 const executeApprove = async (post) => {
   if (!isAdmin.value) return
-  await updateDoc(doc(db, 'posts', post.id), { status: 'approved', stickers: deleteField(), updatedAt: Date.now() })
+  const publishedAt = Date.now()
+  await updateDoc(doc(db, 'posts', post.id), {
+    status: 'approved',
+    stickers: deleteField(),
+    updatedAt: publishedAt,
+    publishedAt: post.publishedAt || publishedAt
+  })
   post.status = 'approved'
+  post.updatedAt = publishedAt
+  post.publishedAt = post.publishedAt || publishedAt
   confirmDialog.value.show = false
   await notifyNewPost(post)
   showToast('Post publicado')
@@ -559,10 +675,10 @@ const executeDelete = async (id) => {
 }
 
 .post-toolbar {
-  align-items: center;
-  display: flex;
+  align-items: start;
+  display: grid;
   gap: 16px;
-  justify-content: space-between;
+  grid-template-columns: auto minmax(320px, 1fr) auto;
   margin-bottom: 18px;
 }
 
@@ -593,6 +709,7 @@ const executeDelete = async (id) => {
   align-items: center;
   display: flex;
   gap: 10px;
+  justify-content: flex-end;
 }
 
 .post-filters select {
@@ -955,6 +1072,36 @@ const executeDelete = async (id) => {
   display: none;
 }
 
+.post-empty-results {
+  align-items: center;
+  background: #ffffff;
+  border: 1px dashed #d8b4fe;
+  border-radius: 16px;
+  color: #64748b;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  min-height: 180px;
+  padding: 24px;
+  text-align: center;
+}
+
+.post-empty-results i {
+  color: #a855f7;
+  font-size: 24px;
+}
+
+.post-empty-results strong {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.post-empty-results span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s;
@@ -981,6 +1128,7 @@ const executeDelete = async (id) => {
   .post-toolbar {
     align-items: stretch;
     display: grid;
+    grid-template-columns: 1fr;
   }
 
   .post-create-btn {

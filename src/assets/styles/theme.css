@@ -1,4 +1,42 @@
 :root {
+  --background: #050816;
+  --surface: rgba(9, 13, 32, 0.92);
+  --surface-elevated: rgba(15, 20, 46, 0.96);
+  --border: rgba(148, 163, 184, 0.16);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --accent: #8b5cf6;
+  --accent-hover: #a78bfa;
+  --accent-active: #ec4899;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+  --glow: 0 0 28px rgba(139, 92, 246, 0.24);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --font-h1: clamp(28px, 4vw, 44px);
+  --font-h2: 22px;
+  --font-h3: 16px;
+  --font-body: 14px;
+  --font-caption: 12px;
+  --button-height-sm: 36px;
+  --button-height-md: 42px;
+  --button-height-lg: 48px;
+  --icon-size-sm: 14px;
+  --icon-size-md: 16px;
+  --icon-size-lg: 20px;
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-fast: 170ms;
+  --motion-normal: 280ms;
+  --motion-slow: 420ms;
   --color-galaxy-bg: #050816;
   --color-galaxy-purple: #9333ea;
   --color-galaxy-pink: #ec4899;
@@ -77,7 +115,7 @@ select:disabled {
   background: #ffffff;
   border: 1px solid #f1f5f9;
   border-radius: 14px;
-  transition: all 0.3s ease;
+  transition: transform var(--motion-normal) var(--ease-standard), box-shadow var(--motion-normal) var(--ease-standard), border-color var(--motion-fast) ease;
 }
 
 .app-card:hover {
@@ -159,7 +197,7 @@ select:disabled {
   display: inline-flex;
   font-weight: 900;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), filter var(--motion-fast) ease;
 }
 
 .btn-primary-galaxy-xs {
@@ -181,8 +219,17 @@ select:disabled {
 }
 
 .btn-primary-galaxy:hover {
-  transform: scale(1.02);
+  transform: translateY(-1px);
   box-shadow: 0 10px 20px rgba(147, 51, 234, 0.2);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgba(192, 132, 252, 0.85);
+  outline-offset: 3px;
 }
 
 .mini-btn-xs {

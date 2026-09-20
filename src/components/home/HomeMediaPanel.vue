@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { proxiedImageUrl } from '@/constants/assets'
+import { useTimedCarousel } from '@/composables/useTimedCarousel'
 
 const props = defineProps({
   items: {
@@ -27,6 +28,8 @@ const youtubeVideos = ref([])
 const youtubeLive = ref(null)
 const youtubeLoading = ref(false)
 const youtubeError = ref('')
+const RECENT_MEDIA_PAGE_SIZE = 3
+const RECENT_MEDIA_SLIDE_DURATION = 5200
 
 const communityVideoProfiles = [
   { id: 'kirby', label: 'Kirby', keywords: ['kirby', 'dream land', 'dreamland', 'waddle', 'dedede', 'meta knight', 'air riders'] },
@@ -137,9 +140,19 @@ const activeEmbedUrl = computed(() => {
 const activeVideoUrl = computed(() => activeVideo.value?.url || (activeVideo.value?.id ? `https://www.youtube.com/watch?v=${activeVideo.value.id}` : ''))
 
 const channelUrl = computed(() => `https://www.youtube.com/@${channelHandle}`)
+const recentRows = computed(() => {
+  if (videoLibrary.value.length) return videoLibrary.value.slice(0, 12)
+  return props.items.slice(0, 12)
+})
+const recentPageCount = computed(() => Math.max(1, Math.ceil(recentRows.value.length / RECENT_MEDIA_PAGE_SIZE)))
+const recentCarousel = useTimedCarousel(recentPageCount, RECENT_MEDIA_SLIDE_DURATION)
+const recentSlideIndex = recentCarousel.index
+const recentProgressPercent = recentCarousel.progressPercent
 const visibleRows = computed(() => {
-  if (videoLibrary.value.length) return videoLibrary.value.slice(0, 3)
-  return props.items.slice(0, 3)
+  const start = recentSlideIndex.value * RECENT_MEDIA_PAGE_SIZE
+  const page = recentRows.value.slice(start, start + RECENT_MEDIA_PAGE_SIZE)
+  if (page.length === RECENT_MEDIA_PAGE_SIZE || recentRows.value.length <= RECENT_MEDIA_PAGE_SIZE) return page
+  return [...page, ...recentRows.value.slice(0, RECENT_MEDIA_PAGE_SIZE - page.length)]
 })
 
 const mapFeedItem = (item) => ({
@@ -236,6 +249,9 @@ const openActive = () => {
 const selectCommunity = (communityId) => {
   selectedCommunityId.value = communityId
 }
+const selectRecentSlide = (index) => {
+  recentCarousel.select(index)
+}
 
 watch(communityOptions, (options) => {
   if (selectedCommunityId.value !== 'latest' && !options.some(option => option.community.id === selectedCommunityId.value)) {
@@ -243,7 +259,10 @@ watch(communityOptions, (options) => {
   }
 })
 
-onMounted(loadYoutubeFeed)
+onMounted(() => {
+  recentCarousel.start()
+  loadYoutubeFeed()
+})
 </script>
 
 <template>
@@ -262,7 +281,7 @@ onMounted(loadYoutubeFeed)
     <div class="media-hero-card" :class="{ 'has-video': activeEmbedUrl }">
       <div class="media-spotlight">
         <div class="media-copy">
-          <span><i class="fas fa-satellite-dish"></i> {{ activeCommunityLabel }}</span>
+          <span><i :class="activeVideo?.streamKind === 'live-now' ? 'fas fa-tower-broadcast' : 'fas fa-satellite-dish'"></i> {{ activeCommunityLabel }}</span>
           <h3>{{ activeTitle }}</h3>
           <p>{{ activeDescription }}</p>
           <div class="media-actions">
@@ -290,6 +309,9 @@ onMounted(loadYoutubeFeed)
             <i class="fab fa-youtube"></i>
             <strong>{{ youtubeLoading ? 'Cargando canal...' : 'Preview del canal' }}</strong>
           </div>
+          <button type="button" class="media-play-orb" aria-label="Ver video" @click="openActive">
+            <i class="fas fa-play"></i>
+          </button>
           <small v-if="activeVideo">
             {{ activeVideo.streamKind === 'live-now' ? 'Live activo' : 'Ultimo video disponible' }}
           </small>
@@ -322,6 +344,12 @@ onMounted(loadYoutubeFeed)
       </button>
     </div>
 
+    <div class="media-list-head">
+      <strong><i class="fas fa-headphones-simple"></i> Contenido reciente</strong>
+      <small v-if="youtubeLoading">Actualizando canal...</small>
+      <small v-else>{{ recentRows.length }} destacados</small>
+    </div>
+
     <div class="media-list">
       <button
         v-for="item in visibleRows"
@@ -330,12 +358,34 @@ onMounted(loadYoutubeFeed)
         class="media-row"
         @click="item.url ? emit('open-item', { ...item, type: item.streamKind === 'live-now' ? 'Live' : item.type || 'Video', startsAt: item.publishedAt || item.startsAt }) : emit('open-item', item)"
       >
-        <span><i :class="item.streamKind === 'live-now' ? 'fas fa-tower-broadcast' : 'fas fa-play'"></i></span>
+        <span class="media-row-thumb">
+          <img v-if="item.thumbnail" :src="item.thumbnail" alt="" />
+          <i v-else :class="item.streamKind === 'live-now' ? 'fas fa-tower-broadcast' : 'fas fa-play'"></i>
+          <b><i :class="item.streamKind === 'live-now' ? 'fas fa-tower-broadcast' : 'fas fa-play'"></i></b>
+        </span>
         <div>
+          <em>{{ item.streamKind === 'live-now' ? 'En directo' : item.type || 'Video' }}</em>
           <strong>{{ item.title }}</strong>
-          <small>{{ item.streamKind === 'live-now' ? 'Live' : item.type || 'Video' }} - {{ formatDate(item.publishedAt || item.startsAt) }}</small>
+          <small>{{ formatDate(item.publishedAt || item.startsAt) }}</small>
         </div>
+        <i class="fas fa-ellipsis-vertical"></i>
       </button>
+    </div>
+
+    <div v-if="recentPageCount > 1" class="media-carousel-controls" aria-label="Paginas de contenido reciente">
+      <div class="media-carousel-progress">
+        <span :style="{ width: `${recentProgressPercent}%` }"></span>
+      </div>
+      <div class="media-carousel-dots">
+        <button
+          v-for="page in recentPageCount"
+          :key="`media-page-${page}`"
+          type="button"
+          :class="{ active: page - 1 === recentSlideIndex }"
+          :aria-label="`Ver videos ${page}`"
+          @click="selectRecentSlide(page - 1)"
+        ></button>
+      </div>
     </div>
 
     <p v-if="youtubeError && !visibleRows.length" class="media-feed-error">{{ youtubeError }}</p>
@@ -344,12 +394,15 @@ onMounted(loadYoutubeFeed)
 
 <style scoped>
 .community-stories-panel {
-  background: rgba(15, 23, 42, 0.68);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 28px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(236, 72, 153, 0.18), transparent 32%),
+    radial-gradient(circle at 88% 0%, rgba(168, 85, 247, 0.2), transparent 30%),
+    rgba(8, 13, 29, 0.82);
+  border: 1px solid rgba(236, 72, 153, 0.34);
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28), 0 0 40px rgba(168, 85, 247, 0.14);
   overflow: hidden;
-  padding: 18px;
+  padding: 20px;
 }
 
 .media-center-panel {
@@ -360,9 +413,11 @@ onMounted(loadYoutubeFeed)
 
 .panel-heading {
   align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   justify-content: space-between;
   gap: 14px;
+  padding-bottom: 14px;
 }
 
 .panel-heading h2 {
@@ -374,26 +429,67 @@ onMounted(loadYoutubeFeed)
 }
 
 .panel-heading h2 span {
-  background: linear-gradient(135deg, #a855f7, #ec4899);
-  border-radius: 999px;
-  height: 12px;
-  width: 12px;
+  align-items: center;
+  background: rgba(168, 85, 247, 0.18);
+  border: 1px solid rgba(236, 72, 153, 0.38);
+  border-radius: 12px;
+  box-shadow: 0 0 22px rgba(236, 72, 153, 0.22);
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  position: relative;
+  width: 44px;
+}
+
+.panel-heading h2 span::before {
+  color: #f0abfc;
+  content: '\f03d';
+  font-family: 'Font Awesome 6 Free';
+  font-size: 17px;
+  font-weight: 900;
 }
 
 .panel-heading button {
-  color: #c4b5fd;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(236, 72, 153, 0.28);
+  border-radius: 10px;
+  color: #f5d0fe;
+  display: inline-flex;
   font-size: 12px;
+  gap: 9px;
   font-weight: 900;
+  min-height: 42px;
+  padding: 0 15px;
 }
 
 .media-hero-card {
   background:
-    linear-gradient(135deg, rgba(124, 58, 237, 0.32), rgba(236, 72, 153, 0.24)),
-    rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 24px;
+    linear-gradient(135deg, rgba(124, 58, 237, 0.5), rgba(236, 72, 153, 0.22)),
+    rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(244, 114, 182, 0.22);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 42px rgba(0, 0, 0, 0.22);
   min-height: 0;
-  padding: 18px;
+  overflow: hidden;
+  padding: 20px;
+  position: relative;
+}
+
+.media-hero-card::before {
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.18), transparent 28%),
+    radial-gradient(circle at 84% 20%, rgba(236, 72, 153, 0.18), transparent 32%);
+  content: '';
+  inset: 0;
+  opacity: 0.9;
+  pointer-events: none;
+  position: absolute;
+}
+
+.media-hero-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .media-spotlight {
@@ -420,7 +516,7 @@ onMounted(loadYoutubeFeed)
 
 .media-copy h3 {
   display: -webkit-box;
-  font-size: clamp(22px, 7cqw, 32px);
+  font-size: clamp(24px, 6cqw, 38px);
   font-weight: 950;
   line-height: 1.05;
   margin-top: 14px;
@@ -453,7 +549,7 @@ onMounted(loadYoutubeFeed)
 .media-actions button,
 .media-actions a {
   align-items: center;
-  border-radius: 999px;
+  border-radius: 10px;
   display: inline-flex;
   font-size: 12px;
   font-weight: 950;
@@ -476,9 +572,9 @@ onMounted(loadYoutubeFeed)
 .media-preview {
   aspect-ratio: 16 / 9;
   background: rgba(3, 7, 18, 0.58);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 20px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 54px rgba(0, 0, 0, 0.32);
   display: grid;
   min-height: 0;
   overflow: hidden;
@@ -494,6 +590,14 @@ onMounted(loadYoutubeFeed)
   object-fit: cover;
   position: absolute;
   width: 100%;
+}
+
+.media-preview::after {
+  background: linear-gradient(180deg, transparent 48%, rgba(3, 7, 18, 0.78));
+  content: '';
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
 }
 
 .media-preview-empty {
@@ -517,6 +621,32 @@ onMounted(loadYoutubeFeed)
   left: 12px;
   padding: 7px 10px;
   position: absolute;
+  z-index: 2;
+}
+
+.media-play-orb {
+  align-items: center;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.9), rgba(236, 72, 153, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  box-shadow: 0 0 0 12px rgba(236, 72, 153, 0.12), 0 0 40px rgba(236, 72, 153, 0.42);
+  color: #fff;
+  display: inline-flex;
+  font-size: 24px;
+  height: 78px;
+  justify-content: center;
+  left: 50%;
+  padding-left: 4px;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 78px;
+  z-index: 3;
+}
+
+.media-preview:has(iframe) .media-play-orb {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .media-chip-grid {
@@ -535,7 +665,7 @@ onMounted(loadYoutubeFeed)
   align-items: center;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  border-radius: 10px;
   color: #ffffff;
   display: flex;
   flex: 0 0 auto;
@@ -563,39 +693,175 @@ onMounted(loadYoutubeFeed)
 
 .media-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   min-width: 0;
 }
 
-.media-row {
+.media-carousel-controls {
   align-items: center;
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  margin-top: -2px;
+}
+
+.media-carousel-progress {
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  height: 4px;
+  max-width: 420px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.media-carousel-progress span {
+  background: linear-gradient(90deg, #22d3ee, #a855f7, #ec4899);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 0.2s linear;
+}
+
+.media-carousel-dots {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.media-carousel-dots button {
+  background: rgba(148, 163, 184, 0.46);
+  border: 0;
+  border-radius: 999px;
+  height: 9px;
+  padding: 0;
+  transition: background 0.2s ease, box-shadow 0.2s ease, width 0.2s ease;
+  width: 9px;
+}
+
+.media-carousel-dots button.active {
+  background: linear-gradient(90deg, #a855f7, #ec4899);
+  box-shadow: 0 0 18px rgba(236, 72, 153, 0.46);
+  width: 30px;
+}
+
+.media-list-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.media-list-head strong {
+  align-items: center;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 16px;
+  font-weight: 950;
+  gap: 9px;
+}
+
+.media-list-head strong i {
+  color: #d946ef;
+}
+
+.media-list-head small {
+  color: #a5b4fc;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.media-row {
+  align-content: start;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.74));
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
   color: #ffffff;
   display: grid;
-  gap: 11px;
-  grid-template-columns: 40px minmax(0, 1fr);
-  padding: 11px;
+  gap: 10px;
+  grid-template-columns: 1fr 22px;
+  overflow: hidden;
+  padding: 10px;
+  position: relative;
   text-align: left;
 }
 
-.media-row > span {
+.media-row:hover {
+  border-color: rgba(236, 72, 153, 0.38);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.2), 0 0 24px rgba(236, 72, 153, 0.12);
+  transform: translateY(-1px);
+}
+
+.media-row-thumb {
   align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border-radius: 13px;
+  aspect-ratio: 16 / 9;
+  background: rgba(3, 7, 18, 0.55);
+  border-radius: 9px;
   display: flex;
-  height: 40px;
+  grid-column: 1 / -1;
+  height: auto;
   justify-content: center;
-  width: 40px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.media-row-thumb img {
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  width: 100%;
+}
+
+.media-row-thumb > i {
+  color: #f0abfc;
+  font-size: 22px;
+}
+
+.media-row-thumb b {
+  align-items: center;
+  background: rgba(3, 7, 18, 0.76);
+  border-radius: 999px;
+  bottom: 8px;
+  color: #fff;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  position: absolute;
+  right: 8px;
+  width: 30px;
+}
+
+.media-row > div {
+  min-width: 0;
+}
+
+.media-row > .fa-ellipsis-vertical {
+  align-self: start;
+  color: #94a3b8;
+  justify-self: end;
+  padding-top: 4px;
+}
+
+.media-row em {
+  color: #f0abfc;
+  display: block;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 950;
+  margin-bottom: 4px;
+  text-transform: uppercase;
 }
 
 .media-row strong {
-  display: block;
+  display: -webkit-box;
   font-size: 13px;
+  line-height: 1.25;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .media-row small {
@@ -623,6 +889,10 @@ onMounted(loadYoutubeFeed)
 }
 
 @container (max-width: 919px) {
+  .media-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .media-hero-card {
     padding: 16px;
   }
@@ -667,7 +937,7 @@ onMounted(loadYoutubeFeed)
 
 @media (max-width: 680px) {
   .community-stories-panel {
-    border-radius: 22px;
+    border-radius: 14px;
     margin-inline: -2px;
     overflow: hidden;
     padding: 14px;
@@ -678,13 +948,18 @@ onMounted(loadYoutubeFeed)
     flex-direction: column;
   }
 
+  .panel-heading button {
+    width: 100%;
+    justify-content: center;
+  }
+
   .media-hero-card {
     min-height: 0;
     padding: 14px;
   }
 
   .media-preview {
-    min-height: 210px;
+    min-height: 220px;
   }
 
   .media-preview-empty {
@@ -724,13 +999,22 @@ onMounted(loadYoutubeFeed)
     scrollbar-width: none;
   }
 
+  .media-carousel-controls {
+    margin-top: 0;
+  }
+
   .media-list::-webkit-scrollbar {
     display: none;
   }
 
   .media-row {
-    flex: 0 0 min(82vw, 310px);
+    flex: 0 0 min(82vw, 320px);
     scroll-snap-align: start;
+  }
+
+  .media-play-orb {
+    height: 62px;
+    width: 62px;
   }
 }
 </style>

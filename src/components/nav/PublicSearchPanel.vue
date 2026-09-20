@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { defaultLogoUrl } from '@/constants/assets'
+import { defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
 import { postCategoryLabels } from '@/services/postCategories'
 import { resolveProfileIcon } from '@/services/profileProgress'
 
@@ -95,7 +95,7 @@ const userHandle = (user) => user.username ? `@${user.username}` : user.email ? 
 const isFollowing = (user) => props.followingIds?.has?.(user.id)
 const canFollow = (user) => props.currentUserId && user.id !== props.currentUserId && !isFollowing(user)
 
-const openPost = (post) => emit('open-result', { type: 'post', id: post.id })
+const openPost = (post) => emit('open-result', { type: 'post', id: post.slug || post.id })
 const openCommunity = (community) => emit('open-result', { type: 'community', id: community.id })
 const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
 </script>
@@ -147,7 +147,7 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
           </header>
 
           <button v-for="post in sections.posts" :key="post.id" type="button" class="search-result-row post-row" @click="openPost(post)">
-            <img v-if="post.image" :src="post.image" alt="" />
+            <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
             <span v-else class="result-fallback"><i class="far fa-image"></i></span>
             <span>
               <strong>{{ post.title || 'Sin titulo' }}</strong>

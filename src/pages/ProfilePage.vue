@@ -275,7 +275,7 @@ const postActivityItems = computed(() => posts.value.map(post => ({
   label: post.category || 'Post',
   time: formatAgo(post.updatedAt || post.createdAt),
   rawAt: post.updatedAt || post.createdAt,
-  action: () => openPost(post.id)
+  action: () => openPost(post)
 })).sort((a, b) => getTime(b.rawAt) - getTime(a.rawAt)))
 const currentRecentPost = computed(() => postActivityItems.value[recentPostIndex.value] || null)
 const threadActivityItems = computed(() => threads.value.map(thread => ({
@@ -1150,8 +1150,13 @@ const selectIcon = async (iconId) => {
   }
 }
 
-const openPost = (id) => {
-  if (id) router.push(`/post/${id}`)
+const postPath = (postOrId) => {
+  if (typeof postOrId === 'object' && postOrId) return `/post/${postOrId.slug || postOrId.id}`
+  return `/post/${postOrId}`
+}
+
+const openPost = (postOrId) => {
+  if (postOrId) router.push(postPath(postOrId))
 }
 
 const changeRecentPost = (direction) => {
@@ -1618,7 +1623,7 @@ onUnmounted(() => {
         </div>
 
         <div class="post-strip">
-          <button v-for="item in posts" :key="item.id" @click="openPost(item.id)">
+          <button v-for="item in posts" :key="item.id" @click="openPost(item)">
             <img v-if="item.image" :src="item.image" alt="" />
             <span v-else></span>
             <strong>{{ item.title }}</strong>

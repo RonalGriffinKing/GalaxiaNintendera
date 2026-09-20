@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 import { handler as igdbHandler } from './netlify/functions/igdb.js'
+import { handler as imageProxyHandler } from './netlify/functions/image-proxy.js'
 import { handler as youtubeFeedHandler } from './netlify/functions/youtube-feed.js'
 
 const readRequestBody = req => {
@@ -38,6 +39,11 @@ const netlifyFunctionsDev = () => ({
         res.setHeader(key, value)
       })
 
+      if (result.isBase64Encoded) {
+        res.end(Buffer.from(result.body || '', 'base64'))
+        return
+      }
+
       res.end(result.body || '')
     }
 
@@ -50,6 +56,19 @@ const netlifyFunctionsDev = () => ({
         res.setHeader('Content-Type', 'application/json')
         res.end(JSON.stringify({
           error: 'No se pudo ejecutar la funcion local'
+        }))
+      }
+    })
+
+    server.middlewares.use('/.netlify/functions/image-proxy', async (req, res) => {
+      try {
+        await runFunction(imageProxyHandler, req, res)
+      } catch (error) {
+        server.config.logger.error(error)
+        res.statusCode = 500
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({
+          error: 'No se pudo ejecutar el proxy de imagen local'
         }))
       }
     })

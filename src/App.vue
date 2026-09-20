@@ -48,11 +48,11 @@ const hideLoader = () => {
 }
 
 onMounted(() => {
-  removeBeforeGuard = router.beforeEach((to, from, next) => {
+  removeBeforeGuard = router.beforeEach((to, from) => {
     const isQueryOnlyNavigation = to.path === from.path
     const canUseFullScreenLoader = to.fullPath !== from.fullPath && !isQueryOnlyNavigation
     if (canUseFullScreenLoader) showLoader()
-    next()
+    return true
   })
 
   removeAfterGuard = router.afterEach(() => {
@@ -80,7 +80,7 @@ onUnmounted(() => {
 <template>
   <router-view v-slot="{ Component, route }">
     <Transition name="route-page" mode="out-in">
-      <component :is="Component" :key="route.path" class="route-page-shell" />
+      <component :is="Component" :key="route.matched[0]?.path || route.path" class="route-page-shell" />
     </Transition>
   </router-view>
 

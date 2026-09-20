@@ -59,8 +59,12 @@ defineProps({
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   box-shadow: 0 26px 80px rgba(0, 0, 0, 0.28);
+  height: auto;
+  inset: auto;
   min-height: 260px;
   padding: 42px 22px;
+  position: relative;
+  width: min(360px, calc(100vw - 40px));
 }
 
 .loader-frame {

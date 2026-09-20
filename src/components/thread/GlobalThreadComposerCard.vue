@@ -463,13 +463,13 @@ onUnmounted(() => {
       <div v-if="isLoading" class="global-thread-state">Preparando comunidades...</div>
 
       <div v-else-if="isCurrentUserBlocked" class="global-thread-state">
-        <strong>Tu cuenta esta bloqueada</strong>
+        <strong>Tu cuenta está bloqueada</strong>
         <span>No puedes crear hilos por ahora.</span>
       </div>
 
       <div v-else-if="!allowedCommunities.length" class="global-thread-state">
         <strong>No tienes comunidades disponibles</strong>
-        <span>Unete a una comunidad para poder publicar hilos.</span>
+        <span>Únete a una comunidad para poder publicar hilos.</span>
         <button type="button" @click="exploreCommunities">Explorar comunidades</button>
       </div>
 
@@ -531,8 +531,8 @@ onUnmounted(() => {
         <section v-else key="compose" class="global-thread-compose">
           <div class="global-thread-prompt">
             <div class="global-thread-prompt-head">
-              <strong>Que quieres compartir?</strong>
-              <div class="global-thread-mobile-tools" aria-label="Herramientas rapidas">
+              <strong>¿Qué quieres compartir?</strong>
+              <div class="global-thread-mobile-tools" aria-label="Herramientas rápidas">
                 <button type="button" title="Imagen" @click="pasteImageUrl"><i class="far fa-image"></i></button>
                 <button type="button" :class="{ active: spoiler }" title="Spoiler" @click="spoiler = !spoiler"><i class="fas fa-eye-slash"></i></button>
                 <button type="button" :class="{ active: mode === 'gifPicker' }" title="GIF / stickers" @click="mode = mode === 'gifPicker' ? 'compose' : 'gifPicker'"><i class="far fa-face-smile"></i></button>
@@ -615,15 +615,15 @@ onUnmounted(() => {
 <style scoped>
 .global-thread-card {
   background:
-    radial-gradient(circle at 18% 0%, rgba(168, 85, 247, 0.28), transparent 34%),
-    radial-gradient(circle at 90% 8%, rgba(236, 72, 153, 0.18), transparent 28%),
+    radial-gradient(circle at 18% 0%, rgba(139, 92, 246, 0.18), transparent 34%),
+    radial-gradient(circle at 90% 8%, rgba(34, 211, 238, 0.1), transparent 28%),
     linear-gradient(180deg, rgba(10, 10, 34, 0.98), rgba(5, 7, 22, 0.99));
-  border: 1px solid rgba(168, 85, 247, 0.42);
-  border-radius: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
   box-shadow:
     0 28px 90px rgba(0, 0, 0, 0.48),
-    0 0 48px rgba(168, 85, 247, 0.18);
-  color: #f8fafc;
+    var(--glow);
+  color: var(--text-primary);
   display: flex;
   flex-direction: column;
   height: min(680px, calc(var(--global-thread-vvh, 100dvh) - 64px));
@@ -648,23 +648,24 @@ onUnmounted(() => {
 .global-thread-header {
   gap: 12px;
   justify-content: space-between;
-  padding: 16px 18px 8px;
+  padding: 18px 20px 10px;
 }
 
 .global-thread-header h2 {
-  color: #fff;
-  font-size: 14px;
-  font-weight: 950;
+  color: var(--text-primary);
+  font-size: var(--font-h3);
+  font-weight: 900;
+  line-height: 1.2;
   margin: 0;
 }
 
 .global-thread-community {
-  background: rgba(5, 8, 22, 0.78);
-  border: 1px solid rgba(168, 85, 247, 0.46);
+  background: rgba(9, 13, 32, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 999px;
-  color: #fff;
+  color: var(--text-primary);
   gap: 10px;
-  min-height: 44px;
+  min-height: var(--button-height-md);
   min-width: 0;
   padding: 4px 14px 4px 4px;
   max-width: min(360px, 72vw);
@@ -696,7 +697,7 @@ onUnmounted(() => {
 
 .global-thread-community strong {
   font-size: 13px;
-  font-weight: 950;
+  font-weight: 850;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -711,7 +712,13 @@ onUnmounted(() => {
   display: inline-flex;
   height: 42px;
   justify-content: center;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
   width: 42px;
+}
+
+.global-thread-close:hover {
+  background: rgba(248, 250, 252, 0.16);
+  transform: translateY(-1px);
 }
 
 .global-thread-content {
@@ -719,14 +726,14 @@ onUnmounted(() => {
   min-height: 0;
   overflow: hidden;
   overscroll-behavior: contain;
-  padding: 8px 18px 14px;
+  padding: 10px 20px 16px;
   position: relative;
   touch-action: pan-y;
 }
 
 .global-thread-state {
   align-content: center;
-  color: #a7adc4;
+  color: var(--text-muted);
   display: grid;
   gap: 10px;
   min-height: 260px;
@@ -739,7 +746,7 @@ onUnmounted(() => {
 }
 
 .global-thread-state button {
-  background: #8b5cf6;
+  background: var(--accent);
   border-radius: 999px;
   color: #fff;
   font-weight: 900;
@@ -790,13 +797,13 @@ onUnmounted(() => {
 }
 
 .global-thread-mode-head strong {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 18px;
-  font-weight: 950;
+  font-weight: 900;
 }
 
 .global-thread-mode-head span {
-  color: #a7adc4;
+  color: var(--text-muted);
   font-size: 11px;
   font-weight: 850;
 }
@@ -814,9 +821,9 @@ onUnmounted(() => {
 }
 
 .global-thread-search {
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   color: #c4b5fd;
   gap: 10px;
   min-height: 42px;
@@ -850,9 +857,9 @@ onUnmounted(() => {
 
 .global-thread-community-list button {
   align-items: center;
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   color: #fff;
   display: grid;
   gap: 12px;
@@ -862,6 +869,12 @@ onUnmounted(() => {
   min-height: 76px;
   padding: 12px 14px;
   text-align: left;
+  transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
+}
+
+.global-thread-community-list button:hover:not(.locked) {
+  background: rgba(255, 255, 255, 0.075);
+  transform: translateY(-1px);
 }
 
 .global-thread-community-list button > span {
@@ -947,7 +960,7 @@ onUnmounted(() => {
 
 .global-thread-prompt {
   display: grid;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .global-thread-prompt-head {
@@ -960,9 +973,10 @@ onUnmounted(() => {
 
 .global-thread-prompt-head > strong,
 .global-thread-prompt > strong {
-  color: #fff;
-  font-size: 20px;
-  font-weight: 950;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.2;
 }
 
 .global-thread-mobile-tools {
@@ -978,34 +992,51 @@ onUnmounted(() => {
 .global-thread-topic-row button {
   align-items: center;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   border-radius: 999px;
   color: #cbd5e1;
   display: inline-flex;
   flex: 0 0 auto;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 800;
   gap: 7px;
   min-height: 34px;
   padding: 0 12px;
+  transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
 }
 
 .global-thread-topic-row button.active,
 .global-thread-tools button.active,
 .global-thread-mobile-tools button.active {
-  background: linear-gradient(135deg, #9333ea, #ec4899);
-  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-active));
+  border-color: rgba(248, 250, 252, 0.22);
+  color: var(--text-primary);
+}
+
+.global-thread-topic-row button:hover,
+.global-thread-tools button:hover,
+.global-thread-mobile-tools button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  transform: translateY(-1px);
 }
 
 .global-thread-editor {
   align-items: start;
-  background: rgba(4, 6, 22, 0.52);
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 18px;
-  gap: 12px;
-  padding: 14px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.58), rgba(6, 10, 26, 0.68));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  gap: var(--space-3);
+  padding: var(--space-4);
   min-height: 0;
   position: relative;
+  transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, background var(--motion-fast) ease;
+}
+
+.global-thread-editor:focus-within {
+  background: linear-gradient(180deg, rgba(20, 28, 58, 0.7), rgba(8, 12, 30, 0.78));
+  border-color: rgba(192, 132, 252, 0.46);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
 }
 
 .global-thread-avatar {
@@ -1028,24 +1059,25 @@ onUnmounted(() => {
 .global-thread-editor textarea {
   background: transparent;
   border: 0;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 16px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.45;
-  min-height: 118px;
+  min-height: 132px;
   outline: none;
   resize: none;
   width: 100%;
 }
 
 .global-thread-editor textarea::placeholder {
-  color: #8e96b3;
+  color: rgba(203, 213, 225, 0.62);
+  font-weight: 650;
 }
 
 .global-thread-editor small {
-  color: #a7adc4;
+  color: var(--text-muted);
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 800;
   justify-self: end;
 }
 
@@ -1057,7 +1089,7 @@ onUnmounted(() => {
 
 .global-thread-suggestions button,
 .global-thread-chip {
-  background: rgba(168, 85, 247, 0.18);
+  background: rgba(139, 92, 246, 0.16);
   border-radius: 999px;
   color: #e9d5ff;
   font-size: 11px;
@@ -1120,21 +1152,21 @@ onUnmounted(() => {
 }
 
 .global-thread-footer {
-  background: rgba(5, 7, 22, 0.94);
+  background: rgba(5, 7, 22, 0.96);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   gap: 12px;
-  padding: 14px 18px 16px;
+  padding: 14px 20px 18px;
   flex-shrink: 0;
   max-height: 140px;
   opacity: 1;
   overflow: hidden;
   transform: translateY(0);
   transition:
-    opacity 0.2s ease,
-    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
-    max-height 0.22s ease,
-    padding 0.22s ease,
-    border-color 0.2s ease;
+    opacity var(--motion-fast) ease,
+    transform var(--motion-normal) var(--ease-standard),
+    max-height var(--motion-normal) var(--ease-standard),
+    padding var(--motion-normal) var(--ease-standard),
+    border-color var(--motion-fast) ease;
 }
 
 .global-thread-footer.is-hidden {
@@ -1162,6 +1194,7 @@ onUnmounted(() => {
   display: inline-flex;
   height: 38px;
   justify-content: center;
+  transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
   width: 38px;
 }
 
@@ -1183,16 +1216,27 @@ onUnmounted(() => {
 }
 
 .global-thread-publish {
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
+  background: linear-gradient(135deg, var(--accent), var(--accent-active));
   border-radius: 999px;
-  color: #fff;
+  color: var(--text-primary);
   gap: 8px;
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 900;
   justify-content: center;
   min-height: 42px;
   min-width: 118px;
   padding: 0 18px;
+  transition: box-shadow var(--motion-fast) ease, filter var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
+}
+
+.global-thread-publish:not(:disabled):hover {
+  box-shadow: 0 12px 30px rgba(139, 92, 246, 0.3);
+  transform: translateY(-1px);
+}
+
+.global-thread-publish:not(:disabled):active,
+.global-thread-publish-mobile:not(:disabled):active {
+  transform: scale(0.97);
 }
 
 .global-thread-publish-mobile {
@@ -1208,7 +1252,7 @@ onUnmounted(() => {
 
 .global-thread-mode-enter-active,
 .global-thread-mode-leave-active {
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  transition: opacity var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
 }
 
 .global-thread-mode-enter-from,

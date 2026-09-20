@@ -842,10 +842,15 @@ const closeUserProfile = () => {
   selectedProfile.value = null
 }
 
-const openPost = (id) => {
-  if (!id) return
+const postPath = (postOrId) => {
+  if (typeof postOrId === 'object' && postOrId) return `/post/${postOrId.slug || postOrId.id}`
+  return `/post/${postOrId}`
+}
+
+const openPost = (postOrId) => {
+  if (!postOrId) return
   closeUserProfile()
-  router.push(`/post/${id}`)
+  router.push(postPath(postOrId))
 }
 
 const insertPollPrompt = () => {
@@ -2861,7 +2866,7 @@ onUnmounted(() => {
                   v-for="post in selectedProfile.posts"
                   :key="post.id"
                   type="button"
-                  @click="openPost(post.id)"
+                  @click="openPost(post)"
                 >
                   <strong>{{ post.title }}</strong>
                   <span>{{ post.category || 'General' }}</span>
@@ -2877,7 +2882,7 @@ onUnmounted(() => {
                   v-for="favorite in selectedProfile.favorites"
                   :key="favorite.postId || favorite.id"
                   type="button"
-                  @click="openPost(favorite.postId || favorite.id)"
+                  @click="openPost(favorite.postSlug || favorite.postId || favorite.id)"
                 >
                   <strong>{{ favorite.title }}</strong>
                   <span>{{ favorite.category || 'General' }}</span>

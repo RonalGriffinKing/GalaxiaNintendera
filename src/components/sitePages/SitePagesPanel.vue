@@ -3,6 +3,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { deleteSitePage, listSitePages, pageTemplate, saveSitePage, seedMissingLegalPages, seedMissingStarterPages } from '@/services/sitePages'
 import SitePageEditor from '@/components/sitePages/SitePageEditor.vue'
+import ListControls from '@/components/shared/ListControls.vue'
+import PaginationNav from '@/components/shared/PaginationNav.vue'
+import { useListNavigation } from '@/composables/useListNavigation'
 
 const props = defineProps({
   embedded: Boolean,
@@ -14,27 +17,79 @@ const route = useRoute()
 const router = useRouter()
 const pages = ref([])
 const filter = ref('all')
+const searchQuery = ref('')
+const sortMode = ref('recent')
 const showEditor = ref(false)
 const editingPage = ref(null)
 const loading = ref(true)
+const loadError = ref('')
 const toast = ref('')
 const confirmDelete = ref(null)
 const seedingLegal = ref(false)
 const seedingStarter = ref(false)
 const canManage = computed(() => ['admin', 'publisher'].includes(props.userRole))
 const pageRoute = (page) => page?.type === 'legal' ? `/${page.slug}` : `/p/${page.slug}`
+const pageSortOptions = [
+  { value: 'recent', label: 'Más recientes' },
+  { value: 'oldest', label: 'Más antiguas' },
+  { value: 'az', label: 'A-Z' }
+]
 
 const filteredPages = computed(() => {
   let list = [...pages.value]
+  const query = normalizeSearch(searchQuery.value)
   if (filter.value !== 'all') list = list.filter(page => page.status === filter.value || page.type === filter.value)
+  if (query) {
+    list = list.filter((page) => normalizeSearch([
+      page.id,
+      page.title,
+      page.name,
+      page.slug,
+      page.description,
+      page.type,
+      page.status
+    ].filter(Boolean).join(' ')).includes(query))
+  }
+  if (sortMode.value === 'az') return list.sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'es', { sensitivity: 'base' }))
+  if (sortMode.value === 'oldest') return list.sort((a, b) => Number(a.updatedAt || 0) - Number(b.updatedAt || 0))
   return list.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
 })
+
+const pagePager = useListNavigation(filteredPages, { initialPageSize: 20 })
+const paginatedPages = computed(() => pagePager.pageItems.value)
+const pagePageSize = computed({
+  get: () => pagePager.pageSize.value,
+  set: (value) => {
+    pagePager.pageSize.value = Number(value) || 20
+  }
+})
+const pagePagination = computed(() => ({
+  currentPage: pagePager.currentPage.value,
+  totalPages: pagePager.totalPages.value,
+  totalItems: pagePager.totalItems.value,
+  startItem: pagePager.startItem.value,
+  endItem: pagePager.endItem.value,
+  pageTokens: pagePager.pageTokens.value
+}))
+
+function normalizeSearch(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
 
 const loadPages = async ({ signal = false } = {}) => {
   if (signal) emit('loading', 'pages')
   loading.value = true
+  loadError.value = ''
   try {
     pages.value = await listSitePages()
+  } catch (error) {
+    console.error(error)
+    pages.value = []
+    loadError.value = 'Revisa permisos o conexion de Firestore.'
   } finally {
     loading.value = false
     if (signal) emit('ready', 'pages')
@@ -126,6 +181,8 @@ watch(() => route.query.seed, async (target) => {
   router.replace({ path: route.path, query: { ...route.query, seed: undefined, section: 'pages' } })
 }, { immediate: true })
 
+watch([searchQuery, filter, sortMode], pagePager.resetPage)
+
 onMounted(() => loadPages({ signal: true }))
 </script>
 
@@ -146,6 +203,13 @@ onMounted(() => loadPages({ signal: true }))
           {{ item === 'all' ? 'Todas' : item === 'draft' ? 'Borradores' : item === 'published' ? 'Publicadas' : item }}
         </button>
       </div>
+      <ListControls
+        v-model:search="searchQuery"
+        v-model:sort="sortMode"
+        v-model:page-size="pagePageSize"
+        search-placeholder="Buscar páginas..."
+        :sort-options="pageSortOptions"
+      />
       <div v-if="canManage" class="site-pages-actions">
         <button class="create-page-btn" type="button" @click="openCreate()">
           <i class="fas fa-file-circle-plus"></i>
@@ -163,14 +227,19 @@ onMounted(() => loadPages({ signal: true }))
     </div>
 
     <div v-if="loading" class="pages-empty">Cargando paginas...</div>
+    <div v-else-if="loadError" class="pages-empty">
+      <i class="fas fa-triangle-exclamation"></i>
+      <strong>No se pudieron cargar las paginas</strong>
+      <span>{{ loadError }}</span>
+    </div>
     <div v-else-if="!filteredPages.length" class="pages-empty">
       <i class="fas fa-file-lines"></i>
-      <strong>No hay paginas todavia</strong>
-      <button v-if="canManage" type="button" @click="openCreate()">Crear la primera pagina</button>
+      <strong>No hay páginas con esos criterios</strong>
+      <button v-if="canManage" type="button" @click="openCreate()">Crear una página</button>
     </div>
 
     <div v-else class="pages-grid">
-      <article v-for="page in filteredPages" :key="page.id" class="site-page-card">
+      <article v-for="page in paginatedPages" :key="page.id" class="site-page-card">
         <div class="page-card-icon" :style="{ '--page-accent': page.theme?.accent || '#a855f7' }">
           <i :class="page.icon || 'fas fa-book-open'"></i>
         </div>
@@ -190,6 +259,18 @@ onMounted(() => loadPages({ signal: true }))
         </nav>
       </article>
     </div>
+
+    <PaginationNav
+      v-if="!loading && !loadError && filteredPages.length"
+      :current-page="pagePagination.currentPage"
+      :total-pages="pagePagination.totalPages"
+      :total-items="pagePagination.totalItems"
+      :start-item="pagePagination.startItem"
+      :end-item="pagePagination.endItem"
+      :page-tokens="pagePagination.pageTokens"
+      item-label="páginas"
+      @page="pagePager.setPage"
+    />
 
     <SitePageEditor v-if="showEditor" :edit-data="editingPage" @close="closeEditor" @saved="loadPages" />
 
@@ -214,7 +295,7 @@ onMounted(() => loadPages({ signal: true }))
 <style scoped>
 .site-pages-panel { display: grid; gap: 18px; }
 .site-pages-head { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
-.site-pages-toolbar { align-items: center; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) auto; }
+.site-pages-toolbar { align-items: start; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(300px, auto) auto; }
 .site-pages-head span { color: #7c3aed; font-size: 11px; font-weight: 950; text-transform: uppercase; }
 .site-pages-head h1 { color: #111827; font-size: 28px; font-weight: 950; }
 .site-pages-head p { color: #64748b; font-size: 13px; font-weight: 750; }

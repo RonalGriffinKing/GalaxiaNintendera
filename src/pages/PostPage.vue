@@ -146,6 +146,9 @@ const loadPost = async () => {
       }
 
       post.value = loadedPost
+      if (loadedPost.slug && String(route.params.id) !== String(loadedPost.slug)) {
+        router.replace(`/post/${loadedPost.slug}`)
+      }
       isLoading.value = false
 
       if (isUpcomingPost.value) {
@@ -247,8 +250,13 @@ const goTop = () => {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-const goPost = (id) => {
-  router.push(`/post/${id}`)
+const postPath = (postOrId) => {
+  if (typeof postOrId === 'object' && postOrId) return `/post/${postOrId.slug || postOrId.id}`
+  return `/post/${postOrId}`
+}
+
+const goPost = (postOrId) => {
+  router.push(postPath(postOrId))
 }
 
 const goProfile = (uid) => {
@@ -433,6 +441,7 @@ const toggleFavorite = async () => {
     } else {
       await setDoc(favoriteRef, {
         postId: post.value.id,
+        postSlug: post.value.slug || '',
         title: post.value.title || '',
         image: post.value.image || '',
         category: post.value.category || 'General',
@@ -464,8 +473,25 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <div v-if="isLoading" class="post-loading-page">
+    <main class="post-loading-shell" aria-label="Cargando publicacion">
+      <div class="post-loading-hero">
+        <span></span>
+        <h1></h1>
+        <p></p>
+        <p></p>
+        <div></div>
+      </div>
+      <aside class="post-loading-sidebar">
+        <span></span>
+        <span></span>
+        <span></span>
+      </aside>
+    </main>
+  </div>
+
   <div
-    v-if="!isLoading"
+    v-else
     class="post-page"
     :class="[{ 'analysis-page': isAnalysisPost }, isAnalysisPost ? `analysis-tier-${analysisTier.key}` : '']"
     :style="isAnalysisPost ? { '--analysis-pattern': `'${analysisTier.pattern}'` } : null"
@@ -666,7 +692,7 @@ onUnmounted(() => {
               v-for="item in relatedPosts"
               :key="item.id"
               class="related-item"
-              @click="goPost(item.id)"
+              @click="goPost(item)"
             >
               <img
                 v-if="item.image"
@@ -704,6 +730,84 @@ onUnmounted(() => {
   min-height: 100vh;
   overflow-x: hidden;
   position: relative;
+}
+
+.post-loading-page {
+  background:
+    radial-gradient(circle at 72% 0%, rgba(124, 58, 237, 0.26), transparent 28%),
+    radial-gradient(circle at 12% 36%, rgba(168, 85, 247, 0.14), transparent 30%),
+    linear-gradient(135deg, #030712, #07111f 48%, #120827);
+  color: #e5e7eb;
+  min-height: calc(100vh - var(--public-nav-offset, 72px));
+  padding: 104px 22px 72px;
+}
+
+.post-loading-shell {
+  display: grid;
+  gap: 28px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  margin: 0 auto;
+  max-width: 1440px;
+}
+
+.post-loading-hero,
+.post-loading-sidebar {
+  animation: postLoadingPulse 1.25s ease-in-out infinite alternate;
+  background: rgba(8, 13, 29, 0.78);
+  border: 1px solid rgba(168, 85, 247, 0.22);
+  border-radius: 28px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+}
+
+.post-loading-hero {
+  display: grid;
+  gap: 18px;
+  min-height: 520px;
+  padding: clamp(28px, 5vw, 64px);
+}
+
+.post-loading-hero span,
+.post-loading-hero h1,
+.post-loading-hero p,
+.post-loading-hero div,
+.post-loading-sidebar span {
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.18), rgba(216, 180, 254, 0.26), rgba(148, 163, 184, 0.18));
+  border-radius: 999px;
+}
+
+.post-loading-hero span { height: 34px; width: 160px; }
+.post-loading-hero h1 { height: clamp(58px, 8vw, 96px); max-width: 760px; width: 78%; }
+.post-loading-hero p { height: 22px; max-width: 680px; width: 72%; }
+.post-loading-hero p + p { width: 54%; }
+.post-loading-hero div { align-self: end; height: 54px; width: 280px; }
+
+.post-loading-sidebar {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+  min-height: 360px;
+  padding: 24px;
+}
+
+.post-loading-sidebar span { height: 42px; width: 100%; }
+
+@keyframes postLoadingPulse {
+  from { opacity: 0.68; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 980px) {
+  .post-loading-page {
+    padding: 80px 16px var(--public-page-bottom-mobile, 132px);
+  }
+
+  .post-loading-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .post-loading-sidebar {
+    display: none;
+  }
 }
 
 .post-page.analysis-page {

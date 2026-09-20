@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import Home from '@/pages/HomePage.vue'
+import Home from '@/pages/Home2Page.vue'
 import PublicLayout from '@/components/shared/PublicLayout.vue'
 import Editor from '@/pages/OverlayEditorPage.vue'
 import OverlayView from '@/pages/OverlayViewPage.vue'
@@ -16,6 +16,10 @@ const routes = [
     component: PublicLayout,
     children: [
       { path: '', component: Home },
+      {
+        path: 'home2',
+        redirect: '/'
+      },
       {
         path: 'noticias',
         name: 'news',
@@ -137,7 +141,7 @@ const router = createRouter({
 })
 
 const publicRoutes = ['/', '/login']
-const publicPrefixes = ['/overlay', '/post', '/p', '/politica-privacidad', '/terminos-condiciones', '/normas-comunidad', '/politica-cookies', '/contacto-reportes', '/aviso-legal', '/perfil', '/categoria', '/noticias', '/rumores', '/guias', '/comunidad', '/eventos']
+const publicPrefixes = ['/home2', '/overlay', '/post', '/p', '/politica-privacidad', '/terminos-condiciones', '/normas-comunidad', '/politica-cookies', '/contacto-reportes', '/aviso-legal', '/perfil', '/categoria', '/noticias', '/rumores', '/guias', '/comunidad', '/eventos']
 let authReady = false
 let authUser = null
 let authReadyPromise = new Promise((resolve) => {
@@ -161,23 +165,23 @@ const getAuthUser = async () => {
   return auth.currentUser || authUser
 }
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to) => {
   if (to.path === '/login') {
     const user = await getAuthUser()
-    return next(user ? '/admin/dashboard' : undefined)
+    return user ? '/admin/dashboard' : true
   }
 
   if (
     publicRoutes.includes(to.path) ||
     publicPrefixes.some(prefix => to.path.startsWith(prefix))
   ) {
-    return next()
+    return true
   }
 
   const user = await getAuthUser()
 
   if (!user && to.path !== '/login') {
-    return next('/login')
+    return '/login'
   }
 
   if (to.meta.adminOnly) {
@@ -185,7 +189,7 @@ router.beforeEach(async (to, from, next) => {
     const role = snap.data()?.role || 'user'
 
     if (role !== 'admin') {
-      return next('/')
+      return '/'
     }
   }
 
@@ -194,11 +198,11 @@ router.beforeEach(async (to, from, next) => {
     const role = snap.data()?.role || 'user'
 
     if (!['admin', 'publisher'].includes(role)) {
-      return next('/')
+      return '/'
     }
   }
 
-  next()
+  return true
 })
 
 export default router

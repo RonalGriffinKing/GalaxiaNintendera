@@ -904,7 +904,7 @@ const openNotification = async (notification) => {
   accountMenuOpen.value = false
 
   if (notification.targetType === 'post' && notification.targetId) {
-    router.push(`/post/${notification.targetId}`)
+    router.push(`/post/${notification.targetSlug || notification.targetId}`)
     return
   }
 

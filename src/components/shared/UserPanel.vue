@@ -22,9 +22,47 @@
       </p>
     </div>
 
-    <div class="users-grid">
+    <div class="users-toolbar">
+      <ListControls
+        v-model:search="searchQuery"
+        v-model:sort="sortMode"
+        v-model:page-size="userPageSize"
+        search-placeholder="Buscar usuarios..."
+        :sort-options="userSortOptions"
+      >
+        <template #filters>
+          <select v-model="roleFilter">
+            <option value="all">Todos los usuarios</option>
+            <option value="admin">Administradores</option>
+            <option value="publisher">Publicadores</option>
+            <option value="user">Usuarios normales</option>
+            <option value="blocked">Solo lectura</option>
+          </select>
+        </template>
+      </ListControls>
+    </div>
+
+    <div v-if="isLoadingUsers" class="users-empty">
+      <i class="fas fa-circle-notch fa-spin"></i>
+      <strong>Cargando usuarios</strong>
+      <span>Conectando con la base de datos...</span>
+    </div>
+
+    <div v-else-if="loadError" class="users-empty">
+      <i class="fas fa-triangle-exclamation"></i>
+      <strong>No se pudieron cargar los usuarios</strong>
+      <span>{{ loadError }}</span>
+    </div>
+
+    <div v-else-if="!filteredUsers.length" class="users-empty">
+      <i class="fas fa-magnifying-glass"></i>
+      <strong>No hay usuarios con esos criterios</strong>
+      <span>Prueba con otra búsqueda, filtro u ordenación.</span>
+    </div>
+
+    <div v-if="!isLoadingUsers && !loadError && filteredUsers.length" class="users-grid">
       <div
-        v-for="user in users"
+        v-for="user in paginatedUsers"
         :key="user.id"
         class="user-card"
       >
@@ -74,6 +112,18 @@
         </div>
       </div>
     </div>
+
+    <PaginationNav
+      v-if="!isLoadingUsers && !loadError && filteredUsers.length"
+      :current-page="userPagination.currentPage"
+      :total-pages="userPagination.totalPages"
+      :total-items="userPagination.totalItems"
+      :start-item="userPagination.startItem"
+      :end-item="userPagination.endItem"
+      :page-tokens="userPagination.pageTokens"
+      item-label="usuarios"
+      @page="userPager.setPage"
+    />
 
     <Transition name="fade">
       <div
@@ -234,6 +284,9 @@ import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/fi
 import { auth, db, firebaseConfig } from '@/firebase'
 import { resolveProfileIcon } from '@/services/profileProgress'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
+import ListControls from '@/components/shared/ListControls.vue'
+import PaginationNav from '@/components/shared/PaginationNav.vue'
+import { useListNavigation } from '@/composables/useListNavigation'
 
 defineProps({
   embedded: {
@@ -249,6 +302,11 @@ const route = useRoute()
 const router = useRouter()
 
 const users = ref([])
+const searchQuery = ref('')
+const roleFilter = ref('all')
+const sortMode = ref('az')
+const isLoadingUsers = ref(false)
+const loadError = ref('')
 const currentRole = ref('')
 const showPanel = ref(false)
 const isEditing = ref(false)
@@ -274,38 +332,103 @@ const form = ref({
 const currentUid = computed(() => auth.currentUser?.uid || '')
 const canManageUsers = computed(() => currentRole.value === 'admin')
 const canUseChat = computed(() => ['admin', 'publisher'].includes(currentRole.value))
+const userSortOptions = [
+  { value: 'az', label: 'A-Z' },
+  { value: 'recent', label: 'Más recientes' },
+  { value: 'oldest', label: 'Más antiguos' }
+]
 
-const loadUsers = async () => {
-  const snap = await getDocs(collection(db, 'users'))
-  users.value = snap.docs.map(d => ({ ...d.data(), id: d.id }))
+const filteredUsers = computed(() => {
+  const query = normalizeSearch(searchQuery.value)
+  let list = [...users.value]
 
-  const user = auth.currentUser
-  if (!user) return
+  if (roleFilter.value === 'blocked') list = list.filter(user => user.isBlocked)
+  else if (roleFilter.value !== 'all') list = list.filter(user => (user.role || 'user') === roleFilter.value)
 
-  const currentSnap = await getDoc(doc(db, 'users', user.uid))
-
-  if (!currentSnap.exists() && users.value.length === 0) {
-    currentRole.value = 'admin'
-    await setDoc(doc(db, 'users', user.uid), {
-      name: user.displayName || 'Admin',
-      email: user.email || '',
-      description: 'admin',
-      imageUrl: user.photoURL || '',
-      role: 'admin',
-      canChat: true,
-      adminCreated: true,
-      emailVerified: true,
-      emailVerificationRequired: false,
-      emailOptIn: true,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    }, { merge: true })
-    await loadUsers()
-    return
+  if (query) {
+    list = list.filter((user) => normalizeSearch([
+      user.id,
+      user.name,
+      user.username,
+      user.email,
+      user.description,
+      user.role
+    ].filter(Boolean).join(' ')).includes(query))
   }
 
-  const currentProfile = currentSnap.data() || {}
-  currentRole.value = currentProfile.isBlocked ? 'user' : (currentProfile.role || 'user')
+  return list.sort((a, b) => {
+    if (sortMode.value === 'recent') return Number(b.createdAt || b.updatedAt || 0) - Number(a.createdAt || a.updatedAt || 0)
+    if (sortMode.value === 'oldest') return Number(a.createdAt || a.updatedAt || 0) - Number(b.createdAt || b.updatedAt || 0)
+    return String(a.name || a.email || '').localeCompare(String(b.name || b.email || ''), 'es', { sensitivity: 'base' })
+  })
+})
+
+const userPager = useListNavigation(filteredUsers, { initialPageSize: 20 })
+const paginatedUsers = computed(() => userPager.pageItems.value)
+const userPageSize = computed({
+  get: () => userPager.pageSize.value,
+  set: (value) => {
+    userPager.pageSize.value = Number(value) || 20
+  }
+})
+const userPagination = computed(() => ({
+  currentPage: userPager.currentPage.value,
+  totalPages: userPager.totalPages.value,
+  totalItems: userPager.totalItems.value,
+  startItem: userPager.startItem.value,
+  endItem: userPager.endItem.value,
+  pageTokens: userPager.pageTokens.value
+}))
+
+function normalizeSearch(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+const loadUsers = async () => {
+  isLoadingUsers.value = true
+  loadError.value = ''
+  try {
+    const snap = await getDocs(collection(db, 'users'))
+    users.value = snap.docs.map(d => ({ ...d.data(), id: d.id }))
+
+    const user = auth.currentUser
+    if (!user) return
+
+    const currentSnap = await getDoc(doc(db, 'users', user.uid))
+
+    if (!currentSnap.exists() && users.value.length === 0) {
+      currentRole.value = 'admin'
+      await setDoc(doc(db, 'users', user.uid), {
+        name: user.displayName || 'Admin',
+        email: user.email || '',
+        description: 'admin',
+        imageUrl: user.photoURL || '',
+        role: 'admin',
+        canChat: true,
+        adminCreated: true,
+        emailVerified: true,
+        emailVerificationRequired: false,
+        emailOptIn: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }, { merge: true })
+      await loadUsers()
+      return
+    }
+
+    const currentProfile = currentSnap.data() || {}
+    currentRole.value = currentProfile.isBlocked ? 'user' : (currentProfile.role || 'user')
+  } catch (error) {
+    console.error(error)
+    users.value = []
+    loadError.value = 'Revisa permisos o conexion de Firestore.'
+  } finally {
+    isLoadingUsers.value = false
+  }
 }
 
 const showToast = (message, type = 'success') => {
@@ -481,8 +604,11 @@ const executeDelete = async () => {
 
 onMounted(async () => {
   emit('loading', 'users')
-  await loadUsers()
-  emit('ready', 'users')
+  try {
+    await loadUsers()
+  } finally {
+    emit('ready', 'users')
+  }
   if (route.query.create === 'user' && canManageUsers.value) openCreate()
 })
 
@@ -494,16 +620,52 @@ watch([showPanel, () => confirmDialog.value.show], ([isPanelOpen, isConfirmOpen]
   document.body.style.overflow = isPanelOpen || isConfirmOpen ? 'hidden' : ''
 })
 
+watch([searchQuery, roleFilter, sortMode], userPager.resetPage)
+
 onUnmounted(() => {
   document.body.style.overflow = ''
 })
 </script>
 
 <style scoped>
+.users-toolbar {
+  margin-bottom: 16px;
+}
+
 .users-grid {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.users-empty {
+  align-items: center;
+  background: #ffffff;
+  border: 1px dashed #d8b4fe;
+  border-radius: 16px;
+  color: #64748b;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  min-height: 180px;
+  padding: 24px;
+  text-align: center;
+}
+
+.users-empty i {
+  color: #a855f7;
+  font-size: 24px;
+}
+
+.users-empty strong {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.users-empty span {
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .user-card {

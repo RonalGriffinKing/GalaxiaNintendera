@@ -138,6 +138,7 @@ const description = computed(() => {
   const source = post.value?.subtitle || post.value?.description || post.value?.excerpt || post.value?.content || ''
   return trimText(stripHtml(source), 145)
 })
+const socialContent = computed(() => post.value?.social || post.value?.shortVersion || post.value?.versionCorta || post.value?.version_corta || {})
 const score = computed(() => post.value?.score ?? post.value?.analysis?.score ?? null)
 const hasScore = computed(() => {
   const normalizedCategory = normalize(category.value)
@@ -176,31 +177,59 @@ const imageIssueMessage = computed(() => {
 const carouselSlides = computed(() => {
   if (!post.value) return []
 
+  const social = socialContent.value
+  const socialSlides = Array.isArray(social?.slides)
+    ? social.slides
+    : (Array.isArray(social?.diapositivas)
+        ? social.diapositivas
+        : (Array.isArray(social?.sections) ? social.sections : (Array.isArray(social?.secciones) ? social.secciones : [])))
+
   const baseSlide = {
     id: 'resumen',
     eyebrow: 'Parte 1',
-    title: title.value,
-    subtitle: post.value?.subtitle || category.value,
-    description: description.value,
-    image: coverImage.value,
+    title: trimText(stripHtml(social.title || social.titulo || title.value), 90),
+    subtitle: social.subtitle || social.subtitulo || post.value?.subtitle || category.value,
+    description: trimText(stripHtml(social.summary || social.resumen || social.content || social.contenido || social.description || description.value), 210),
+    image: social.image || social.imagen || coverImage.value,
     score: score.value,
     showScore: hasScore.value
   }
 
-  const sectionSlides = Array.isArray(post.value.sections)
-    ? post.value.sections
-        .filter(section => section?.title || section?.content || section?.image)
+  const sections = Array.isArray(post.value.sections) ? post.value.sections : []
+  const sectionSlides = socialSlides.length
+    ? socialSlides.map((socialSlide, index) => {
+        const indexes = Array.isArray(socialSlide.sectionIndexes) && socialSlide.sectionIndexes.length
+          ? socialSlide.sectionIndexes
+          : [index]
+        const referencedSections = indexes
+          .map(sectionIndex => sections[Number(sectionIndex)])
+          .filter(section => section && section.hidden !== true)
+        const primarySection = referencedSections[0] || sections[index] || {}
+        const inheritedImage = referencedSections.find(section => section.image)?.image || primarySection.image || coverImage.value
+
+        return {
+          id: `social-${index + 1}`,
+          eyebrow: `Parte ${index + 2}`,
+          title: trimText(stripHtml(socialSlide.title || socialSlide.titulo || primarySection.title || title.value), 90),
+          subtitle: socialSlide.subtitle || socialSlide.subtitulo || primarySection.subtitle || primarySection.label || category.value,
+          description: trimText(stripHtml(socialSlide.content || socialSlide.contenido || socialSlide.summary || socialSlide.resumen || socialSlide.description || primarySection.content || description.value), 210),
+          image: socialSlide.image || socialSlide.imagen || inheritedImage,
+          score: null,
+          showScore: false
+        }
+      })
+    : sections
+        .filter(section => section?.hidden !== true && (section?.title || section?.content || section?.image))
         .map((section, index) => ({
           id: `seccion-${index + 1}`,
           eyebrow: `Parte ${index + 2}`,
-          title: section.title || title.value,
-          subtitle: section.subtitle || section.category || category.value,
-          description: trimText(stripHtml(section.content || description.value), 230),
+          title: trimText(stripHtml(section.title || title.value), 90),
+          subtitle: section.subtitle || section.label || category.value,
+          description: trimText(stripHtml(section.content || description.value), 210),
           image: section.image || coverImage.value,
           score: null,
           showScore: false
         }))
-    : []
 
   return [baseSlide, ...sectionSlides].map((slide, index, slides) => ({
     ...slide,

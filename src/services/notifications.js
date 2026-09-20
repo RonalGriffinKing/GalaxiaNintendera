@@ -92,6 +92,7 @@ export const notifyNewPost = async (post) => {
       title: 'Nuevo post publicado',
       message: post.title || 'Hay una nueva publicacion en la Galaxia.',
       targetId: post.id,
+      targetSlug: post.slug || '',
       targetType: 'post',
       read: false,
       createdAt: now()
@@ -110,7 +111,7 @@ export const notifyNewPost = async (post) => {
         status: 'pending',
         postId: post.id,
         postTitle: post.title || 'Nuevo post',
-        postUrl: `/post/${post.id}`,
+        postUrl: `/post/${post.slug || post.id}`,
         createdAt: now()
       })
       operations += 1

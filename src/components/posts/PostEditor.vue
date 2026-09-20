@@ -711,6 +711,13 @@ const post = ref({
   teaserVisible: true,
   mediaGameName: '',
   sections: [{ title: '', label: 'Introduccion', image: '', content: '', hidden: false }],
+  social: {
+    title: '',
+    subtitle: '',
+    summary: '',
+    image: '',
+    slides: []
+  },
   analysis: {
     score: 88,
     hypeTitle: '',
@@ -1071,6 +1078,30 @@ const normalizeSections = (sections = [], { dropEmpty = false } = {}) => {
   return filtered.length ? filtered : [{ title: '', label: 'Introduccion', image: '', content: '', hidden: false }]
 }
 
+const normalizeSocialContent = (social = {}) => {
+  const slidesSource = Array.isArray(social?.slides)
+    ? social.slides
+    : (Array.isArray(social?.diapositivas)
+        ? social.diapositivas
+        : (Array.isArray(social?.sections) ? social.sections : (Array.isArray(social?.secciones) ? social.secciones : [])))
+
+  return {
+    title: String(social?.title || social?.titulo || '').trim(),
+    subtitle: String(social?.subtitle || social?.subtitulo || '').trim(),
+    summary: String(social?.summary || social?.resumen || social?.content || social?.contenido || social?.description || '').trim(),
+    image: String(social?.image || social?.imagen || '').trim(),
+    slides: slidesSource.map(slide => ({
+      title: String(slide?.title || slide?.titulo || '').trim(),
+      subtitle: String(slide?.subtitle || slide?.subtitulo || '').trim(),
+      content: String(slide?.content || slide?.contenido || slide?.summary || slide?.resumen || slide?.description || '').trim(),
+      image: String(slide?.image || slide?.imagen || '').trim(),
+      sectionIndexes: (Array.isArray(slide?.sectionIndexes) ? slide.sectionIndexes : (Array.isArray(slide?.secciones) ? slide.secciones : []))
+        .map(index => Number(index))
+        .filter(index => Number.isInteger(index) && index >= 0)
+    }))
+  }
+}
+
 const parseAiJsonPost = (value) => {
   const data = JSON.parse(value || '{}')
   const title = String(data?.title || data?.titulo || '').trim()
@@ -1089,6 +1120,23 @@ const parseAiJsonPost = (value) => {
     ? data.sections
     : (Array.isArray(data?.secciones) ? data.secciones : [])
   const mergedCategories = [...new Set([category, ...categories].filter(Boolean))]
+  const socialSource = data?.social || data?.shortVersion || data?.versionCorta || data?.version_corta || {}
+  const social = normalizeSocialContent(socialSource)
+
+  if (!social.title || !social.summary) {
+    throw new Error('El JSON debe incluir social.title y social.summary con la version corta para imagenes.')
+  }
+  if (!social.slides.length) {
+    throw new Error('El JSON debe incluir al menos una entrada en social.slides.')
+  }
+  const incompleteSocialSlide = social.slides.findIndex(slide => !slide.title || !slide.content)
+  if (incompleteSocialSlide >= 0) {
+    throw new Error(`La entrada ${incompleteSocialSlide + 1} de social.slides necesita title y content.`)
+  }
+  const invalidSocialReference = social.slides.findIndex(slide => slide.sectionIndexes.some(index => index >= sectionsSource.length))
+  if (invalidSocialReference >= 0) {
+    throw new Error(`La entrada ${invalidSocialReference + 1} de social.slides hace referencia a una seccion que no existe.`)
+  }
 
   return {
     title,
@@ -1097,6 +1145,7 @@ const parseAiJsonPost = (value) => {
     image: String(data?.image || data?.imagen || '').trim(),
     categories: mergedCategories,
     sections: normalizeSections(sectionsSource),
+    social,
     analysis: data?.analysis || data?.analisis || {},
     score: Number(data?.score || data?.nota || data?.analysis?.score || data?.analisis?.score || 0),
     pros: Array.isArray(data?.pros) ? data.pros : [],
@@ -1112,8 +1161,22 @@ const pasteJsonIntoPost = async () => {
     post.value.title = parsed.title
     post.value.subtitle = parsed.subtitle
     post.value.content = parsed.content
-    post.value.image = parsed.image
-    post.value.sections = parsed.sections
+    post.value.image = parsed.image || post.value.image
+    const currentSections = Array.isArray(post.value.sections) ? post.value.sections : []
+    post.value.sections = parsed.sections.map((section, index) => ({
+      ...section,
+      image: section.image || currentSections[index]?.image || ''
+    }))
+    const currentSocial = post.value.social || {}
+    const currentSocialSlides = Array.isArray(currentSocial.slides) ? currentSocial.slides : []
+    post.value.social = {
+      ...parsed.social,
+      image: parsed.social.image || currentSocial.image || '',
+      slides: parsed.social.slides.map((slide, index) => ({
+        ...slide,
+        image: slide.image || currentSocialSlides[index]?.image || ''
+      }))
+    }
     selectedCategories.value = parsed.categories.slice(0, 3)
     activeSectionIndex.value = 0
 
@@ -1192,6 +1255,7 @@ const savePost = async (targetStatus = 'pending') => {
     const cleanPost = JSON.parse(JSON.stringify(post.value))
     delete cleanPost.stickers
     cleanPost.sections = normalizeSections(cleanPost.sections, { dropEmpty: !isHeroMode.value })
+    cleanPost.social = normalizeSocialContent(cleanPost.social)
     cleanPost.categories = selectedCategories.value
     cleanPost.category = selectedCategories.value[0]
     cleanPost.tags = String(cleanPost.tagsText || '').split(',').map(item => item.trim()).filter(Boolean)
@@ -1230,18 +1294,22 @@ const savePost = async (targetStatus = 'pending') => {
     if (isHeroMode.value) cleanPost.sections = []
 
     if (props.editData) {
+      const nextUpdatedAt = Date.now()
       await updateDoc(doc(db, 'posts', props.editData.id), {
         ...cleanPost,
         stickers: deleteField(),
-        updatedAt: Date.now()
+        updatedAt: nextUpdatedAt,
+        ...(props.editData.status === 'approved' ? { publishedAt: cleanPost.publishedAt || props.editData.publishedAt || nextUpdatedAt } : {})
       })
     } else {
+      const createdAt = Date.now()
       await addDoc(collection(db, 'posts'), {
         ...cleanPost,
         authorId: user?.uid || 'anon',
         authorName: user?.displayName || 'Admin',
         status: targetStatus === 'draft' ? 'draft' : 'pending',
-        createdAt: Date.now()
+        createdAt,
+        updatedAt: createdAt
       })
     }
 
@@ -3090,7 +3158,29 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .editor-loading-cover {
-  background: rgba(255, 255, 255, 0.72);
+  background:
+    radial-gradient(circle at 18% 16%, rgba(124, 58, 237, 0.28), transparent 30%),
+    radial-gradient(circle at 78% 24%, rgba(236, 72, 153, 0.18), transparent 28%),
+    linear-gradient(180deg, #050816, #07071c 58%, #09061a);
+}
+
+.editor-loading-cover :deep(.galaxy-loader.compact) {
+  height: 100vh;
+  height: 100dvh;
+  inset: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 24px;
+  position: fixed;
+  width: 100vw;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(147, 51, 234, 0.26), transparent 30%),
+    radial-gradient(circle at 76% 24%, rgba(236, 72, 153, 0.18), transparent 28%),
+    radial-gradient(circle at 50% 86%, rgba(34, 211, 238, 0.1), transparent 30%),
+    linear-gradient(180deg, #050816, #07071c 58%, #09061a);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 @media (max-width: 1240px) {

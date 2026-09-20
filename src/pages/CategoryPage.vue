@@ -100,8 +100,8 @@ const matchingPosts = computed(() => {
   })
 
   return [...filtered].sort((a, b) => {
-    const left = getTime(a.createdAt)
-    const right = getTime(b.createdAt)
+    const left = postSortTime(a)
+    const right = postSortTime(b)
     return sortMode.value === 'recent' ? right - left : left - right
   })
 })
@@ -113,7 +113,7 @@ const showLoadMoreDots = computed(() => isLoadingMore.value || isShowingMoreLoad
 
 const sortLabel = computed(() => sortOptions.find(option => option.value === sortMode.value)?.label || 'Mas recientes')
 
-const popularPosts = computed(() => posts.value.slice(0, 4))
+const popularPosts = computed(() => [...posts.value].sort((a, b) => postSortTime(b) - postSortTime(a)).slice(0, 4))
 
 const moreLinks = computed(() => {
   const topic = pageConfig.value.eyebrow
@@ -217,6 +217,13 @@ const getTime = (timestamp) => {
   return timestamp?.toDate ? timestamp.toDate().getTime() : new Date(timestamp).getTime()
 }
 
+const postDisplayDate = (post = {}) => Math.max(
+  getTime(post.publishedAt),
+  getTime(post.updatedAt),
+  getTime(post.createdAt)
+) || post.publishedAt || post.updatedAt || post.createdAt
+const postSortTime = (post = {}) => getTime(postDisplayDate(post))
+
 const formatAgo = (timestamp) => {
   const time = getTime(timestamp)
   if (!time) return 'Reciente'
@@ -228,8 +235,13 @@ const formatAgo = (timestamp) => {
   return `Hace ${days} dia${days === 1 ? '' : 's'}`
 }
 
-const goPost = (id) => {
-  router.push(`/post/${id}`)
+const postPath = (postOrId) => {
+  if (typeof postOrId === 'object' && postOrId) return `/post/${postOrId.slug || postOrId.id}`
+  return `/post/${postOrId}`
+}
+
+const goPost = (postOrId) => {
+  router.push(postPath(postOrId))
 }
 
 const selectFilter = (filter) => {
@@ -383,7 +395,7 @@ watch(() => route.fullPath, () => {
               v-for="(post, index) in displayedPosts"
               :key="post.id"
               :class="['news-row', { analysis: isAnalysisPost(post), 'featured-latest': index === 0, 'grid-card': index > 0 }]"
-              @click="goPost(post.id)"
+              @click="goPost(post)"
             >
               <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
               <div v-else class="post-placeholder"></div>
@@ -410,11 +422,17 @@ watch(() => route.fullPath, () => {
                   />
                   <div>
                     <strong>{{ post.authorName || 'Redactor' }}</strong>
-                    <small>{{ formatAgo(post.createdAt) }}</small>
+                    <small>{{ formatAgo(postDisplayDate(post)) }}</small>
                   </div>
                 </div>
                 <h2>{{ cardTitle(post) }}</h2>
                 <p v-if="pageConfig.type === 'news'">{{ post.content }}</p>
+                <div class="post-mobile-meta">
+                  <span>
+                    <strong>{{ post.authorName || 'Redactor' }}</strong>
+                    <small>{{ formatAgo(postDisplayDate(post)) }}</small>
+                  </span>
+                </div>
               </div>
             </button>
           </div>
@@ -456,13 +474,13 @@ watch(() => route.fullPath, () => {
               v-for="post in popularPosts"
               :key="post.id"
               class="popular-post"
-              @click="goPost(post.id)"
+              @click="goPost(post)"
             >
               <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
               <div v-else class="popular-placeholder"></div>
               <span>
                 <strong>{{ post.title }}</strong>
-                <small>{{ formatAgo(post.createdAt) }}</small>
+                <small>{{ formatAgo(postDisplayDate(post)) }}</small>
               </span>
             </button>
           </div>
@@ -2544,29 +2562,41 @@ watch(() => route.fullPath, () => {
   }
 
   .post-mobile-meta > span {
+    align-items: center;
     display: inline-flex;
-    flex: 0 1 auto;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
     gap: 0;
-    max-width: 55%;
+    max-width: 100%;
     min-width: 0;
-  }
-
-  .post-mobile-meta > span::after {
-    content: "•";
-    margin: 0 5px;
-    opacity: 0.7;
   }
 
   .post-mobile-meta strong,
   .post-mobile-meta small {
     color: rgba(226, 232, 240, 0.82);
-    display: block;
+    display: inline;
     font-size: 10px;
-    font-weight: 850;
-    line-height: 1.1;
+    line-height: 1.2;
     min-width: 0;
+  }
+
+  .post-mobile-meta strong {
+    font-weight: 850;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .post-mobile-meta strong::after {
+    content: "•";
+    font-weight: 400;
+    margin: 0 5px;
+    opacity: 0.7;
+  }
+
+  .post-mobile-meta small {
+    flex: 0 0 auto;
+    font-weight: 800;
     white-space: nowrap;
   }
 
@@ -2702,16 +2732,64 @@ watch(() => route.fullPath, () => {
   text-align: center;
 }
 
-.listing-analysis-score small {
-  display: block;
-  grid-column: 1 / -1;
-  justify-self: center;
-  margin-top: -4px;
-  text-align: center;
-  width: 100%;
+.news-row.featured-latest {
+  border: 2px solid rgba(34, 211, 238, 0.44);
+  box-shadow:
+    0 0 0 1px rgba(168, 85, 247, 0.28),
+    0 0 34px rgba(34, 211, 238, 0.16),
+    0 24px 72px rgba(88, 28, 135, 0.34);
+  isolation: isolate;
+}
+
+.news-row.featured-latest::after {
+  background: linear-gradient(90deg, #22d3ee, #a855f7, #ec4899, #facc15);
+  border-radius: inherit;
+  content: '';
+  inset: -2px;
+  opacity: 0.42;
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+}
+
+.news-row.featured-latest:hover {
+  border-color: rgba(216, 180, 254, 0.78);
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.36),
+    0 0 44px rgba(168, 85, 247, 0.28),
+    0 28px 82px rgba(88, 28, 135, 0.42);
+}
+
+.news-row.analysis.featured-latest {
+  border: 2px solid rgba(250, 204, 21, 0.86);
+  box-shadow:
+    0 0 0 1px rgba(245, 158, 11, 0.34),
+    0 0 36px rgba(250, 204, 21, 0.18),
+    0 26px 78px rgba(120, 53, 15, 0.42);
+}
+
+.news-row.analysis.featured-latest::after {
+  background: linear-gradient(90deg, #facc15, #f59e0b, #a855f7, #fde68a);
+  opacity: 0.48;
+}
+
+.news-row.analysis::before,
+.news-row.analysis.featured-latest::before,
+.news-row.grid-card.analysis::before {
+  content: none;
+  display: none;
 }
 
 @media (min-width: 761px) {
+  .listing-analysis-score small {
+    display: block;
+    grid-column: 1 / -1;
+    justify-self: center;
+    margin-top: -4px;
+    text-align: center;
+    width: 100%;
+  }
+
   .news-row.grid-card .post-copy,
   .news-row.grid-card.analysis .post-copy {
     grid-row: 2;
@@ -2742,18 +2820,6 @@ watch(() => route.fullPath, () => {
     top: 18px;
   }
 
-  .news-row:not(:first-child):not(.featured-latest) .listing-card-category {
-    font-size: 8px;
-    left: 12px;
-    max-width: 72px;
-    padding: 4px 6px;
-    top: 12px;
-  }
-
-  .news-row:not(:first-child):not(.featured-latest) .listing-card-category i {
-    display: none;
-  }
-
   .news-row:first-child .listing-card-author,
   .news-row.featured-latest .listing-card-author {
     margin-bottom: 8px;
@@ -2764,26 +2830,77 @@ watch(() => route.fullPath, () => {
     --avatar-size: 36px;
   }
 
-  .news-row:not(:first-child):not(.featured-latest) .listing-card-author {
-    margin-bottom: 6px;
-  }
-
-  .news-row:not(:first-child):not(.featured-latest) .listing-card-author .listing-author-avatar {
-    --avatar-size: 24px;
-  }
-
-  .news-row:not(:first-child):not(.featured-latest) .listing-card-author strong {
-    font-size: 10px;
-  }
-
-  .news-row:not(:first-child):not(.featured-latest) .listing-card-author small {
+  .news-row:first-child .post-mobile-meta,
+  .news-row.featured-latest .post-mobile-meta {
     display: none;
   }
 
+  .news-row:first-child .listing-analysis-score small,
+  .news-row.featured-latest .listing-analysis-score small {
+    display: block;
+    grid-column: 1 / -1;
+    justify-self: center;
+    text-align: center;
+    width: 100%;
+  }
+
+  /* Compact rows: layout horizontal como antes */
+  .news-row:not(:first-child):not(.featured-latest) {
+    align-items: start;
+    grid-template-rows: auto auto;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) > img,
+  .news-row:not(:first-child):not(.featured-latest) > .post-placeholder {
+    align-self: stretch;
+    grid-row: 1 / -1;
+    height: 92px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-card-category {
+    align-self: start;
+    border-radius: 7px;
+    font-size: 9px;
+    grid-column: 2;
+    grid-row: 1;
+    left: auto;
+    margin: 0 0 6px;
+    max-width: 100%;
+    padding: 4px 7px;
+    position: static;
+    top: auto;
+    width: fit-content;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-card-category i {
+    display: none;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-card-author {
+    display: none;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .post-copy {
+    align-self: start;
+    grid-column: 2;
+    grid-row: 2;
+    padding: 0;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .post-mobile-meta {
+    display: flex;
+    line-height: 1.2;
+  }
+
   .news-row:not(:first-child):not(.featured-latest) .listing-analysis-score {
-    left: 66px;
-    right: auto;
+    left: auto;
+    padding: 5px 7px;
+    right: 10px;
     top: 10px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-analysis-score small {
+    display: none;
   }
 }
 </style>

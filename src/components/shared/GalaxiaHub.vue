@@ -47,7 +47,7 @@ const PLAYLISTS = {
   mario: {
     key: 'mario',
     name: 'Remixes Mario',
-    subtitle: 'Clasicos del Reino Champinon',
+    subtitle: 'Clásicos del Reino Champiñón',
     url: 'https://soundcloud.com/videogameremixes/sets/super-mario-remixes',
     cover: 'https://i1.sndcdn.com/artworks-000054372707-urujxv-t500x500.jpg'
   }
@@ -81,6 +81,8 @@ const miniPlayerVisible = ref(false)
 const iframeRef = ref(null)
 const chatMessagesRef = ref(null)
 const chatInputRef = ref(null)
+const hubContentRef = ref(null)
+const hubContentHeight = ref(0)
 const liveFrameRef = ref(null)
 const liveChatMessagesRef = ref(null)
 const liveChatInputRef = ref(null)
@@ -105,6 +107,7 @@ let iconTimer = null
 let miniPlayerTimer = null
 let previousBodyOverflow = ''
 let previousHtmlOverflow = ''
+let hubResizeObserver = null
 
 const canUseChat = computed(() => (
   currentUser.value &&
@@ -113,6 +116,13 @@ const canUseChat = computed(() => (
 ))
 
 const hasLivePlayer = computed(() => Boolean(playerState.currentVideo?.id && playerState.allowFloatingPlayback))
+const hubTabs = computed(() => [
+  { key: 'communities', label: 'Comunidades' },
+  { key: 'chat', label: 'Chat' },
+  { key: 'music', label: 'Música' },
+  ...(hasLivePlayer.value ? [{ key: 'live', label: 'Live' }] : [])
+])
+const activeHubTabIndex = computed(() => Math.max(0, hubTabs.value.findIndex(tab => tab.key === activeTab.value)))
 const buildLiveEmbedSrc = (video = playerState.currentVideo) => {
   if (!video?.id) return ''
   const params = new URLSearchParams({
@@ -183,7 +193,7 @@ const iconCycle = computed(() => {
   const icons = [
     { key: 'communities', icon: 'fas fa-users', label: 'Comunidades' },
     { key: 'chat', icon: 'fas fa-comment-dots', label: 'Chat' },
-    { key: 'music', icon: 'fas fa-music', label: 'Musica' },
+    { key: 'music', icon: 'fas fa-music', label: 'Música' },
     ...(hasLivePlayer.value ? [{ key: 'live', icon: 'fas fa-circle-play', label: 'Live' }] : [])
   ]
   return icons[iconIndex.value % icons.length]
@@ -212,6 +222,13 @@ const formatChatTime = (value) => {
   const diff = Date.now() - time
   if (diff > 86400000) return `${Math.floor(diff / 86400000)}d`
   return new Date(time).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+}
+
+const measureHubContent = () => {
+  nextTick(() => {
+    if (!hubContentRef.value || (activeTab.value === 'chat' && activeChatUser.value)) return
+    hubContentHeight.value = Math.ceil(hubContentRef.value.scrollHeight)
+  })
 }
 
 const fallbackImage = (event) => {
@@ -655,7 +672,7 @@ const handleCommunityMusic = (event) => {
   applyPlaylist({
     key: `community-${event.detail?.id || 'selected'}`,
     name: `Playlist ${event.detail?.name || 'Comunidad'}`,
-    subtitle: 'Musica de la comunidad',
+    subtitle: 'Música de la comunidad',
     url: playlistUrl,
     cover: event.detail?.iconUrl || officialLogo,
     volume: Number(event.detail?.volume || DEFAULT_VOLUME)
@@ -687,7 +704,6 @@ const registerLiveFrame = () => {
 }
 
 const syncLivePlayerAfterLoad = () => {
-  stopMusicPlayback()
   registerLiveFrame()
   const startAt = Math.max(0, Math.floor(Number(playerState.currentTime ?? playerState.currentVideo?.startedAt ?? 0)))
   const sync = () => {
@@ -868,7 +884,7 @@ const subscribeInbox = () => {
         if (isUnread) unread += 1
         return {
           ...chat,
-          lastMessage: clearedAfterLastMessage ? 'Chat vacio' : chat.lastMessage,
+          lastMessage: clearedAfterLastMessage ? 'Chat vacío' : chat.lastMessage,
           pinned: Boolean(chat.pinnedBy?.[currentUser.value.uid]),
           unread: isUnread ? 1 : 0
         }
@@ -908,6 +924,7 @@ watch(open, (isOpen) => {
 })
 
 watch(chatDraft, resizeChatInput)
+watch([activeTab, expandedMusic, activeChatUser, hasLivePlayer], measureHubContent)
 
 watch(activeChatUser, (user) => {
   showJumpToBottom.value = false
@@ -951,6 +968,13 @@ onMounted(() => {
     subscribeInbox()
   })
   window.addEventListener('open-direct-chat', handleOpenDirectChatRequest)
+  nextTick(() => {
+    measureHubContent()
+    if (window.ResizeObserver && hubContentRef.value) {
+      hubResizeObserver = new ResizeObserver(measureHubContent)
+      hubResizeObserver.observe(hubContentRef.value)
+    }
+  })
 })
 
 onUnmounted(() => {
@@ -970,6 +994,7 @@ onUnmounted(() => {
   unsubscribeInbox?.()
   unsubscribeHubMessages?.()
   unsubscribeLiveMessages?.()
+  hubResizeObserver?.disconnect?.()
   resetKeyboardViewport()
   if (open.value) {
     document.body.style.overflow = previousBodyOverflow
@@ -980,7 +1005,7 @@ onUnmounted(() => {
 
 <template>
   <div class="galaxia-hub-root" :class="{ open }" :style="{ '--hub-keyboard-offset': `${keyboardOffset}px` }">
-    <iframe ref="iframeRef" class="hub-audio-frame" :src="embedSrc" title="Galaxia musica" allow="autoplay"></iframe>
+    <iframe ref="iframeRef" class="hub-audio-frame" :src="embedSrc" title="Galaxia música" allow="autoplay"></iframe>
 
     <button class="galaxia-hub-orb" :class="[`mode-${iconCycle.key}`, { playing: isPlaying, unread: unreadCount }]" type="button" @click="openHub()">
       <span class="hub-orb-glow"></span>
@@ -990,6 +1015,7 @@ onUnmounted(() => {
       <strong v-if="unreadCount">{{ unreadCount }}</strong>
     </button>
 
+    <Transition name="hub-mini-player">
     <button v-if="isPlaying && miniPlayerVisible && !open" class="hub-mini-player" type="button" @click="openHub('music')">
       <img :src="currentTrackCover || currentPlaylist.cover || officialLogo" alt="" @error="fallbackImage" />
       <span>
@@ -998,31 +1024,53 @@ onUnmounted(() => {
       </span>
       <i class="fas fa-pause"></i>
     </button>
+    </Transition>
 
     <Transition name="hub-backdrop">
       <button v-if="open" class="hub-backdrop" type="button" aria-label="Cerrar Galaxia Hub" @click="closeHub"></button>
     </Transition>
 
     <Transition name="hub-panel">
-      <section class="galaxia-hub-panel" :class="{ 'hub-hidden': !open, 'chat-active': activeTab === 'chat' && activeChatUser, 'live-active': activeTab === 'live', 'keyboard-open': keyboardOpen }" aria-label="Galaxia Hub">
+      <section
+        class="galaxia-hub-panel"
+        :class="{
+          'hub-hidden': !open,
+          'communities-active': activeTab === 'communities',
+          'chat-active': activeTab === 'chat' && activeChatUser,
+          'music-active': activeTab === 'music',
+          'live-active': activeTab === 'live',
+          'keyboard-open': keyboardOpen
+        }"
+        :style="{ '--hub-content-height': hubContentHeight ? `${hubContentHeight}px` : 'auto' }"
+        aria-label="Galaxia Hub"
+      >
         <header class="hub-head">
           <div>
             <span>Galaxia Hub</span>
-            <h2>{{ activeTab === 'communities' ? 'Ecosistema social' : activeTab === 'chat' ? 'Mensajes' : activeTab === 'live' ? 'Live' : 'Musica' }}</h2>
+            <h2>{{ activeTab === 'communities' ? 'Ecosistema social' : activeTab === 'chat' ? 'Mensajes' : activeTab === 'live' ? 'Live' : 'Música' }}</h2>
           </div>
           <button type="button" aria-label="Cerrar" @click="closeHub"><i class="fas fa-xmark"></i></button>
         </header>
 
-        <nav class="hub-segments" aria-label="Secciones de Galaxia Hub">
-          <button :class="{ active: activeTab === 'communities' }" type="button" @click="activeTab = 'communities'">Comunidades</button>
-          <button :class="{ active: activeTab === 'chat' }" type="button" @click="activeTab = 'chat'">
-            Chat <em v-if="unreadCount">{{ unreadCount }}</em>
+        <nav
+          class="hub-segments"
+          :style="{ '--hub-tab-count': hubTabs.length, '--hub-tab-index': activeHubTabIndex }"
+          aria-label="Secciones de Galaxia Hub"
+        >
+          <span class="hub-segment-indicator" aria-hidden="true"></span>
+          <button
+            v-for="tab in hubTabs"
+            :key="tab.key"
+            :class="{ active: activeTab === tab.key }"
+            type="button"
+            @click="activeTab = tab.key"
+          >
+            {{ tab.label }} <em v-if="tab.key === 'chat' && unreadCount">{{ unreadCount }}</em>
           </button>
-          <button :class="{ active: activeTab === 'music' }" type="button" @click="activeTab = 'music'">Musica</button>
-          <button v-if="hasLivePlayer" :class="{ active: activeTab === 'live' }" type="button" @click="activeTab = 'live'">Live</button>
         </nav>
 
         <div class="hub-content">
+          <div ref="hubContentRef" class="hub-content-measure">
           <section v-if="activeTab === 'communities'" class="hub-section">
             <div class="hub-section-title">
               <strong>Mis comunidades</strong>
@@ -1109,7 +1157,7 @@ onUnmounted(() => {
                   </small>
                 </article>
                 <div v-if="!hubMessages.length" class="hub-chat-placeholder">
-                  Todavia no hay mensajes con este usuario.
+                  Todavía no hay mensajes con este usuario.
                 </div>
                 <button
                   v-if="showJumpToBottom"
@@ -1192,7 +1240,7 @@ onUnmounted(() => {
             <div v-if="!activeChatUser && (!canUseChat || !chatPreview.length)" class="hub-empty">
               <i class="fas fa-comment-dots"></i>
               <strong>{{ canUseChat ? 'Sin conversaciones recientes' : 'Chat no disponible' }}</strong>
-              <p>{{ canUseChat ? 'Cuando tengas mensajes apareceran aqui.' : 'Activa permisos de chat desde tu perfil o administrador.' }}</p>
+              <p>{{ canUseChat ? 'Cuando tengas mensajes aparecerán aquí.' : 'Activa permisos de chat desde tu perfil o administrador.' }}</p>
             </div>
           </section>
 
@@ -1273,7 +1321,7 @@ onUnmounted(() => {
                     </span>
                   </article>
                   <div v-if="!liveMessages.length" class="hub-chat-placeholder">
-                    Aun no hay mensajes en este video.
+                    Aún no hay mensajes en este vídeo.
                   </div>
                 </div>
                 <button
@@ -1313,9 +1361,10 @@ onUnmounted(() => {
             <div v-else class="hub-empty">
               <i class="fas fa-circle-play"></i>
               <strong>No hay video en segundo plano</strong>
-              <p>Minimiza un directo o video desde comunidad para verlo aqui.</p>
+              <p>Minimiza un directo o vídeo desde comunidad para verlo aquí.</p>
             </div>
           </section>
+          </div>
         </div>
       </section>
     </Transition>
@@ -1325,6 +1374,10 @@ onUnmounted(() => {
 <style scoped>
 .galaxia-hub-root {
   --hub-keyboard-offset: 0px;
+  --hub-orb-size: 58px;
+  --hub-orb-bottom: 34px;
+  --hub-orb-right: 28px;
+  --hub-mini-gap: 14px;
   pointer-events: none;
   position: fixed;
   z-index: 520;
@@ -1346,17 +1399,17 @@ onUnmounted(() => {
     linear-gradient(135deg, #22d3ee, #a855f7, #ec4899, #38bdf8, #a855f7) border-box;
   border: 2px solid transparent;
   border-radius: 999px;
-  bottom: 34px;
+  bottom: var(--hub-orb-bottom);
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34), 0 0 26px rgba(168, 85, 247, 0.28);
   color: #ffffff;
   display: grid;
-  height: 58px;
+  height: var(--hub-orb-size);
   overflow: visible;
   place-items: center;
   pointer-events: auto;
   position: fixed;
-  right: 28px;
-  width: 58px;
+  right: var(--hub-orb-right);
+  width: var(--hub-orb-size);
 }
 
 .galaxia-hub-orb i {
@@ -1395,19 +1448,31 @@ onUnmounted(() => {
   backdrop-filter: blur(18px);
   border: 1px solid rgba(168, 85, 247, 0.32);
   border-radius: 999px;
-  bottom: 30px;
+  bottom: var(--hub-orb-bottom);
   box-shadow: 0 18px 46px rgba(0, 0, 0, 0.32), 0 0 20px rgba(168, 85, 247, 0.18);
   color: #ffffff;
   display: grid;
-  gap: 9px;
-  grid-template-columns: 36px minmax(0, 1fr) 32px;
+  gap: 10px;
+  grid-template-columns: calc(var(--hub-orb-size) - 18px) minmax(0, 1fr) 32px;
+  height: var(--hub-orb-size);
   max-width: min(310px, calc(100vw - 82px));
-  min-height: 48px;
-  padding: 6px;
+  min-height: var(--hub-orb-size);
+  padding: 8px;
   pointer-events: auto;
   position: fixed;
-  right: 104px;
+  right: calc(var(--hub-orb-right) + var(--hub-orb-size) + var(--hub-mini-gap));
+  transform-origin: right center;
+  transition:
+    opacity var(--motion-normal) ease,
+    transform var(--motion-normal) var(--ease-standard),
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
   width: 260px;
+}
+
+.hub-mini-player:hover {
+  border-color: rgba(216, 180, 254, 0.42);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.34), 0 0 24px rgba(168, 85, 247, 0.24);
 }
 
 .hub-mini-player img,
@@ -1443,13 +1508,28 @@ onUnmounted(() => {
 
 .hub-mini-player b {
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 900;
 }
 
 .hub-mini-player small {
   color: #aeb8d3;
   font-size: 10px;
   font-weight: 800;
+}
+
+.hub-mini-player-enter-active,
+.hub-mini-player-leave-active {
+  transition:
+    opacity var(--motion-normal) ease,
+    transform var(--motion-normal) var(--ease-standard),
+    filter var(--motion-normal) ease;
+}
+
+.hub-mini-player-enter-from,
+.hub-mini-player-leave-to {
+  filter: blur(4px);
+  opacity: 0;
+  transform: translateX(10px) scale(0.98);
 }
 
 .hub-backdrop {
@@ -1463,12 +1543,12 @@ onUnmounted(() => {
 
 .galaxia-hub-panel {
   background:
-    radial-gradient(circle at 20% 0%, rgba(168, 85, 247, 0.2), transparent 34%),
+    radial-gradient(circle at 20% 0%, rgba(139, 92, 246, 0.16), transparent 34%),
     radial-gradient(circle at 84% 16%, rgba(34, 211, 238, 0.12), transparent 34%),
     linear-gradient(145deg, rgba(7, 10, 25, 0.98), rgba(17, 12, 42, 0.97));
-  border: 1px solid rgba(168, 85, 247, 0.36);
-  border-radius: 26px;
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.46), 0 0 38px rgba(168, 85, 247, 0.16);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.46), var(--glow);
   color: #ffffff;
   display: grid;
   gap: 16px;
@@ -1483,6 +1563,11 @@ onUnmounted(() => {
   right: 28px;
   top: auto;
   width: min(390px, calc(100vw - 36px));
+  transition:
+    width var(--motion-slow) var(--ease-emphasized),
+    max-height var(--motion-slow) var(--ease-emphasized),
+    box-shadow var(--motion-normal) ease,
+    border-color var(--motion-normal) ease;
 }
 
 .galaxia-hub-panel.hub-hidden {
@@ -1522,9 +1607,9 @@ onUnmounted(() => {
 }
 
 .hub-head h2 {
-  font-size: 22px;
-  font-weight: 950;
-  line-height: 1;
+  font-size: var(--font-h2);
+  font-weight: 900;
+  line-height: 1.08;
 }
 
 .hub-head button {
@@ -1532,7 +1617,13 @@ onUnmounted(() => {
   border-radius: 999px;
   color: #ffffff;
   height: 36px;
+  transition: background var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
   width: 36px;
+}
+
+.hub-head button:hover {
+  background: rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
 }
 
 .hub-segments {
@@ -1542,22 +1633,38 @@ onUnmounted(() => {
   border-radius: 999px;
   display: grid;
   gap: 4px;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--hub-tab-count, 3), minmax(0, 1fr));
   padding: 4px;
+  position: relative;
 }
 
 .hub-segments button {
   border-radius: 999px;
   color: #cbd5e1;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 850;
   min-height: 36px;
+  position: relative;
+  transition: color var(--motion-fast) ease;
+  z-index: 2;
 }
 
 .hub-segments button.active {
-  background: linear-gradient(135deg, #7c3aed, #c026d3);
-  box-shadow: 0 0 22px rgba(168, 85, 247, 0.26);
   color: #ffffff;
+}
+
+.hub-segment-indicator {
+  background: linear-gradient(135deg, var(--accent), var(--accent-active));
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(139, 92, 246, 0.22);
+  height: calc(100% - 8px);
+  left: 4px;
+  position: absolute;
+  top: 4px;
+  transform: translateX(calc(var(--hub-tab-index, 0) * 100%));
+  transition: transform var(--motion-normal) var(--ease-emphasized), width var(--motion-normal) var(--ease-standard);
+  width: calc((100% - 8px) / var(--hub-tab-count, 3));
+  z-index: 1;
 }
 
 .hub-segments em {
@@ -1569,16 +1676,25 @@ onUnmounted(() => {
 }
 
 .hub-content {
+  height: var(--hub-content-height);
   max-width: 100%;
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
   padding-right: 2px;
   position: relative;
+  transition: height var(--motion-slow) var(--ease-emphasized);
+}
+
+.hub-content-measure {
+  display: grid;
+  gap: 0;
+  min-width: 0;
 }
 
 .galaxia-hub-panel.chat-active .hub-content,
 .galaxia-hub-panel.live-active .hub-content {
+  height: auto;
   overflow: hidden;
   padding-right: 0;
 }
@@ -1587,6 +1703,7 @@ onUnmounted(() => {
   display: grid;
   gap: 14px;
   min-width: 0;
+  transition: opacity var(--motion-normal) ease, transform var(--motion-normal) var(--ease-standard);
 }
 
 .hub-section.chat-room {
@@ -1920,13 +2037,23 @@ onUnmounted(() => {
 .hub-community-grid button {
   background: rgba(255, 255, 255, 0.055);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   color: #ffffff;
   display: grid;
   gap: 7px;
   justify-items: center;
   min-width: 0;
   padding: 9px 6px;
+  transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
+}
+
+.hub-community-grid button:hover,
+.hub-list button:hover,
+.hub-now-playing:hover,
+.hub-playlists button:hover {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(192, 132, 252, 0.28);
+  transform: translateY(-1px);
 }
 
 .hub-community-grid img,
@@ -1963,13 +2090,14 @@ onUnmounted(() => {
   align-items: center;
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   color: #ffffff;
   display: grid;
   gap: 10px;
   grid-template-columns: 42px minmax(0, 1fr) auto;
   min-height: 58px;
   padding: 8px;
+  transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
 }
 
 .hub-list img,
@@ -1985,7 +2113,7 @@ onUnmounted(() => {
 
 .hub-list strong {
   font-size: 13px;
-  font-weight: 950;
+  font-weight: 850;
 }
 
 .hub-list small {
@@ -2377,20 +2505,33 @@ onUnmounted(() => {
 
 .hub-player-controls {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns: repeat(4, 1fr);
 }
 
 .hub-player-controls button {
   background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   color: #ffffff;
+  font-size: var(--icon-size-md);
   min-height: 42px;
+  transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
 }
 
 .hub-player-controls .primary {
   background: linear-gradient(135deg, #7c3aed, #c026d3);
-  box-shadow: 0 0 26px rgba(168, 85, 247, 0.28);
+  box-shadow: 0 12px 26px rgba(139, 92, 246, 0.24);
+}
+
+.hub-player-controls button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(192, 132, 252, 0.28);
+  transform: translateY(-1px);
+}
+
+.hub-player-controls button:active {
+  transform: scale(0.97);
 }
 
 .hub-playlists {
@@ -2410,7 +2551,7 @@ onUnmounted(() => {
 
 .hub-icon-enter-active,
 .hub-icon-leave-active {
-  transition: opacity 0.22s ease, transform 0.22s ease;
+  transition: opacity var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
 }
 
 .hub-icon-enter-from,
@@ -2423,7 +2564,7 @@ onUnmounted(() => {
 .hub-backdrop-leave-active,
 .hub-panel-enter-active,
 .hub-panel-leave-active {
-  transition: opacity 0.22s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity var(--motion-normal) ease, transform var(--motion-normal) var(--ease-standard);
 }
 
 .hub-backdrop-enter-from,
@@ -2439,14 +2580,20 @@ onUnmounted(() => {
 }
 
 @media (max-width: 859px) {
+  .galaxia-hub-root {
+    --hub-orb-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    --hub-orb-right: max(14px, env(safe-area-inset-right, 0px));
+    --hub-mini-gap: 10px;
+  }
+
   .galaxia-hub-orb {
-    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
-    right: max(14px, env(safe-area-inset-right, 0px));
+    bottom: var(--hub-orb-bottom);
+    right: var(--hub-orb-right);
   }
 
   .hub-mini-player {
-    bottom: calc(146px + env(safe-area-inset-bottom, 0px));
-    right: max(14px, env(safe-area-inset-right, 0px));
+    bottom: calc(var(--hub-orb-bottom) + var(--hub-orb-size) + var(--hub-mini-gap));
+    right: var(--hub-orb-right);
   }
 
   .hub-backdrop {
