@@ -7,6 +7,7 @@ import { resolveAssetUrl } from '@/constants/assets'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { categoryIcon, loadPostCategories, normalizeCategory as normalize, postCategoryLabels, postMatchesCategory } from '@/services/postCategories'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
+import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -506,6 +507,7 @@ watch(() => route.fullPath, () => {
         </aside>
       </section>
     </main>
+    <ScrollHintBubble v-if="!isLoading" />
 
   </div>
 </template>

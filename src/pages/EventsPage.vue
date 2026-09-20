@@ -175,6 +175,11 @@ watch(() => route.query.id, (id) => {
   if (found) detailEvent.value = found
 })
 
+const goBack = () => {
+  if (window.history.state?.back) router.back()
+  else router.push('/')
+}
+
 watch(calendarPanelOpen, (isOpen) => {
   if (isOpen) {
     lockCalendarScroll()
@@ -194,6 +199,10 @@ onUnmounted(() => {
 <template>
   <main class="events-page-premium">
     <div class="events-page-inner">
+      <button type="button" class="events-back-button" @click="goBack">
+        <i class="fas fa-arrow-left"></i>
+        <span>Volver</span>
+      </button>
       <EventsHero :can-create="isAdmin" @create="openEditor()" />
       <EventsTabs v-model="activeTab" />
 
@@ -319,6 +328,26 @@ onUnmounted(() => {
   display: grid;
   gap: 18px;
   grid-template-columns: 320px minmax(0, 1fr) 320px;
+}
+
+.events-back-button {
+  align-items: center;
+  background: rgba(13, 16, 36, 0.86);
+  border: 1px solid rgba(192, 132, 252, 0.36);
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 9px;
+  justify-self: start;
+  min-height: 40px;
+  padding: 0 16px;
+}
+
+.events-back-button:hover {
+  background: rgba(124, 58, 237, 0.34);
+  border-color: rgba(216, 180, 254, 0.62);
 }
 
 .events-calendar-mobile-trigger {

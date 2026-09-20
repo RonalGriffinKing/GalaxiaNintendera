@@ -8,6 +8,7 @@ import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
 import { READ_REWARD_STARS, awardPostRead, getReadRewardDelayMs, resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { renderRichText } from '@/services/richText'
 import PostCinematicHero from '@/components/posts/PostCinematicHero.vue'
+import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -722,6 +723,7 @@ onUnmounted(() => {
         </div>
       </aside>
     </main>
+    <ScrollHintBubble />
 
     <Transition name="toast">
       <div v-if="rewardToast.show" class="read-reward-toast">

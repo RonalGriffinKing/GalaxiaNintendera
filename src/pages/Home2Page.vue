@@ -1,8 +1,8 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { collection, getDocs } from 'firebase/firestore'
-import { auth, db } from '@/firebase'
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
+import { db } from '@/firebase'
 import { resolveAssetUrl } from '@/constants/assets'
 import { HOME_HERO_SLIDE_DURATION } from '@/constants/home'
 import { useTimedCarousel } from '@/composables/useTimedCarousel'
@@ -12,6 +12,7 @@ import logoImage from '@/iconos/logo.png'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import HomeMediaPanel from '@/components/home/HomeMediaPanel.vue'
 import HomeWelcomeLoader from '@/components/home/HomeWelcomeLoader.vue'
+import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
 import { postCategoryLabels, normalizeCategory } from '@/services/postCategories'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 
@@ -26,10 +27,9 @@ const communities = ref([])
 const communityThreads = ref([])
 const events = ref([])
 const authorProfiles = ref({})
-const isLoading = ref(true)
+const isLoading = ref(false)
 const isInitialHomeLoading = ref(shouldShowHomeWelcome)
 const initialLoadCompleted = ref(!shouldShowHomeWelcome)
-const homeWelcomeTimedOut = ref(false)
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
 const COMMUNITY_SLIDE_DURATION = 3600
 const ANALYSIS_SLIDE_DURATION = 5200
@@ -228,15 +228,13 @@ const liveItems = computed(() => {
 })
 
 const loadData = async () => {
-  isLoading.value = true
-  try {
-    const [postSnap, communitySnap, threadSnap, eventSnap] = await Promise.all([
-      getDocs(collection(db, 'posts')).catch(() => ({ docs: [] })),
-      getDocs(collection(db, 'communities')).catch(() => ({ docs: [] })),
-      getDocs(collection(db, 'communityThreads')).catch(() => ({ docs: [] })),
-      getDocs(collection(db, 'galaxyEvents')).catch(() => ({ docs: [] }))
-    ])
+  const postRequest = getDocs(collection(db, 'posts')).catch(() => ({ docs: [] }))
+  loadCommunities()
+  loadCommunityThreads()
+  loadEvents()
 
+  try {
+    const postSnap = await postRequest
     const approved = postSnap.docs
       .map(item => ({ id: item.id, ...item.data() }))
       .filter(post => post.status === 'approved' && post.visibility !== 'private' && post.visibility !== 'unlisted')
@@ -244,16 +242,28 @@ const loadData = async () => {
 
     posts.value = approved.filter(post => post.placement !== 'hero' && !post.isMainEntry)
     mainEntries.value = approved.filter(post => (post.placement === 'hero' || post.isMainEntry) && isReleased(post))
-    communities.value = communitySnap.docs.map(item => ({ id: item.id, ...item.data() }))
-    communityThreads.value = threadSnap.docs.map(item => ({ id: item.id, ...item.data() }))
-    events.value = eventSnap.docs.map(item => ({ id: item.id, ...item.data() }))
-      .filter(item => getTime(item.startsAt) >= Date.now() || item.featured)
-      .sort((a, b) => getTime(a.startsAt) - getTime(b.startsAt))
-    await loadAuthorProfiles()
   } finally {
-    isLoading.value = false
     finishInitialHomeLoad()
   }
+
+  loadAuthorProfiles()
+}
+
+const loadCommunities = async () => {
+  const snap = await getDocs(collection(db, 'communities')).catch(() => ({ docs: [] }))
+  communities.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
+}
+
+const loadCommunityThreads = async () => {
+  const snap = await getDocs(collection(db, 'communityThreads')).catch(() => ({ docs: [] }))
+  communityThreads.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
+}
+
+const loadEvents = async () => {
+  const snap = await getDocs(collection(db, 'galaxyEvents')).catch(() => ({ docs: [] }))
+  events.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
+    .filter(item => getTime(item.startsAt) >= Date.now() || item.featured)
+    .sort((a, b) => getTime(a.startsAt) - getTime(b.startsAt))
 }
 
 const finishInitialHomeLoad = () => {
@@ -267,15 +277,13 @@ const finishInitialHomeLoad = () => {
 }
 
 const loadAuthorProfiles = async () => {
-  const ids = [...new Set(posts.value.map(post => post.authorId).filter(Boolean))]
+  const ids = [...new Set([...posts.value, ...mainEntries.value].map(post => post.authorId).filter(Boolean))]
   if (!ids.length) return
-  const snap = await getDocs(collection(db, 'users')).catch(() => ({ docs: [] }))
-  authorProfiles.value = Object.fromEntries(
-    snap.docs
-      .map(item => ({ id: item.id, ...item.data() }))
-      .filter(user => ids.includes(user.id))
-      .map(user => [user.id, user])
-  )
+  const profiles = await Promise.all(ids.map(async (id) => {
+    const snap = await getDoc(doc(db, 'users', id)).catch(() => null)
+    return snap?.exists() ? [id, { id, ...snap.data() }] : null
+  }))
+  authorProfiles.value = Object.fromEntries(profiles.filter(Boolean))
 }
 
 const getTime = (timestamp) => {
@@ -383,15 +391,10 @@ const selectSecondaryAnalysisSlide = (index) => {
 const openHeroSlide = () => {
   if (typeof activeHeroSlide.value?.action === 'function') activeHeroSlide.value.action()
 }
-const scrollPastHero = () => {
-  document.getElementById('home2-next-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
-
 onMounted(() => {
   if (shouldShowHomeWelcome && typeof window !== 'undefined') {
     sessionStorage.setItem(HOME_WELCOME_STORAGE_KEY, 'true')
     homeWelcomeTimer = window.setTimeout(() => {
-      homeWelcomeTimedOut.value = true
       finishInitialHomeLoad()
     }, HOME_WELCOME_MAX_WAIT)
   }
@@ -459,15 +462,6 @@ onUnmounted(() => {
                 ></button>
               </div>
             </div>
-            <button
-              type="button"
-              class="home2-scroll-cue"
-              aria-label="Ver más contenido"
-              title="Ver más contenido"
-              @click.stop="scrollPastHero"
-            >
-              <i class="fas fa-chevron-down"></i>
-            </button>
           </article>
         </section>
 
@@ -577,6 +571,7 @@ onUnmounted(() => {
         />
       </template>
     </main>
+    <ScrollHintBubble target-id="home2-next-section" />
   </div>
 </template>
 
@@ -822,29 +817,6 @@ onUnmounted(() => {
   background: linear-gradient(90deg, #a855f7, #ec4899);
   box-shadow: 0 0 18px rgba(236, 72, 153, 0.42);
   width: 30px;
-}
-
-.home2-scroll-cue {
-  align-items: center;
-  animation: home2ScrollCue 1.8s ease-in-out infinite;
-  backdrop-filter: blur(16px);
-  background: rgba(8, 13, 29, 0.78);
-  border: 1px solid rgba(216, 180, 254, 0.46);
-  border-radius: 999px;
-  bottom: 18px;
-  box-shadow: 0 0 24px rgba(168, 85, 247, 0.32);
-  color: #fff;
-  display: none;
-  height: 44px;
-  justify-content: center;
-  position: absolute !important;
-  right: 20px;
-  width: 44px;
-  z-index: 4 !important;
-}
-
-.home2-scroll-cue i {
-  font-size: 16px;
 }
 
 .home2-panel {
@@ -1323,17 +1295,6 @@ onUnmounted(() => {
 @keyframes home2Pulse {
   from { opacity: 0.58; }
   to { opacity: 1; }
-}
-
-@keyframes home2ScrollCue {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(6px); }
-}
-
-@media (max-height: 820px) {
-  .home2-scroll-cue {
-    display: inline-flex;
-  }
 }
 
 @media (max-height: 760px) and (min-width: 641px) {
