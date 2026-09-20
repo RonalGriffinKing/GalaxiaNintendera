@@ -588,6 +588,8 @@ onUnmounted(() => {
   overflow: hidden auto;
   padding: var(--public-page-top, 88px) 16px 42px;
   position: relative;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 /* Ambient background layer: remove this block and .home2-shell z-index to disable it cleanly. */
@@ -1329,7 +1331,33 @@ onUnmounted(() => {
   }
 
   .home2-shell {
+    gap: 14px;
     width: 100%;
+  }
+
+  .home2-panel {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .home2-panel-head {
+    align-items: center;
+    gap: 10px;
+  }
+
+  .home2-panel-head h2 {
+    font-size: 18px;
+    gap: 7px;
+    line-height: 1.15;
+    min-width: 0;
+  }
+
+  .home2-panel-head button {
+    flex: 0 0 auto;
+    font-size: 10px;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 10px;
   }
 
   .home2-main-hero {
@@ -1348,20 +1376,64 @@ onUnmounted(() => {
 
   .home2-analysis-featured {
     background-position: center top;
-    min-height: 520px;
+    min-height: 430px;
+    padding: 16px;
+  }
+
+  .home2-analysis-featured > span {
+    font-size: 9px;
+    gap: 6px;
+    left: 12px;
+    padding: 7px 9px;
+    top: 12px;
   }
 
   .home2-analysis-featured em {
-    font-size: 24px;
+    font-size: 22px;
+    gap: 5px;
+    padding: 7px 9px;
+    right: 12px;
+    top: 12px;
+  }
+
+  .home2-analysis-featured em small {
+    font-size: 7px;
+  }
+
+  .home2-analysis-featured h3 {
+    display: -webkit-box;
+    font-size: 28px;
+    line-height: 1.06;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+  }
+
+  .home2-analysis-featured p {
+    font-size: 13px;
+    line-height: 1.42;
+    margin-top: 10px;
   }
 
   .home2-analysis-featured footer {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    display: grid;
+    gap: 8px 10px;
+    grid-template-columns: auto minmax(0, 1fr);
+    margin-top: 14px;
+  }
+
+  .home2-analysis-featured footer strong {
+    font-size: 11px;
+    line-height: 1.25;
   }
 
   .home2-analysis-featured footer b {
+    grid-column: 1 / -1;
+    justify-self: start;
     margin-left: 0;
+    min-height: 32px;
+    padding: 0 11px;
   }
 
   .home2-all-card {

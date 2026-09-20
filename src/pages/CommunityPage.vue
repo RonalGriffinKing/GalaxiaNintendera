@@ -1,27 +1,22 @@
 <script setup>
 import { onMounted, onUnmounted, ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import CommunityPanel from '@/components/community/CommunityPanel.vue'
+import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
 
 defineOptions({
   name: 'CommunityPage'
 })
 
 const route = useRoute()
-const router = useRouter()
 const selectedCommunityId = computed(() => route.query.id || '')
 const currentUser = ref(auth.currentUser)
 const currentRole = ref('user')
 const isCheckingAuth = ref(true)
 let unsubscribeAuth = null
-
-const goBack = () => {
-  if (window.history.state?.back) router.back()
-  else router.push('/')
-}
 
 const loadRole = async (user) => {
   currentRole.value = 'user'
@@ -52,10 +47,7 @@ onUnmounted(() => {
   <div>
     <Transition name="community-content" appear>
       <main v-if="!isCheckingAuth" class="community-member-page">
-        <button type="button" class="community-back-button" @click="goBack">
-          <i class="fas fa-arrow-left"></i>
-          <span>Volver</span>
-        </button>
+        <FloatingBackButton />
         <CommunityPanel :user-role="currentRole" :initial-community-id="selectedCommunityId" :show-rail="false" />
       </main>
     </Transition>
@@ -71,29 +63,6 @@ onUnmounted(() => {
   color: #f8fafc;
   overflow-x: hidden;
   padding: var(--public-page-top, 88px) 18px 56px;
-}
-
-.community-back-button {
-  align-items: center;
-  background: rgba(13, 16, 36, 0.86);
-  border: 1px solid rgba(192, 132, 252, 0.36);
-  border-radius: 999px;
-  color: #ffffff;
-  display: flex;
-  font-size: 13px;
-  font-weight: 900;
-  gap: 9px;
-  margin: 0 max(0px, calc((100vw - 1500px) / 2)) 14px;
-  min-height: 40px;
-  padding: 0 16px;
-  position: relative;
-  width: fit-content;
-  z-index: 2;
-}
-
-.community-back-button:hover {
-  background: rgba(124, 58, 237, 0.34);
-  border-color: rgba(216, 180, 254, 0.62);
 }
 
 .community-member-page::before {
