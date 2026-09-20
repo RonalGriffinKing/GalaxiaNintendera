@@ -753,7 +753,7 @@ onUnmounted(() => {
     linear-gradient(135deg, #030712, #07111f 48%, #120827);
   color: #e5e7eb;
   min-height: calc(100vh - var(--public-nav-offset, 72px));
-  padding: 104px 22px 72px;
+  padding: 104px 0 72px;
 }
 
 .post-loading-shell {
@@ -761,7 +761,8 @@ onUnmounted(() => {
   gap: 28px;
   grid-template-columns: minmax(0, 1fr) 320px;
   margin: 0 auto;
-  max-width: 1440px;
+  max-width: 1200px;
+  width: calc(100% - clamp(48px, 12vw, 180px));
 }
 
 .post-loading-hero,
@@ -885,10 +886,10 @@ onUnmounted(() => {
   display: grid;
   gap: 28px;
   margin: 0 auto;
-  max-width: 1440px;
-  padding: 104px 22px 56px;
+  max-width: 1200px;
+  padding: 104px 0 56px;
   position: relative;
-  width: 100%;
+  width: calc(100% - clamp(48px, 12vw, 180px));
   z-index: 1;
 }
 
@@ -1130,7 +1131,8 @@ onUnmounted(() => {
 }
 
 @media (max-width: 720px) {
-  .post-layout { gap: 22px; padding: 68px 0 var(--public-page-bottom-mobile, calc(112px + env(safe-area-inset-bottom))); }
+  .post-loading-shell { width: 100%; }
+  .post-layout { gap: 22px; padding: 68px 0 var(--public-page-bottom-mobile, calc(112px + env(safe-area-inset-bottom))); width: 100%; }
   .post-back-button { margin-left: 10px; }
   .post-cinematic-hero { margin-left: 6px; margin-right: 6px; }
   .post-paragraph, .post-content-section, .upcoming-post-lock, .analysis-summary-mobile { margin-left: 10px; margin-right: 10px; }
