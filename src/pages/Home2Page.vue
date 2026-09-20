@@ -620,8 +620,9 @@ onUnmounted(() => {
   display: grid;
   gap: 24px;
   margin: 0 auto;
-  max-width: 1280px;
+  max-width: 1200px;
   position: relative;
+  width: calc(100% - clamp(48px, 12vw, 180px));
   z-index: 1;
 }
 
@@ -1325,6 +1326,10 @@ onUnmounted(() => {
 @media (max-width: 640px) {
   .home2-page {
     padding: var(--public-page-top-mobile, 72px) 10px var(--public-page-bottom-mobile, 124px);
+  }
+
+  .home2-shell {
+    width: 100%;
   }
 
   .home2-main-hero {
