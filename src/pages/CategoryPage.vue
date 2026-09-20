@@ -275,6 +275,12 @@ const readState = (postId) => {
 
 const cardTitle = (post) => post.analysis?.hypeTitle || post.title
 const cardActionIcon = (post) => categoryIcon(post.category)
+const cardSurfaceStyle = (post, index) => {
+  if (index === 0 || !post.image) return null
+  const image = resolveAssetUrl(post.image)
+  if (!image) return null
+  return { '--post-card-image': `url("${String(image).replace(/"/g, '\\"')}")` }
+}
 const authorProfile = (post) => authorProfiles.value[post.authorId] || {}
 const authorIcon = (post) => {
   const profile = authorProfile(post)
@@ -395,6 +401,7 @@ watch(() => route.fullPath, () => {
               v-for="(post, index) in displayedPosts"
               :key="post.id"
               :class="['news-row', { analysis: isAnalysisPost(post), 'featured-latest': index === 0, 'grid-card': index > 0 }]"
+              :style="cardSurfaceStyle(post, index)"
               @click="goPost(post)"
             >
               <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
@@ -1639,10 +1646,45 @@ watch(() => route.fullPath, () => {
   .news-row.featured-latest > .post-placeholder {
     height: 100%;
     min-height: 260px;
+    object-fit: cover;
+    position: static;
+  }
+
+  .news-row.grid-card::after {
+    background:
+      linear-gradient(180deg, rgba(5, 8, 22, 0.22) 0%, rgba(5, 8, 22, 0.1) 34%, rgba(5, 8, 22, 0.58) 63%, rgba(5, 8, 22, 0.94) 100%),
+      radial-gradient(circle at 80% 18%, rgba(168, 85, 247, 0.16), transparent 30%);
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: 1;
+  }
+
+  .news-row.featured-latest .listing-author-overlay {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0 0 14px;
+    max-width: 220px;
+    width: 220px;
+  }
+
+  .news-row.featured-latest .post-copy {
+    align-self: center;
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
+    padding: 0;
+    padding-top: 56px;
+  }
+
+  .news-row.featured-latest .post-copy > span {
+    margin-bottom: initial;
   }
 
   .news-row.featured-latest .post-copy h2 {
     font-size: clamp(30px, 3.2vw, 42px);
+    margin-top: 12px;
     -webkit-line-clamp: 3;
   }
 
@@ -1653,7 +1695,13 @@ watch(() => route.fullPath, () => {
 
   .news-row.grid-card,
   .news-row.grid-card.analysis {
-    align-content: start;
+    align-content: end;
+    background:
+      linear-gradient(180deg, rgba(5, 8, 22, 0.1), rgba(5, 8, 22, 0.22)),
+      var(--post-card-image),
+      #050816;
+    background-position: center;
+    background-size: cover;
     display: grid;
     gap: 0;
     grid-template-columns: 1fr;
@@ -1677,32 +1725,68 @@ watch(() => route.fullPath, () => {
   .news-row.grid-card > .post-placeholder,
   .news-row.grid-card.analysis > img,
   .news-row.grid-card.analysis > .post-placeholder {
-    border-radius: 14px 14px 0 0;
-    grid-column: 1;
-    grid-row: 1;
-    height: 190px;
+    border-radius: inherit;
+    height: 100%;
+    inset: 0;
     min-height: 0;
+    object-fit: contain;
+    object-position: center;
+    position: absolute;
+    width: 100%;
+    z-index: 0;
   }
 
   .news-row.grid-card .listing-author-overlay,
   .news-row.grid-card.analysis .listing-author-overlay {
-    grid-column: 1;
-    grid-row: 2;
-    margin: 14px 16px 0;
-    max-width: calc(100% - 32px);
+    align-self: auto;
+    background: rgba(5, 8, 22, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+    grid-column: auto;
+    grid-row: auto;
+    margin: 0;
+    max-width: calc(100% - 178px);
+    position: absolute;
+    right: 102px;
+    top: 14px;
     width: auto;
+    z-index: 2;
+  }
+
+  .news-row.grid-card:not(.analysis) .listing-author-overlay {
+    max-width: calc(100% - 132px);
+    right: 16px;
   }
 
   .news-row.grid-card .post-copy,
   .news-row.grid-card.analysis .post-copy {
+    align-self: end;
+    display: block;
     grid-column: 1;
-    grid-row: 3;
-    padding: 12px 16px 18px;
+    grid-row: 1;
+    padding: 58px 16px 18px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .news-row.grid-card .post-copy > span,
+  .news-row.grid-card.analysis .post-copy > span {
+    left: 16px;
+    margin: 0;
+    max-width: 130px;
+    overflow: hidden;
+    position: absolute;
+    text-overflow: ellipsis;
+    top: 14px;
+    white-space: nowrap;
+    z-index: 3;
   }
 
   .news-row.grid-card .post-copy h2,
   .news-row.grid-card.analysis .post-copy h2 {
     font-size: clamp(20px, 1.55vw, 25px);
+    margin-top: 0;
     -webkit-line-clamp: 2;
   }
 
@@ -1713,19 +1797,22 @@ watch(() => route.fullPath, () => {
 
   .news-row.grid-card .listing-analysis-score {
     border-radius: 12px;
-    height: 58px;
+    height: 54px;
     position: absolute;
     right: 14px;
     top: 14px;
     transform: none;
-    width: 86px;
+    width: 78px;
+    z-index: 4;
   }
 
   .news-row.grid-card .post-sticker,
   .news-row.grid-card.analysis .post-sticker {
     left: auto;
     right: 14px;
-    top: 174px;
+    top: 14px;
+    transform: none;
+    z-index: 3;
   }
 }
 
@@ -2901,6 +2988,23 @@ watch(() => route.fullPath, () => {
 
   .news-row:not(:first-child):not(.featured-latest) .listing-analysis-score small {
     display: none;
+  }
+}
+
+@media (min-width: 761px) {
+  .news-row.grid-card.analysis {
+    background:
+      linear-gradient(180deg, rgba(5, 8, 22, 0.08), rgba(5, 8, 22, 0.24)),
+      var(--post-card-image),
+      #050816 !important;
+    background-position: center !important;
+    background-size: cover !important;
+  }
+
+  .news-row.grid-card.analysis > img {
+    filter: none !important;
+    object-fit: contain !important;
+    object-position: center !important;
   }
 }
 </style>
