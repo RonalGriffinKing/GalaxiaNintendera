@@ -1095,6 +1095,10 @@ const normalizeSocialContent = (social = {}) => {
       subtitle: String(slide?.subtitle || slide?.subtitulo || '').trim(),
       content: String(slide?.content || slide?.contenido || slide?.summary || slide?.resumen || slide?.description || '').trim(),
       image: String(slide?.image || slide?.imagen || '').trim(),
+      points: (Array.isArray(slide?.points) ? slide.points : (Array.isArray(slide?.puntos) ? slide.puntos : (Array.isArray(slide?.highlights) ? slide.highlights : [])))
+        .map(point => String(point || '').trim())
+        .filter(Boolean)
+        .slice(0, 4),
       sectionIndexes: (Array.isArray(slide?.sectionIndexes) ? slide.sectionIndexes : (Array.isArray(slide?.secciones) ? slide.secciones : []))
         .map(index => Number(index))
         .filter(index => Number.isInteger(index) && index >= 0)

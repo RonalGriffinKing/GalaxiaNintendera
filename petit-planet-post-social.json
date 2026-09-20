@@ -96,31 +96,51 @@
 ],
 "social": {
 "title": "Petit Planet: las claves de su beta final",
-"summary": "Personalización, vida diaria, multijugador y cientos de objetos en un acogedor mundo espacial.",
+"summary": "La beta final revela un enorme simulador de vida espacial con personalización, colecciones, actividades diarias y opciones para compartir la aventura con otros jugadores.",
 "image": "",
 "slides": [
 {
 "title": "Beta, mundos y personalización",
-"content": "Conoce los idiomas disponibles, elige tu planeta y crea un personaje realmente único.",
+"content": "La prueba final amplía las opciones para comenzar la aventura a tu manera.",
 "image": "",
+"points": [
+"Voces en chino, inglés, japonés y coreano, además de textos en varios idiomas.",
+"Planetas como Hexia y Taffeh ofrecen entornos y estilos diferentes.",
+"Nuevos degradados, mechas y paletas permiten crear un personaje más personal."
+],
 "sectionIndexes": [0, 1, 2]
 },
 {
 "title": "Economía, colecciones y vida diaria",
-"content": "Completa pedidos, reúne cientos de objetos y disfruta actividades conectadas con el tiempo real.",
+"content": "Cada día combina progreso, descubrimiento y muchas actividades para completar.",
 "image": "",
+"points": [
+"StarDash permite completar pedidos, ganar Dough y comprar en la tienda de Glenn.",
+"Omnidex reúne cientos de plantas, muebles, animales y recetas para coleccionar.",
+"El tiempo real acompaña actividades como cocinar, pescar y capturar fauna."
+],
 "sectionIndexes": [3, 4, 5]
 },
 {
 "title": "Multijugador, vecinos y nuevas herramientas",
-"content": "Visita otros planetas, consigue planos y organiza mejor tu aventura con el nuevo mapa.",
+"content": "La comunidad y las relaciones también forman parte del crecimiento de tu planeta.",
 "image": "",
+"points": [
+"El Bazar Galáctico, los minijuegos y la Estación conectan tu mundo con otros jugadores.",
+"Los vecinos entregan regalos y Tarjetas de Inspiración con planos para muebles.",
+"El nuevo mapa y el diario ayudan a localizar personajes y organizar las tareas."
+],
 "sectionIndexes": [6, 7, 8]
 },
 {
 "title": "Recompensas y conclusiones de la beta",
-"content": "Starsea Call y todas las novedades anticipan una experiencia enorme para disfrutar cada día.",
+"content": "La beta deja una experiencia amplia que quiere darte motivos para regresar cada día.",
 "image": "",
+"points": [
+"Starsea Call incorpora trajes, muebles y recompensas de distintas temáticas.",
+"Personalización, comercio, cooperativo y colecciones forman un conjunto muy completo.",
+"Sus sistemas todavía pueden cambiar antes del lanzamiento previsto para 2026."
+],
 "sectionIndexes": [9, 10, 11]
 }
 ]

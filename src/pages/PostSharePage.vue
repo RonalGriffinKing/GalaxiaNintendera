@@ -213,6 +213,10 @@ const carouselSlides = computed(() => {
           title: trimText(stripHtml(socialSlide.title || socialSlide.titulo || primarySection.title || title.value), 90),
           subtitle: socialSlide.subtitle || socialSlide.subtitulo || primarySection.subtitle || primarySection.label || category.value,
           description: trimText(stripHtml(socialSlide.content || socialSlide.contenido || socialSlide.summary || socialSlide.resumen || socialSlide.description || primarySection.content || description.value), 210),
+          points: (Array.isArray(socialSlide.points) ? socialSlide.points : (Array.isArray(socialSlide.puntos) ? socialSlide.puntos : (Array.isArray(socialSlide.highlights) ? socialSlide.highlights : [])))
+            .map(point => trimText(stripHtml(point), 110))
+            .filter(Boolean)
+            .slice(0, 4),
           image: socialSlide.image || socialSlide.imagen || inheritedImage,
           score: null,
           showScore: false
@@ -226,6 +230,7 @@ const carouselSlides = computed(() => {
           title: trimText(stripHtml(section.title || title.value), 90),
           subtitle: section.subtitle || section.label || category.value,
           description: trimText(stripHtml(section.content || description.value), 210),
+          points: [],
           image: section.image || coverImage.value,
           score: null,
           showScore: false
@@ -824,7 +829,7 @@ function slugify(value) {
                   </div>
                 </div>
 
-                <div class="social-card-copy">
+                <div class="social-card-copy" :class="{ 'has-points': slide.points?.length }">
                   <span v-if="settingsForSlide(index).part.visible" class="social-category">
                     <i class="fas fa-gamepad"></i>
                     {{ labelForPart(slide, index) }}
@@ -832,6 +837,12 @@ function slugify(value) {
                   <h2>{{ slide.title }}</h2>
                   <small v-if="settingsForSlide(index).subtitle.visible" class="social-subtitle">{{ slide.subtitle }}</small>
                   <p>{{ slide.description }}</p>
+                  <ul v-if="slide.points?.length" class="social-points">
+                    <li v-for="(point, pointIndex) in slide.points" :key="`${slide.id}-point-${pointIndex}`">
+                      <span>{{ pointIndex + 1 }}</span>
+                      <strong>{{ point }}</strong>
+                    </li>
+                  </ul>
                 </div>
 
                 <div v-if="!slide.isLast && settingsForSlide(index).arrow.visible" class="social-next-cue">
@@ -1498,6 +1509,54 @@ function slugify(value) {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: var(--copy-text-lines);
   text-shadow: 0 8px 28px rgba(0, 0, 0, 0.48);
+}
+
+.social-card-copy.has-points p {
+  font-size: calc(var(--copy-text-size) * 0.82);
+  -webkit-line-clamp: 2;
+}
+
+.social-points {
+  display: grid;
+  gap: 18px;
+  list-style: none;
+  margin: 26px 0 0;
+  max-width: 840px;
+  padding: 0;
+}
+
+.social-points li {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 38px minmax(0, 1fr);
+}
+
+.social-points li > span {
+  align-items: center;
+  background: linear-gradient(135deg, var(--part-color), #ec4899);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(88, 28, 135, 0.28);
+  color: #fff;
+  display: inline-flex;
+  font-size: 20px;
+  font-weight: 950;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.social-points li > strong {
+  color: var(--copy-text-color);
+  font-size: calc(var(--copy-text-size) * 0.76);
+  font-weight: 850;
+  line-height: 1.18;
+  text-shadow: 0 8px 28px rgba(0, 0, 0, 0.56);
+}
+
+.social-card.analysis .social-points li > span {
+  background: linear-gradient(135deg, #a16207, #facc15);
 }
 
 .social-next-cue {

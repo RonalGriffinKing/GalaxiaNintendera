@@ -383,6 +383,9 @@ const selectSecondaryAnalysisSlide = (index) => {
 const openHeroSlide = () => {
   if (typeof activeHeroSlide.value?.action === 'function') activeHeroSlide.value.action()
 }
+const scrollPastHero = () => {
+  document.getElementById('home2-next-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 onMounted(() => {
   if (shouldShowHomeWelcome && typeof window !== 'undefined') {
@@ -456,10 +459,19 @@ onUnmounted(() => {
                 ></button>
               </div>
             </div>
+            <button
+              type="button"
+              class="home2-scroll-cue"
+              aria-label="Ver más contenido"
+              title="Ver más contenido"
+              @click.stop="scrollPastHero"
+            >
+              <i class="fas fa-chevron-down"></i>
+            </button>
           </article>
         </section>
 
-        <section class="home2-community-band">
+        <section id="home2-next-section" class="home2-community-band">
           <div>
             <span><i class="fas fa-users"></i> Comunidad Nintendo</span>
             <h2>Unete a nuestras comunidades</h2>
@@ -810,6 +822,29 @@ onUnmounted(() => {
   background: linear-gradient(90deg, #a855f7, #ec4899);
   box-shadow: 0 0 18px rgba(236, 72, 153, 0.42);
   width: 30px;
+}
+
+.home2-scroll-cue {
+  align-items: center;
+  animation: home2ScrollCue 1.8s ease-in-out infinite;
+  backdrop-filter: blur(16px);
+  background: rgba(8, 13, 29, 0.78);
+  border: 1px solid rgba(216, 180, 254, 0.46);
+  border-radius: 999px;
+  bottom: 18px;
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.32);
+  color: #fff;
+  display: none;
+  height: 44px;
+  justify-content: center;
+  position: absolute !important;
+  right: 20px;
+  width: 44px;
+  z-index: 4 !important;
+}
+
+.home2-scroll-cue i {
+  font-size: 16px;
 }
 
 .home2-panel {
@@ -1288,6 +1323,27 @@ onUnmounted(() => {
 @keyframes home2Pulse {
   from { opacity: 0.58; }
   to { opacity: 1; }
+}
+
+@keyframes home2ScrollCue {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+
+@media (max-height: 820px) {
+  .home2-scroll-cue {
+    display: inline-flex;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 641px) {
+  .home2-main-hero {
+    height: clamp(430px, calc(100dvh - var(--public-page-top, 88px) - 32px), 500px);
+  }
+
+  .home2-main-hero h1 {
+    font-size: clamp(32px, 3.7vw, 50px);
+  }
 }
 
 @media (max-width: 980px) {

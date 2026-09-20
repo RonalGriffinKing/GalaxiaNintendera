@@ -32,6 +32,14 @@ const currentUrl = computed(() => {
   return window.location.href
 })
 const publicPostPath = computed(() => `/post/${post.value.slug || post.value.id || route.params.id}`)
+const goBack = () => {
+  const previousRoute = typeof window !== 'undefined' ? window.history.state?.back : null
+  if (previousRoute) {
+    router.back()
+    return
+  }
+  router.push('/noticias')
+}
 
 const postSections = computed(() => Array.isArray(post.value.sections) ? post.value.sections : [])
 const mediaFor = (url) => mediaFromUrl(url)
@@ -506,6 +514,10 @@ onUnmounted(() => {
     </div>
 
     <main class="post-layout">
+      <button type="button" class="post-back-button" @click="goBack">
+        <i class="fas fa-arrow-left"></i>
+        <span>Volver</span>
+      </button>
       <article class="post-article">
         <PostCinematicHero
           :post="post"
@@ -878,6 +890,36 @@ onUnmounted(() => {
   z-index: 1;
 }
 
+.post-back-button {
+  align-items: center;
+  align-self: center;
+  backdrop-filter: blur(16px);
+  background: rgba(8, 13, 29, 0.76);
+  border: 1px solid rgba(216, 180, 254, 0.24);
+  border-radius: 10px;
+  color: #f5f3ff;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 9px;
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 40px;
+  padding: 0 14px;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.post-back-button:hover {
+  background: rgba(124, 58, 237, 0.34);
+  border-color: rgba(216, 180, 254, 0.58);
+  transform: translateX(-2px);
+}
+
+.analysis-page .post-back-button {
+  border-color: rgba(250, 204, 21, 0.3);
+  color: #fef3c7;
+}
+
 .post-article {
   display: grid;
   gap: 24px;
@@ -1087,6 +1129,7 @@ onUnmounted(() => {
 
 @media (max-width: 720px) {
   .post-layout { gap: 22px; padding: 68px 0 var(--public-page-bottom-mobile, calc(112px + env(safe-area-inset-bottom))); }
+  .post-back-button { margin-left: 10px; }
   .post-cinematic-hero { margin-left: 6px; margin-right: 6px; }
   .post-paragraph, .post-content-section, .upcoming-post-lock, .analysis-summary-mobile { margin-left: 10px; margin-right: 10px; }
   .post-paragraph { font-size: 15px; }
