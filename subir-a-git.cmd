@@ -18,6 +18,13 @@ if not exist ".git" (
   goto :error
 )
 
+for /f "delims=" %%B in ('git branch --show-current') do set "CURRENT_BRANCH=%%B"
+if /i not "%CURRENT_BRANCH%"=="main" (
+  echo ERROR: La rama activa es "%CURRENT_BRANCH%" y la web publica desde "main".
+  echo Cambia a main antes de volver a ejecutar este archivo.
+  goto :error
+)
+
 where npm >nul 2>nul
 if errorlevel 1 (
   echo AVISO: npm no esta disponible. Se omitira la comprobacion del build.
@@ -47,8 +54,8 @@ if "%STATUS_SIZE%"=="0" (
 )
 
 echo.
-echo Subiendo la rama actual al repositorio remoto...
-git push
+echo Subiendo la rama main al repositorio remoto...
+git push origin main
 if errorlevel 1 goto :command_error
 
 echo.
