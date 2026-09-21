@@ -84,18 +84,28 @@ const emit = defineEmits(['update:search', 'update:sort', 'update:pageSize'])
   font-size: 12px;
   font-weight: 800;
   height: 42px;
+  padding: 0 36px 0 14px;
 }
 
 @media (max-width: 760px) {
   .list-controls {
     align-items: stretch;
     display: grid;
+    gap: 14px;
     grid-template-columns: 1fr;
     justify-content: stretch;
   }
 
   .list-search {
+    min-height: 50px;
     min-width: 0;
+    padding: 0 16px;
+    width: 100%;
+  }
+
+  .list-controls select {
+    height: 50px;
+    padding-left: 16px;
     width: 100%;
   }
 }

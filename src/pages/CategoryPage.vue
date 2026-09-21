@@ -3090,7 +3090,36 @@ watch(() => route.fullPath, () => {
   }
 
   .news-row:not(:first-child):not(.featured-latest) .post-mobile-meta {
-    margin-top: 2px;
+    margin-top: 4px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .post-mobile-meta > span {
+    align-items: center;
+    display: flex;
+    gap: 7px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .post-mobile-meta strong,
+  .news-row:not(:first-child):not(.featured-latest) .post-mobile-meta small {
+    align-items: center;
+    display: inline-flex;
+    line-height: 1;
+    min-height: 14px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .post-mobile-meta strong::after {
+    content: none;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .post-mobile-meta small::before {
+    background: currentColor;
+    border-radius: 50%;
+    content: "";
+    display: inline-block;
+    height: 3px;
+    margin-right: 7px;
+    opacity: 0.65;
+    width: 3px;
   }
 }
 

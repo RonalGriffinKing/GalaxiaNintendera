@@ -1131,6 +1131,10 @@ const executeDelete = async (id) => {
     grid-template-columns: 1fr;
   }
 
+  .post-toolbar {
+    gap: 20px;
+  }
+
   .post-create-btn {
     justify-content: center;
     width: 100%;
