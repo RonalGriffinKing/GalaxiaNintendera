@@ -12,6 +12,11 @@ import { doc, getDoc } from 'firebase/firestore'
 
 const routes = [
   {
+    path: '/ruzafa-impresora',
+    name: 'ruzafa-printer',
+    component: () => import('@/pages/RuzafaPrinterPage.vue')
+  },
+  {
     path: '/',
     component: PublicLayout,
     children: [
@@ -141,7 +146,7 @@ const router = createRouter({
 })
 
 const publicRoutes = ['/', '/login']
-const publicPrefixes = ['/home2', '/overlay', '/post', '/p', '/politica-privacidad', '/terminos-condiciones', '/normas-comunidad', '/politica-cookies', '/contacto-reportes', '/aviso-legal', '/perfil', '/categoria', '/noticias', '/rumores', '/guias', '/comunidad', '/eventos']
+const publicPrefixes = ['/ruzafa-impresora', '/home2', '/overlay', '/post', '/p', '/politica-privacidad', '/terminos-condiciones', '/normas-comunidad', '/politica-cookies', '/contacto-reportes', '/aviso-legal', '/perfil', '/categoria', '/noticias', '/rumores', '/guias', '/comunidad', '/eventos']
 let authReady = false
 let authUser = null
 let authReadyPromise = new Promise((resolve) => {
