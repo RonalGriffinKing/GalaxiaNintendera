@@ -401,6 +401,75 @@ const ensureMetaTag = (name, content) => {
   meta.setAttribute('content', content)
 }
 
+const ensurePropertyMeta = (property, content) => {
+  if (typeof document === 'undefined' || !content) return
+  let meta = document.querySelector(`meta[property="${property}"]`)
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.setAttribute('property', property)
+    document.head.appendChild(meta)
+  }
+  meta.setAttribute('content', content)
+}
+
+const absoluteUrl = (value) => {
+  if (!value || typeof window === 'undefined') return ''
+  try {
+    return new URL(resolveAssetUrl(value), import.meta.env.VITE_SITE_URL || window.location.origin).href
+  } catch {
+    return ''
+  }
+}
+
+const seoDescription = () => String(post.value.metaDescription || post.value.summary || post.value.content || '')
+  .replace(/[*_#>`\[\]]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .slice(0, 160)
+
+const isoDate = (value) => {
+  const time = getTime(value)
+  return time ? new Date(time).toISOString() : ''
+}
+
+const ensureArticleSchema = (canonical, description, image) => {
+  let script = document.querySelector('#post-article-schema')
+  if (!script) {
+    script = document.createElement('script')
+    script.id = 'post-article-schema'
+    script.type = 'application/ld+json'
+    document.head.appendChild(script)
+  }
+
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: post.value.title || 'Galaxia Nintendera',
+    description,
+    mainEntityOfPage: canonical,
+    url: canonical,
+    author: {
+      '@type': 'Person',
+      name: post.value.authorName || 'Redaccion Galaxia Nintendera'
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Galaxia Nintendera',
+      logo: {
+        '@type': 'ImageObject',
+        url: `${import.meta.env.VITE_SITE_URL || window.location.origin}/icons/icon-192.png`
+      }
+    }
+  }
+
+  if (image) schema.image = [image]
+  const published = isoDate(post.value.releaseAt || post.value.createdAt)
+  const modified = isoDate(post.value.updatedAt || post.value.createdAt)
+  if (published) schema.datePublished = published
+  if (modified) schema.dateModified = modified
+  script.textContent = JSON.stringify(schema)
+}
+
 const ensureCanonical = (href) => {
   if (typeof document === 'undefined') return
   let link = document.querySelector('link[rel="canonical"]')
@@ -414,12 +483,26 @@ const ensureCanonical = (href) => {
 
 const applyPostSeo = () => {
   if (typeof document === 'undefined' || !post.value.id) return
-  document.title = `${post.value.title || 'Post'} | Galaxia Nintendera`
-  ensureMetaTag('description', post.value.metaDescription || post.value.content || '')
+  const title = `${post.value.title || 'Post'} | Galaxia Nintendera`
+  const description = seoDescription()
+  const image = absoluteUrl(post.value.image)
+  document.title = title
+  ensureMetaTag('description', description)
   ensureMetaTag('keywords', Array.isArray(post.value.keywords) ? post.value.keywords.join(', ') : '')
   ensureMetaTag('robots', post.value.indexGoogle === false || post.value.visibility === 'private' ? 'noindex,nofollow' : 'index,follow')
-  const canonical = post.value.canonicalUrl || `${window.location.origin}${publicPostPath.value}`
+  const canonical = post.value.canonicalUrl || `${import.meta.env.VITE_SITE_URL || window.location.origin}${publicPostPath.value}`
   ensureCanonical(canonical)
+  ensurePropertyMeta('og:type', 'article')
+  ensurePropertyMeta('og:site_name', 'Galaxia Nintendera')
+  ensurePropertyMeta('og:title', title)
+  ensurePropertyMeta('og:description', description)
+  ensurePropertyMeta('og:url', canonical)
+  ensurePropertyMeta('og:image', image)
+  ensureMetaTag('twitter:card', image ? 'summary_large_image' : 'summary')
+  ensureMetaTag('twitter:title', title)
+  ensureMetaTag('twitter:description', description)
+  ensureMetaTag('twitter:image', image)
+  ensureArticleSchema(canonical, description, image)
 }
 
 const toggleFavorite = async () => {
@@ -467,6 +550,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   if (previousTitle) document.title = previousTitle
+  document.querySelector('#post-article-schema')?.remove()
   clearReadTimer()
   window.removeEventListener('scroll', checkEndReached)
   window.removeEventListener('resize', checkEndReached)
@@ -726,9 +810,10 @@ onUnmounted(() => {
 <style scoped>
 .post-page {
   background:
-    radial-gradient(circle at 72% 0%, rgba(124, 58, 237, 0.28), transparent 28%),
-    radial-gradient(circle at 12% 36%, rgba(168, 85, 247, 0.16), transparent 30%),
-    linear-gradient(135deg, #030712, #07111f 48%, #120827);
+    radial-gradient(circle at 82% 8%, rgba(250, 204, 21, 0.28), transparent 30%),
+    radial-gradient(circle at 56% 18%, rgba(236, 72, 153, 0.28), transparent 34%),
+    radial-gradient(circle at 14% 34%, rgba(34, 211, 238, 0.2), transparent 32%),
+    linear-gradient(135deg, #061120 0%, #26104b 42%, #5b214f 70%, #503712 100%);
   color: #e5e7eb;
   min-height: 100vh;
   overflow-x: hidden;

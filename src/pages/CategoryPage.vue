@@ -398,12 +398,12 @@ watch(() => route.fullPath, () => {
             v-if="displayedPosts.length"
             class="news-list"
           >
-            <button
+            <RouterLink
               v-for="(post, index) in displayedPosts"
               :key="post.id"
+              :to="postPath(post)"
               :class="['news-row', { analysis: isAnalysisPost(post), 'featured-latest': index === 0, 'grid-card': index > 0 }]"
               :style="cardSurfaceStyle(post, index)"
-              @click="goPost(post)"
             >
               <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
               <div v-else class="post-placeholder"></div>
@@ -442,7 +442,7 @@ watch(() => route.fullPath, () => {
                   </span>
                 </div>
               </div>
-            </button>
+            </RouterLink>
           </div>
 
           <div v-else class="empty-state">
@@ -721,6 +721,7 @@ watch(() => route.fullPath, () => {
   padding-bottom: 24px;
   position: relative;
   text-align: left;
+  text-decoration: none;
 }
 
 .news-row.analysis {
@@ -1641,7 +1642,7 @@ watch(() => route.fullPath, () => {
   .news-row.featured-latest {
     grid-column: 1 / -1;
     grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr) 92px;
-    min-height: 310px;
+    min-height: 350px;
   }
 
   .news-row.featured-latest > img,
@@ -1657,6 +1658,7 @@ watch(() => route.fullPath, () => {
       linear-gradient(180deg, rgba(5, 8, 22, 0.22) 0%, rgba(5, 8, 22, 0.1) 34%, rgba(5, 8, 22, 0.58) 63%, rgba(5, 8, 22, 0.94) 100%),
       radial-gradient(circle at 80% 18%, rgba(168, 85, 247, 0.16), transparent 30%);
     content: "";
+    border-radius: inherit;
     inset: 0;
     pointer-events: none;
     position: absolute;
@@ -1699,20 +1701,22 @@ watch(() => route.fullPath, () => {
   .news-row.grid-card.analysis {
     align-content: end;
     background:
-      linear-gradient(180deg, rgba(5, 8, 22, 0.1), rgba(5, 8, 22, 0.22)),
+      linear-gradient(180deg, rgba(5, 8, 22, 0.12), rgba(5, 8, 22, 0.3)),
       var(--post-card-image),
       #050816;
     background-position: center;
     background-size: cover;
+    background-clip: padding-box;
+    border-width: 2px;
     display: grid;
     gap: 0;
     grid-template-columns: 1fr;
-    min-height: 390px;
+    min-height: 300px;
     padding: 0;
   }
 
   .news-row.grid-card.analysis {
-    border-left-width: 1px;
+    border-left-width: 2px;
   }
 
   .news-row.grid-card.analysis::before {
@@ -1731,8 +1735,9 @@ watch(() => route.fullPath, () => {
     height: 100%;
     inset: 0;
     min-height: 0;
-    object-fit: contain;
+    object-fit: cover;
     object-position: center;
+    opacity: 0;
     position: absolute;
     width: 100%;
     z-index: 0;
@@ -2870,6 +2875,30 @@ watch(() => route.fullPath, () => {
 }
 
 @media (min-width: 761px) {
+  .news-row.featured-latest::before,
+  .news-row.analysis.featured-latest::before {
+    animation: featured-stars-drift 18s linear infinite;
+    background-image:
+      radial-gradient(circle, rgba(255, 255, 255, 0.92) 0 1px, transparent 1.5px),
+      radial-gradient(circle, rgba(186, 230, 253, 0.74) 0 1.5px, transparent 2px),
+      radial-gradient(circle, rgba(253, 224, 71, 0.72) 0 1px, transparent 1.5px);
+    background-position: 8px 14px, 38px 48px, 72px 24px;
+    background-size: 74px 68px, 116px 104px, 148px 132px;
+    border-radius: inherit;
+    content: '';
+    display: block;
+    inset: 0;
+    mask-image: linear-gradient(90deg, transparent 28%, rgba(0, 0, 0, 0.34) 44%, #000 66%);
+    opacity: 0.42;
+    pointer-events: none;
+    position: absolute;
+    z-index: 0;
+  }
+
+  .news-row.featured-latest > * {
+    z-index: 1;
+  }
+
   .listing-analysis-score small {
     display: block;
     grid-column: 1 / -1;
@@ -2899,6 +2928,23 @@ watch(() => route.fullPath, () => {
   .news-row.featured-latest .listing-card-category {
     left: 18px;
     top: 18px;
+  }
+}
+
+@keyframes featured-stars-drift {
+  from {
+    background-position: 8px 14px, 38px 48px, 72px 24px;
+  }
+
+  to {
+    background-position: 82px 82px, 154px 152px, 220px 156px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-row.featured-latest::before,
+  .news-row.analysis.featured-latest::before {
+    animation: none;
   }
 }
 
@@ -2991,12 +3037,67 @@ watch(() => route.fullPath, () => {
   .news-row:not(:first-child):not(.featured-latest) .listing-analysis-score small {
     display: none;
   }
+
+  .news-row:not(:first-child):not(.featured-latest),
+  .news-row.grid-card:not(.featured-latest),
+  .news-row.grid-card.analysis:not(.featured-latest) {
+    align-items: center;
+    gap: 0 12px;
+    grid-template-columns: 120px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 130px;
+    padding: 10px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) > img,
+  .news-row:not(:first-child):not(.featured-latest) > .post-placeholder,
+  .news-row.grid-card:not(.featured-latest) > img,
+  .news-row.grid-card:not(.featured-latest) > .post-placeholder {
+    align-self: center;
+    grid-column: 1;
+    grid-row: 1 / 3;
+    height: 106px;
+    width: 120px;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .listing-card-category {
+    align-self: end;
+    grid-column: 2;
+    grid-row: 1;
+    margin-bottom: 7px;
+    max-width: calc(100% - 4px);
+  }
+
+  .news-row.analysis:not(:first-child):not(.featured-latest) .listing-card-category {
+    max-width: calc(100% - 66px);
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .post-copy {
+    align-self: start;
+    display: grid;
+    gap: 5px;
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .post-copy h2 {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .post-copy p {
+    margin-top: 0;
+  }
+
+  .news-row:not(:first-child):not(.featured-latest) .post-mobile-meta {
+    margin-top: 2px;
+  }
 }
 
 @media (min-width: 761px) {
   .news-row.grid-card.analysis {
     background:
-      linear-gradient(180deg, rgba(5, 8, 22, 0.08), rgba(5, 8, 22, 0.24)),
+      linear-gradient(180deg, rgba(5, 8, 22, 0.08), rgba(5, 8, 22, 0.28)),
       var(--post-card-image),
       #050816 !important;
     background-position: center !important;
@@ -3005,8 +3106,7 @@ watch(() => route.fullPath, () => {
 
   .news-row.grid-card.analysis > img {
     filter: none !important;
-    object-fit: contain !important;
-    object-position: center !important;
+    opacity: 0 !important;
   }
 }
 </style>

@@ -4,6 +4,17 @@
 
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "VITE_YOUTUBE_CHANNEL_ID,VITE_YOUTUBE_API_KEY,VITE_SOCKET_URL,VITE_YOUTUBE_HANDLE,IGDB_CLIENT_ID,IGDB_CLIENT_SECRET,TWITCH_CLIENT_ID,TWITCH_CLIENT_SECRET"
+  VITE_SITE_URL = "https://galaxianintendera.com"
+
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/seo-files?type=sitemap"
+  status = 200
+
+[[redirects]]
+  from = "/robots.txt"
+  to = "/.netlify/functions/seo-files?type=robots"
+  status = 200
 
 [[redirects]]
   from = "/*"

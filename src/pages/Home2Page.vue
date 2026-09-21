@@ -555,14 +555,14 @@ onUnmounted(() => {
             <button type="button" @click="router.push('/noticias')">Archivo <i class="fas fa-arrow-right"></i></button>
           </header>
           <div class="home2-all-grid">
-            <button v-for="post in allNews" :key="post.id" type="button" :class="['home2-all-card', { analysis: isAnalysisPost(post) }]" @click="goPost(post)">
+            <RouterLink v-for="post in allNews" :key="post.id" :to="postPath(post)" :class="['home2-all-card', { analysis: isAnalysisPost(post) }]">
               <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
               <div>
                 <span>{{ cardCategory(post) }}</span>
                 <strong>{{ cardTitle(post) }}</strong>
                 <small>{{ post.authorName || 'Redactor' }} - {{ formatAgo(postDisplayDate(post)) }}</small>
               </div>
-            </button>
+            </RouterLink>
           </div>
         </section>
 
@@ -1176,6 +1176,7 @@ onUnmounted(() => {
   gap: 12px;
   grid-template-columns: 126px minmax(0, 1fr);
   padding: 10px;
+  text-decoration: none;
 }
 
 .home2-all-card.analysis {
@@ -1464,7 +1465,41 @@ onUnmounted(() => {
   }
 
   .home2-all-card {
-    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    grid-template-columns: 112px minmax(0, 1fr);
+    min-height: 116px;
+    padding: 10px;
+  }
+
+  .home2-all-card img {
+    aspect-ratio: auto;
+    height: 94px;
+    object-position: center;
+    width: 112px;
+  }
+
+  .home2-all-card div {
+    align-content: center;
+    gap: 6px;
+  }
+
+  .home2-all-card span {
+    font-size: 9px;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 6px 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .home2-all-card strong {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .home2-all-card small {
+    line-height: 1.2;
   }
 
   .home2-analysis-grid,

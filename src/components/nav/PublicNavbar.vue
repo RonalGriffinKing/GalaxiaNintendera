@@ -876,6 +876,10 @@ const saveQuickUser = async () => {
 const isActivePath = (to) => {
   const path = String(to).split('?')[0]
   if (path === '/') return route.path === '/'
+  if (path === '/noticias') {
+    return ['/noticias', '/post/', '/categoria/', '/rumores', '/guias']
+      .some(sectionPath => route.path.startsWith(sectionPath))
+  }
   return route.path.startsWith(path)
 }
 
@@ -985,6 +989,8 @@ onUnmounted(() => {
           v-for="link in links"
           :key="link.label"
           class="public-nav-link"
+          :class="{ active: isActivePath(link.to) }"
+          :aria-current="isActivePath(link.to) ? 'page' : undefined"
           @click="goTo(link.to)"
         >
           {{ link.label }}
@@ -1477,6 +1483,20 @@ onUnmounted(() => {
 .public-mobile-link:hover {
   background: rgba(124, 58, 237, 0.28);
   color: #c084fc;
+}
+
+.public-nav-link.active {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.82), rgba(168, 85, 247, 0.62));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 0 1px rgba(216, 180, 254, 0.22),
+    0 8px 20px rgba(88, 28, 135, 0.28);
+  color: #ffffff;
+}
+
+.public-nav-link.active:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(192, 132, 252, 0.68));
+  color: #ffffff;
 }
 
 .public-actions {

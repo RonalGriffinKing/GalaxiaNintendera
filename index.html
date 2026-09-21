@@ -6,6 +6,12 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <meta name="theme-color" content="#050816" />
+    <meta name="description" content="Noticias, analisis, guias, eventos y comunidades para fans de Nintendo en Galaxia Nintendera." />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
+    <meta property="og:site_name" content="Galaxia Nintendera" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Galaxia Nintendera" />
+    <meta property="og:description" content="Noticias, analisis, guias, eventos y comunidades para fans de Nintendo." />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Galaxia Nintendera" />
@@ -14,6 +20,27 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Galaxia Nintendera</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://galaxianintendera.com/#organization",
+            "name": "Galaxia Nintendera",
+            "logo": "https://galaxianintendera.com/icons/icon-192.png"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://galaxianintendera.com/#website",
+            "url": "https://galaxianintendera.com/",
+            "name": "Galaxia Nintendera",
+            "publisher": { "@id": "https://galaxianintendera.com/#organization" },
+            "inLanguage": "es"
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>
