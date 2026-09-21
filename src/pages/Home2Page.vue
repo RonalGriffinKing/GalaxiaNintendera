@@ -97,7 +97,9 @@ const visibleCommunityCards = computed(() => {
   const cards = communityCards.value
   if (cards.length <= 3) return cards
   const start = communitySlideIndex.value * 3
-  return cards.slice(start, start + 3)
+  const page = cards.slice(start, start + 3)
+  if (page.length === 3) return page
+  return [...page, ...cards.slice(0, 3 - page.length)]
 })
 const heroSlides = computed(() => {
   const slides = []
@@ -524,15 +526,17 @@ onUnmounted(() => {
               </footer>
             </div>
           </button>
-          <div class="home2-analysis-grid">
-            <button v-for="post in secondaryAnalysisPosts" :key="post.id" type="button" class="home2-analysis-card" @click="goPost(post)">
-              <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
-              <span><i class="fas fa-crown"></i> Analisis premium</span>
-              <strong>{{ cardTitle(post) }}</strong>
-              <p>{{ post.content }}</p>
-              <em><i class="fas fa-star"></i> {{ post.analysis?.score || '--' }} <small>Nota</small></em>
-            </button>
-          </div>
+          <Transition name="analysis-page" mode="out-in">
+            <div :key="`analysis-group-${secondaryAnalysisSlideIndex}`" class="home2-analysis-grid">
+              <button v-for="post in secondaryAnalysisPosts" :key="post.id" type="button" class="home2-analysis-card" @click="goPost(post)">
+                <img :src="resolveAssetUrl(post.image || bannerImage)" alt="" />
+                <span><i class="fas fa-crown"></i> Analisis premium</span>
+                <strong>{{ cardTitle(post) }}</strong>
+                <p>{{ post.content }}</p>
+                <em><i class="fas fa-star"></i> {{ post.analysis?.score || '--' }} <small>Nota</small></em>
+              </button>
+            </div>
+          </Transition>
           <div v-if="secondaryAnalysisPageCount > 1" class="home2-analysis-dots" aria-label="Grupos de analisis destacados">
             <button
               v-for="page in secondaryAnalysisPageCount"
@@ -869,6 +873,21 @@ onUnmounted(() => {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.analysis-page-enter-active,
+.analysis-page-leave-active {
+  transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.analysis-page-enter-from {
+  opacity: 0;
+  transform: translateX(14px);
+}
+
+.analysis-page-leave-to {
+  opacity: 0;
+  transform: translateX(-14px);
+}
+
 .home2-analysis-featured,
 .home2-analysis-card,
 .home2-all-card,
@@ -1093,9 +1112,12 @@ onUnmounted(() => {
     0 0 0 1px rgba(250, 204, 21, 0.2),
     0 0 28px rgba(245, 158, 11, 0.16),
     0 20px 48px rgba(0, 0, 0, 0.34);
+  grid-template-rows: auto 29px 36px 38px;
+  height: 100%;
 }
 
 .home2-analysis-card span {
+  align-self: center;
   background: rgba(113, 63, 18, 0.9);
   color: #fef3c7;
 }
@@ -1106,9 +1128,14 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 800;
   line-height: 1.45;
+  min-height: 38px;
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.home2-analysis-card strong {
+  min-height: 36px;
 }
 
 .home2-analysis-card em {
@@ -1464,6 +1491,13 @@ onUnmounted(() => {
 
   .home2-community-grid strong {
     justify-self: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analysis-page-enter-active,
+  .analysis-page-leave-active {
+    transition-duration: 0.01ms;
   }
 }
 </style>

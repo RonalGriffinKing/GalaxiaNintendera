@@ -81,7 +81,12 @@ onUnmounted(() => {
 .scroll-hint-enter-from, .scroll-hint-leave-to { opacity: 0; transform: translate(-50%, 10px); }
 @keyframes scrollHintFloat { 0%, 100% { margin-bottom: 0; } 50% { margin-bottom: 5px; } }
 @media (max-width: 859px) {
-  .scroll-hint-bubble { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); font-size: 11px; min-height: 40px; padding: 0 14px; }
+  .scroll-hint-bubble {
+    bottom: calc(106px + env(safe-area-inset-bottom, 0px));
+    font-size: 11px;
+    min-height: 40px;
+    padding: 0 14px;
+  }
 }
 @media (prefers-reduced-motion: reduce) { .scroll-hint-bubble { animation: none; } }
 </style>
