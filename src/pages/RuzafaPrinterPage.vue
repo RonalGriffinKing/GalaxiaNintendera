@@ -200,7 +200,7 @@ const goHome = () => {
         <p class="location">Ruzafa · Etiquetado interno</p>
         <h1>Impresora de etiquetas</h1>
       </div>
-      <div class="printer-status"><span></span> Brother TD-4550DNWB</div>
+      <div class="printer-status"><span></span> Seleccionar TD-4550 al imprimir</div>
     </header>
 
     <p v-if="message" class="notice no-print">{{ message }}</p>
@@ -375,7 +375,7 @@ const goHome = () => {
 .location, .eyebrow { margin: 0; text-transform: uppercase; font-size: 12px; font-weight: 800; letter-spacing: .12em; }
 .location { color: #b8d6c6; }
 .printer-status { margin-left: auto; padding: 9px 12px; display: flex; align-items: center; gap: 8px; font-size: 13px; background: #244d3b; border: 1px solid #3b6954; border-radius: 6px; }
-.printer-status span { width: 8px; height: 8px; border-radius: 50%; background: #65db8c; box-shadow: 0 0 0 3px rgba(101,219,140,.14); }
+.printer-status span { width: 8px; height: 8px; border-radius: 50%; background: #f0c653; box-shadow: 0 0 0 3px rgba(240,198,83,.14); }
 .back-button { width: 42px; height: 42px; color: white; border: 1px solid #547465; border-radius: 6px; background: transparent; font-size: 25px; cursor: pointer; }
 .notice { max-width: 1080px; margin: 18px auto 0; padding: 12px 16px; color: #643f00; background: #fff4d5; border: 1px solid #ead18a; border-radius: 6px; }
 .loading-state { padding: 15vh 20px; text-align: center; font-weight: 700; }
@@ -464,9 +464,9 @@ button:disabled { opacity: .55; cursor: default; }
   .primary-actions { grid-template-columns: 1fr; }
 }
 
-@page { size: 55mm 54mm; margin: 0; }
+@page { size: 55mm 50mm; margin: 0; }
 @media print {
-  :global(html), :global(body), .rz-page { margin: 0 !important; padding: 0 !important; background: white !important; }
+  :global(html), :global(body), .rz-page { width: 55mm !important; margin: 0 !important; padding: 0 !important; background: white !important; }
   .no-print { display: none !important; }
   .preview-view { width: auto; margin: 0; padding: 0; }
   .print-sheet { display: block; }
