@@ -477,8 +477,7 @@ const ensureArticleSchema = (canonical, description, image) => {
         .filter(Boolean)
     }
     if (game.releaseDate) schema.about.datePublished = game.releaseDate
-    const officialUrls = (Array.isArray(game.officialLinks) ? game.officialLinks : [])
-      .map(link => link?.url)
+    const officialUrls = [game.officialUrl, ...(Array.isArray(game.officialLinks) ? game.officialLinks.map(link => link?.url) : [])]
       .filter(url => /^https?:\/\//i.test(url || ''))
     if (officialUrls.length) schema.about.sameAs = officialUrls
   }

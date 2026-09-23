@@ -322,7 +322,7 @@
                   <input v-model="post.game.nameEn" placeholder="Pokemon Legends: Z-A" />
                 </label>
               </div>
-              <div class="field-grid-2">
+              <div class="game-platform-date-grid">
                 <div class="field-group">
                   <span>Plataformas</span>
                   <div class="game-platform-editor">
@@ -363,8 +363,8 @@
                 <input v-model="post.game.releaseNote" placeholder="Nintendo Switch 2 pendiente de anuncio oficial" />
               </label>
               <label class="field-group">
-                <span>Webs oficiales (una por linea)</span>
-                <textarea v-model="post.game.officialLinksText" placeholder="Web oficial | https://...&#10;Nintendo | https://..." />
+                <span>Web oficial</span>
+                <input v-model="post.game.officialUrl" type="url" placeholder="https://web-oficial-del-juego.com/" />
               </label>
             </div>
           </article>
@@ -810,7 +810,7 @@ const post = ref({
     platforms: [],
     releaseDate: '',
     releaseNote: '',
-    officialLinksText: ''
+    officialUrl: ''
   },
   sections: [{ title: '', label: 'Introduccion', image: '', content: '', hidden: false }],
   social: {
@@ -1012,9 +1012,10 @@ onMounted(async () => {
       platforms: normalizeGamePlatforms(savedGame.platforms || savedGame.platformsText || ''),
       releaseDate: savedGame.releaseDate || '',
       releaseNote: savedGame.releaseNote || '',
-      officialLinksText: Array.isArray(savedGame.officialLinks)
-        ? savedGame.officialLinks.map(link => `${link.label || 'Web oficial'} | ${link.url || ''}`).join('\n')
-        : (savedGame.officialLinksText || '')
+      officialUrl: savedGame.officialUrl
+        || savedGame.officialLinks?.find(link => /web oficial/i.test(link?.label || ''))?.url
+        || savedGame.officialLinks?.[0]?.url
+        || ''
     }
     post.value.sections = normalizeSections(post.value.sections?.length ? post.value.sections : post.value.sections)
     ensureAnalysisData()
@@ -1099,6 +1100,7 @@ const normalizeGameData = (game = {}) => {
       url: String(link?.url || link?.link || '').trim()
     }
   }).filter(link => link.url)
+  const officialUrl = String(game.officialUrl || game.webOficial || normalizedLinks[0]?.url || '').trim()
 
   return {
     nameEs: String(game.nameEs || game.nameSpanish || game.nombreEs || names.es || names.spanish || '').trim(),
@@ -1106,18 +1108,9 @@ const normalizeGameData = (game = {}) => {
     platforms: normalizeGamePlatforms(platformsSource),
     releaseDate: String(game.releaseDate || game.fechaLanzamiento || '').trim(),
     releaseNote: String(game.releaseNote || game.notaLanzamiento || '').trim(),
-    officialLinks: normalizedLinks
+    officialUrl
   }
 }
-
-const parseOfficialLinksText = (value = '') => String(value || '')
-  .split('\n')
-  .map((line, index) => {
-    const separator = line.indexOf('|')
-    if (separator < 0) return { label: index ? `Web oficial ${index + 1}` : 'Web oficial', url: line.trim() }
-    return { label: line.slice(0, separator).trim() || 'Web oficial', url: line.slice(separator + 1).trim() }
-  })
-  .filter(link => link.url)
 
 const ensureAnalysisData = () => {
   post.value.analysis = {
@@ -1373,7 +1366,7 @@ const pasteJsonIntoPost = async () => {
     }
     post.value.game = {
       ...parsed.game,
-      officialLinksText: parsed.game.officialLinks.map(link => `${link.label} | ${link.url}`).join('\n')
+      officialUrl: parsed.game.officialUrl || ''
     }
     post.value.mediaGameName = parsed.game.nameEn || parsed.game.nameEs || post.value.mediaGameName
     selectedCategories.value = parsed.categories.slice(0, 3)
@@ -1468,14 +1461,12 @@ const savePost = async (targetStatus = 'pending') => {
     cleanPost.sections = normalizeSections(cleanPost.sections, { dropEmpty: !isHeroMode.value })
     cleanPost.social = normalizeSocialContent(cleanPost.social)
     cleanPost.game = normalizeGameData({
-      ...cleanPost.game,
-      officialLinks: parseOfficialLinksText(cleanPost.game?.officialLinksText)
+      ...cleanPost.game
     })
-    if (!cleanPost.game.nameEs && !cleanPost.game.nameEn && !cleanPost.game.platforms.length && !cleanPost.game.releaseDate && !cleanPost.game.officialLinks.length) {
+    if (!cleanPost.game.nameEs && !cleanPost.game.nameEn && !cleanPost.game.platforms.length && !cleanPost.game.releaseDate && !cleanPost.game.officialUrl) {
       delete cleanPost.game
     }
     if (cleanPost.game) {
-      delete cleanPost.game.officialLinksText
       cleanPost.mediaGameName = cleanPost.game.nameEn || cleanPost.game.nameEs || cleanPost.mediaGameName
     }
     cleanPost.categories = selectedCategories.value
@@ -1843,6 +1834,12 @@ const savePost = async (targetStatus = 'pending') => {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.game-platform-date-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .game-platform-editor {

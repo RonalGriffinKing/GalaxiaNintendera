@@ -246,15 +246,6 @@
     ],
     "releaseDate": "",
     "releaseNote": "Lanzamiento previsto para invierno de 2026. La versión para Nintendo Switch 2 figura en la clasificación ESRB, pero sigue pendiente de anuncio oficial de HoYoverse.",
-    "officialLinks": [
-      {
-        "label": "Web oficial",
-        "url": "https://planet.hoyoverse.com/"
-      },
-      {
-        "label": "HoYoLAB oficial",
-        "url": "https://www.hoyolab.com/article/44455649"
-      }
-    ]
+    "officialUrl": "https://planet.hoyoverse.com/"
   }
 }

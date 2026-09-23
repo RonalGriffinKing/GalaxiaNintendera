@@ -82,7 +82,11 @@ const gamePlatforms = computed(() => (Array.isArray(gameDetails.value.platforms)
   .filter(platform => platform.name))
 const gameLinks = computed(() => (Array.isArray(gameDetails.value.officialLinks) ? gameDetails.value.officialLinks : [])
   .filter(link => link?.url && /^https?:\/\//i.test(link.url)))
-const officialGameUrl = computed(() => gameLinks.value.find(link => /web oficial/i.test(link.label || ''))?.url || gameLinks.value[0]?.url || '')
+const officialGameUrl = computed(() => {
+  const directUrl = String(gameDetails.value.officialUrl || '')
+  if (/^https?:\/\//i.test(directUrl)) return directUrl
+  return gameLinks.value.find(link => /web oficial/i.test(link.label || ''))?.url || gameLinks.value[0]?.url || ''
+})
 const platformIcon = (platform = '') => {
   const value = platform.toLowerCase()
   if (value.includes('playstation') || value.includes('ps5') || value.includes('ps4')) return 'fab fa-playstation'
