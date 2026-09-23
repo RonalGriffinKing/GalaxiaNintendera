@@ -31,6 +31,11 @@ const routes = [
         component: () => import('@/pages/CategoryPage.vue')
       },
       {
+        path: 'buscar',
+        name: 'search-results',
+        component: () => import('@/pages/SearchResultsPage.vue')
+      },
+      {
         path: 'rumores',
         name: 'rumors',
         component: () => import('@/pages/CategoryPage.vue')
@@ -146,7 +151,7 @@ const router = createRouter({
 })
 
 const publicRoutes = ['/', '/login']
-const publicPrefixes = ['/ruzafa-impresora', '/home2', '/overlay', '/post', '/p', '/politica-privacidad', '/terminos-condiciones', '/normas-comunidad', '/politica-cookies', '/contacto-reportes', '/aviso-legal', '/perfil', '/categoria', '/noticias', '/rumores', '/guias', '/comunidad', '/eventos']
+const publicPrefixes = ['/ruzafa-impresora', '/home2', '/overlay', '/post', '/p', '/politica-privacidad', '/terminos-condiciones', '/normas-comunidad', '/politica-cookies', '/contacto-reportes', '/aviso-legal', '/perfil', '/categoria', '/noticias', '/buscar', '/rumores', '/guias', '/comunidad', '/eventos']
 let authReady = false
 let authUser = null
 let authReadyPromise = new Promise((resolve) => {

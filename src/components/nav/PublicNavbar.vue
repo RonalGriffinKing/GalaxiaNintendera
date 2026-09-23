@@ -425,25 +425,18 @@ const goAllSearchResults = () => {
     searchFilter.value = 'all'
     return
   }
-  if (queryText) saveRecentSearch(queryText)
-
-  if (searchPreview.value.posts[0]) {
-    goSearchResult({ type: 'post', id: searchPreview.value.posts[0].id })
-    return
-  }
-
-  if (searchPreview.value.communities[0]) {
-    goSearchResult({ type: 'community', id: searchPreview.value.communities[0].id })
-    return
-  }
-
-  if (searchPreview.value.users[0]) {
-    goSearchResult({ type: 'user', id: searchPreview.value.users[0].id })
-  }
+  if (!queryText) return
+  saveRecentSearch(queryText)
+  closeSearch()
+  router.push({ name: 'search-results', query: { q: queryText } })
 }
 
 const submitSearch = () => {
-  goAllSearchResults()
+  const queryText = searchQuery.value.trim()
+  if (!queryText) return
+  saveRecentSearch(queryText)
+  closeSearch()
+  router.push({ name: 'search-results', query: { q: queryText } })
 }
 
 const applyRecentSearch = (value) => {
