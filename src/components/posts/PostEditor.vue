@@ -551,20 +551,41 @@
           <section class="image-picker-panel">
             <header>
               <div>
-                <span>IGDB</span>
+                <span>BUSCADOR DE JUEGOS</span>
                 <h2>Escoger imagenes del juego</h2>
-                <p>Busca el juego, revisa portadas, screenshots y artes; luego asigna cada imagen a portada o secciones.</p>
+                <p>Escribe parte del nombre y el buscador mostrara juegos relacionados, portadas, capturas y artes.</p>
               </div>
               <button type="button" @click="imagePickerOpen = false"><i class="fas fa-xmark"></i></button>
             </header>
 
             <form class="igdb-search-row" @submit.prevent="searchIgdbImages">
-              <input v-model="igdbQuery" placeholder="Nombre del juego, ej: Mario Kart World" />
-              <button type="submit" :disabled="igdbLoading || !igdbQuery.trim()">
+              <input v-model="igdbQuery" placeholder="Ej: pokemon za, petit planet..." autocomplete="off" />
+              <button type="submit" :disabled="igdbLoading || igdbQuery.trim().length < 2">
                 <i :class="igdbLoading ? 'fas fa-circle-notch fa-spin' : 'fas fa-search'"></i>
                 Buscar
               </button>
             </form>
+            <p class="igdb-search-hint">
+              <i class="fas fa-bolt"></i>
+              Busca automaticamente cuando dejas de escribir. No hace falta poner el titulo exacto.
+            </p>
+
+            <div v-if="igdbGames.length" class="igdb-game-matches" aria-label="Juegos encontrados">
+              <button type="button" :class="{ active: igdbGameFilter === 'all' }" @click="igdbGameFilter = 'all'">
+                Todos
+                <span>{{ igdbImages.length }}</span>
+              </button>
+              <button
+                v-for="game in igdbGames"
+                :key="game.id"
+                type="button"
+                :class="{ active: String(igdbGameFilter) === String(game.id) }"
+                @click="igdbGameFilter = game.id"
+              >
+                {{ game.name }}
+                <span>{{ game.imageCount }}</span>
+              </button>
+            </div>
 
             <div class="target-strip">
               <button
@@ -594,7 +615,7 @@
 
             <div v-if="igdbError" class="json-paste-error">{{ igdbError }}</div>
             <div v-if="!igdbImages.length && !igdbLoading" class="igdb-empty">
-              Busca un juego para cargar imagenes.
+              {{ igdbHasSearched ? 'No encontramos imagenes. Prueba con menos palabras.' : 'Escribe al menos dos letras para comenzar.' }}
             </div>
             <div v-if="igdbLoading" class="igdb-empty">
               Buscando imagenes...
@@ -603,10 +624,11 @@
             <div v-if="filteredIgdbImages.length" class="igdb-gallery">
               <article v-for="image in filteredIgdbImages" :key="image.id" :class="{ selected: assignedLabel(image.url) }">
                 <img :src="image.url" :alt="image.typeLabel" />
-                <div>
-                  <span>{{ image.typeLabel }}</span>
+                <div class="igdb-image-meta">
+                  <span>{{ image.gameName || image.typeLabel }}</span>
                   <strong v-if="assignedLabel(image.url)">{{ assignedLabel(image.url) }}</strong>
                 </div>
+                <small>{{ image.typeLabel }}</small>
                 <button type="button" @click="assignIgdbImage(image)">
                   Asignar a {{ activeImageTarget?.label || 'destino' }}
                 </button>
@@ -665,9 +687,14 @@ const imagePickerOpen = ref(false)
 const imageTargetId = ref('cover')
 const igdbQuery = ref('')
 const igdbImages = ref([])
+const igdbGames = ref([])
+const igdbGameFilter = ref('all')
 const igdbTypeFilter = ref('all')
 const igdbLoading = ref(false)
 const igdbError = ref('')
+const igdbHasSearched = ref(false)
+let igdbSearchTimer = null
+let igdbSearchSequence = 0
 const releaseAtInput = ref('')
 const openAccordions = ref(['main'])
 const previewDevice = ref('desktop')
@@ -857,8 +884,12 @@ const igdbTypeFilters = computed(() => {
   }))
 })
 const filteredIgdbImages = computed(() => {
-  if (igdbTypeFilter.value === 'all') return igdbImages.value
-  return igdbImages.value.filter(image => image.type === igdbTypeFilter.value)
+  return igdbImages.value.filter(image => {
+    const matchesGame = igdbGameFilter.value === 'all'
+      || String(image.gameId) === String(igdbGameFilter.value)
+    const matchesType = igdbTypeFilter.value === 'all' || image.type === igdbTypeFilter.value
+    return matchesGame && matchesType
+  })
 })
 
 const toLocalDateTimeInput = (value) => {
@@ -922,6 +953,12 @@ watch(isInitialFlowComplete, (complete) => {
   if (complete || isHeroMode.value) return
   openAccordions.value = ['main']
   mobileStep.value = 'info'
+})
+
+watch(igdbQuery, (query) => {
+  clearTimeout(igdbSearchTimer)
+  if (!imagePickerOpen.value || query.trim().length < 2) return
+  igdbSearchTimer = window.setTimeout(() => searchIgdbImages(), 550)
 })
 
 const normalizeText = (value) => String(value || '')
@@ -1202,14 +1239,22 @@ const openImagePicker = (targetId = 'cover') => {
   imageTargetId.value = targetId
   imagePickerOpen.value = true
   igdbError.value = ''
-  igdbQuery.value = post.value.mediaGameName || post.value.title || ''
+  const suggestedQuery = post.value.mediaGameName || post.value.title || ''
+  if (igdbQuery.value === suggestedQuery && suggestedQuery.trim().length >= 2 && !igdbImages.value.length) {
+    window.setTimeout(() => searchIgdbImages(), 0)
+  } else {
+    igdbQuery.value = suggestedQuery
+  }
 }
 
 const searchIgdbImages = async () => {
   const query = igdbQuery.value.trim()
-  if (!query) return
+  if (query.length < 2) return
+  clearTimeout(igdbSearchTimer)
+  const requestId = ++igdbSearchSequence
   igdbLoading.value = true
   igdbError.value = ''
+  igdbHasSearched.value = true
   try {
     const response = await fetch('/.netlify/functions/igdb', {
       method: 'POST',
@@ -1218,14 +1263,18 @@ const searchIgdbImages = async () => {
     })
     const data = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(data?.error || 'No se pudieron buscar imagenes')
+    if (requestId !== igdbSearchSequence) return
     igdbImages.value = data.images || []
+    igdbGames.value = data.games || (data.game ? [{ ...data.game, imageCount: data.images?.length || 0 }] : [])
+    igdbGameFilter.value = 'all'
     igdbTypeFilter.value = 'all'
     post.value.mediaGameName = data.game?.name || query
   } catch (error) {
+    if (requestId !== igdbSearchSequence) return
     console.error(error)
     igdbError.value = error.message || 'No se pudieron buscar imagenes'
   } finally {
-    igdbLoading.value = false
+    if (requestId === igdbSearchSequence) igdbLoading.value = false
   }
 }
 
@@ -2996,6 +3045,57 @@ const savePost = async (targetStatus = 'pending') => {
   padding: 0 18px;
 }
 
+.igdb-search-hint {
+  align-items: center;
+  color: #64748b;
+  display: flex;
+  font-size: 11px;
+  font-weight: 750;
+  gap: 7px;
+  margin-top: -4px;
+}
+
+.igdb-search-hint i {
+  color: #a855f7;
+}
+
+.igdb-game-matches {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 5px;
+}
+
+.igdb-game-matches button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  color: #334155;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 11px;
+}
+
+.igdb-game-matches button.active {
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
+}
+
+.igdb-game-matches span {
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  font-size: 10px;
+  min-width: 22px;
+  padding: 3px 6px;
+  text-align: center;
+}
+
 .target-strip {
   display: flex;
   gap: 8px;
@@ -3104,22 +3204,36 @@ const savePost = async (targetStatus = 'pending') => {
   width: 100%;
 }
 
-.igdb-gallery div {
+.igdb-gallery .igdb-image-meta {
   display: flex;
   justify-content: space-between;
   gap: 8px;
 }
 
-.igdb-gallery span,
-.igdb-gallery strong {
+.igdb-gallery .igdb-image-meta span,
+.igdb-gallery .igdb-image-meta strong {
   color: #64748b;
   font-size: 10px;
   font-weight: 950;
   text-transform: uppercase;
 }
 
-.igdb-gallery strong {
+.igdb-gallery .igdb-image-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.igdb-gallery .igdb-image-meta strong {
   color: #9333ea;
+  flex: 0 0 auto;
+}
+
+.igdb-gallery article > small {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .igdb-gallery button {
