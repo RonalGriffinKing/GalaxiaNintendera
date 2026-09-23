@@ -1,3 +1,9 @@
+html.notification-dropdown-open,
+body.notification-dropdown-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 .notification-dropdown-layer {
   --notification-dropdown-top: 78px;
   --notification-dropdown-left: auto;
@@ -17,6 +23,7 @@
   inset: 0;
   pointer-events: auto;
   position: absolute;
+  touch-action: none;
 }
 
 .notification-dropdown-card {
@@ -75,6 +82,34 @@
 .notification-dropdown-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.notification-dropdown-actions .notification-dropdown-close {
+  align-items: center;
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  color: #475569;
+  display: inline-flex;
+  flex: 0 0 32px;
+  font-size: 14px;
+  height: 32px;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0;
+  width: 32px;
+}
+
+.notification-dropdown-actions .notification-dropdown-close:hover,
+.notification-dropdown-actions .notification-dropdown-close:focus-visible {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.notification-dropdown-actions .notification-dropdown-close:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
 }
 
 .notification-dropdown-actions span {

@@ -87,6 +87,10 @@ const updatePosition = () => {
 }
 
 watch(() => props.open, async (open) => {
+  if (typeof document !== 'undefined') {
+    document.body.classList.toggle('notification-dropdown-open', open)
+    document.documentElement.classList.toggle('notification-dropdown-open', open)
+  }
   if (!open) return
   await nextTick()
   updatePosition()
@@ -98,6 +102,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  document.body.classList.remove('notification-dropdown-open')
+  document.documentElement.classList.remove('notification-dropdown-open')
   window.removeEventListener('resize', updatePosition)
   window.removeEventListener('scroll', updatePosition)
 })
@@ -127,6 +133,15 @@ onUnmounted(() => {
                 {{ clearing ? 'Limpiando...' : 'Limpiar' }}
               </button>
               <span>{{ unreadCount }} nuevas</span>
+              <button
+                class="notification-dropdown-close"
+                type="button"
+                aria-label="Cerrar notificaciones"
+                title="Cerrar"
+                @click="emit('close')"
+              >
+                <i class="fas fa-xmark"></i>
+              </button>
             </div>
           </div>
 
