@@ -463,6 +463,21 @@ const ensureArticleSchema = (canonical, description, image) => {
   }
 
   if (image) schema.image = [image]
+  const game = post.value.game || {}
+  const gameName = game.nameEs || game.nameEn
+  if (gameName) {
+    schema.about = {
+      '@type': 'VideoGame',
+      name: gameName
+    }
+    if (game.nameEn && game.nameEn !== gameName) schema.about.alternateName = game.nameEn
+    if (Array.isArray(game.platforms) && game.platforms.length) schema.about.gamePlatform = game.platforms
+    if (game.releaseDate) schema.about.datePublished = game.releaseDate
+    const officialUrls = (Array.isArray(game.officialLinks) ? game.officialLinks : [])
+      .map(link => link?.url)
+      .filter(url => /^https?:\/\//i.test(url || ''))
+    if (officialUrls.length) schema.about.sameAs = officialUrls
+  }
   const published = isoDate(post.value.releaseAt || post.value.createdAt)
   const modified = isoDate(post.value.updatedAt || post.value.createdAt)
   if (published) schema.datePublished = published

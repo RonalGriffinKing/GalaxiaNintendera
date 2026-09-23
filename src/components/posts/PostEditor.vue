@@ -303,10 +303,51 @@
           </article>
 
           <article v-if="!isHeroMode" class="editor-accordion" :class="{ gated: !isInitialFlowComplete }">
+            <button type="button" class="accordion-trigger" :disabled="!isInitialFlowComplete" @click="toggleAccordion('game')">
+              <span class="accordion-icon"><i class="fas fa-gamepad"></i></span>
+              <span>
+                <strong>5. Ficha del juego</strong>
+                <small>{{ isInitialFlowComplete ? 'Nombre, plataformas, lanzamiento y enlaces oficiales.' : initialFlowMessage }}</small>
+              </span>
+              <i :class="isAccordionOpen('game') ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+            </button>
+            <div v-show="isAccordionOpen('game')" class="accordion-body">
+              <div class="field-grid-2">
+                <label class="field-group">
+                  <span>Nombre en espanol</span>
+                  <input v-model="post.game.nameEs" placeholder="Leyendas Pokemon: Z-A" />
+                </label>
+                <label class="field-group">
+                  <span>Nombre en ingles / IGDB</span>
+                  <input v-model="post.game.nameEn" placeholder="Pokemon Legends: Z-A" />
+                </label>
+              </div>
+              <div class="field-grid-2">
+                <label class="field-group">
+                  <span>Plataformas</span>
+                  <input v-model="post.game.platformsText" placeholder="Nintendo Switch 2, PC, PS5" />
+                </label>
+                <label class="field-group">
+                  <span>Fecha de lanzamiento</span>
+                  <input v-model="post.game.releaseDate" type="date" />
+                </label>
+              </div>
+              <label class="field-group">
+                <span>Nota del lanzamiento</span>
+                <input v-model="post.game.releaseNote" placeholder="Nintendo Switch 2 pendiente de anuncio oficial" />
+              </label>
+              <label class="field-group">
+                <span>Webs oficiales (una por linea)</span>
+                <textarea v-model="post.game.officialLinksText" placeholder="Web oficial | https://...&#10;Nintendo | https://..." />
+              </label>
+            </div>
+          </article>
+
+          <article v-if="!isHeroMode" class="editor-accordion" :class="{ gated: !isInitialFlowComplete }">
             <button type="button" class="accordion-trigger" :disabled="!isInitialFlowComplete" @click="toggleAccordion('extras')">
               <span class="accordion-icon"><i class="fas fa-wand-magic-sparkles"></i></span>
               <span>
-                <strong>5. Extras y gamificacion</strong>
+                <strong>6. Extras y gamificacion</strong>
                 <small>{{ isInitialFlowComplete ? 'Puntos, badges y misiones.' : initialFlowMessage }}</small>
               </span>
               <i :class="isAccordionOpen('extras') ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
@@ -737,6 +778,14 @@ const post = ref({
   releaseAt: 0,
   teaserVisible: true,
   mediaGameName: '',
+  game: {
+    nameEs: '',
+    nameEn: '',
+    platformsText: '',
+    releaseDate: '',
+    releaseNote: '',
+    officialLinksText: ''
+  },
   sections: [{ title: '', label: 'Introduccion', image: '', content: '', hidden: false }],
   social: {
     title: '',
@@ -924,6 +973,17 @@ onMounted(async () => {
     post.value.rewardMultiplier = String(post.value.rewardMultiplier || '1')
     releaseAtInput.value = toLocalDateTimeInput(post.value.releaseAt || post.value.scheduledAt)
     post.value.teaserVisible = post.value.teaserVisible !== false
+    const savedGame = post.value.game || {}
+    post.value.game = {
+      nameEs: savedGame.nameEs || savedGame.nameSpanish || '',
+      nameEn: savedGame.nameEn || savedGame.nameEnglish || post.value.mediaGameName || '',
+      platformsText: Array.isArray(savedGame.platforms) ? savedGame.platforms.join(', ') : (savedGame.platformsText || ''),
+      releaseDate: savedGame.releaseDate || '',
+      releaseNote: savedGame.releaseNote || '',
+      officialLinksText: Array.isArray(savedGame.officialLinks)
+        ? savedGame.officialLinks.map(link => `${link.label || 'Web oficial'} | ${link.url || ''}`).join('\n')
+        : (savedGame.officialLinksText || '')
+    }
     post.value.sections = normalizeSections(post.value.sections?.length ? post.value.sections : post.value.sections)
     ensureAnalysisData()
     const savedCategories = Array.isArray(post.value.categories) && post.value.categories.length
@@ -966,6 +1026,41 @@ const normalizeText = (value) => String(value || '')
   .replace(/[\u0300-\u036f]/g, '')
   .toLowerCase()
   .trim()
+
+const normalizeGameData = (game = {}) => {
+  const names = game.names || game.nombres || {}
+  const platformsSource = Array.isArray(game.platforms)
+    ? game.platforms
+    : (Array.isArray(game.plataformas) ? game.plataformas : String(game.platformsText || game.plataformas || '').split(','))
+  const linksSource = Array.isArray(game.officialLinks)
+    ? game.officialLinks
+    : (Array.isArray(game.enlacesOficiales) ? game.enlacesOficiales : [])
+  const normalizedLinks = linksSource.map((link, index) => {
+    if (typeof link === 'string') return { label: index ? `Web oficial ${index + 1}` : 'Web oficial', url: link.trim() }
+    return {
+      label: String(link?.label || link?.nombre || link?.title || 'Web oficial').trim(),
+      url: String(link?.url || link?.link || '').trim()
+    }
+  }).filter(link => link.url)
+
+  return {
+    nameEs: String(game.nameEs || game.nameSpanish || game.nombreEs || names.es || names.spanish || '').trim(),
+    nameEn: String(game.nameEn || game.nameEnglish || game.nombreEn || names.en || names.english || '').trim(),
+    platforms: platformsSource.map(item => String(item || '').trim()).filter(Boolean),
+    releaseDate: String(game.releaseDate || game.fechaLanzamiento || '').trim(),
+    releaseNote: String(game.releaseNote || game.notaLanzamiento || '').trim(),
+    officialLinks: normalizedLinks
+  }
+}
+
+const parseOfficialLinksText = (value = '') => String(value || '')
+  .split('\n')
+  .map((line, index) => {
+    const separator = line.indexOf('|')
+    if (separator < 0) return { label: index ? `Web oficial ${index + 1}` : 'Web oficial', url: line.trim() }
+    return { label: line.slice(0, separator).trim() || 'Web oficial', url: line.slice(separator + 1).trim() }
+  })
+  .filter(link => link.url)
 
 const ensureAnalysisData = () => {
   post.value.analysis = {
@@ -1187,6 +1282,7 @@ const parseAiJsonPost = (value) => {
     categories: mergedCategories,
     sections: normalizeSections(sectionsSource),
     social,
+    game: normalizeGameData(data?.game || data?.juego || {}),
     analysis: data?.analysis || data?.analisis || {},
     score: Number(data?.score || data?.nota || data?.analysis?.score || data?.analisis?.score || 0),
     pros: Array.isArray(data?.pros) ? data.pros : [],
@@ -1218,6 +1314,12 @@ const pasteJsonIntoPost = async () => {
         image: slide.image || currentSocialSlides[index]?.image || ''
       }))
     }
+    post.value.game = {
+      ...parsed.game,
+      platformsText: parsed.game.platforms.join(', '),
+      officialLinksText: parsed.game.officialLinks.map(link => `${link.label} | ${link.url}`).join('\n')
+    }
+    post.value.mediaGameName = parsed.game.nameEn || parsed.game.nameEs || post.value.mediaGameName
     selectedCategories.value = parsed.categories.slice(0, 3)
     activeSectionIndex.value = 0
 
@@ -1239,7 +1341,7 @@ const openImagePicker = (targetId = 'cover') => {
   imageTargetId.value = targetId
   imagePickerOpen.value = true
   igdbError.value = ''
-  const suggestedQuery = post.value.mediaGameName || post.value.title || ''
+  const suggestedQuery = post.value.game?.nameEn || post.value.game?.nameEs || post.value.mediaGameName || post.value.title || ''
   if (igdbQuery.value === suggestedQuery && suggestedQuery.trim().length >= 2 && !igdbImages.value.length) {
     window.setTimeout(() => searchIgdbImages(), 0)
   } else {
@@ -1309,6 +1411,19 @@ const savePost = async (targetStatus = 'pending') => {
     delete cleanPost.stickers
     cleanPost.sections = normalizeSections(cleanPost.sections, { dropEmpty: !isHeroMode.value })
     cleanPost.social = normalizeSocialContent(cleanPost.social)
+    cleanPost.game = normalizeGameData({
+      ...cleanPost.game,
+      platforms: String(cleanPost.game?.platformsText || '').split(','),
+      officialLinks: parseOfficialLinksText(cleanPost.game?.officialLinksText)
+    })
+    if (!cleanPost.game.nameEs && !cleanPost.game.nameEn && !cleanPost.game.platforms.length && !cleanPost.game.releaseDate && !cleanPost.game.officialLinks.length) {
+      delete cleanPost.game
+    }
+    if (cleanPost.game) {
+      delete cleanPost.game.platformsText
+      delete cleanPost.game.officialLinksText
+      cleanPost.mediaGameName = cleanPost.game.nameEn || cleanPost.game.nameEs || cleanPost.mediaGameName
+    }
     cleanPost.categories = selectedCategories.value
     cleanPost.category = selectedCategories.value[0]
     cleanPost.tags = String(cleanPost.tagsText || '').split(',').map(item => item.trim()).filter(Boolean)

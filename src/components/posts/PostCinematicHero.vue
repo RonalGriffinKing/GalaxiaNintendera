@@ -69,7 +69,34 @@ const coverMedia = computed(() => mediaFromUrl(props.post.image))
 const categoryLabel = computed(() => props.post.category || props.post.categories?.[0] || 'General')
 const authorName = computed(() => props.post.authorName || props.authorProfile?.name || 'Redactor')
 const badgeLabel = computed(() => props.isAnalysis ? 'Analisis Premium' : categoryLabel.value)
-const platformLabel = computed(() => props.post.platform || props.post.platformName || categoryLabel.value)
+const gameDetails = computed(() => props.post.game || {})
+const platformLabel = computed(() => props.post.platform || props.post.platformName || gameDetails.value.nameEs || gameDetails.value.nameEn || '')
+const gamePlatforms = computed(() => Array.isArray(gameDetails.value.platforms) ? gameDetails.value.platforms.filter(Boolean) : [])
+const gameLinks = computed(() => (Array.isArray(gameDetails.value.officialLinks) ? gameDetails.value.officialLinks : [])
+  .filter(link => link?.url && /^https?:\/\//i.test(link.url)))
+const hasGameDetails = computed(() => Boolean(
+  gamePlatforms.value.length
+  || gameDetails.value.releaseDate
+  || gameDetails.value.releaseNote
+  || gameLinks.value.length
+))
+const gameReleaseLabel = computed(() => {
+  if (!gameDetails.value.releaseDate) return ''
+  const value = String(gameDetails.value.releaseDate)
+  const date = new Date(value.length === 10 ? `${value}T00:00:00` : value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })
+})
+const platformIcon = (platform = '') => {
+  const value = platform.toLowerCase()
+  if (value.includes('playstation') || value.includes('ps5') || value.includes('ps4')) return 'fab fa-playstation'
+  if (value.includes('xbox')) return 'fab fa-xbox'
+  if (value.includes('windows') || value === 'pc' || value.includes('steam')) return 'fas fa-desktop'
+  if (value.includes('ios') || value.includes('mac')) return 'fab fa-apple'
+  if (value.includes('android')) return 'fab fa-android'
+  if (value.includes('switch') || value.includes('nintendo')) return 'fas fa-gamepad'
+  return 'fas fa-gamepad'
+}
 const heroSummary = computed(() => {
   const text = String(props.post.heroSummary || props.post.excerpt || props.post.content || '').replace(/\s+/g, ' ').trim()
   if (text.length <= 230) return text
@@ -133,7 +160,7 @@ const scoreTone = computed(() => {
           <i :class="isAnalysis ? 'fas fa-crown' : 'fas fa-gamepad'"></i>
           {{ badgeLabel }}
         </span>
-        <span class="hero-pill">{{ platformLabel }}</span>
+        <span v-if="platformLabel" class="hero-pill">{{ platformLabel }}</span>
         <span v-if="isAnalysis" class="hero-mini-score">
           {{ analysisScore }}
           <small>{{ analysisTier.label }}</small>
@@ -143,6 +170,35 @@ const scoreTone = computed(() => {
       <div class="hero-copy">
         <h1>{{ post.title || 'Titulo de la publicacion' }}</h1>
         <p v-if="heroSummary">{{ heroSummary }}</p>
+      </div>
+
+      <div v-if="hasGameDetails" class="hero-game-details">
+        <div v-if="gamePlatforms.length" class="hero-platforms">
+          <strong>Plataformas</strong>
+          <span v-for="platform in gamePlatforms" :key="platform">
+            <i :class="platformIcon(platform)"></i>
+            {{ platform }}
+          </span>
+        </div>
+        <div v-if="gameReleaseLabel" class="hero-game-release">
+          <i class="far fa-calendar"></i>
+          <span>Lanzamiento</span>
+          <strong>{{ gameReleaseLabel }}</strong>
+        </div>
+        <p v-if="gameDetails.releaseNote" class="hero-release-note">*{{ gameDetails.releaseNote }}</p>
+        <div v-if="gameLinks.length" class="hero-official-links">
+          <a
+            v-for="link in gameLinks"
+            :key="`${link.label}-${link.url}`"
+            :href="preview ? undefined : link.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            @click="preview && $event.preventDefault()"
+          >
+            {{ link.label || 'Web oficial' }}
+            <i class="fas fa-arrow-up-right-from-square"></i>
+          </a>
+        </div>
       </div>
 
       <div class="hero-footer">
@@ -430,6 +486,74 @@ const scoreTone = computed(() => {
   text-shadow: 0 12px 28px rgba(0, 0, 0, 0.62);
 }
 
+.hero-game-details {
+  display: grid;
+  gap: 9px;
+  width: min(100%, 820px);
+}
+
+.hero-platforms,
+.hero-game-release,
+.hero-official-links {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hero-platforms > strong,
+.hero-game-release > span {
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 900;
+  margin-right: 2px;
+}
+
+.hero-platforms > span,
+.hero-game-release,
+.hero-official-links a {
+  align-items: center;
+  backdrop-filter: blur(10px);
+  background: rgba(2, 6, 23, 0.72);
+  border: 1px solid color-mix(in srgb, var(--hero-accent) 54%, transparent);
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 11px;
+}
+
+.hero-platforms i,
+.hero-game-release i,
+.hero-official-links i {
+  color: var(--hero-accent);
+}
+
+.hero-game-release strong {
+  color: #ffffff;
+}
+
+.hero-release-note {
+  color: #cbd5e1;
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 750;
+  margin: 0;
+  text-shadow: 0 8px 20px rgba(0, 0, 0, 0.7);
+}
+
+.hero-official-links a {
+  background: color-mix(in srgb, var(--hero-accent) 24%, rgba(2, 6, 23, 0.82));
+  text-decoration: none;
+}
+
+.hero-official-links a:hover {
+  border-color: var(--hero-accent);
+}
+
 .is-analysis .hero-copy p {
   color: #fff2c2;
 }
@@ -606,6 +730,22 @@ const scoreTone = computed(() => {
     font-size: 13.5px;
     line-height: 1.58;
     margin-top: 14px;
+  }
+
+  .hero-game-details {
+    gap: 8px;
+  }
+
+  .hero-platforms > strong {
+    flex-basis: 100%;
+  }
+
+  .hero-platforms > span,
+  .hero-game-release,
+  .hero-official-links a {
+    font-size: 10px;
+    min-height: 28px;
+    padding: 0 9px;
   }
 
   .hero-mini-score {
