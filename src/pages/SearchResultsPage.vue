@@ -142,7 +142,7 @@ loadPosts()
   margin: 0 auto;
   max-width: 1240px;
   min-height: 80vh;
-  padding: 54px 24px 120px;
+  padding: calc(var(--public-nav-offset, 72px) + 28px) 24px 120px;
 }
 
 .search-page-head {
@@ -228,7 +228,7 @@ loadPosts()
 .search-page-state h2, .search-page-state p { margin: 0; }
 
 @media (max-width: 860px) {
-  .search-page { padding: 28px 16px 120px; }
+  .search-page { padding: var(--public-page-top-mobile, 76px) 16px 120px; }
   .search-result-grid { grid-template-columns: 1fr; }
 }
 
