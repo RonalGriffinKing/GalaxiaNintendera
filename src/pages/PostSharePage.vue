@@ -922,7 +922,11 @@ function slugify(value) {
               <article
                 :ref="(el) => setCardRef(el, index)"
                 class="social-card"
-                :class="[activeStyle.className, { analysis: isAnalysisPost }]"
+                :class="[activeStyle.className, {
+                  analysis: isAnalysisPost,
+                  'impact-cover': selectedStyle === 'impact' && index === 0,
+                  'impact-detail': selectedStyle === 'impact' && index > 0
+                }]"
                 :style="cardStyleFor(index)"
               >
                 <img
@@ -965,8 +969,8 @@ function slugify(value) {
                   </span>
                   <h2>{{ displaySlideTitle(slide) }}</h2>
                   <small v-if="settingsForSlide(index).subtitle.visible" class="social-subtitle">{{ slide.subtitle }}</small>
-                  <p v-if="settingsForSlide(index).description.visible">{{ slide.description }}</p>
-                  <ul v-if="selectedStyle !== 'impact' && slide.points?.length" class="social-points">
+                  <p v-if="settingsForSlide(index).description.visible || (selectedStyle === 'impact' && index > 0)">{{ slide.description }}</p>
+                  <ul v-if="slide.points?.length && (selectedStyle !== 'impact' || index > 0)" class="social-points">
                     <li v-for="(point, pointIndex) in slide.points" :key="`${slide.id}-point-${pointIndex}`">
                       <span>{{ pointIndex + 1 }}</span>
                       <strong>{{ point }}</strong>
@@ -1946,6 +1950,72 @@ function slugify(value) {
   max-width: calc(100% - 116px);
   right: 58px;
   top: 25%;
+}
+
+.social-card.style-impact.impact-cover .social-card-copy {
+  bottom: 210px;
+  top: auto;
+}
+
+.social-card.style-impact.impact-cover .social-card-copy h2 {
+  max-width: 850px;
+}
+
+.social-card.style-impact.impact-cover .social-game-logo {
+  bottom: auto;
+  height: min(calc(var(--game-logo-size) * 1.8), 520px);
+  max-height: 30%;
+  top: 120px;
+  width: min(calc(var(--game-logo-size) * 3), 76%);
+}
+
+.social-card.style-impact.impact-detail .social-card-copy {
+  max-width: 820px;
+  right: 170px;
+  top: 17%;
+}
+
+.social-card.style-impact.impact-detail .social-card-copy h2 {
+  font-size: calc(var(--copy-title-size) * 0.78);
+  line-height: 1.08;
+  max-height: 260px;
+}
+
+.social-card.style-impact.impact-detail .social-card-copy p {
+  display: -webkit-box;
+  font-size: calc(var(--copy-text-size) * 0.82);
+  line-height: 1.25;
+  margin-top: 28px;
+  max-width: 780px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.social-card.style-impact.impact-detail .social-points {
+  gap: 14px;
+  margin-top: 24px;
+  max-width: 780px;
+}
+
+.social-card.style-impact.impact-detail .social-points li {
+  gap: 12px;
+  grid-template-columns: 32px minmax(0, 1fr);
+}
+
+.social-card.style-impact.impact-detail .social-points li > span {
+  background: rgba(255, 255, 255, 0.94);
+  border: 0;
+  border-radius: 999px;
+  color: #18181b;
+  font-size: 17px;
+  height: 32px;
+  width: 32px;
+}
+
+.social-card.style-impact.impact-detail .social-points li > strong {
+  font-size: calc(var(--copy-text-size) * 0.66);
+  line-height: 1.2;
 }
 
 .social-card.style-impact .social-card-copy h2 {
