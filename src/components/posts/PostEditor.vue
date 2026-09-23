@@ -323,10 +323,36 @@
                 </label>
               </div>
               <div class="field-grid-2">
-                <label class="field-group">
+                <div class="field-group">
                   <span>Plataformas</span>
-                  <input v-model="post.game.platformsText" placeholder="PC, iOS, Android, Nintendo Switch 2?" />
-                </label>
+                  <div class="game-platform-editor">
+                    <div v-if="post.game.platforms.length" class="game-platform-list">
+                      <div
+                        v-for="platform in post.game.platforms"
+                        :key="platform.name"
+                        class="game-platform-item"
+                        :class="{ pending: !platform.confirmed }"
+                      >
+                        <button type="button" @click="platform.confirmed = !platform.confirmed">
+                          <i :class="platform.confirmed ? 'fas fa-circle-check' : 'far fa-clock'"></i>
+                          {{ platform.name }}
+                          <small>{{ platform.confirmed ? 'Confirmada' : 'Pendiente' }}</small>
+                        </button>
+                        <button type="button" class="remove-platform" :aria-label="`Quitar ${platform.name}`" @click="removeGamePlatform(platform.name)">
+                          <i class="fas fa-xmark"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="category-combobox">
+                      <select v-model="gamePlatformToAdd" @change="addGamePlatform">
+                        <option value="">Agregar plataforma</option>
+                        <option v-for="platform in availableGamePlatforms" :key="platform" :value="platform">{{ platform }}</option>
+                      </select>
+                      <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <p>Al pulsar una plataforma alternas entre confirmada y pendiente.</p>
+                  </div>
+                </div>
                 <label class="field-group">
                   <span>Fecha de lanzamiento</span>
                   <input v-model="post.game.releaseDate" type="date" />
@@ -781,7 +807,7 @@ const post = ref({
   game: {
     nameEs: '',
     nameEn: '',
-    platformsText: '',
+    platforms: [],
     releaseDate: '',
     releaseNote: '',
     officialLinksText: ''
@@ -803,6 +829,12 @@ const post = ref({
   }
 })
 const selectedCategories = ref([])
+const gamePlatformToAdd = ref('')
+const gamePlatformOptions = ['PC', 'Nintendo Switch', 'Nintendo Switch 2', 'PlayStation 4', 'PlayStation 5', 'Xbox One', 'Xbox Series X|S', 'iOS', 'Android', 'macOS']
+const availableGamePlatforms = computed(() => {
+  const selected = new Set((post.value.game?.platforms || []).map(platform => platform.name))
+  return gamePlatformOptions.filter(platform => !selected.has(platform))
+})
 
 const availableCategoryOptions = computed(() => {
   const source = props.categoryOptions.length
@@ -977,12 +1009,7 @@ onMounted(async () => {
     post.value.game = {
       nameEs: savedGame.nameEs || savedGame.nameSpanish || '',
       nameEn: savedGame.nameEn || savedGame.nameEnglish || post.value.mediaGameName || '',
-      platformsText: Array.isArray(savedGame.platforms)
-        ? savedGame.platforms.map(platform => {
-            if (typeof platform === 'string') return platform
-            return `${platform?.name || platform?.label || ''}${platform?.confirmed === false || platform?.status === 'unconfirmed' ? '?' : ''}`
-          }).filter(Boolean).join(', ')
-        : (savedGame.platformsText || ''),
+      platforms: normalizeGamePlatforms(savedGame.platforms || savedGame.platformsText || ''),
       releaseDate: savedGame.releaseDate || '',
       releaseNote: savedGame.releaseNote || '',
       officialLinksText: Array.isArray(savedGame.officialLinks)
@@ -1032,6 +1059,31 @@ const normalizeText = (value) => String(value || '')
   .toLowerCase()
   .trim()
 
+function normalizeGamePlatforms(value = []) {
+  const source = Array.isArray(value) ? value : String(value || '').split(',')
+  return source.map(item => {
+    if (typeof item === 'object' && item) {
+      return {
+        name: String(item.name || item.label || '').trim(),
+        confirmed: item.confirmed !== false && item.status !== 'unconfirmed'
+      }
+    }
+    const name = String(item || '').trim()
+    return { name: name.replace(/\?$/, '').trim(), confirmed: !name.endsWith('?') }
+  }).filter(item => item.name)
+}
+
+const addGamePlatform = () => {
+  const name = gamePlatformToAdd.value
+  if (!name || post.value.game.platforms.some(platform => platform.name === name)) return
+  post.value.game.platforms.push({ name, confirmed: true })
+  gamePlatformToAdd.value = ''
+}
+
+const removeGamePlatform = (name) => {
+  post.value.game.platforms = post.value.game.platforms.filter(platform => platform.name !== name)
+}
+
 const normalizeGameData = (game = {}) => {
   const names = game.names || game.nombres || {}
   const platformsSource = Array.isArray(game.platforms)
@@ -1051,16 +1103,7 @@ const normalizeGameData = (game = {}) => {
   return {
     nameEs: String(game.nameEs || game.nameSpanish || game.nombreEs || names.es || names.spanish || '').trim(),
     nameEn: String(game.nameEn || game.nameEnglish || game.nombreEn || names.en || names.english || '').trim(),
-    platforms: platformsSource.map(item => {
-      if (typeof item === 'object' && item) {
-        return {
-          name: String(item.name || item.label || '').trim(),
-          confirmed: item.confirmed !== false && item.status !== 'unconfirmed'
-        }
-      }
-      const value = String(item || '').trim()
-      return { name: value.replace(/\?$/, '').trim(), confirmed: !value.endsWith('?') }
-    }).filter(item => item.name),
+    platforms: normalizeGamePlatforms(platformsSource),
     releaseDate: String(game.releaseDate || game.fechaLanzamiento || '').trim(),
     releaseNote: String(game.releaseNote || game.notaLanzamiento || '').trim(),
     officialLinks: normalizedLinks
@@ -1330,7 +1373,6 @@ const pasteJsonIntoPost = async () => {
     }
     post.value.game = {
       ...parsed.game,
-      platformsText: parsed.game.platforms.join(', '),
       officialLinksText: parsed.game.officialLinks.map(link => `${link.label} | ${link.url}`).join('\n')
     }
     post.value.mediaGameName = parsed.game.nameEn || parsed.game.nameEs || post.value.mediaGameName
@@ -1427,14 +1469,12 @@ const savePost = async (targetStatus = 'pending') => {
     cleanPost.social = normalizeSocialContent(cleanPost.social)
     cleanPost.game = normalizeGameData({
       ...cleanPost.game,
-      platforms: String(cleanPost.game?.platformsText || '').split(','),
       officialLinks: parseOfficialLinksText(cleanPost.game?.officialLinksText)
     })
     if (!cleanPost.game.nameEs && !cleanPost.game.nameEn && !cleanPost.game.platforms.length && !cleanPost.game.releaseDate && !cleanPost.game.officialLinks.length) {
       delete cleanPost.game
     }
     if (cleanPost.game) {
-      delete cleanPost.game.platformsText
       delete cleanPost.game.officialLinksText
       cleanPost.mediaGameName = cleanPost.game.nameEn || cleanPost.game.nameEs || cleanPost.mediaGameName
     }
@@ -1803,6 +1843,71 @@ const savePost = async (targetStatus = 'pending') => {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.game-platform-editor {
+  display: grid;
+  gap: 9px;
+}
+
+.game-platform-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.game-platform-item {
+  align-items: stretch;
+  background: #f5f3ff;
+  border: 1px solid #c084fc;
+  border-radius: 10px;
+  display: flex;
+  overflow: hidden;
+}
+
+.game-platform-item.pending {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.game-platform-item > button:first-child {
+  align-items: center;
+  color: #6d28d9;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 8px 0 10px;
+}
+
+.game-platform-item.pending > button:first-child {
+  color: #64748b;
+}
+
+.game-platform-item small {
+  background: rgba(124, 58, 237, 0.1);
+  border-radius: 999px;
+  font-size: 8px;
+  padding: 3px 5px;
+  text-transform: uppercase;
+}
+
+.game-platform-item.pending small {
+  background: #e2e8f0;
+}
+
+.game-platform-item .remove-platform {
+  border-left: 1px solid rgba(148, 163, 184, 0.28);
+  color: #94a3b8;
+  min-width: 30px;
+}
+
+.game-platform-editor > p {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 750;
+  margin: 0;
 }
 
 .featured-field .input-shell {

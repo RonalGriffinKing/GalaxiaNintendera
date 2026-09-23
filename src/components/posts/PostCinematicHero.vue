@@ -186,9 +186,9 @@ const scoreTone = computed(() => {
             :class="{ unconfirmed: !platform.confirmed }"
             :title="platform.confirmed ? '' : 'Plataforma todavia no anunciada oficialmente'"
           >
+            <small v-if="!platform.confirmed">Pendiente de confirmar</small>
             <i :class="platformIcon(platform.name)"></i>
             {{ platform.name }}
-            <i v-if="!platform.confirmed" class="fas fa-question platform-status-icon" aria-hidden="true"></i>
           </span>
       </div>
 
@@ -511,6 +511,7 @@ const scoreTone = computed(() => {
   gap: 7px;
   min-height: 30px;
   padding: 0 11px;
+  position: relative;
 }
 
 .hero-platforms i {
@@ -519,18 +520,19 @@ const scoreTone = computed(() => {
 
 .hero-platforms > span.unconfirmed {
   filter: saturate(0.55);
-  opacity: 0.5;
+  margin-top: 13px;
+  opacity: 0.52;
 }
 
-.hero-platforms .platform-status-icon {
-  align-items: center;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  display: inline-flex;
+.hero-platforms > span small {
+  color: #ffffff;
   font-size: 7px;
-  height: 13px;
-  justify-content: center;
-  width: 13px;
+  font-weight: 950;
+  left: 8px;
+  position: absolute;
+  text-transform: uppercase;
+  top: -13px;
+  white-space: nowrap;
 }
 
 .is-analysis .hero-copy p {
