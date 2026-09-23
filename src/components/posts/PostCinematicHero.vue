@@ -499,6 +499,7 @@ const scoreTone = computed(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  padding-top: 13px;
   width: min(100%, 820px);
 }
 
@@ -524,7 +525,6 @@ const scoreTone = computed(() => {
 
 .hero-platforms > span.unconfirmed {
   filter: saturate(0.55);
-  margin-top: 13px;
   opacity: 0.52;
 }
 
