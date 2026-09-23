@@ -51,6 +51,7 @@ const defaultTemplateSettings = {
   image: { visible: true, brightness: 100, contrast: 100, saturation: 100, blur: 0, scale: 100, x: 50, y: 0 },
   logo: { visible: true, size: 120, x: 50, y: 34, opacity: 1 },
   gameLogo: { visible: false, url: '', size: 220, x: 50, y: 150, opacity: 1 },
+  coverGameLogo: { size: 450, x: 50, y: 120 },
   author: { visible: true, avatar: true, name: true, date: true, size: 100, x: 82, y: 86, opacity: 1 },
   arrow: { visible: true, icon: 'fa-arrow-right', size: 96, color: '#9333ea', x: 34, y: 56, opacity: 1 },
   part: { visible: true, color: '#8b5cf6', text: '', size: 25, radius: 16 },
@@ -67,6 +68,7 @@ const impactTemplateSettings = mergeSettings(defaultTemplateSettings, {
   image: { y: 50 },
   logo: { visible: false, size: 112, x: 50, y: 48, opacity: 1 },
   gameLogo: { visible: false, url: '', size: 250, x: 50, y: 150, opacity: 1 },
+  coverGameLogo: { size: 450, x: 50, y: 120 },
   author: { visible: false },
   arrow: { visible: true, icon: 'fa-chevron-right', size: 132, color: '#ffffff', x: 44, y: 84, opacity: 1 },
   part: { visible: false },
@@ -399,6 +401,51 @@ function resetImageFilters() {
   setSetting('image.y', defaults.y)
 }
 
+function resetLogoLayout(group) {
+  const defaults = activeStyle.value.settings[group]
+  if (!defaults) return
+  ;['size', 'x', 'y', 'opacity'].forEach((key) => {
+    if (defaults[key] !== undefined) setSetting(`${group}.${key}`, defaults[key])
+  })
+}
+
+function coverLogoValue(key) {
+  return globalTemplateSettings.value.coverGameLogo[key]
+}
+
+function setCoverLogoSetting(key, value) {
+  const coverGameLogo = {
+    ...globalTemplateSettings.value.coverGameLogo,
+    [key]: value
+  }
+  globalTemplateSettings.value = {
+    ...globalTemplateSettings.value,
+    coverGameLogo
+  }
+}
+
+function resetCoverLogoLayout() {
+  globalTemplateSettings.value = {
+    ...globalTemplateSettings.value,
+    coverGameLogo: cloneSettings(activeStyle.value.settings.coverGameLogo)
+  }
+}
+
+function resetPositions() {
+  const defaults = activeStyle.value.settings
+  const paths = [
+    'image.x', 'image.y',
+    'logo.x', 'logo.y',
+    'gameLogo.x', 'gameLogo.y',
+    'author.x', 'author.y',
+    'arrow.x', 'arrow.y',
+    'button.y'
+  ]
+  paths.forEach(path => setSetting(path, getByPath(defaults, path)))
+  setCoverLogoSetting('x', defaults.coverGameLogo.x)
+  setCoverLogoSetting('y', defaults.coverGameLogo.y)
+}
+
 function displaySlideTitle(slide) {
   return slideTextOverrides.value[slide.id] ?? slide.title
 }
@@ -505,7 +552,10 @@ function cardStyleFor(index) {
     '--game-logo-bottom': `${settings.gameLogo.y}px`,
     '--game-logo-left': `${settings.gameLogo.x}%`,
     '--game-logo-size': `${settings.gameLogo.size}px`,
-    '--game-logo-opacity': settings.gameLogo.opacity
+    '--game-logo-opacity': settings.gameLogo.opacity,
+    '--cover-game-logo-top': `${settings.coverGameLogo.y}px`,
+    '--cover-game-logo-left': `${settings.coverGameLogo.x}%`,
+    '--cover-game-logo-size': `${settings.coverGameLogo.size}px`
   }
 }
 
@@ -1052,6 +1102,10 @@ function slugify(value) {
         <div class="drawer-actions">
           <button type="button" @click="saveCustomTemplate">Guardar personalizada</button>
           <button type="button" @click="resetTemplate">Restablecer</button>
+          <button type="button" class="drawer-reset-positions" @click="resetPositions">
+            <i class="fas fa-arrows-to-dot"></i>
+            Restablecer posiciones
+          </button>
         </div>
       </div>
 
@@ -1122,16 +1176,33 @@ function slugify(value) {
           <label>Posicion X <input type="range" min="5" max="95" :value="settingValue('logo.x')" @input="setSetting('logo.x', Number($event.target.value))" /></label>
           <label>Margen inferior <input type="range" min="0" max="180" :value="settingValue('logo.y')" @input="setSetting('logo.y', Number($event.target.value))" /></label>
           <label>Opacidad <input type="range" min="0" max="1" step="0.05" :value="settingValue('logo.opacity')" @input="setSetting('logo.opacity', Number($event.target.value))" /></label>
+          <button type="button" class="drawer-ghost-action" @click="resetLogoLayout('logo')">
+            <i class="fas fa-rotate-left"></i>
+            Restablecer mi logo
+          </button>
         </details>
 
         <details :open="activeDrawerSection === 'gameLogo'">
           <summary @click.prevent="toggleDrawerSection('gameLogo')">Logo del juego</summary>
           <label><input type="checkbox" :checked="settingValue('gameLogo.visible')" @change="setSetting('gameLogo.visible', $event.target.checked)" /> Mostrar logo del juego</label>
           <label>URL PNG <input type="url" :value="settingValue('gameLogo.url')" placeholder="https://.../logo.png" @input="setSetting('gameLogo.url', $event.target.value.trim())" /></label>
-          <label>Tamano <input type="range" min="60" max="480" :value="settingValue('gameLogo.size')" @input="setSetting('gameLogo.size', Number($event.target.value))" /></label>
-          <label>Posicion X <input type="range" min="5" max="95" :value="settingValue('gameLogo.x')" @input="setSetting('gameLogo.x', Number($event.target.value))" /></label>
-          <label>Margen inferior <input type="range" min="0" max="420" :value="settingValue('gameLogo.y')" @input="setSetting('gameLogo.y', Number($event.target.value))" /></label>
+          <span class="drawer-subtitle">Portada</span>
+          <label>Tamano portada <input type="range" min="100" max="760" :value="coverLogoValue('size')" @input="setCoverLogoSetting('size', Number($event.target.value))" /></label>
+          <label>Posicion X portada <input type="range" min="5" max="95" :value="coverLogoValue('x')" @input="setCoverLogoSetting('x', Number($event.target.value))" /></label>
+          <label>Distancia desde arriba <input type="range" min="20" max="720" :value="coverLogoValue('y')" @input="setCoverLogoSetting('y', Number($event.target.value))" /></label>
+          <button type="button" class="drawer-ghost-action" @click="resetCoverLogoLayout">
+            <i class="fas fa-rotate-left"></i>
+            Restablecer logo de portada
+          </button>
+          <span class="drawer-subtitle">Diapositivas interiores</span>
+          <label>Tamano interiores <input type="range" min="60" max="480" :value="settingValue('gameLogo.size')" @input="setSetting('gameLogo.size', Number($event.target.value))" /></label>
+          <label>Posicion X interiores <input type="range" min="5" max="95" :value="settingValue('gameLogo.x')" @input="setSetting('gameLogo.x', Number($event.target.value))" /></label>
+          <label>Margen inferior interiores <input type="range" min="0" max="420" :value="settingValue('gameLogo.y')" @input="setSetting('gameLogo.y', Number($event.target.value))" /></label>
           <label>Opacidad <input type="range" min="0" max="1" step="0.05" :value="settingValue('gameLogo.opacity')" @input="setSetting('gameLogo.opacity', Number($event.target.value))" /></label>
+          <button type="button" class="drawer-ghost-action" @click="resetLogoLayout('gameLogo')">
+            <i class="fas fa-rotate-left"></i>
+            Restablecer logos interiores
+          </button>
         </details>
 
         <details :open="activeDrawerSection === 'author'">
@@ -1963,10 +2034,11 @@ function slugify(value) {
 
 .social-card.style-impact.impact-cover .social-game-logo {
   bottom: auto;
-  height: min(calc(var(--game-logo-size) * 1.8), 520px);
+  height: var(--cover-game-logo-size);
+  left: var(--cover-game-logo-left);
   max-height: 30%;
-  top: 120px;
-  width: min(calc(var(--game-logo-size) * 3), 76%);
+  top: var(--cover-game-logo-top);
+  width: min(calc(var(--cover-game-logo-size) * 1.8), 82%);
 }
 
 .social-card.style-impact.impact-detail .social-card-copy {
@@ -2162,6 +2234,20 @@ function slugify(value) {
   display: grid;
   gap: 8px;
   grid-template-columns: 1fr 1fr;
+}
+
+.drawer-actions .drawer-reset-positions {
+  grid-column: 1 / -1;
+}
+
+.drawer-subtitle {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e9d5ff;
+  display: block;
+  font-size: 11px;
+  font-weight: 950;
+  padding: 4px 0 8px;
+  text-transform: uppercase;
 }
 
 .drawer-sections label {
