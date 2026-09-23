@@ -46,6 +46,7 @@ const notifications = ref([])
 const isClearingNotifications = ref(false)
 const currentRole = ref('user')
 const currentCanChat = ref(false)
+const currentProfileLoading = ref(Boolean(auth.currentUser))
 const confirmLogoutOpen = ref(false)
 const isLoggingOut = ref(false)
 const currentProfile = ref({})
@@ -546,10 +547,14 @@ const rememberPublicPath = () => {
 }
 
 const loadUserRole = async (user) => {
+  currentProfileLoading.value = Boolean(user)
   currentRole.value = 'user'
   currentCanChat.value = false
   currentProfile.value = {}
-  if (!user) return
+  if (!user) {
+    currentProfileLoading.value = false
+    return
+  }
 
   try {
     const snap = await getDoc(doc(db, 'users', user.uid))
@@ -559,6 +564,8 @@ const loadUserRole = async (user) => {
     currentCanChat.value = !data.isBlocked && Boolean(data.canChat)
   } catch (error) {
     console.error(error)
+  } finally {
+    currentProfileLoading.value = false
   }
 }
 
@@ -1035,6 +1042,7 @@ onUnmounted(() => {
               :alt="authLabel"
               :label="authLabel"
               :effect="currentProfileIconMeta"
+              :loading="currentProfileLoading"
             />
             <span>{{ authLabel }}</span>
             <i class="fas fa-chevron-down"></i>
@@ -1066,6 +1074,7 @@ onUnmounted(() => {
             :alt="authLabel"
             :label="authLabel"
             :effect="currentProfileIconMeta"
+            :loading="currentProfileLoading"
           />
         </button>
       </div>
@@ -1117,6 +1126,7 @@ onUnmounted(() => {
               :alt="authLabel"
               :label="authLabel"
               :effect="currentProfileIconMeta"
+              :loading="currentProfileLoading"
             />
           </span>
           <div>
@@ -1204,6 +1214,7 @@ onUnmounted(() => {
               :alt="authLabel"
               :label="authLabel"
               :effect="currentProfileIconMeta"
+              :loading="currentProfileLoading"
             />
             <div>
               <strong>{{ authLabel }}</strong>

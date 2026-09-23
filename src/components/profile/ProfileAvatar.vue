@@ -8,7 +8,8 @@ const props = defineProps({
   effect: { type: Object, default: () => ({}) },
   roleBadge: { type: String, default: '' },
   label: { type: String, default: '' },
-  decorative: { type: Boolean, default: false }
+  decorative: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false }
 })
 
 const imageFailed = ref(false)
@@ -23,13 +24,17 @@ watch(() => [props.src, props.fallback], () => {
 <template>
   <span
     class="profile-avatar-ui"
-    :class="{ special: effect?.special }"
+    :class="{ special: effect?.special && !loading, loading }"
     :style="{ '--avatar-effect': effect?.effectColor || '#a855f7' }"
+    :aria-busy="loading ? 'true' : undefined"
   >
     <span class="profile-avatar-ui-frame">
       <span class="profile-avatar-ui-clip">
+        <span v-if="loading" class="profile-avatar-ui-loader" aria-hidden="true">
+          <i></i><i></i><i></i>
+        </span>
         <img
-          v-if="imageSrc"
+          v-else-if="imageSrc"
           :src="imageSrc"
           :alt="decorative ? '' : alt"
           :aria-hidden="decorative ? 'true' : undefined"
@@ -146,6 +151,28 @@ watch(() => [props.src, props.fallback], () => {
   z-index: 1;
 }
 
+.profile-avatar-ui-loader {
+  animation: profileAvatarLoadingSpin 0.9s linear infinite;
+  display: flex;
+  height: 52%;
+  position: relative;
+  width: 52%;
+}
+
+.profile-avatar-ui-loader i {
+  left: 40%;
+  position: absolute;
+  top: 0;
+  background: #a855f7;
+  border-radius: 999px;
+  box-shadow: 0 0 7px rgba(168, 85, 247, 0.72);
+  height: 20%;
+  width: 20%;
+}
+
+.profile-avatar-ui-loader i:nth-child(2) { left: 6%; top: 66%; }
+.profile-avatar-ui-loader i:nth-child(3) { left: 74%; top: 66%; }
+
 .profile-avatar-ui-role {
   background: rgba(7, 11, 28, 0.96);
   border: 2px solid #ffffff;
@@ -184,6 +211,16 @@ watch(() => [props.src, props.fallback], () => {
   50% {
     opacity: 0.94;
     transform: scale(1.06);
+  }
+}
+
+@keyframes profileAvatarLoadingSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-avatar-ui-loader {
+    animation: none;
   }
 }
 </style>

@@ -595,7 +595,7 @@
 
       <Transition name="fade">
         <div v-if="loading" class="editor-loading-cover">
-          <GalaxyLoader compact title="Guardando" text="Publicando con la pantalla de carga de la galaxia..." />
+          <GalaxyLoader :title="savingLoaderTitle" :text="savingLoaderText" />
         </div>
       </Transition>
 
@@ -654,32 +654,6 @@
               </button>
             </div>
 
-            <div class="target-strip">
-              <button
-                v-for="target in imageTargets"
-                :key="target.id"
-                type="button"
-                :class="{ active: imageTargetId === target.id, filled: target.url }"
-                @click="imageTargetId = target.id"
-              >
-                <span>{{ target.label }}</span>
-                <small>{{ target.url ? 'Asignada' : 'Sin imagen' }}</small>
-              </button>
-            </div>
-
-            <div v-if="igdbImages.length" class="igdb-filter-tabs">
-              <button
-                v-for="filter in igdbTypeFilters"
-                :key="filter.id"
-                type="button"
-                :class="{ active: igdbTypeFilter === filter.id }"
-                @click="igdbTypeFilter = filter.id"
-              >
-                {{ filter.label }}
-                <span>{{ filter.count }}</span>
-              </button>
-            </div>
-
             <div v-if="igdbError" class="json-paste-error">{{ igdbError }}</div>
             <div v-if="!igdbImages.length && !igdbLoading" class="igdb-empty">
               {{ igdbHasSearched ? 'No encontramos imagenes. Prueba con menos palabras.' : 'Escribe al menos dos letras para comenzar.' }}
@@ -688,21 +662,81 @@
               Buscando imagenes...
             </div>
 
-            <div v-if="filteredIgdbImages.length" class="igdb-gallery">
-              <article v-for="image in filteredIgdbImages" :key="image.id" :class="{ selected: assignedLabel(image.url) }">
-                <img :src="image.url" :alt="image.typeLabel" />
-                <div class="igdb-image-meta">
-                  <span>{{ image.gameName || image.typeLabel }}</span>
-                  <strong v-if="assignedLabel(image.url)">{{ assignedLabel(image.url) }}</strong>
+            <div v-if="igdbImages.length && !igdbLoading" class="igdb-picker-workspace">
+              <aside class="igdb-targets" aria-label="Ubicacion de la imagen">
+                <div class="igdb-pane-title">
+                  <span>Destino</span>
+                  <small>{{ imageTargets.filter(target => target.url).length }}/{{ imageTargets.length }}</small>
                 </div>
-                <small>{{ image.typeLabel }}</small>
-                <button type="button" @click="assignIgdbImage(image)">
-                  Asignar a {{ activeImageTarget?.label || 'destino' }}
+                <button
+                  v-for="(target, index) in imageTargets"
+                  :key="target.id"
+                  type="button"
+                  :class="{ active: imageTargetId === target.id, filled: target.url }"
+                  @click="selectImageTarget(target)"
+                >
+                  <img v-if="target.url" :src="target.url" alt="" />
+                  <b v-else>{{ index + 1 }}</b>
+                  <span>
+                    <strong>{{ target.label }}</strong>
+                    <small>{{ target.url ? 'Imagen asignada' : 'Sin imagen' }}</small>
+                  </span>
+                  <i :class="target.url ? 'fas fa-check' : 'fas fa-chevron-right'"></i>
                 </button>
-              </article>
-            </div>
-            <div v-else-if="igdbImages.length && !igdbLoading" class="igdb-empty">
-              No hay imagenes en esta categoria.
+              </aside>
+
+              <section class="igdb-results-pane">
+                <div class="igdb-pane-title">
+                  <span>{{ filteredIgdbImages.length }} imagenes</span>
+                  <small>Selecciona una para verla</small>
+                </div>
+                <div class="igdb-filter-tabs">
+                  <button
+                    v-for="filter in igdbTypeFilters"
+                    :key="filter.id"
+                    type="button"
+                    :class="{ active: igdbTypeFilter === filter.id }"
+                    @click="igdbTypeFilter = filter.id"
+                  >
+                    {{ filter.label }}
+                    <span>{{ filter.count }}</span>
+                  </button>
+                </div>
+
+                <div v-if="filteredIgdbImages.length" class="igdb-gallery">
+                  <button
+                    v-for="image in filteredIgdbImages"
+                    :key="image.id"
+                    type="button"
+                    :class="{ active: activeIgdbImage?.id === image.id, assigned: assignedLabel(image.url) }"
+                    @click="selectedIgdbImage = image"
+                  >
+                    <img :src="image.url" :alt="`${image.gameName || 'Juego'} - ${image.typeLabel}`" />
+                    <span><i class="far fa-image"></i>{{ image.typeLabel }}</span>
+                    <em v-if="assignedLabel(image.url)" :title="`Asignada a ${assignedLabel(image.url)}`"><i class="fas fa-check"></i></em>
+                  </button>
+                </div>
+                <div v-else class="igdb-empty">No hay imagenes en esta categoria.</div>
+              </section>
+
+              <aside class="igdb-selection-pane">
+                <div class="igdb-pane-title"><span>Vista previa</span></div>
+                <template v-if="activeIgdbImage">
+                  <img :src="activeIgdbImage.url" :alt="activeIgdbImage.typeLabel" />
+                  <div class="igdb-selection-copy">
+                    <strong>{{ activeIgdbImage.gameName || 'Imagen del juego' }}</strong>
+                    <span>{{ activeIgdbImage.typeLabel }}</span>
+                  </div>
+                  <button type="button" class="igdb-use-image" @click="assignIgdbImage(activeIgdbImage)">
+                    <i class="fas fa-check"></i>
+                    Usar en {{ activeImageTarget?.label || 'el articulo' }}
+                  </button>
+                  <a :href="activeIgdbImage.url" target="_blank" rel="noopener noreferrer">
+                    Ver tamaño completo <i class="fas fa-arrow-up-right-from-square"></i>
+                  </a>
+                  <p><i class="far fa-lightbulb"></i> Las imágenes horizontales funcionan mejor en portadas y secciones.</p>
+                </template>
+              </aside>
             </div>
           </section>
         </div>
@@ -745,6 +779,17 @@ const props = defineProps({
 const emit = defineEmits(['close', 'created'])
 
 const loading = ref(false)
+const savingTargetStatus = ref('pending')
+const savingLoaderTitle = computed(() => {
+  if (props.editData) return 'Guardando cambios'
+  if (savingTargetStatus.value === 'draft') return 'Guardando borrador'
+  return isHeroMode.value ? 'Publicando principal' : 'Publicando post'
+})
+const savingLoaderText = computed(() => {
+  if (props.editData) return 'Actualizando la publicacion en Galaxia Nintendera...'
+  if (savingTargetStatus.value === 'draft') return 'Conservando todo para que puedas continuar despues...'
+  return 'Preparando imagenes, contenido y detalles de la publicacion...'
+})
 const toast = ref({ show: false, message: '', type: 'success' })
 const activeSectionIndex = ref(0)
 const mobileStep = ref('info')
@@ -757,6 +802,7 @@ const igdbImages = ref([])
 const igdbGames = ref([])
 const igdbGameFilter = ref('all')
 const igdbTypeFilter = ref('all')
+const selectedIgdbImage = ref(null)
 const igdbLoading = ref(false)
 const igdbError = ref('')
 const igdbHasSearched = ref(false)
@@ -971,6 +1017,11 @@ const filteredIgdbImages = computed(() => {
     const matchesType = igdbTypeFilter.value === 'all' || image.type === igdbTypeFilter.value
     return matchesGame && matchesType
   })
+})
+const activeIgdbImage = computed(() => {
+  const selected = selectedIgdbImage.value
+  if (selected && filteredIgdbImages.value.some(image => image.id === selected.id)) return selected
+  return filteredIgdbImages.value[0] || null
 })
 
 const toLocalDateTimeInput = (value) => {
@@ -1417,6 +1468,7 @@ const searchIgdbImages = async () => {
     if (requestId !== igdbSearchSequence) return
     igdbImages.value = data.images || []
     igdbGames.value = data.games || (data.game ? [{ ...data.game, imageCount: data.images?.length || 0 }] : [])
+    selectedIgdbImage.value = igdbImages.value[0] || null
     igdbGameFilter.value = 'all'
     igdbTypeFilter.value = 'all'
     post.value.mediaGameName = data.game?.name || query
@@ -1440,6 +1492,11 @@ const assignIgdbImage = (image) => {
   showEditorToast(`Imagen asignada a ${activeImageTarget.value?.label || 'destino'}`)
 }
 
+const selectImageTarget = (target) => {
+  imageTargetId.value = target.id
+  selectedIgdbImage.value = igdbImages.value.find(image => image.url === target.url) || activeIgdbImage.value
+}
+
 const assignedLabel = (url) => {
   const target = imageTargets.value.find(item => item.url === url)
   return target?.label || ''
@@ -1453,6 +1510,7 @@ const savePost = async (targetStatus = 'pending') => {
   }
   if (!selectedCategories.value.length) return alert('Selecciona al menos una categoria')
 
+  savingTargetStatus.value = targetStatus
   loading.value = true
   try {
     const user = auth.currentUser
@@ -3327,36 +3385,98 @@ const savePost = async (targetStatus = 'pending') => {
   text-align: center;
 }
 
-.target-strip {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
+.igdb-picker-workspace {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 220px minmax(0, 1fr) 280px;
+  height: min(540px, calc(100dvh - 300px));
+  min-height: 320px;
+  overflow: hidden;
 }
 
-.target-strip button {
+.igdb-targets,
+.igdb-results-pane,
+.igdb-selection-pane {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  min-height: 0;
+}
+
+.igdb-targets,
+.igdb-selection-pane {
+  align-content: start;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.igdb-targets { overflow-y: auto; }
+
+.igdb-pane-title {
+  align-items: center;
+  color: #1e293b;
+  display: flex;
+  font-size: 11px;
+  font-weight: 950;
+  justify-content: space-between;
+  min-height: 28px;
+  text-transform: uppercase;
+}
+
+.igdb-pane-title small {
+  color: #94a3b8;
+  font-size: 9px;
+  text-transform: none;
+}
+
+.igdb-targets > button {
+  align-items: center;
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  color: #334155;
-  display: grid;
-  flex: 0 0 auto;
-  font-size: 12px;
-  font-weight: 950;
-  gap: 2px;
-  min-width: 132px;
-  padding: 9px 12px;
-  text-align: left;
-}
-
-.target-strip button.active {
-  border-color: #a855f7;
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.12);
-}
-
-.target-strip small {
+  border-radius: 10px;
   color: #64748b;
-  font-size: 10px;
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 38px minmax(0, 1fr) 12px;
+  min-height: 50px;
+  padding: 6px;
+  text-align: left;
+  width: 100%;
+}
+
+.igdb-targets > button.active {
+  background: #f5f3ff;
+  border-color: #a855f7;
+  color: #7c3aed;
+}
+
+.igdb-targets > button img,
+.igdb-targets > button > b {
+  align-items: center;
+  aspect-ratio: 1;
+  background: #ede9fe;
+  border-radius: 7px;
+  display: flex;
+  font-size: 12px;
+  justify-content: center;
+  object-fit: cover;
+  overflow: hidden;
+  width: 38px;
+}
+
+.igdb-targets > button span { min-width: 0; }
+.igdb-targets > button strong,
+.igdb-targets > button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.igdb-targets > button strong { color: #1e293b; font-size: 11px; }
+.igdb-targets > button small { color: #94a3b8; font-size: 9px; margin-top: 2px; }
+.igdb-targets > button.filled > i { color: #16a34a; }
+
+.igdb-results-pane {
+  display: grid;
+  gap: 10px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  padding: 12px;
 }
 
 .igdb-filter-tabs {
@@ -3407,74 +3527,115 @@ const savePost = async (targetStatus = 'pending') => {
 
 .igdb-gallery {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
 }
 
-.igdb-gallery article {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  display: grid;
-  gap: 8px;
+.igdb-gallery > button {
+  aspect-ratio: 16 / 10;
+  background: #e2e8f0;
+  border: 2px solid transparent;
+  border-radius: 10px;
   overflow: hidden;
-  padding: 8px;
+  padding: 0;
+  position: relative;
 }
 
-.igdb-gallery article.selected {
+.igdb-gallery > button.active {
   border-color: #a855f7;
   box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.12);
 }
 
-.igdb-gallery img {
+.igdb-gallery > button img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.igdb-gallery > button > span {
+  align-items: center;
+  background: rgba(3, 7, 18, 0.78);
+  border-radius: 6px;
+  bottom: 6px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 9px;
+  font-weight: 900;
+  gap: 5px;
+  left: 6px;
+  padding: 4px 6px;
+  position: absolute;
+}
+
+.igdb-gallery > button > em {
+  align-items: center;
+  background: #8b5cf6;
+  border-radius: 999px;
+  color: #ffffff;
+  display: flex;
+  font-size: 9px;
+  height: 22px;
+  justify-content: center;
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 22px;
+}
+
+.igdb-selection-pane > img {
   aspect-ratio: 16 / 9;
   border-radius: 10px;
   object-fit: cover;
   width: 100%;
 }
 
-.igdb-gallery .igdb-image-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
+.igdb-selection-copy { display: grid; gap: 3px; }
+.igdb-selection-copy strong { color: #111827; font-size: 13px; line-height: 1.25; }
+.igdb-selection-copy span { color: #7c3aed; font-size: 10px; font-weight: 900; text-transform: uppercase; }
 
-.igdb-gallery .igdb-image-meta span,
-.igdb-gallery .igdb-image-meta strong {
-  color: #64748b;
-  font-size: 10px;
-  font-weight: 950;
-  text-transform: uppercase;
-}
-
-.igdb-gallery .igdb-image-meta span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.igdb-gallery .igdb-image-meta strong {
-  color: #9333ea;
-  flex: 0 0 auto;
-}
-
-.igdb-gallery article > small {
-  color: #94a3b8;
-  font-size: 9px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.igdb-gallery button {
-  background: #f5f3ff;
+.igdb-use-image {
+  align-items: center;
+  background: linear-gradient(135deg, #9333ea, #7c3aed);
   border-radius: 10px;
-  color: #7c3aed;
+  color: #ffffff;
+  display: flex;
   font-size: 11px;
   font-weight: 950;
-  min-height: 34px;
+  gap: 7px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 8px 10px;
 }
+
+.igdb-selection-pane > a {
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  color: #475569;
+  display: flex;
+  font-size: 10px;
+  font-weight: 900;
+  gap: 6px;
+  justify-content: center;
+  min-height: 36px;
+  text-decoration: none;
+}
+
+.igdb-selection-pane > p {
+  background: #faf5ff;
+  border-radius: 10px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.4;
+  margin: 4px 0 0;
+  padding: 10px;
+}
+
+.igdb-selection-pane > p i { color: #f59e0b; margin-right: 5px; }
 
 .app-toast {
   align-items: center;
@@ -3513,7 +3674,7 @@ const savePost = async (targetStatus = 'pending') => {
     linear-gradient(180deg, #050816, #07071c 58%, #09061a);
 }
 
-.editor-loading-cover :deep(.galaxy-loader.compact) {
+.editor-loading-cover :deep(.galaxy-loader) {
   height: 100vh;
   height: 100dvh;
   inset: 0;
@@ -3736,13 +3897,48 @@ const savePost = async (targetStatus = 'pending') => {
 
   .image-picker-panel {
     border-radius: 0;
+    height: 100dvh;
     max-height: 100dvh;
     max-width: 100vw;
+    overflow-y: auto;
     width: 100vw;
   }
 
   .igdb-search-row {
     grid-template-columns: 1fr;
+  }
+
+  .igdb-picker-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .igdb-targets {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .igdb-targets .igdb-pane-title {
+    display: none;
+  }
+
+  .igdb-targets > button {
+    flex: 0 0 min(240px, 72vw);
+  }
+
+  .igdb-results-pane {
+    overflow: visible;
+  }
+
+  .igdb-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 52dvh;
+  }
+
+  .igdb-selection-pane {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
   }
 
   .mobile-editor-actionbar {
