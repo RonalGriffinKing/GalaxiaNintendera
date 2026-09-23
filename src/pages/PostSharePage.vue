@@ -23,12 +23,15 @@ const brokenImages = ref({})
 const imageCacheNonce = ref(Date.now())
 const exportProgress = ref({ current: 0, total: 0, label: '' })
 const editorOpen = ref(false)
+const stylePickerOpen = ref(false)
 const selectedSlideIndex = ref(0)
 const applyScope = ref('all')
+const selectedStyle = ref('editorial')
 const selectedTemplate = ref('official')
 const activeDrawerSection = ref('image')
 const globalImageOverride = ref('')
 const slideImageOverrides = ref({})
+const slideTextOverrides = ref({})
 const sourceType = computed(() => route.query.type === 'event' ? 'event' : 'post')
 
 const fontOptions = [
@@ -45,18 +48,52 @@ const arrowIcons = [
 ]
 
 const defaultTemplateSettings = {
-  image: { visible: true },
+  image: { visible: true, brightness: 100, contrast: 100, saturation: 100, blur: 0, scale: 100, x: 50, y: 0 },
   logo: { visible: true, size: 120, x: 50, y: 34, opacity: 1 },
+  gameLogo: { visible: false, url: '', size: 220, x: 50, y: 150, opacity: 1 },
   author: { visible: true, avatar: true, name: true, date: true, size: 100, x: 82, y: 86, opacity: 1 },
   arrow: { visible: true, icon: 'fa-arrow-right', size: 96, color: '#9333ea', x: 34, y: 56, opacity: 1 },
   part: { visible: true, color: '#8b5cf6', text: '', size: 25, radius: 16 },
   title: { size: 82, weight: 950, color: '#ffffff', width: 820, line: 1.04, spacing: 34 },
   subtitle: { visible: false, size: 25, color: '#ffffff', lines: 1 },
-  description: { size: 40, color: '#f8fafc', lines: 3 },
+  description: { visible: true, size: 40, color: '#f8fafc', lines: 3 },
   button: { visible: true, text: 'Leela en la web', color: '#f97316', radius: 999, y: 126 },
   number: { visible: true, color: '#ffffff', size: 30 },
   overlay: { color: '#050816', intensity: 0.9, height: 100, gradient: true },
   typography: { family: 'Inter, system-ui, sans-serif' }
+}
+
+const impactTemplateSettings = mergeSettings(defaultTemplateSettings, {
+  image: { y: 50 },
+  logo: { visible: false, size: 112, x: 50, y: 48, opacity: 1 },
+  gameLogo: { visible: false, url: '', size: 250, x: 50, y: 150, opacity: 1 },
+  author: { visible: false },
+  arrow: { visible: true, icon: 'fa-chevron-right', size: 132, color: '#ffffff', x: 44, y: 84, opacity: 1 },
+  part: { visible: false },
+  title: { size: 76, weight: 950, color: '#ffffff', width: 900, line: 1.12, spacing: 0 },
+  subtitle: { visible: false },
+  description: { visible: false, size: 34, color: '#ffffff', lines: 2 },
+  button: { visible: false },
+  number: { visible: false },
+  overlay: { color: '#080604', intensity: 0.52, height: 100, gradient: false },
+  typography: { family: 'Inter, system-ui, sans-serif' }
+})
+
+const styleDefinitions = {
+  editorial: {
+    label: 'Editorial Galaxia',
+    description: 'El carrusel actual con autor, etiquetas, resumen y numeracion.',
+    icon: 'fa-layer-group',
+    className: 'style-editorial',
+    settings: defaultTemplateSettings
+  },
+  impact: {
+    label: 'Impacto visual',
+    description: 'Imagen completa, titular grande, logos opcionales y flecha circular.',
+    icon: 'fa-bolt',
+    className: 'style-impact',
+    settings: impactTemplateSettings
+  }
 }
 
 const templatePresets = {
@@ -102,7 +139,12 @@ const templatePresets = {
   }
 }
 
-const globalTemplateSettings = ref(loadStoredTemplate() || cloneSettings(defaultTemplateSettings))
+const styleSettingsStore = ref({
+  editorial: loadStoredTemplate('editorial') || cloneSettings(defaultTemplateSettings),
+  impact: loadStoredTemplate('impact') || cloneSettings(impactTemplateSettings)
+})
+const styleOverridesStore = ref({ editorial: {}, impact: {} })
+const globalTemplateSettings = ref(cloneSettings(styleSettingsStore.value.editorial))
 const slideTemplateOverrides = ref({})
 
 const formats = {
@@ -147,6 +189,7 @@ const hasScore = computed(() => {
 const isAnalysisPost = computed(() => Boolean(post.value?.analysis) || normalize(category.value).includes('analisis'))
 const createdAtLabel = computed(() => formatDate(post.value?.createdAt))
 const activeFormat = computed(() => formats[selectedFormat.value] || formats.story)
+const activeStyle = computed(() => styleDefinitions[selectedStyle.value] || styleDefinitions.editorial)
 const exportSize = computed(() => ({ width: activeFormat.value.width, height: activeFormat.value.height }))
 const cardStyle = computed(() => ({
   width: `${exportSize.value.width}px`,
@@ -263,6 +306,28 @@ function selectSlide(index) {
   selectedSlideIndex.value = index
 }
 
+function switchStyle(key) {
+  if (!styleDefinitions[key] || key === selectedStyle.value) {
+    stylePickerOpen.value = false
+    return
+  }
+
+  styleSettingsStore.value = {
+    ...styleSettingsStore.value,
+    [selectedStyle.value]: cloneSettings(globalTemplateSettings.value)
+  }
+  styleOverridesStore.value = {
+    ...styleOverridesStore.value,
+    [selectedStyle.value]: cloneSettings(slideTemplateOverrides.value)
+  }
+
+  selectedStyle.value = key
+  globalTemplateSettings.value = cloneSettings(styleSettingsStore.value[key] || styleDefinitions[key].settings)
+  slideTemplateOverrides.value = cloneSettings(styleOverridesStore.value[key] || {})
+  selectedTemplate.value = key === 'editorial' ? 'official' : 'custom'
+  stylePickerOpen.value = false
+}
+
 function settingsForSlide(index) {
   return mergeSettings(globalTemplateSettings.value, slideTemplateOverrides.value[index] || {})
 }
@@ -302,7 +367,7 @@ function setSetting(path, value) {
 function applyPreset(key) {
   selectedTemplate.value = key
   if (key === 'custom') {
-    const custom = loadStoredTemplate()
+    const custom = loadStoredTemplate(selectedStyle.value)
     if (custom) globalTemplateSettings.value = custom
     return
   }
@@ -313,14 +378,38 @@ function applyPreset(key) {
 }
 
 function saveCustomTemplate() {
-  localStorage.setItem('galaxia-social-template', JSON.stringify(globalTemplateSettings.value))
+  localStorage.setItem(`galaxia-social-template-${selectedStyle.value}`, JSON.stringify(globalTemplateSettings.value))
   selectedTemplate.value = 'custom'
 }
 
 function resetTemplate() {
-  selectedTemplate.value = 'official'
-  globalTemplateSettings.value = cloneSettings(defaultTemplateSettings)
+  selectedTemplate.value = selectedStyle.value === 'editorial' ? 'official' : 'custom'
+  globalTemplateSettings.value = cloneSettings(activeStyle.value.settings)
   slideTemplateOverrides.value = {}
+}
+
+function resetImageFilters() {
+  const defaults = activeStyle.value.settings.image
+  setSetting('image.brightness', defaults.brightness)
+  setSetting('image.contrast', defaults.contrast)
+  setSetting('image.saturation', defaults.saturation)
+  setSetting('image.blur', defaults.blur)
+  setSetting('image.scale', defaults.scale)
+  setSetting('image.x', defaults.x)
+  setSetting('image.y', defaults.y)
+}
+
+function displaySlideTitle(slide) {
+  return slideTextOverrides.value[slide.id] ?? slide.title
+}
+
+function setSlideTitle(value) {
+  const slide = selectedSlide.value
+  if (!slide) return
+  slideTextOverrides.value = {
+    ...slideTextOverrides.value,
+    [slide.id]: value
+  }
 }
 
 function setTemporaryImage(value) {
@@ -372,6 +461,10 @@ function cardStyleFor(index) {
   return {
     ...cardStyle.value,
     '--template-font-family': settings.typography.family,
+    '--image-filter': `brightness(${settings.image.brightness}%) contrast(${settings.image.contrast}%) saturate(${settings.image.saturation}%) blur(${settings.image.blur}px)`,
+    '--image-scale': settings.image.scale / 100,
+    '--image-position-x': `${settings.image.x}%`,
+    '--image-position-y': `${settings.image.y}%`,
     '--author-x': `${settings.author.x}px`,
     '--author-y': `${settings.author.y}px`,
     '--author-scale': settings.author.size / 100,
@@ -408,8 +501,17 @@ function cardStyleFor(index) {
     '--logo-bottom': `${settings.logo.y}px`,
     '--logo-left': `${settings.logo.x}%`,
     '--logo-size': `${settings.logo.size}px`,
-    '--logo-opacity': settings.logo.opacity
+    '--logo-opacity': settings.logo.opacity,
+    '--game-logo-bottom': `${settings.gameLogo.y}px`,
+    '--game-logo-left': `${settings.gameLogo.x}%`,
+    '--game-logo-size': `${settings.gameLogo.size}px`,
+    '--game-logo-opacity': settings.gameLogo.opacity
   }
+}
+
+function gameLogoSource(index) {
+  const value = settingsForSlide(index).gameLogo.url
+  return value ? proxiedImageUrl(value) : ''
 }
 
 function labelForPart(slide, index) {
@@ -450,9 +552,10 @@ function setByPath(source, path, value) {
   target[last] = value
 }
 
-function loadStoredTemplate() {
+function loadStoredTemplate(style = 'editorial') {
   try {
-    const stored = localStorage.getItem('galaxia-social-template')
+    const stored = localStorage.getItem(`galaxia-social-template-${style}`)
+      || (style === 'editorial' ? localStorage.getItem('galaxia-social-template') : '')
     return stored ? mergeSettings(defaultTemplateSettings, JSON.parse(stored)) : null
   } catch (err) {
     return null
@@ -461,7 +564,7 @@ function loadStoredTemplate() {
 
 function overlayGradient(overlay) {
   const color = overlay.color || '#050816'
-  if (!overlay.gradient) return color
+  if (!overlay.gradient) return hexToRgba(color, overlay.intensity)
   return `linear-gradient(180deg, ${hexToRgba(color, 0.22)} 0%, ${hexToRgba(color, 0.04)} ${100 - overlay.height}%, ${hexToRgba(color, overlay.intensity)} 100%), linear-gradient(90deg, rgba(88, 28, 135, 0.22), rgba(236, 72, 153, 0.08), rgba(5, 8, 22, 0.22))`
 }
 
@@ -747,6 +850,10 @@ function slugify(value) {
           <i class="fas fa-sliders"></i>
           Editar plantilla
         </button>
+        <button type="button" class="share-secondary style-change-button" :disabled="!post" @click="stylePickerOpen = !stylePickerOpen">
+          <i class="fas fa-swatchbook"></i>
+          Cambiar estilo
+        </button>
         <button type="button" class="share-primary" :disabled="!post || isDownloading" @click="downloadCarousel">
           <i :class="isDownloading ? 'fas fa-circle-notch fa-spin' : 'fas fa-download'"></i>
           {{ isDownloading ? `Generando ${exportProgress.current || 1}/${exportProgress.total || carouselSlides.length}` : `Descargar ZIP (${carouselSlides.length} imagenes)` }}
@@ -768,6 +875,28 @@ function slugify(value) {
       <p v-if="error" class="share-error">{{ error }}</p>
       <p v-if="imageIssueMessage" class="share-warning">{{ imageIssueMessage }}</p>
 
+      <div v-if="stylePickerOpen" class="style-picker" aria-label="Seleccionar estilo visual">
+        <button
+          v-for="(style, key) in styleDefinitions"
+          :key="key"
+          type="button"
+          :class="{ active: selectedStyle === key }"
+          @click="switchStyle(key)"
+        >
+          <i :class="['fas', style.icon]"></i>
+          <span>
+            <strong>{{ style.label }}</strong>
+            <small>{{ style.description }}</small>
+          </span>
+          <i v-if="selectedStyle === key" class="fas fa-check style-selected-icon"></i>
+        </button>
+      </div>
+
+      <div class="active-style-bar">
+        <span><i :class="['fas', activeStyle.icon]"></i> {{ activeStyle.label }}</span>
+        <button type="button" @click="stylePickerOpen = !stylePickerOpen">Cambiar</button>
+      </div>
+
       <div class="format-switcher" aria-label="Formato de exportacion">
         <button
           v-for="(format, key) in formats"
@@ -784,7 +913,7 @@ function slugify(value) {
       <div class="share-preview">
         <div
           v-for="(slide, index) in carouselSlides"
-          :key="`${post?.id || 'post'}-${selectedFormat}-${slide.id}-${slide.image}`"
+          :key="`${post?.id || 'post'}-${selectedStyle}-${selectedFormat}-${slide.id}-${slide.image}`"
           class="share-slide-shell"
           :class="{ active: selectedSlideIndex === index }"
         >
@@ -793,7 +922,7 @@ function slugify(value) {
               <article
                 :ref="(el) => setCardRef(el, index)"
                 class="social-card"
-                :class="{ analysis: isAnalysisPost }"
+                :class="[activeStyle.className, { analysis: isAnalysisPost }]"
                 :style="cardStyleFor(index)"
               >
                 <img
@@ -834,10 +963,10 @@ function slugify(value) {
                     <i class="fas fa-gamepad"></i>
                     {{ labelForPart(slide, index) }}
                   </span>
-                  <h2>{{ slide.title }}</h2>
+                  <h2>{{ displaySlideTitle(slide) }}</h2>
                   <small v-if="settingsForSlide(index).subtitle.visible" class="social-subtitle">{{ slide.subtitle }}</small>
-                  <p>{{ slide.description }}</p>
-                  <ul v-if="slide.points?.length" class="social-points">
+                  <p v-if="settingsForSlide(index).description.visible">{{ slide.description }}</p>
+                  <ul v-if="selectedStyle !== 'impact' && slide.points?.length" class="social-points">
                     <li v-for="(point, pointIndex) in slide.points" :key="`${slide.id}-point-${pointIndex}`">
                       <span>{{ pointIndex + 1 }}</span>
                       <strong>{{ point }}</strong>
@@ -856,6 +985,13 @@ function slugify(value) {
                 </div>
 
                 <img v-if="settingsForSlide(index).logo.visible" class="social-brand-logo" :src="galaxyLogo" alt="Galaxia Nintendera" />
+                <img
+                  v-if="settingsForSlide(index).gameLogo.visible && gameLogoSource(index)"
+                  class="social-game-logo"
+                  :src="gameLogoSource(index)"
+                  crossorigin="anonymous"
+                  alt="Logo del juego"
+                />
               </article>
             </div>
           </div>
@@ -888,11 +1024,27 @@ function slugify(value) {
       </div>
 
       <div class="drawer-panel">
-        <label class="drawer-label">Plantilla</label>
-        <select :value="selectedTemplate" @change="applyPreset($event.target.value)">
-          <option v-for="(preset, key) in templatePresets" :key="key" :value="key">{{ preset.label }}</option>
-          <option value="custom">Personalizada</option>
-        </select>
+        <label class="drawer-label">Estilo</label>
+        <div class="drawer-style-switch">
+          <button
+            v-for="(style, key) in styleDefinitions"
+            :key="key"
+            type="button"
+            :class="{ active: selectedStyle === key }"
+            @click="switchStyle(key)"
+          >
+            <i :class="['fas', style.icon]"></i>
+            {{ style.label }}
+          </button>
+        </div>
+        <template v-if="selectedStyle === 'editorial'">
+          <label class="drawer-label">Variacion editorial</label>
+          <select :value="selectedTemplate" @change="applyPreset($event.target.value)">
+            <option v-for="(preset, key) in templatePresets" :key="key" :value="key">{{ preset.label }}</option>
+            <option value="custom">Personalizada</option>
+          </select>
+        </template>
+        <small v-else>Personaliza este estilo con los controles y guarda tus valores para reutilizarlos.</small>
         <div class="drawer-actions">
           <button type="button" @click="saveCustomTemplate">Guardar personalizada</button>
           <button type="button" @click="resetTemplate">Restablecer</button>
@@ -944,13 +1096,38 @@ function slugify(value) {
           </button>
         </details>
 
+        <details :open="activeDrawerSection === 'filters'">
+          <summary @click.prevent="toggleDrawerSection('filters')">Filtros de imagen</summary>
+          <label>Brillo <input type="range" min="40" max="160" :value="settingValue('image.brightness')" @input="setSetting('image.brightness', Number($event.target.value))" /></label>
+          <label>Contraste <input type="range" min="40" max="180" :value="settingValue('image.contrast')" @input="setSetting('image.contrast', Number($event.target.value))" /></label>
+          <label>Saturacion <input type="range" min="0" max="220" :value="settingValue('image.saturation')" @input="setSetting('image.saturation', Number($event.target.value))" /></label>
+          <label>Desenfoque <input type="range" min="0" max="14" step="0.5" :value="settingValue('image.blur')" @input="setSetting('image.blur', Number($event.target.value))" /></label>
+          <label>Zoom <input type="range" min="100" max="170" :value="settingValue('image.scale')" @input="setSetting('image.scale', Number($event.target.value))" /></label>
+          <label>Posicion horizontal <input type="range" min="0" max="100" :value="settingValue('image.x')" @input="setSetting('image.x', Number($event.target.value))" /></label>
+          <label>Posicion vertical <input type="range" min="0" max="100" :value="settingValue('image.y')" @input="setSetting('image.y', Number($event.target.value))" /></label>
+          <button type="button" class="drawer-ghost-action" @click="resetImageFilters">
+            <i class="fas fa-rotate-left"></i>
+            Restablecer filtros
+          </button>
+        </details>
+
         <details :open="activeDrawerSection === 'logo'">
-          <summary @click.prevent="toggleDrawerSection('logo')">Logo Galaxia</summary>
-          <label><input type="checkbox" :checked="settingValue('logo.visible')" @change="setSetting('logo.visible', $event.target.checked)" /> Mostrar logo</label>
+          <summary @click.prevent="toggleDrawerSection('logo')">Logo Galaxia Nintendera</summary>
+          <label><input type="checkbox" :checked="settingValue('logo.visible')" @change="setSetting('logo.visible', $event.target.checked)" /> Mostrar mi logo</label>
           <label>Tamano <input type="range" min="60" max="220" :value="settingValue('logo.size')" @input="setSetting('logo.size', Number($event.target.value))" /></label>
           <label>Posicion X <input type="range" min="5" max="95" :value="settingValue('logo.x')" @input="setSetting('logo.x', Number($event.target.value))" /></label>
           <label>Margen inferior <input type="range" min="0" max="180" :value="settingValue('logo.y')" @input="setSetting('logo.y', Number($event.target.value))" /></label>
           <label>Opacidad <input type="range" min="0" max="1" step="0.05" :value="settingValue('logo.opacity')" @input="setSetting('logo.opacity', Number($event.target.value))" /></label>
+        </details>
+
+        <details :open="activeDrawerSection === 'gameLogo'">
+          <summary @click.prevent="toggleDrawerSection('gameLogo')">Logo del juego</summary>
+          <label><input type="checkbox" :checked="settingValue('gameLogo.visible')" @change="setSetting('gameLogo.visible', $event.target.checked)" /> Mostrar logo del juego</label>
+          <label>URL PNG <input type="url" :value="settingValue('gameLogo.url')" placeholder="https://.../logo.png" @input="setSetting('gameLogo.url', $event.target.value.trim())" /></label>
+          <label>Tamano <input type="range" min="60" max="480" :value="settingValue('gameLogo.size')" @input="setSetting('gameLogo.size', Number($event.target.value))" /></label>
+          <label>Posicion X <input type="range" min="5" max="95" :value="settingValue('gameLogo.x')" @input="setSetting('gameLogo.x', Number($event.target.value))" /></label>
+          <label>Margen inferior <input type="range" min="0" max="420" :value="settingValue('gameLogo.y')" @input="setSetting('gameLogo.y', Number($event.target.value))" /></label>
+          <label>Opacidad <input type="range" min="0" max="1" step="0.05" :value="settingValue('gameLogo.opacity')" @input="setSetting('gameLogo.opacity', Number($event.target.value))" /></label>
         </details>
 
         <details :open="activeDrawerSection === 'author'">
@@ -984,6 +1161,7 @@ function slugify(value) {
 
         <details :open="activeDrawerSection === 'text'">
           <summary @click.prevent="toggleDrawerSection('text')">Texto</summary>
+          <label>Texto de este slide <textarea :value="selectedSlide ? displaySlideTitle(selectedSlide) : ''" rows="4" @input="setSlideTitle($event.target.value)"></textarea></label>
           <label>Fuente <select :value="settingValue('typography.family')" @change="setSetting('typography.family', $event.target.value)"><option v-for="font in fontOptions" :key="font.value" :value="font.value">{{ font.label }}</option></select></label>
           <label>Titulo tamano <input type="range" min="42" max="110" :value="settingValue('title.size')" @input="setSetting('title.size', Number($event.target.value))" /></label>
           <label>Titulo peso <input type="range" min="500" max="950" step="50" :value="settingValue('title.weight')" @input="setSetting('title.weight', Number($event.target.value))" /></label>
@@ -1069,6 +1247,92 @@ function slugify(value) {
 .share-toolbar-actions {
   display: flex;
   gap: 10px;
+}
+
+.active-style-bar {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.active-style-bar > span {
+  align-items: center;
+  color: #e9d5ff;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 950;
+  gap: 8px;
+}
+
+.active-style-bar button {
+  color: #f0abfc;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.style-picker {
+  background: rgba(7, 10, 26, 0.94);
+  border: 1px solid rgba(216, 180, 254, 0.28);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.style-picker > button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #ffffff;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  min-height: 74px;
+  padding: 12px;
+  text-align: left;
+}
+
+.style-picker > button.active {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.38), rgba(236, 72, 153, 0.22));
+  border-color: #d946ef;
+  box-shadow: inset 0 0 0 1px rgba(217, 70, 239, 0.34);
+}
+
+.style-picker > button > i:first-child {
+  align-items: center;
+  background: rgba(168, 85, 247, 0.2);
+  border-radius: 8px;
+  color: #e879f9;
+  display: flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.style-picker strong,
+.style-picker small {
+  display: block;
+}
+
+.style-picker strong {
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.style-picker small {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin-top: 4px;
+}
+
+.style-selected-icon {
+  color: #4ade80;
 }
 
 .share-primary,
@@ -1277,12 +1541,15 @@ function slugify(value) {
 }
 
 .social-card-bg {
+  filter: var(--image-filter);
   height: 100%;
   inset: 0;
   object-fit: cover;
-  object-position: center top;
+  object-position: var(--image-position-x) var(--image-position-y);
   opacity: 0.98;
   position: absolute;
+  transform: scale(var(--image-scale));
+  transform-origin: center;
   width: 100%;
 }
 
@@ -1334,7 +1601,8 @@ function slugify(value) {
 .social-card-top,
 .social-card-copy,
 .social-card-footer,
-.social-brand-logo {
+.social-brand-logo,
+.social-game-logo {
   position: relative;
   z-index: 2;
 }
@@ -1650,6 +1918,72 @@ function slugify(value) {
   width: var(--logo-size);
 }
 
+.social-game-logo {
+  bottom: var(--game-logo-bottom);
+  height: var(--game-logo-size);
+  left: var(--game-logo-left);
+  object-fit: contain;
+  opacity: var(--game-logo-opacity);
+  position: absolute;
+  transform: translateX(-50%);
+  width: min(var(--game-logo-size), 72%);
+}
+
+.social-card.style-impact .social-card-scrim,
+.social-card.style-impact.analysis .social-card-scrim {
+  background: var(--overlay-gradient);
+}
+
+.social-card.style-impact .social-card-glow,
+.social-card.style-impact.analysis .social-card-glow,
+.social-card.style-impact .analysis-gold-pattern {
+  display: none;
+}
+
+.social-card.style-impact .social-card-copy {
+  bottom: auto;
+  left: 58px;
+  max-width: calc(100% - 116px);
+  right: 58px;
+  top: 25%;
+}
+
+.social-card.style-impact .social-card-copy h2 {
+  font-size: var(--copy-title-size);
+  letter-spacing: 0;
+  max-height: 850px;
+  max-width: var(--copy-title-width);
+  overflow-wrap: anywhere;
+  text-shadow: 0 5px 2px rgba(0, 0, 0, 0.72), 0 14px 34px rgba(0, 0, 0, 0.62);
+  text-transform: uppercase;
+}
+
+.social-card.style-impact .social-card-copy p {
+  max-width: var(--copy-title-width);
+}
+
+.social-card.style-impact .social-next-cue {
+  background: #ffffff;
+  border: 0;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+  color: #171717;
+}
+
+.social-card.style-impact .social-next-cue i,
+.social-card.style-impact.analysis .social-next-cue i {
+  background: transparent;
+  color: #292524;
+  font-size: calc(var(--arrow-size) * 0.52);
+}
+
+.social-card.style-impact .social-brand-logo {
+  filter: drop-shadow(0 7px 18px rgba(0, 0, 0, 0.55));
+}
+
+.social-card.style-impact .social-game-logo {
+  filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.62));
+}
+
 .template-drawer {
   background: rgba(7, 10, 26, 0.96);
   border-left: 1px solid rgba(255, 255, 255, 0.12);
@@ -1709,13 +2043,49 @@ function slugify(value) {
 
 .drawer-panel select,
 .drawer-sections select,
-.drawer-sections input:not([type="checkbox"]):not([type="range"]):not([type="color"]) {
+.drawer-sections input:not([type="checkbox"]):not([type="range"]):not([type="color"]),
+.drawer-sections textarea {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
   color: #ffffff;
   min-height: 38px;
   padding: 0 10px;
+}
+
+.drawer-sections textarea {
+  font: inherit;
+  line-height: 1.35;
+  min-height: 92px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.drawer-style-switch {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.drawer-style-switch button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  display: flex;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 7px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 6px 8px;
+}
+
+.drawer-style-switch button.active {
+  background: linear-gradient(135deg, #7c3aed, #db2777);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 
 .drawer-actions {
@@ -1966,6 +2336,10 @@ function slugify(value) {
   .share-toolbar-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .style-picker {
+    grid-template-columns: 1fr;
   }
 
   .share-primary,
