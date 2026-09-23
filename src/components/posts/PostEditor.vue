@@ -325,7 +325,7 @@
               <div class="field-grid-2">
                 <label class="field-group">
                   <span>Plataformas</span>
-                  <input v-model="post.game.platformsText" placeholder="Nintendo Switch 2, PC, PS5" />
+                  <input v-model="post.game.platformsText" placeholder="PC, iOS, Android, Nintendo Switch 2?" />
                 </label>
                 <label class="field-group">
                   <span>Fecha de lanzamiento</span>
@@ -977,7 +977,12 @@ onMounted(async () => {
     post.value.game = {
       nameEs: savedGame.nameEs || savedGame.nameSpanish || '',
       nameEn: savedGame.nameEn || savedGame.nameEnglish || post.value.mediaGameName || '',
-      platformsText: Array.isArray(savedGame.platforms) ? savedGame.platforms.join(', ') : (savedGame.platformsText || ''),
+      platformsText: Array.isArray(savedGame.platforms)
+        ? savedGame.platforms.map(platform => {
+            if (typeof platform === 'string') return platform
+            return `${platform?.name || platform?.label || ''}${platform?.confirmed === false || platform?.status === 'unconfirmed' ? '?' : ''}`
+          }).filter(Boolean).join(', ')
+        : (savedGame.platformsText || ''),
       releaseDate: savedGame.releaseDate || '',
       releaseNote: savedGame.releaseNote || '',
       officialLinksText: Array.isArray(savedGame.officialLinks)
@@ -1046,7 +1051,16 @@ const normalizeGameData = (game = {}) => {
   return {
     nameEs: String(game.nameEs || game.nameSpanish || game.nombreEs || names.es || names.spanish || '').trim(),
     nameEn: String(game.nameEn || game.nameEnglish || game.nombreEn || names.en || names.english || '').trim(),
-    platforms: platformsSource.map(item => String(item || '').trim()).filter(Boolean),
+    platforms: platformsSource.map(item => {
+      if (typeof item === 'object' && item) {
+        return {
+          name: String(item.name || item.label || '').trim(),
+          confirmed: item.confirmed !== false && item.status !== 'unconfirmed'
+        }
+      }
+      const value = String(item || '').trim()
+      return { name: value.replace(/\?$/, '').trim(), confirmed: !value.endsWith('?') }
+    }).filter(item => item.name),
     releaseDate: String(game.releaseDate || game.fechaLanzamiento || '').trim(),
     releaseNote: String(game.releaseNote || game.notaLanzamiento || '').trim(),
     officialLinks: normalizedLinks

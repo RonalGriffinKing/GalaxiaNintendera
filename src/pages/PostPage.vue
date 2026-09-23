@@ -471,7 +471,11 @@ const ensureArticleSchema = (canonical, description, image) => {
       name: gameName
     }
     if (game.nameEn && game.nameEn !== gameName) schema.about.alternateName = game.nameEn
-    if (Array.isArray(game.platforms) && game.platforms.length) schema.about.gamePlatform = game.platforms
+    if (Array.isArray(game.platforms) && game.platforms.length) {
+      schema.about.gamePlatform = game.platforms
+        .map(platform => typeof platform === 'string' ? platform.replace(/\?$/, '').trim() : platform?.name)
+        .filter(Boolean)
+    }
     if (game.releaseDate) schema.about.datePublished = game.releaseDate
     const officialUrls = (Array.isArray(game.officialLinks) ? game.officialLinks : [])
       .map(link => link?.url)
