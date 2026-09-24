@@ -212,12 +212,13 @@ const rows = [
   ['Sirope tiramisu', 'Secos', 'primaria'],
   ['Sirope vainilla', 'Secos', 'primaria'],
   ['Sirope violeta', 'Secos', '2 meses'],
-
   ['Pulpa de mango', 'Refrigerados', '4 dias'],
   ['Matcha biberon', 'Refrigerados', '3 dias'],
   ['Fruta de la pasion', 'Refrigerados', '4 dias'],
   ['Zumo de naranja', 'Refrigerados', '2 dias'],
   ['Cacao', 'Secos', 'primaria'],
+  ['Sirope chocolate Dubai', 'Secos', 'primaria'],
+  ['Sirope chai', 'Secos', 'primaria'],
 ]
 
 const storageByCategory = {

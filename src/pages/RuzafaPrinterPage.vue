@@ -11,21 +11,59 @@ const mode = ref('home')
 const printTitle = ref('')
 const queue = ref([])
 const search = ref('')
+const homeSearch = ref('')
+const selectedProduct = ref(null)
 const category = ref('Todos')
 const editing = reactive({})
 const pendingProductIds = ref(new Set())
 
 const categories = ['Todos', 'Congelados', 'Refrigerados', 'Elaborados', 'Secos']
 
-const normalizeProduct = product => ({
-  audit: true,
-  daily: false,
-  bar: false,
-  active: true,
-  storage: 'Refrigeracion (+)',
-  state: 'Abierto',
-  ...product,
-})
+const dateFromValue = value => {
+  if (!value) return null
+  const text = String(value).trim()
+  const spanishDate = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const parts = spanishDate
+    ? [spanishDate[3], spanishDate[2], spanishDate[1]]
+    : isoDate
+      ? [isoDate[1], isoDate[2], isoDate[3]]
+      : null
+  if (!parts) return null
+  const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 12)
+  const isValid = date.getFullYear() === Number(parts[0])
+    && date.getMonth() === Number(parts[1]) - 1
+    && date.getDate() === Number(parts[2])
+  return !Number.isNaN(date.getTime()) && isValid ? date : null
+}
+
+const toDateInputValue = value => {
+  const date = dateFromValue(value)
+  if (!date) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const normalizeProduct = product => {
+  const normalized = {
+    audit: true,
+    daily: false,
+    bar: false,
+    active: true,
+    primaryExpiry: '',
+    storage: 'Refrigeracion (+)',
+    state: 'Abierto',
+    ...product,
+  }
+  const legacyPrimaryDate = dateFromValue(normalized.shelfLife)
+  if (!normalized.primaryExpiry && legacyPrimaryDate) {
+    normalized.primaryExpiry = toDateInputValue(normalized.shelfLife)
+    normalized.shelfLife = 'primaria'
+  }
+  return normalized
+}
 
 onMounted(async () => {
   try {
@@ -45,6 +83,14 @@ const filteredProducts = computed(() => {
     const matchesTerm = !term || product.name.toLocaleLowerCase('es').includes(term)
     return matchesCategory && matchesTerm
   })
+})
+
+const globalSearchResults = computed(() => {
+  const term = homeSearch.value.trim().toLocaleLowerCase('es')
+  if (term.length < 2) return []
+  return products.value
+    .filter(product => product.active && product.name.toLocaleLowerCase('es').includes(term))
+    .slice(0, 8)
 })
 
 const pendingCount = computed(() => pendingProductIds.value.size)
@@ -79,6 +125,26 @@ const addShelfLife = (date, shelfLife) => {
   return expiry
 }
 
+const prepareQueue = (source, title) => {
+  const now = new Date()
+  queue.value = source.map((product, index) => {
+    const primaryDate = dateFromValue(product.primaryExpiry)
+    return {
+      ...product,
+      selected: true,
+      quantity: 1,
+      printedAt: now,
+      expiry: primaryDate || addShelfLife(now, product.shelfLife),
+      manualExpiry: product.primaryExpiry || '',
+      lot: makeLot(now, index),
+    }
+  })
+  printTitle.value = title
+  mode.value = 'preview'
+  selectedProduct.value = null
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 const makeLot = (date, index) => {
   const day = String(date.getDate()).padStart(2, '0')
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -87,25 +153,22 @@ const makeLot = (date, index) => {
 }
 
 const createQueue = type => {
-  const now = new Date()
   const source = products.value.filter(product => product.active && product[type])
-  queue.value = source.map((product, index) => ({
-    ...product,
-    selected: true,
-    quantity: 1,
-    printedAt: now,
-    expiry: addShelfLife(now, product.shelfLife),
-    manualExpiry: '',
-    lot: makeLot(now, index),
-  }))
   const titles = {
     audit: 'Impresion para auditoria',
     daily: 'Impresion diaria',
     bar: 'Impresion para barra',
   }
-  printTitle.value = titles[type] || 'Impresion de etiquetas'
-  mode.value = 'preview'
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  prepareQueue(source, titles[type] || 'Impresion de etiquetas')
+}
+
+const printSingleProduct = product => {
+  prepareQueue([product], `Imprimir ${product.name}`)
+}
+
+const selectGlobalProduct = product => {
+  selectedProduct.value = product
+  homeSearch.value = product.name
 }
 
 const printableLabels = computed(() => queue.value.flatMap(item => {
@@ -116,6 +179,12 @@ const printableLabels = computed(() => queue.value.flatMap(item => {
 const expiryText = item => {
   if (item.manualExpiry) return formatDate(new Date(`${item.manualExpiry}T12:00:00`))
   return item.expiry ? formatDate(item.expiry) : 'INDICAR FECHA'
+}
+
+const primaryExpiryText = item => {
+  const value = item.manualExpiry || item.primaryExpiry
+  const date = dateFromValue(value)
+  return date ? formatDate(date) : ''
 }
 
 const printLabels = () => {
@@ -136,6 +205,7 @@ const saveProduct = async () => {
   saving.value = true
   message.value = ''
   try {
+    if (editing.primaryExpiry && dateFromValue(editing.shelfLife)) editing.shelfLife = 'primaria'
     await saveRuzafaProduct(editing)
     const index = products.value.findIndex(product => product.id === editing.id)
     if (index >= 0) products.value[index] = normalizeProduct({ ...editing })
@@ -187,6 +257,7 @@ const savePendingProducts = async () => {
 const goHome = () => {
   mode.value = 'home'
   message.value = ''
+  selectedProduct.value = null
 }
 </script>
 
@@ -212,6 +283,38 @@ const goHome = () => {
         <p class="eyebrow">Selecciona una tarea</p>
         <h2>¿Qué etiquetas necesitas hoy?</h2>
         <p>Las fechas se calculan automáticamente usando la tabla de caducidades.</p>
+      </div>
+
+      <div class="global-product-search">
+        <label for="rz-global-search">Buscar un producto</label>
+        <div class="global-search-field">
+          <input
+            id="rz-global-search"
+            v-model="homeSearch"
+            type="search"
+            autocomplete="off"
+            placeholder="Ej.: sirope de vainilla"
+            @input="selectedProduct = null"
+          >
+          <button v-if="homeSearch" type="button" aria-label="Limpiar busqueda" @click="homeSearch = ''; selectedProduct = null">&times;</button>
+        </div>
+        <div v-if="globalSearchResults.length && !selectedProduct" class="global-results">
+          <button v-for="product in globalSearchResults" :key="product.id" type="button" @click="selectGlobalProduct(product)">
+            <span><strong>{{ product.name }}</strong><small>{{ product.category }}</small></span>
+            <span>{{ product.primaryExpiry ? formatDate(dateFromValue(product.primaryExpiry)) : product.shelfLife }}</span>
+          </button>
+        </div>
+        <p v-else-if="homeSearch.trim().length >= 2 && !selectedProduct" class="empty-search">No hay productos activos con ese nombre.</p>
+        <div v-if="selectedProduct" class="quick-product-panel">
+          <div>
+            <strong>{{ selectedProduct.name }}</strong>
+            <small>{{ selectedProduct.category }} · {{ selectedProduct.primaryExpiry ? `Caducidad primaria: ${formatDate(dateFromValue(selectedProduct.primaryExpiry))}` : selectedProduct.shelfLife }}</small>
+          </div>
+          <div class="quick-product-actions">
+            <button class="print-button" type="button" @click="printSingleProduct(selectedProduct)">Imprimir etiqueta</button>
+            <button class="secondary-button" type="button" @click="editProduct(selectedProduct)">Modificar producto</button>
+          </div>
+        </div>
       </div>
 
       <div class="primary-actions">
@@ -258,7 +361,7 @@ const goHome = () => {
           <input v-model="item.selected" type="checkbox" :aria-label="`Incluir ${item.name}`">
           <div class="queue-name"><strong>{{ item.name }}</strong><small>{{ item.shelfLife }}</small></div>
           <label>Caducidad
-            <input v-if="!item.expiry" v-model="item.manualExpiry" type="date">
+            <input v-if="!item.expiry || item.primaryExpiry || String(item.shelfLife).toLowerCase().includes('primaria')" v-model="item.manualExpiry" type="date">
             <span v-else>{{ expiryText(item) }}</span>
           </label>
           <label>Lote<input v-model="item.lot" type="text" inputmode="numeric"></label>
@@ -272,7 +375,7 @@ const goHome = () => {
           <div class="label-rule"></div>
           <div class="label-grid">
             <span>Fecha<br>Impresión</span><b>{{ formatDate(item.printedAt) }}<br>{{ formatTime(item.printedAt) }}</b>
-            <span>Caducidad<br>Primaria</span><b></b>
+            <span>Caducidad<br>Primaria</span><b>{{ primaryExpiryText(item) }}</b>
             <span>Caducidad</span><b>{{ expiryText(item) }}</b>
             <span>Almacenamiento</span><b>{{ item.storage }}</b>
           </div>
@@ -347,7 +450,8 @@ const goHome = () => {
       <form @submit.prevent="saveProduct">
         <label>Nombre<input v-model.trim="editing.name" required></label>
         <div class="form-grid">
-          <label>Caducidad secundaria<input v-model.trim="editing.shelfLife" placeholder="Ej.: 48 horas" required></label>
+          <label>Caducidad secundaria<input v-model.trim="editing.shelfLife" placeholder="Ej.: 48 horas o primaria" required></label>
+          <label>Fecha de caducidad primaria<input v-model="editing.primaryExpiry" type="date"></label>
           <label>Categoría<select v-model="editing.category"><option v-for="item in categories.slice(1)" :key="item">{{ item }}</option></select></label>
           <label>Almacenamiento<input v-model.trim="editing.storage" required></label>
           <label>Estado<input v-model.trim="editing.state" required></label>
@@ -384,6 +488,19 @@ const goHome = () => {
 .eyebrow { color: #35704f; }
 h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .intro > p:last-child, .preview-heading p { color: #5a675e; font-size: 17px; }
+.global-product-search { position: relative; margin-top: 28px; padding: 20px; background: white; border: 1px solid #cbd4ce; border-radius: 8px; }
+.global-product-search > label { display: block; margin-bottom: 8px; color: #315440; font-size: 13px; font-weight: 800; }
+.global-search-field { position: relative; }
+.global-search-field input { width: 100%; box-sizing: border-box; padding: 14px 46px 14px 15px; border: 1px solid #aebdb3; border-radius: 6px; font: inherit; font-size: 16px; }
+.global-search-field button { position: absolute; top: 50%; right: 7px; width: 34px; height: 34px; transform: translateY(-50%); color: #53635a; background: transparent; border: 0; font-size: 25px; cursor: pointer; }
+.global-results { position: absolute; z-index: 4; top: calc(100% - 17px); right: 20px; left: 20px; overflow: hidden; background: white; border: 1px solid #bdc9c1; border-radius: 0 0 7px 7px; box-shadow: 0 12px 25px rgba(23,60,43,.15); }
+.global-results button { width: 100%; min-height: 58px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 16px; color: inherit; text-align: left; background: white; border: 0; border-bottom: 1px solid #e5eae6; cursor: pointer; }
+.global-results button:hover { background: #f3f8f5; }
+.global-results button:last-child { border-bottom: 0; }
+.global-results small, .quick-product-panel small { display: block; margin-top: 3px; color: #718078; }
+.empty-search { margin: 10px 0 0; color: #6a756e; font-size: 14px; }
+.quick-product-panel { margin-top: 14px; padding-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 18px; border-top: 1px solid #e0e6e2; }
+.quick-product-actions { display: flex; gap: 9px; }
 .primary-actions { margin-top: 38px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .action-button { min-height: 150px; padding: 24px; display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 18px; text-align: left; border: 0; border-radius: 8px; cursor: pointer; box-shadow: 0 10px 28px rgba(23,60,43,.11); transition: transform .18s ease, box-shadow .18s ease; }
 .action-button:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(23,60,43,.16); }
@@ -445,6 +562,8 @@ button:disabled { opacity: .55; cursor: default; }
   .printer-status { display: none; }
   .home-view, .preview-view, .manage-view, .edit-view { width: min(100% - 28px, 1080px); padding: 36px 0; }
   .primary-actions { grid-template-columns: 1fr; }
+  .quick-product-panel { align-items: stretch; flex-direction: column; }
+  .quick-product-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .action-button { min-height: 128px; }
   .spec-strip { gap: 12px; justify-content: space-between; font-size: 12px; }
   .preview-heading, .manage-heading { align-items: stretch; flex-direction: column; }
@@ -471,6 +590,7 @@ button:disabled { opacity: .55; cursor: default; }
   .preview-view { width: auto; margin: 0; padding: 0; }
   .print-sheet { display: block; }
   .thermal-label { width: 55mm; height: 50mm; box-sizing: border-box; padding: 2.1mm 2.2mm 1.7mm; overflow: hidden; color: #000; background: #fff; font-family: Arial, Helvetica, sans-serif; break-after: page; page-break-after: always; }
+  .thermal-label:last-child { break-after: auto; page-break-after: auto; }
   .label-product { min-height: 10mm; display: grid; grid-template-columns: 21mm 1fr; align-items: start; gap: 1mm; }
   .label-product b { padding-top: .5mm; font-family: Georgia, serif; font-size: 9pt; }
   .label-product strong { text-align: center; font-family: Georgia, serif; font-size: 9.5pt; line-height: 1.02; overflow-wrap: anywhere; }
