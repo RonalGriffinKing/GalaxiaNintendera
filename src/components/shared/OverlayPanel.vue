@@ -19,7 +19,7 @@
         class="overlay-card group"
       >
         <div class="preview-box">
-          <div class="preview-canvas">
+          <div class="preview-canvas" :style="previewCanvasStyle(overlay)">
             <div
               v-for="widget in overlay.widgets || []"
               :key="widget.id"
@@ -35,6 +35,7 @@
           <div class="preview-count">
             {{ overlay.widgets?.length || 0 }} widgets
           </div>
+          <div class="preview-format">{{ overlayFormatLabel(overlay) }}</div>
         </div>
 
         <div class="p-3">
@@ -261,6 +262,9 @@ const saveOverlay = async () => {
       await setDoc(doc(db, "overlays", user.uid, "items", id), {
         name: form.value.name,
         widgets: [],
+        format: 'vertical',
+        width: 1080,
+        height: 1920,
         createdAt: Date.now()
       })
       showToast('OVERLAY CREADO')
@@ -308,6 +312,17 @@ const executeDelete = async (id) => {
 const goToEditor = (id) => {
   router.push(`/editor?id=${id}`)
 }
+
+const overlayDimensions = overlay => ({ width: overlay.width || 1080, height: overlay.height || 1920 })
+const previewCanvasStyle = overlay => {
+  const size = overlayDimensions(overlay)
+  const scale = Math.min(260 / size.width, 96 / size.height)
+  return { width: `${size.width}px`, height: `${size.height}px`, transform: `scale(${scale})` }
+}
+const overlayFormatLabel = overlay => {
+  const size = overlayDimensions(overlay)
+  return size.width > size.height ? 'Horizontal' : 'Vertical'
+}
 </script>
 
 <style scoped>
@@ -320,11 +335,8 @@ const goToEditor = (id) => {
 }
 
 .preview-canvas {
-  height: 1920px;
   position: absolute;
-  transform: scale(0.08);
   transform-origin: top left;
-  width: 1080px;
 }
 
 .preview-widget {
@@ -345,6 +357,7 @@ const goToEditor = (id) => {
   left: 6px;
   position: absolute;
 }
+.preview-format { position: absolute; right: 6px; bottom: 4px; color: white; font-size: 8px; font-weight: 900; text-transform: uppercase; }
 
 .overlay-card {
   background: white;

@@ -16,6 +16,7 @@ import { computed } from 'vue'
 import GoalWidget from '@/components/widgets/types/GoalWidget.vue'
 import TodoWidget from '@/components/widgets/types/TodoWidget.vue'
 import ChatWidget from '@/components/widgets/types/ChatWidget.vue'
+import TimerWidget from '@/components/widgets/types/TimerWidget.vue'
 
 const props = defineProps({
   widget: {
@@ -27,7 +28,8 @@ const props = defineProps({
 const map = {
   goal: GoalWidget,
   todo: TodoWidget,
-  chat: ChatWidget
+  chat: ChatWidget,
+  timer: TimerWidget
 }
 
 const component = computed(() => {

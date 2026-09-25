@@ -1,71 +1,38 @@
 <template>
   <div class="space-y-5">
-    <div>
-      <label class="app-label">Titulo</label>
-      <input v-model="widget.data.title" class="app-input" />
-    </div>
-
-    <div class="grid grid-cols-2 gap-3">
-      <div>
-        <label class="app-label">Actual</label>
-        <input type="number" v-model="widget.data.current" class="app-input" />
-      </div>
-
-      <div>
-        <label class="app-label">Meta</label>
-        <input type="number" v-model="widget.data.goal" class="app-input" />
-      </div>
-    </div>
-
-    <div>
-      <label class="app-label">Color barra</label>
-      <input type="color" v-model="widget.data.barColor" class="color-input" />
-    </div>
-
-    <div>
-      <label class="app-label">Tamano titulo</label>
-      <input type="range" min="10" max="40" v-model="widget.data.titleSize" class="slider" />
-      <p class="section-caption">{{ widget.data.titleSize }} px</p>
-
-      <label class="app-label mt-3">Tamano numeros</label>
-      <input type="range" min="10" max="40" v-model="widget.data.numberSize" class="slider" />
-      <p class="section-caption">{{ widget.data.numberSize }} px</p>
-    </div>
-
-    <div>
-      <label class="app-label">Ancho</label>
-      <input type="range" min="200" max="800" v-model="widget.data.width" class="slider" />
-      <p class="section-caption">{{ widget.data.width }} px</p>
-
-      <label class="app-label mt-3">Alto</label>
-      <input type="range" min="80" max="300" v-model="widget.data.height" class="slider" />
-      <p class="section-caption">{{ widget.data.height }} px</p>
-    </div>
+    <div><label class="app-label">Diseno</label><div class="layout-grid"><button :class="{active:data.layout==='card'}" @click="setLayout('card')"><i class="fas fa-rectangle-list"></i><span>Tarjeta</span></button><button :class="{active:data.layout==='starbar'}" @click="setLayout('starbar')"><i class="fas fa-star"></i><span>Meta estelar</span></button></div></div>
+    <div><label class="app-label">Nombre de la meta</label><input v-model="data.title" class="app-input" placeholder="Meta de la comunidad" /></div>
+    <div class="grid grid-cols-2 gap-3"><div><label class="app-label">Progreso actual</label><input v-model.number="data.current" min="0" type="number" class="app-input" /></div><div><label class="app-label">Objetivo</label><input v-model.number="data.goal" min="1" type="number" class="app-input" /></div></div>
+    <div><label class="app-label">Estilo</label><div class="theme-grid"><button v-for="theme in themes" :key="theme.id" :class="['theme-option',theme.id,{active:data.theme===theme.id}]" @click="applyTheme(theme)"><span></span>{{ theme.label }}</button></div></div>
+    <div class="color-grid"><label><span>Fondo</span><input v-model="data.bgColor" type="color" /></label><label><span>Texto</span><input v-model="data.textColor" type="color" /></label><label><span>Barra</span><input v-model="data.barColor" type="color" /></label></div>
+    <div><label class="app-label">Alineacion del contenido</label><div class="align-options"><button :class="{active:data.contentAlign==='left'}" @click="data.contentAlign='left'"><i class="fas fa-align-left"></i> Izquierda</button><button :class="{active:data.contentAlign==='center'}" @click="data.contentAlign='center'"><i class="fas fa-align-center"></i> Centrado</button></div></div>
+    <div><label class="app-label">Simbolo de progreso</label><div class="symbol-grid"><button v-for="symbol in symbols" :key="symbol" :class="{active:data.symbol===symbol}" @click="data.symbol=symbol"><i :class="symbol"></i></button></div></div>
+    <label class="check-row"><input v-model="data.showBackground" type="checkbox" /> Mostrar fondo y borde</label>
+    <label class="check-row"><input v-model="data.sparkles" type="checkbox" /> Mostrar estrellas brillantes</label>
+    <label class="check-row"><input v-model="data.animateBar" type="checkbox" /> Animar energia de la barra</label>
+    <label class="check-row"><input v-model="data.rotateSymbol" type="checkbox" /> Girar simbolo lentamente</label>
+    <label class="check-row"><input v-model="data.compactThousands" type="checkbox" /> Abreviar miles con K</label>
+    <div><label class="app-label">Ancho</label><input v-model.number="data.width" type="range" min="280" max="900" class="slider" /><p class="section-caption">{{ data.width }} px</p></div>
+    <div v-if="data.layout==='starbar'"><label class="app-label">Ancho de la pildora del titulo</label><input v-model.number="data.titlePillWidth" type="range" min="140" max="440" class="slider" /><p class="section-caption">{{ data.titlePillWidth }} px</p></div>
+    <div><label class="app-label">Alto</label><input v-model.number="data.height" type="range" min="90" max="320" class="slider" /><p class="section-caption">{{ data.height }} px</p></div>
+    <div><label class="app-label">Grosor de la barra</label><input v-model.number="data.barHeight" type="range" min="8" max="42" class="slider" /><p class="section-caption">{{ data.barHeight }} px</p></div>
+    <div><label class="app-label">Separacion titulo y barra</label><input v-model.number="data.titleGap" type="range" min="8" max="70" class="slider" /><p class="section-caption">{{ data.titleGap }} px</p></div>
+    <div><label class="app-label">Tamano del titulo</label><input v-model.number="data.titleSize" type="range" min="12" max="34" class="slider" /><p class="section-caption">{{ data.titleSize }} px</p></div>
+    <div><label class="app-label">Tamano de numeros</label><input v-model.number="data.numberSize" type="range" min="12" max="38" class="slider" /><p class="section-caption">{{ data.numberSize }} px</p></div>
+    <p class="editor-hint">La barra se adapta automaticamente incluso cuando reduces la altura.</p>
   </div>
 </template>
-
 <script setup>
-import { onMounted } from 'vue'
-
-const props = defineProps({
-  widget: Object
-})
-
-onMounted(() => {
-  const d = props.widget.data
-
-  d.title ??= 'Meta'
-  d.current ??= 1000
-  d.goal ??= 2000
-  d.barColor ??= '#a855f7'
-  d.titleSize ??= 16
-  d.numberSize ??= 18
-  d.width ??= 400
-  d.height ??= 120
-})
+const props=defineProps({widget:Object});const data=props.widget.data||(props.widget.data={})
+data.title||='Meta de la comunidad';data.current=Number(data.current)||0;data.goal=Number(data.goal)||2000;data.barColor||='#d946ef';data.bgColor||='#17102f';data.textColor||='#ffffff';data.titleSize=Number(data.titleSize)||20;data.numberSize=Number(data.numberSize)||22;data.width=Number(data.width)||430;data.height=Number(data.height)||170;data.layout||='card';data.theme||='galaxy';data.sparkles=data.sparkles!==false;data.showBackground=data.showBackground!==false;data.contentAlign||='left';data.animateBar=data.animateBar!==false;data.barHeight=Number(data.barHeight)||18;data.titleGap=Number(data.titleGap)||28;data.symbol||='fas fa-star';data.rotateSymbol=data.rotateSymbol!==false;data.compactThousands=Boolean(data.compactThousands);data.titlePillWidth=Number(data.titlePillWidth)||240
+const themes=[{id:'galaxy',label:'Galaxia',bg:'#17102f',text:'#ffffff',accent:'#d946ef'},{id:'nebula',label:'Nebulosa',bg:'#071a3d',text:'#ecfeff',accent:'#22d3ee'},{id:'starlight',label:'Luz estelar',bg:'#fff7ed',text:'#3b174f',accent:'#ff2d95'},{id:'petit-planet',label:'Petit Planet',bg:'#073467',text:'#fff8d6',accent:'#69e6f3'}]
+const symbols=['fas fa-star','fas fa-moon','fas fa-heart','fas fa-bolt','fas fa-crown','fas fa-gamepad']
+const applyTheme=theme=>{data.theme=theme.id;data.bgColor=theme.bg;data.textColor=theme.text;data.barColor=theme.accent;if(theme.id==='petit-planet'){data.symbol='fas fa-moon';data.sparkles=true;data.animateBar=true}}
+const setLayout=layout=>{data.layout=layout;if(layout==='starbar'&&data.height>180)data.height=150}
 </script>
-
 <style scoped>
-.color-input { width: 100%; height: 40px; margin-top: 6px; }
-.slider { width: 100%; margin-top: 6px; }
+.layout-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}.layout-grid button{min-height:58px;border:1px solid #dbe1ea;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:#64748b;background:white;font-size:11px;font-weight:800}.layout-grid button.active,.theme-option.active{border-color:#9333ea;color:#7e22ce;box-shadow:0 0 0 2px rgba(147,51,234,.12)}.theme-grid{display:grid;gap:7px;margin-top:7px}.theme-option{display:flex;align-items:center;gap:9px;text-align:left;border:1px solid #dbe1ea;border-radius:8px;padding:9px;font-size:11px;font-weight:800;color:#64748b;background:white}.theme-option span{width:28px;height:18px;border-radius:5px}.theme-option.galaxy span{background:linear-gradient(135deg,#281252,#d946ef)}.theme-option.nebula span{background:linear-gradient(135deg,#071a3d,#22d3ee)}.theme-option.starlight span{background:linear-gradient(135deg,#fff7ed,#ff2d95)}.color-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.color-grid label{display:flex;flex-direction:column;gap:5px;font-size:9px;font-weight:900;color:#64748b}.color-grid input{width:100%;height:34px;border:0}.check-row{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:700;color:#475569}.slider{width:100%;margin-top:6px}.editor-hint{font-size:10px;line-height:1.45;color:#94a3b8}
+.align-options{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}.align-options button{height:36px;border:1px solid #dbe1ea;border-radius:8px;color:#64748b;background:white;font-size:10px;font-weight:800}.align-options button.active{border-color:#9333ea;color:#7e22ce;box-shadow:0 0 0 2px rgba(147,51,234,.12)}.align-options i{margin-right:5px}
+.symbol-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-top:7px}.symbol-grid button{height:36px;border:1px solid #dbe1ea;border-radius:8px;color:#64748b;background:white}.symbol-grid button.active{border-color:#9333ea;color:white;background:linear-gradient(135deg,#7c3aed,#db2777);box-shadow:0 0 0 2px rgba(147,51,234,.12)}
+.theme-option.petit-planet span{background:linear-gradient(135deg,#073467 8%,#18b8d4 58%,#ffe987)}
 </style>

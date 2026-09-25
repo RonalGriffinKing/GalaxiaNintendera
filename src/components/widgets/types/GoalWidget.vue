@@ -1,70 +1,41 @@
 <template>
-  <div
-    class="shadow-xl overflow-hidden px-5 py-4"
-    :style="cardStyle"
-  >
-    <p
-      class="opacity-80 mb-2"
-      :style="{ fontSize: widget.data.titleSize + 'px' }"
-    >
-      {{ widget.data.title }}
-    </p>
-
-    <div
-      class="flex justify-between font-medium mt-2"
-      :style="{ fontSize: widget.data.numberSize + 'px' }"
-    >
-      <span>{{ widget.data.current }}</span>
-      <span>{{ widget.data.goal }}</span>
+  <div v-if="data.layout==='starbar'" class="star-goal" :class="[`theme-${data.theme||'galaxy'}`,{compact:isCompact,'no-background':data.showBackground===false,'center-content':data.contentAlign==='center','energy-active':data.animateBar!==false}]" :style="rootStyle">
+    <div class="star-title" :style="{fontSize:titleFont+'px',width:Math.min(Number(data.titlePillWidth)||240,(Number(data.width)||430)-48)+'px'}"><i :class="data.symbol || 'fas fa-star'"></i><span>{{ data.title }}</span></div>
+    <span v-if="data.sparkles" class="twinkle one">+</span><span v-if="data.sparkles" class="twinkle two">+</span><span v-if="data.sparkles" class="twinkle three">+</span>
+    <div class="star-track" :style="{marginTop:(Number(data.titleGap)||28)+'px'}">
+      <template v-if="data.sparkles"><span v-for="spark in orbitSparkles" :key="spark.id" class="orbit-spark" :style="spark.style"><i class="fas fa-star"></i></span></template>
+      <div class="star-fill" :style="{width:percentage+'%'}"><span class="energy-particles"></span></div>
+      <div class="star-knob" :class="{'rotate-symbol':data.rotateSymbol!==false&&isStarSymbol}" :style="{left:percentage+'%'}"><i :class="data.symbol || 'fas fa-star'"></i></div>
     </div>
+    <div class="star-stats" :style="{fontSize:numberFont+'px'}"><strong>{{ formatValue(data.current) }}</strong><span>{{ percentage }}%</span><strong>{{ formatValue(data.goal) }}</strong></div>
+  </div>
 
-    <div class="bg-gray-200 rounded-full mt-3 overflow-hidden">
-      <div
-        class="transition-all duration-500"
-        :style="barStyle"
-      ></div>
-    </div>
+  <div v-else class="goal-card" :class="[`theme-${data.theme||'galaxy'}`,{compact:isCompact,micro:isMicro,'no-background':data.showBackground===false,'center-content':data.contentAlign==='center','energy-active':data.animateBar!==false}]" :style="rootStyle">
+    <span v-if="data.sparkles" class="twinkle one">+</span><span v-if="data.sparkles" class="twinkle two">+</span>
+    <div class="goal-head"><div><span class="eyebrow">OBJETIVO GALACTICO</span><p :style="{fontSize:titleFont+'px'}">{{ data.title }}</p></div><i :class="[data.symbol || 'fas fa-star', {'rotate-card-symbol':data.rotateSymbol!==false&&isStarSymbol}]"></i></div>
+    <div class="numbers" :style="{fontSize:numberFont+'px'}"><strong>{{ formatValue(data.current) }}</strong><span>{{ percentage }}%</span><strong>{{ formatValue(data.goal) }}</strong></div>
+    <div class="track"><div class="bar" :style="{width:percentage+'%'}"><span></span></div></div>
+    <p v-if="!isCompact" class="remaining">{{ remainingText }}</p>
   </div>
 </template>
-
 <script setup>
-import { computed, onMounted } from 'vue'
-
-const props = defineProps({
-  widget: Object
-})
-
-onMounted(() => {
-  const d = props.widget.data
-
-  d.title ??= 'Meta'
-  d.current ??= 1000
-  d.goal ??= 2000
-  d.barColor ??= '#a855f7'
-  d.titleSize ??= 16
-  d.numberSize ??= 18
-  d.width ??= 400
-  d.height ??= 120
-})
-
-const progress = computed(() => {
-  return (props.widget.data.current / props.widget.data.goal) * 100
-})
-
-const cardStyle = computed(() => ({
-  width: props.widget.data.width + 'px',
-  height: props.widget.data.height + 'px',
-  background: '#ffffff',
-  color: '#000',
-  borderRadius: '12px',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center'
-}))
-
-const barStyle = computed(() => ({
-  width: progress.value + '%',
-  height: '10px',
-  background: props.widget.data.barColor
-}))
+import {computed} from 'vue'
+const props=defineProps({widget:Object});const data=computed(()=>props.widget.data||{})
+const percentage=computed(()=>Math.max(0,Math.min(100,Math.round((Number(data.value.current)||0)/(Number(data.value.goal)||1)*100))))
+const remainingText=computed(()=>{const left=Math.max(0,(Number(data.value.goal)||0)-(Number(data.value.current)||0));return left?`FALTAN ${left} PARA ALCANZAR LA META`:'META COMPLETADA'})
+const isCompact=computed(()=>(Number(data.value.height)||170)<145);const isMicro=computed(()=>(Number(data.value.height)||170)<112)
+const titleFont=computed(()=>Number(data.value.titleSize)||20);const numberFont=computed(()=>Number(data.value.numberSize)||22)
+const isStarSymbol=computed(()=>String(data.value.symbol||'fas fa-star').includes('fa-star'))
+const formatValue=value=>{const number=Number(value)||0;if(!data.value.compactThousands||Math.abs(number)<1000)return number;const compact=Math.round(number/100)/10;return `${Number.isInteger(compact)?compact:compact.toFixed(1)}K`}
+const rootStyle=computed(()=>({width:`${Number(data.value.width)||430}px`,height:`${Math.max(Number(data.value.height)||170,90)}px`,'--accent':data.value.barColor||'#d946ef','--surface':data.value.bgColor||'#17102f','--ink':data.value.textColor||'#fff','--bar-height':`${Number(data.value.barHeight)||18}px`}))
+const orbitSparkles=[{id:1,style:{left:'8%',top:'-19px',animationDelay:'0s'}},{id:2,style:{left:'20%',bottom:'-22px',animationDelay:'.5s'}},{id:3,style:{left:'36%',top:'-24px',animationDelay:'1.1s'}},{id:4,style:{left:'62%',bottom:'-21px',animationDelay:'.25s'}},{id:5,style:{left:'78%',top:'-20px',animationDelay:'1.5s'}},{id:6,style:{left:'92%',bottom:'-24px',animationDelay:'.8s'}}]
 </script>
+<style scoped>
+.goal-card,.star-goal{position:relative;overflow:hidden;color:var(--ink);border:1px solid var(--accent);box-shadow:0 18px 44px rgba(8,3,24,.4),inset 0 1px rgba(255,255,255,.12)}.goal-card{display:flex;flex-direction:column;justify-content:center;padding:18px 24px;border-radius:22px;background-color:var(--surface);background-image:radial-gradient(circle at 88% 8%,rgba(217,70,239,.28),transparent 30%)}.goal-head{display:flex;align-items:center;justify-content:space-between;min-height:0}.goal-head p{margin:2px 0 7px;font-weight:900;line-height:1.08;letter-spacing:0}.goal-head>i{color:var(--accent);filter:drop-shadow(0 0 8px var(--accent));font-size:20px}.eyebrow,.remaining{font-size:9px;font-weight:900;letter-spacing:1.2px;color:#c4b5fd}.numbers{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;font-variant-numeric:tabular-nums}.numbers strong:last-child{text-align:right}.numbers span{font-size:11px;font-weight:900}.track{flex:0 0 11px;height:11px;padding:2px;margin-top:8px;border-radius:99px;background:rgba(255,255,255,.15)}.bar{height:100%;border-radius:99px;background:linear-gradient(90deg,#8b5cf6,var(--accent));box-shadow:0 0 14px var(--accent);transition:width .5s}.bar span{display:block;width:8px;height:100%;margin-left:auto;border-radius:50%;background:white;box-shadow:0 0 7px white}.remaining{margin:6px 0 0;text-align:right;opacity:.78}.goal-card.compact{padding:11px 18px}.goal-card.compact .eyebrow{font-size:7px}.goal-card.compact .goal-head>i{font-size:15px}.goal-card.compact .goal-head p{margin-bottom:4px}.goal-card.compact .track{margin-top:5px}.goal-card.micro{padding:8px 16px}.goal-card.micro .eyebrow,.goal-card.micro .goal-head>i{display:none}.goal-card.micro .goal-head p{margin:0 0 3px}.goal-card.micro .track{height:9px;flex-basis:9px;margin-top:3px}
+.star-goal{padding:14px 24px;border-radius:26px;background-color:var(--surface);background-image:radial-gradient(circle at 50% 100%,rgba(217,70,239,.2),transparent 42%);display:flex;flex-direction:column;justify-content:center}.star-title{box-sizing:border-box;position:absolute;left:24px;top:10px;max-width:calc(100% - 48px);display:flex;align-items:center;gap:7px;padding:5px 11px;border-radius:99px;color:var(--ink);background:var(--surface);border:1px solid var(--accent);box-shadow:0 5px 15px rgba(0,0,0,.2);font-size:12px;font-weight:900;white-space:nowrap;overflow:hidden}.star-title span{min-width:0;overflow:hidden;text-overflow:ellipsis}.star-title i{flex:0 0 auto;color:var(--accent);filter:drop-shadow(0 0 5px var(--accent))}.star-track{position:relative;height:25px;margin-top:20px;border-radius:99px;background:rgba(255,255,255,.18);box-shadow:inset 0 2px 5px rgba(0,0,0,.16)}.star-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#7c3aed,var(--accent));box-shadow:0 0 18px var(--accent);transition:width .5s}.star-knob{position:absolute;top:50%;width:43px;height:43px;border-radius:50%;display:grid;place-items:center;color:white;background:radial-gradient(circle at 35% 25%,white,var(--accent) 35%,#f97316);border:2px solid rgba(255,255,255,.7);box-shadow:0 0 18px var(--accent);transform:translate(-50%,-50%);transition:left .5s}.star-knob i{font-size:22px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.2))}.star-stats{display:grid;grid-template-columns:1fr auto 1fr;margin-top:9px;font-size:12px;font-weight:900;font-variant-numeric:tabular-nums}.star-stats strong:last-child{text-align:right}.star-stats span{color:var(--ink);opacity:.78}.star-goal.compact{padding:10px 20px}.star-goal.compact .star-title{top:5px;left:20px;padding:3px 9px;font-size:10px}.star-goal.compact .star-track{height:18px;margin-top:16px}.star-goal.compact .star-knob{width:34px;height:34px}.star-goal.compact .star-knob i{font-size:17px}.star-goal.compact .star-stats{margin-top:5px;font-size:10px}.twinkle{position:absolute;z-index:2;color:white;text-shadow:0 0 8px white;animation:twinkle 2s infinite}.twinkle.one{right:58px;top:12px}.twinkle.two{right:22px;bottom:19px;animation-delay:.7s}.twinkle.three{left:34%;bottom:12px;animation-delay:1.2s}@keyframes twinkle{50%{opacity:.2;transform:scale(.6)}}
+.goal-card.no-background,.star-goal.no-background{background:transparent!important;border-color:transparent;box-shadow:none}.goal-card.center-content .goal-head{justify-content:center;text-align:center}.goal-card.center-content .goal-head>i{position:absolute;right:22px}.goal-card.center-content .remaining{text-align:center}.star-goal.center-content .star-title{left:50%;right:auto;transform:translateX(-50%);justify-content:center;text-align:center}.star-goal.no-background .star-title{background:rgba(18,8,42,.82)}
+.orbit-spark{position:absolute;z-index:4;color:white;font-size:10px;line-height:1;text-shadow:0 0 5px white,0 0 11px var(--accent);pointer-events:none;animation:orbit-twinkle 2.1s ease-in-out infinite}.star-knob.rotate-symbol i,.goal-head>i.rotate-card-symbol{animation:symbol-spin 9s linear infinite}@keyframes symbol-spin{to{transform:rotate(360deg)}}@keyframes orbit-twinkle{0%,100%{opacity:.15;transform:scale(.55) rotate(0)}50%{opacity:1;transform:scale(1.25) rotate(45deg)}}
+@media (prefers-reduced-motion:reduce){.star-knob.rotate-symbol i,.goal-head>i.rotate-card-symbol,.orbit-spark{animation:none}}
+.goal-card .track{height:var(--bar-height);flex-basis:var(--bar-height)}.star-goal .star-track{height:var(--bar-height)}.star-fill{position:relative;overflow:hidden}.energy-particles{position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.95) 0 1.5px,transparent 2px),radial-gradient(circle,rgba(255,255,255,.72) 0 1px,transparent 1.7px),linear-gradient(105deg,transparent 20%,rgba(255,255,255,.42) 46%,transparent 72%);background-size:34px 18px,51px 25px,90px 100%;background-position:0 2px,12px 11px,-90px 0;opacity:.9}.energy-active .energy-particles{animation:energy-flow 1.35s linear infinite}.energy-active .star-fill{background-size:180% 100%;animation:gradient-flow 2.2s ease-in-out infinite}.energy-active .star-knob{animation:star-pulse 1.5s ease-in-out infinite}.energy-active .bar{background-size:180% 100%;animation:gradient-flow 2.2s ease-in-out infinite}.energy-active .bar span{animation:star-pulse 1.5s ease-in-out infinite}@keyframes energy-flow{to{background-position:68px 2px,114px 11px,90px 0}}@keyframes gradient-flow{0%,100%{filter:saturate(1);background-position:0 0}50%{filter:saturate(1.4) brightness(1.15);background-position:100% 0}}@keyframes star-pulse{0%,100%{filter:brightness(1);box-shadow:0 0 12px var(--accent)}50%{filter:brightness(1.28);box-shadow:0 0 26px var(--accent)}}@media(prefers-reduced-motion:reduce){.energy-active .energy-particles,.energy-active .star-fill,.energy-active .star-knob,.energy-active .bar,.energy-active .bar span{animation:none}}
+.theme-petit-planet{border-color:rgba(105,230,243,.7);background-color:#073467;background-image:radial-gradient(circle at 72% 86%,rgba(105,230,243,.36),transparent 32%),linear-gradient(155deg,#062951,#084d83 58%,#087b9d);box-shadow:0 18px 44px rgba(1,20,54,.46),inset 0 1px rgba(255,248,214,.2),0 0 24px rgba(105,230,243,.14)}.theme-petit-planet::after{content:"";position:absolute;z-index:1;inset:0;pointer-events:none;background-image:radial-gradient(circle at 10% 24%,#fff7bd 0 2px,transparent 3px),radial-gradient(circle at 18% 76%,#79eff5 0 2px,transparent 3px),radial-gradient(circle at 42% 18%,#ffd98a 0 1.5px,transparent 3px),radial-gradient(circle at 67% 72%,#fff6bd 0 2px,transparent 3px),radial-gradient(circle at 90% 62%,#83ecf4 0 1.5px,transparent 3px)}.theme-petit-planet .star-title,.theme-petit-planet .goal-head,.theme-petit-planet .numbers,.theme-petit-planet .track,.theme-petit-planet .star-track,.theme-petit-planet .star-stats,.theme-petit-planet .remaining{position:relative;z-index:3}.theme-petit-planet .star-title{background:rgba(4,34,73,.86);border-color:#ffe58b;color:#fff8d6}.theme-petit-planet .star-title i{color:#ffe58b;filter:drop-shadow(0 0 7px #ffe58b)}.theme-petit-planet .star-track,.theme-petit-planet .track{background:rgba(2,24,58,.65);box-shadow:inset 0 2px 5px rgba(0,0,0,.3),0 0 12px rgba(105,230,243,.2)}.theme-petit-planet .star-fill,.theme-petit-planet .bar{background:linear-gradient(90deg,#36c8ed,#75f0e7 48%,#ffe78d);box-shadow:0 0 18px #69e6f3}.theme-petit-planet .star-knob{color:#8a5b13;background:radial-gradient(circle at 35% 25%,#fff,#fff2aa 35%,#f5b942);border-color:#fff8d6;box-shadow:0 0 18px #ffe58b}.theme-petit-planet .eyebrow,.theme-petit-planet .remaining{color:#a7f3f5}.theme-petit-planet.no-background::after{opacity:.72}
+</style>

@@ -1,0 +1,260 @@
+/* Galaxia Nintendera theme for AllChat custom CSS. */
+:root {
+  --gn-surface: rgba(16, 8, 38, 0.88);
+  --gn-surface-old: rgba(12, 8, 28, 0.72);
+  --gn-text: #fffaff;
+  --gn-muted: #c4b5fd;
+  --gn-purple: #a855f7;
+  --gn-pink: #f02d9b;
+  --gn-cyan: #38d9ff;
+  --gn-radius: 16px;
+  --gn-message-duration: 32s;
+}
+
+html,
+body,
+#root,
+main {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+html,
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.space-y-3 {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 9px !important;
+  width: min(100%, var(--gn-chat-width, 520px)) !important;
+  max-width: var(--gn-chat-width, 520px) !important;
+  margin: 0 !important;
+}
+
+.space-y-3 > div:has(.text-white.break-words),
+.space-y-3 > div.event-message {
+  --gn-row-opacity: 1;
+  --gn-row-scale: 1;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  position: relative !important;
+  isolation: isolate !important;
+  overflow: hidden !important;
+  padding: 11px 14px !important;
+  border: 1px solid color-mix(in srgb, var(--gn-purple) 75%, white 25%) !important;
+  border-left-width: 4px !important;
+  border-radius: var(--gn-radius) !important;
+  background:
+    radial-gradient(circle at 92% 5%, rgba(240, 45, 155, 0.2), transparent 30%),
+    linear-gradient(135deg, var(--gn-surface), rgba(26, 11, 58, 0.82)) !important;
+  box-shadow:
+    0 12px 28px rgba(4, 1, 16, 0.34),
+    inset 0 1px rgba(255, 255, 255, 0.1),
+    0 0 16px rgba(168, 85, 247, 0.12) !important;
+  backdrop-filter: blur(10px) !important;
+  max-height: 240px !important;
+  transform-origin: center bottom !important;
+  animation: gn-message-life var(--gn-message-duration) linear forwards !important;
+}
+
+/* The newest message is full size; older messages step into the background. */
+.space-y-3 > div:has(.text-white.break-words):has(~ div:has(.text-white.break-words)) {
+  --gn-row-opacity: 0.72;
+  --gn-row-scale: 0.94;
+}
+
+.space-y-3 > div:has(.text-white.break-words):has(~ div:has(.text-white.break-words) ~ div:has(.text-white.break-words)) {
+  --gn-row-opacity: 0.48;
+  --gn-row-scale: 0.9;
+}
+
+.space-y-3 > div:has(.text-white.break-words):has(~ div:has(.text-white.break-words) ~ div:has(.text-white.break-words) ~ div:has(.text-white.break-words)) {
+  --gn-row-opacity: 0.3;
+  --gn-row-scale: 0.87;
+}
+
+.space-y-3 > div:has(.text-white.break-words)::before,
+.space-y-3 > div:has(.text-white.break-words)::after,
+.space-y-3 > div.event-message::before,
+.space-y-3 > div.event-message::after {
+  position: absolute;
+  z-index: -1;
+  color: white;
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 0 5px white, 0 0 12px var(--gn-pink);
+  animation: gn-twinkle 2.4s ease-in-out infinite;
+}
+
+.space-y-3 > div:has(.text-white.break-words)::before,
+.space-y-3 > div.event-message::before {
+  content: "✦";
+  top: 8px;
+  right: 12px;
+  font-size: 8px;
+}
+
+.space-y-3 > div:has(.text-white.break-words)::after,
+.space-y-3 > div.event-message::after {
+  content: "·";
+  right: 28px;
+  bottom: 8px;
+  font-size: 18px;
+  animation-delay: 700ms;
+}
+
+.platform-badge-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 25px !important;
+  height: 25px !important;
+  padding: 4px !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(145deg, var(--gn-purple), var(--gn-pink)) !important;
+  box-shadow: 0 0 14px rgba(192, 38, 211, 0.38) !important;
+}
+
+.platform-badge-icon svg {
+  width: 15px !important;
+  height: 15px !important;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.45)) !important;
+}
+
+.font-semibold.text-sm {
+  display: var(--chat-show-username, inline) !important;
+  color: var(--gn-muted) !important;
+  font-size: var(--chat-username-font-size, 15px) !important;
+  font-weight: var(--chat-username-font-weight, 800) !important;
+  letter-spacing: 0 !important;
+  text-shadow: 0 0 10px rgba(168, 85, 247, 0.42) !important;
+}
+
+.flex.gap-1 {
+  display: var(--chat-show-badges, inline-flex) !important;
+}
+
+.flex.gap-1 img {
+  width: var(--chat-avatar-size, 18px) !important;
+  height: var(--chat-avatar-size, 18px) !important;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.3)) !important;
+}
+
+.text-white.break-words {
+  margin-top: 3px !important;
+  color: var(--chat-message-color, var(--gn-text)) !important;
+  font-size: var(--chat-font-size, 16px) !important;
+  font-weight: 650 !important;
+  line-height: var(--chat-line-height, 1.42) !important;
+  letter-spacing: 0 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.text-white.break-words img {
+  height: 1.65em !important;
+  margin: 0 2px !important;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.35)) !important;
+}
+
+.text-xs.text-gray-500 {
+  display: var(--chat-show-timestamps, block) !important;
+  color: var(--chat-timestamp-color, rgba(221, 214, 254, 0.68)) !important;
+  font-size: var(--chat-timestamp-font-size, 10px) !important;
+}
+
+.event-message {
+  --event-scale: 1;
+  --event-min-height: 0;
+  --event-animation: none;
+  --event-decor: none;
+  --event-border-width: 0;
+  --event-icon-size: 1.35rem;
+  --event-icon-filter: drop-shadow(0 0 7px var(--event-accent-color));
+  --event-icon-animation: none;
+  --event-title-size: 12px;
+  --event-title-spacing: 0;
+  --event-title-color: #e9d5ff;
+  --event-title-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+  --event-value-size: 17px;
+  --event-value-color: #ffffff;
+  --event-value-shadow: 0 0 9px var(--event-accent-color);
+  --event-text-size: 15px;
+  --event-meta-color: #c4b5fd;
+  --event-indent: 2.15rem;
+  --event-accent-subscription: #a855f7;
+  --event-accent-bits: #38d9ff;
+  --event-accent-raid: #fb7185;
+  --event-accent-super-chat: #facc15;
+  --event-accent-channel-points: #22d3ee;
+  --event-accent-gift: #f472b6;
+  --event-accent-follow: #60a5fa;
+  --event-accent-like: #fe2c55;
+  --event-accent-member: #34d399;
+}
+
+.space-y-3 > div.event-message {
+  border-left-color: var(--event-accent-color, var(--gn-purple)) !important;
+}
+
+@keyframes gn-message-life {
+  0% {
+    opacity: 0;
+    max-height: 240px;
+    transform: translateY(14px) scale(var(--gn-row-scale));
+  }
+  2%, 76% {
+    opacity: var(--gn-row-opacity);
+    max-height: 240px;
+    transform: translateY(0) scale(var(--gn-row-scale));
+  }
+  90% {
+    opacity: 0.18;
+    max-height: 240px;
+    transform: translateY(0) scale(var(--gn-row-scale));
+  }
+  99% {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-width: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  100% {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-width: 0;
+    visibility: hidden;
+  }
+}
+
+@keyframes gn-twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.7) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.2) rotate(45deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-y-3 > div:has(.text-white.break-words),
+  .space-y-3 > div.event-message,
+  .space-y-3 > div:has(.text-white.break-words)::before,
+  .space-y-3 > div:has(.text-white.break-words)::after,
+  .space-y-3 > div.event-message::before,
+  .space-y-3 > div.event-message::after {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .space-y-3 {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
