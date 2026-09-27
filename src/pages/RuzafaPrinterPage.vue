@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { defaultRuzafaProducts } from '@/data/ruzafaProducts'
-import { getRuzafaProducts, saveRuzafaProduct, saveRuzafaProducts } from '@/services/ruzafaProducts'
+import { getRuzafaPrintHistory, getRuzafaProducts, saveRuzafaPrintHistory, saveRuzafaProduct, saveRuzafaProducts } from '@/services/ruzafaProducts'
 
 const products = ref([])
 const loading = ref(true)
@@ -13,14 +13,25 @@ const queue = ref([])
 const search = ref('')
 const homeSearch = ref('')
 const selectedProduct = ref(null)
+const expandedQueueId = ref(null)
+const printHistory = ref([])
+const showPrinterReminder = ref(false)
 const category = ref('Todos')
 const editing = reactive({})
+const editReturnMode = ref('manage')
 const pendingProductIds = ref(new Set())
 
 const categories = ['Todos', 'Congelados', 'Refrigerados', 'Elaborados', 'Secos']
+const shelfLifeOptions = [
+  { label: 'Caducidad primaria del envase', value: 'primaria' },
+  ...[24, 48, 72, 96, 120, 144, 168].map(hours => ({ label: `${hours} horas`, value: `${hours} horas` })),
+  ...[1, 2, 3, 4, 5, 6, 7, 10, 14, 15, 20, 30, 40, 60].map(days => ({ label: `${days} ${days === 1 ? 'día' : 'días'}`, value: `${days} ${days === 1 ? 'dia' : 'dias'}` })),
+  ...[1, 2, 3, 6, 12].map(months => ({ label: `${months} ${months === 1 ? 'mes' : 'meses'}`, value: `${months} ${months === 1 ? 'mes' : 'meses'}` })),
+]
 
 const dateFromValue = value => {
   if (!value) return null
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : new Date(value)
   const text = String(value).trim()
   const spanishDate = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
   const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})$/)
@@ -53,6 +64,12 @@ const normalizeProduct = product => {
     bar: false,
     active: true,
     primaryExpiry: '',
+    currentLot: '',
+    barDaily: false,
+    barWeekly: false,
+    workshopDaily: false,
+    workshopManual: false,
+    produce: false,
     storage: 'Refrigeracion (+)',
     state: 'Abierto',
     ...product,
@@ -66,8 +83,16 @@ const normalizeProduct = product => {
 }
 
 onMounted(async () => {
+  const reminderKey = 'ruzafa-printer-reminder-dismissed-at'
+  const lastReminder = Number(window.localStorage.getItem(reminderKey) || 0)
+  showPrinterReminder.value = Date.now() - lastReminder >= 6 * 60 * 60 * 1000
   try {
     products.value = (await getRuzafaProducts()).map(normalizeProduct)
+    try {
+      printHistory.value = await getRuzafaPrintHistory()
+    } catch (error) {
+      printHistory.value = []
+    }
   } catch (error) {
     products.value = defaultRuzafaProducts.map(normalizeProduct)
     message.value = 'Catalogo local cargado. Firebase no esta disponible en este momento.'
@@ -87,13 +112,46 @@ const filteredProducts = computed(() => {
 
 const globalSearchResults = computed(() => {
   const term = homeSearch.value.trim().toLocaleLowerCase('es')
-  if (term.length < 2) return []
+  if (!term) return []
   return products.value
     .filter(product => product.active && product.name.toLocaleLowerCase('es').includes(term))
     .slice(0, 8)
 })
 
 const pendingCount = computed(() => pendingProductIds.value.size)
+
+const expiryReviews = computed(() => {
+  const latestByProduct = new Map()
+  printHistory.value.forEach(entry => {
+    ;(entry.labels || []).forEach(label => {
+      if (!latestByProduct.has(label.productId)) latestByProduct.set(label.productId, label)
+    })
+  })
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return [...latestByProduct.values()].map(label => {
+    const expiry = dateFromValue(label.expiry)
+    if (!expiry) return null
+    expiry.setHours(0, 0, 0, 0)
+    const days = Math.round((expiry - today) / 86400000)
+    if (days > 1) return null
+    return { ...label, days }
+  }).filter(Boolean).sort((a, b) => a.days - b.days).slice(0, 8)
+})
+
+const updateHomeSearch = event => {
+  homeSearch.value = event.target.value
+  selectedProduct.value = null
+}
+
+const updateManageSearch = event => {
+  search.value = event.target.value
+}
+
+const dismissPrinterReminder = () => {
+  window.localStorage.setItem('ruzafa-printer-reminder-dismissed-at', String(Date.now()))
+  showPrinterReminder.value = false
+}
 
 const formatDate = date => new Intl.DateTimeFormat('es-ES', {
   day: '2-digit',
@@ -136,7 +194,7 @@ const prepareQueue = (source, title) => {
       printedAt: now,
       expiry: primaryDate || addShelfLife(now, product.shelfLife),
       manualExpiry: product.primaryExpiry || '',
-      lot: makeLot(now, index),
+      lot: product.currentLot || makeLot(now, index),
     }
   })
   printTitle.value = title
@@ -156,8 +214,11 @@ const createQueue = type => {
   const source = products.value.filter(product => product.active && product[type])
   const titles = {
     audit: 'Impresion para auditoria',
-    daily: 'Impresion diaria',
-    bar: 'Impresion para barra',
+    barDaily: 'Impresion diaria de barra',
+    barWeekly: 'Impresion semanal de barra',
+    workshopDaily: 'Impresion diaria de obrador',
+    workshopManual: 'Impresion de obrador',
+    produce: 'Recepcion de fruta y verdura',
   }
   prepareQueue(source, titles[type] || 'Impresion de etiquetas')
 }
@@ -167,6 +228,7 @@ const printSingleProduct = product => {
 }
 
 const selectGlobalProduct = product => {
+  if (!product) return
   selectedProduct.value = product
   homeSearch.value = product.name
 }
@@ -182,21 +244,97 @@ const expiryText = item => {
 }
 
 const primaryExpiryText = item => {
+  if (!isPrimaryProduct(item)) return ''
   const value = item.manualExpiry || item.primaryExpiry
   const date = dateFromValue(value)
   return date ? formatDate(date) : ''
 }
 
-const printLabels = () => {
+const printLabels = async () => {
   if (!printableLabels.value.length) {
     message.value = 'Selecciona al menos una etiqueta.'
     return
   }
+  const labels = printableLabels.value.map(item => ({
+    productId: item.id,
+    productName: item.name,
+    lot: item.lot,
+    expiry: item.manualExpiry || toDateInputValue(item.expiry),
+    printedAt: new Date().toISOString(),
+  }))
+  try {
+    await saveRuzafaPrintHistory(labels)
+  } catch (error) {
+    message.value = 'La etiqueta se imprimira, pero no se pudo guardar el historial.'
+  }
   window.print()
 }
 
+const printedDateLabel = item => item.category === 'Congelados' ? 'Inicio Descong.' : 'Fecha Impresión'
+const printedState = item => item.category === 'Congelados' ? 'Descongelación + uso' : item.state
+
+const isPrimaryProduct = item => Boolean(item.primaryExpiry) || String(item.shelfLife).toLowerCase().includes('primaria')
+
+const toggleQueueEditor = item => {
+  if (expandedQueueId.value === item.id) {
+    expandedQueueId.value = null
+    return
+  }
+  if (!item.manualExpiry && item.expiry) item.manualExpiry = toDateInputValue(item.expiry)
+  expandedQueueId.value = item.id
+}
+
+const saveQueueProduct = async item => {
+  saving.value = true
+  try {
+    const product = products.value.find(candidate => candidate.id === item.id)
+    if (!product) return
+    const updated = normalizeProduct({
+      ...product,
+      currentLot: item.lot || '',
+      primaryExpiry: isPrimaryProduct(item) ? item.manualExpiry || product.primaryExpiry || '' : product.primaryExpiry || '',
+    })
+    await saveRuzafaProduct(updated)
+    products.value[products.value.findIndex(candidate => candidate.id === item.id)] = updated
+    item.currentLot = updated.currentLot
+    item.primaryExpiry = updated.primaryExpiry
+    message.value = `${isPrimaryProduct(item) ? 'Lote y fecha' : 'Lote'} de ${item.name} guardado para todos.`
+    expandedQueueId.value = null
+  } catch (error) {
+    message.value = 'No se pudo guardar en Firebase. Puedes imprimir usando estos datos solo esta vez.'
+  } finally {
+    saving.value = false
+  }
+}
+
 const editProduct = product => {
+  Object.keys(editing).forEach(key => delete editing[key])
   Object.assign(editing, JSON.parse(JSON.stringify(product)))
+  editing._isNew = false
+  editReturnMode.value = mode.value === 'home' ? 'home' : 'manage'
+  mode.value = 'edit'
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+const applyCategoryDefaults = () => {
+  editing.storage = editing.category === 'Secos' ? 'Temperatura ambiente' : 'Refrigeracion (+)'
+  editing.state = editing.category === 'Elaborados' ? 'Preparacion' : 'Abierto'
+}
+
+const createProduct = () => {
+  const uniqueId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  Object.keys(editing).forEach(key => delete editing[key])
+  Object.assign(editing, normalizeProduct({
+    id: `rz-custom-${uniqueId}`,
+    name: '',
+    category: 'Refrigerados',
+    shelfLife: '24 horas',
+    storage: 'Refrigeracion (+)',
+    state: 'Abierto',
+    audit: true,
+    active: true,
+  }), { _isNew: true })
+  editReturnMode.value = 'home'
   mode.value = 'edit'
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -206,11 +344,16 @@ const saveProduct = async () => {
   message.value = ''
   try {
     if (editing.primaryExpiry && dateFromValue(editing.shelfLife)) editing.shelfLife = 'primaria'
-    await saveRuzafaProduct(editing)
-    const index = products.value.findIndex(product => product.id === editing.id)
-    if (index >= 0) products.value[index] = normalizeProduct({ ...editing })
-    message.value = 'Producto actualizado para todos los dispositivos.'
-    mode.value = 'manage'
+    const productToSave = { ...editing }
+    const isNew = Boolean(productToSave._isNew)
+    delete productToSave._isNew
+    await saveRuzafaProduct(productToSave)
+    const normalized = normalizeProduct(productToSave)
+    const index = products.value.findIndex(product => product.id === normalized.id)
+    if (index >= 0) products.value[index] = normalized
+    else products.value.push(normalized)
+    message.value = isNew ? 'Producto creado y guardado para todos los dispositivos.' : 'Producto actualizado para todos los dispositivos.'
+    mode.value = editReturnMode.value
   } catch (error) {
     message.value = 'No se pudo guardar. Revisa los permisos de Firebase.'
   } finally {
@@ -227,7 +370,7 @@ const toggleProductActive = product => {
 }
 
 const togglePrintGroup = (product, field) => {
-  if (!product.active || !['audit', 'daily', 'bar'].includes(field)) return
+  if (!product.active || !['audit', 'barDaily', 'barWeekly', 'workshopDaily', 'workshopManual', 'produce'].includes(field)) return
   const index = products.value.findIndex(item => item.id === product.id)
   if (index < 0) return
   products.value[index] = { ...product, [field]: !product[field] }
@@ -263,6 +406,18 @@ const goHome = () => {
 
 <template>
   <main class="rz-page">
+    <div v-if="showPrinterReminder" class="reminder-backdrop no-print" role="presentation">
+      <section class="printer-reminder" role="dialog" aria-modal="true" aria-labelledby="printer-reminder-title">
+        <span class="reminder-icon" aria-hidden="true">!</span>
+        <div>
+          <p class="eyebrow">Antes de imprimir</p>
+          <h2 id="printer-reminder-title">Revisa que la impresora esté encendida</h2>
+          <p>Comprueba la luz de encendido de la impresora antes de preparar las etiquetas. Así evitamos envíos fallidos y esperas innecesarias.</p>
+        </div>
+        <button class="print-button" type="button" autofocus @click="dismissPrinterReminder">La impresora está encendida</button>
+      </section>
+    </div>
+
     <header class="rz-header no-print">
       <button v-if="mode !== 'home'" class="back-button" type="button" aria-label="Volver" @click="goHome">
         <span aria-hidden="true">←</span>
@@ -286,15 +441,19 @@ const goHome = () => {
       </div>
 
       <div class="global-product-search">
-        <label for="rz-global-search">Buscar un producto</label>
+        <div class="search-title-row">
+          <label for="rz-global-search">Buscar un producto</label>
+          <button class="add-product-button" type="button" title="Agregar producto" aria-label="Agregar producto" @click="createProduct">+</button>
+        </div>
         <div class="global-search-field">
           <input
             id="rz-global-search"
             v-model="homeSearch"
-            type="search"
+            type="text"
+            inputmode="search"
             autocomplete="off"
             placeholder="Ej.: sirope de vainilla"
-            @input="selectedProduct = null"
+            @input="updateHomeSearch"
           >
           <button v-if="homeSearch" type="button" aria-label="Limpiar busqueda" @click="homeSearch = ''; selectedProduct = null">&times;</button>
         </div>
@@ -304,7 +463,7 @@ const goHome = () => {
             <span>{{ product.primaryExpiry ? formatDate(dateFromValue(product.primaryExpiry)) : product.shelfLife }}</span>
           </button>
         </div>
-        <p v-else-if="homeSearch.trim().length >= 2 && !selectedProduct" class="empty-search">No hay productos activos con ese nombre.</p>
+        <p v-else-if="homeSearch.trim().length >= 1 && !selectedProduct" class="empty-search">No hay productos activos con ese nombre.</p>
         <div v-if="selectedProduct" class="quick-product-panel">
           <div>
             <strong>{{ selectedProduct.name }}</strong>
@@ -317,21 +476,47 @@ const goHome = () => {
         </div>
       </div>
 
+      <section v-if="expiryReviews.length" class="review-panel">
+        <div class="review-heading">
+          <div><p class="eyebrow">Revisiones pendientes</p><strong>Productos que caducan pronto</strong></div>
+          <span>{{ expiryReviews.length }}</span>
+        </div>
+        <button v-for="review in expiryReviews" :key="`${review.productId}-${review.printedAt}`" type="button" @click="selectGlobalProduct(products.find(product => product.id === review.productId))">
+          <span><strong>{{ review.productName }}</strong><small>Lote {{ review.lot || 'sin indicar' }}</small></span>
+          <b>{{ review.days < 0 ? 'Caducado' : review.days === 0 ? 'Caduca hoy' : 'Caduca manana' }}</b>
+        </button>
+      </section>
+
       <div class="primary-actions">
         <button class="action-button audit" type="button" @click="createQueue('audit')">
           <span class="action-icon" aria-hidden="true">A</span>
           <span><strong>Imprimir para auditoría</strong><small>Todos los productos activos</small></span>
           <span class="arrow" aria-hidden="true">→</span>
         </button>
-        <button class="action-button daily" type="button" @click="createQueue('daily')">
-          <span class="action-icon" aria-hidden="true">D</span>
-          <span><strong>Impresión diaria</strong><small>Solo los productos de uso diario</small></span>
+        <button class="action-button daily" type="button" @click="createQueue('barDaily')">
+          <span class="action-icon" aria-hidden="true">BD</span>
+          <span><strong>Barra diaria</strong><small>Leches, bebidas y productos diarios</small></span>
           <span class="arrow" aria-hidden="true">→</span>
         </button>
-        <button class="action-button bar" type="button" @click="createQueue('bar')">
-          <span class="action-icon" aria-hidden="true">B</span>
-          <span><strong>Impresión para barra</strong><small>Bebidas, siropes y preparados de barra</small></span>
+        <button class="action-button bar" type="button" @click="createQueue('barWeekly')">
+          <span class="action-icon" aria-hidden="true">BS</span>
+          <span><strong>Barra semanal</strong><small>Siropes, canela, cacao y toppings</small></span>
           <span class="arrow" aria-hidden="true">→</span>
+        </button>
+        <button class="action-button workshop" type="button" @click="createQueue('workshopDaily')">
+          <span class="action-icon" aria-hidden="true">OD</span>
+          <span><strong>Obrador diario</strong><small>Elaboraciones que se renuevan cada dia</small></span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+        </button>
+        <button class="action-button workshop-manual" type="button" @click="createQueue('workshopManual')">
+          <span class="action-icon" aria-hidden="true">OM</span>
+          <span><strong>Obrador</strong><small>Productos que se etiquetan cuando se utilizan</small></span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+        </button>
+        <button class="action-button produce" type="button" @click="createQueue('produce')">
+          <span class="action-icon" aria-hidden="true">FV</span>
+          <span><strong>Fruta y verdura</strong><small>Etiquetas para recepcion de producto</small></span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
         </button>
       </div>
 
@@ -359,13 +544,18 @@ const goHome = () => {
       <div class="queue-table no-print">
         <div v-for="item in queue" :key="item.id" class="queue-row">
           <input v-model="item.selected" type="checkbox" :aria-label="`Incluir ${item.name}`">
-          <div class="queue-name"><strong>{{ item.name }}</strong><small>{{ item.shelfLife }}</small></div>
+          <button class="queue-name" type="button" @click="toggleQueueEditor(item)"><strong>{{ item.name }}</strong><small>{{ item.shelfLife }} · Tocar para editar</small></button>
           <label>Caducidad
-            <input v-if="!item.expiry || item.primaryExpiry || String(item.shelfLife).toLowerCase().includes('primaria')" v-model="item.manualExpiry" type="date">
+            <input v-if="expandedQueueId === item.id || !item.expiry || isPrimaryProduct(item)" v-model="item.manualExpiry" type="date">
             <span v-else>{{ expiryText(item) }}</span>
           </label>
           <label>Lote<input v-model="item.lot" type="text" inputmode="numeric"></label>
           <label>Cantidad<input v-model.number="item.quantity" type="number" min="1" max="99"></label>
+          <div v-if="expandedQueueId === item.id" class="queue-quick-edit">
+            <p>Los datos de arriba sirven para esta impresion. Tambien puedes guardarlos para las proximas.</p>
+            <button class="secondary-button" type="button" @click="expandedQueueId = null">Usar solo esta vez</button>
+            <button class="print-button" type="button" :disabled="saving" @click="saveQueueProduct(item)">{{ saving ? 'Guardando...' : isPrimaryProduct(item) ? 'Guardar lote y fecha' : 'Guardar lote actual' }}</button>
+          </div>
         </div>
       </div>
 
@@ -374,7 +564,7 @@ const goHome = () => {
           <div class="label-product"><b>PRODUCTO</b><strong>{{ item.name }}</strong></div>
           <div class="label-rule"></div>
           <div class="label-grid">
-            <span>Fecha<br>Impresión</span><b>{{ formatDate(item.printedAt) }}<br>{{ formatTime(item.printedAt) }}</b>
+            <span>{{ printedDateLabel(item) }}</span><b>{{ formatDate(item.printedAt) }}<br>{{ formatTime(item.printedAt) }}</b>
             <span>Caducidad<br>Primaria</span><b>{{ primaryExpiryText(item) }}</b>
             <span>Caducidad</span><b>{{ expiryText(item) }}</b>
             <span>Almacenamiento</span><b>{{ item.storage }}</b>
@@ -382,7 +572,7 @@ const goHome = () => {
           <div class="label-rule"></div>
           <div class="label-grid label-bottom">
             <span>Lote</span><b>{{ item.lot }}</b>
-            <span>Estado</span><b>{{ item.state }}</b>
+            <span>Estado</span><b>{{ printedState(item) }}</b>
           </div>
         </article>
       </div>
@@ -396,7 +586,7 @@ const goHome = () => {
         </button>
       </div>
       <div class="filters">
-        <input v-model="search" type="search" placeholder="Buscar producto..." aria-label="Buscar producto">
+        <input v-model="search" type="text" inputmode="search" placeholder="Buscar producto..." aria-label="Buscar producto" @input="updateManageSearch">
         <div class="category-tabs">
           <button v-for="item in categories" :key="item" type="button" :class="{ active: category === item }" @click="category = item">{{ item }}</button>
         </div>
@@ -418,18 +608,21 @@ const goHome = () => {
             >A</button>
             <button
               type="button"
-              :class="{ on: product.daily }"
+              :class="{ on: product.barDaily }"
               :disabled="!product.active"
-              :title="product.daily ? 'Quitar de impresion diaria' : 'Incluir en impresion diaria'"
-              @click="togglePrintGroup(product, 'daily')"
-            >D</button>
+              :title="product.barDaily ? 'Quitar de barra diaria' : 'Incluir en barra diaria'"
+              @click="togglePrintGroup(product, 'barDaily')"
+            >BD</button>
             <button
               type="button"
-              :class="{ on: product.bar }"
+              :class="{ on: product.barWeekly }"
               :disabled="!product.active"
-              :title="product.bar ? 'Quitar de impresion para barra' : 'Incluir en impresion para barra'"
-              @click="togglePrintGroup(product, 'bar')"
-            >B</button>
+              :title="product.barWeekly ? 'Quitar de barra semanal' : 'Incluir en barra semanal'"
+              @click="togglePrintGroup(product, 'barWeekly')"
+            >BS</button>
+            <button type="button" :class="{ on: product.workshopDaily }" :disabled="!product.active" title="Obrador diario" @click="togglePrintGroup(product, 'workshopDaily')">OD</button>
+            <button type="button" :class="{ on: product.workshopManual }" :disabled="!product.active" title="Obrador manual" @click="togglePrintGroup(product, 'workshopManual')">OM</button>
+            <button type="button" :class="{ on: product.produce }" :disabled="!product.active" title="Fruta y verdura" @click="togglePrintGroup(product, 'produce')">FV</button>
           </span>
           <button
             class="active-button"
@@ -445,26 +638,34 @@ const goHome = () => {
     </section>
 
     <section v-else-if="mode === 'edit'" class="edit-view no-print">
-      <p class="eyebrow">Editar producto</p>
-      <h2>{{ editing.name }}</h2>
+      <p class="eyebrow">{{ editing._isNew ? 'Nuevo producto' : 'Editar producto' }}</p>
+      <h2>{{ editing._isNew ? 'Agregar producto' : editing.name }}</h2>
       <form @submit.prevent="saveProduct">
         <label>Nombre<input v-model.trim="editing.name" required></label>
         <div class="form-grid">
-          <label>Caducidad secundaria<input v-model.trim="editing.shelfLife" placeholder="Ej.: 48 horas o primaria" required></label>
+          <label>Caducidad
+            <select v-model="editing.shelfLife" required>
+              <option v-for="option in shelfLifeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
           <label>Fecha de caducidad primaria<input v-model="editing.primaryExpiry" type="date"></label>
-          <label>Categoría<select v-model="editing.category"><option v-for="item in categories.slice(1)" :key="item">{{ item }}</option></select></label>
+          <label>Lote actual (opcional)<input v-model.trim="editing.currentLot" placeholder="Se genera uno si se deja vacio"></label>
+          <label>Categoría<select v-model="editing.category" @change="applyCategoryDefaults"><option v-for="item in categories.slice(1)" :key="item">{{ item }}</option></select></label>
           <label>Almacenamiento<input v-model.trim="editing.storage" required></label>
           <label>Estado<input v-model.trim="editing.state" required></label>
         </div>
         <div class="toggles">
           <label><input v-model="editing.active" type="checkbox"> Producto activo</label>
           <label><input v-model="editing.audit" type="checkbox"> Incluir en auditoría</label>
-          <label><input v-model="editing.daily" type="checkbox"> Incluir en impresión diaria</label>
-          <label><input v-model="editing.bar" type="checkbox"> Incluir en impresión para barra</label>
+          <label><input v-model="editing.barDaily" type="checkbox"> Barra diaria</label>
+          <label><input v-model="editing.barWeekly" type="checkbox"> Barra semanal</label>
+          <label><input v-model="editing.workshopDaily" type="checkbox"> Obrador diario</label>
+          <label><input v-model="editing.workshopManual" type="checkbox"> Obrador manual</label>
+          <label><input v-model="editing.produce" type="checkbox"> Fruta y verdura</label>
         </div>
         <div class="form-actions">
-          <button class="secondary-button" type="button" @click="mode = 'manage'">Cancelar</button>
-          <button class="print-button" type="submit" :disabled="saving">{{ saving ? 'Guardando...' : 'Guardar cambios' }}</button>
+          <button class="secondary-button" type="button" @click="mode = editReturnMode">Cancelar</button>
+          <button class="print-button" type="submit" :disabled="saving">{{ saving ? 'Guardando...' : editing._isNew ? 'Crear producto' : 'Guardar cambios' }}</button>
         </div>
       </form>
     </section>
@@ -481,6 +682,12 @@ const goHome = () => {
 .printer-status { margin-left: auto; padding: 9px 12px; display: flex; align-items: center; gap: 8px; font-size: 13px; background: #244d3b; border: 1px solid #3b6954; border-radius: 6px; }
 .printer-status span { width: 8px; height: 8px; border-radius: 50%; background: #f0c653; box-shadow: 0 0 0 3px rgba(240,198,83,.14); }
 .back-button { width: 42px; height: 42px; color: white; border: 1px solid #547465; border-radius: 6px; background: transparent; font-size: 25px; cursor: pointer; }
+.reminder-backdrop { position: fixed; z-index: 50; inset: 0; padding: 18px; display: grid; place-items: center; background: rgba(13, 26, 19, .58); backdrop-filter: blur(4px); }
+.printer-reminder { width: min(520px, 100%); box-sizing: border-box; padding: 26px; display: grid; grid-template-columns: 54px 1fr; gap: 18px; color: #17211a; background: white; border: 1px solid #c9d4cc; border-radius: 8px; box-shadow: 0 24px 70px rgba(6, 24, 14, .3); }
+.reminder-icon { width: 50px; height: 50px; display: grid; place-items: center; color: #382900; background: #f0c653; border-radius: 50%; font-size: 25px; font-weight: 900; }
+.printer-reminder h2 { margin-top: 5px; font-size: 27px; }
+.printer-reminder p:last-child { margin: 0; color: #59675e; line-height: 1.5; }
+.printer-reminder > button { grid-column: 2; justify-self: start; }
 .notice { max-width: 1080px; margin: 18px auto 0; padding: 12px 16px; color: #643f00; background: #fff4d5; border: 1px solid #ead18a; border-radius: 6px; }
 .loading-state { padding: 15vh 20px; text-align: center; font-weight: 700; }
 .home-view, .preview-view, .manage-view, .edit-view { width: min(1080px, calc(100% - 40px)); margin: 0 auto; padding: clamp(42px, 7vw, 76px) 0; }
@@ -489,7 +696,9 @@ const goHome = () => {
 h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .intro > p:last-child, .preview-heading p { color: #5a675e; font-size: 17px; }
 .global-product-search { position: relative; margin-top: 28px; padding: 20px; background: white; border: 1px solid #cbd4ce; border-radius: 8px; }
-.global-product-search > label { display: block; margin-bottom: 8px; color: #315440; font-size: 13px; font-weight: 800; }
+.search-title-row { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.search-title-row label { color: #315440; font-size: 13px; font-weight: 800; }
+.add-product-button { width: 38px; height: 38px; display: grid; place-items: center; color: white; background: #176a43; border: 1px solid #176a43; border-radius: 6px; font-size: 26px; line-height: 1; cursor: pointer; }
 .global-search-field { position: relative; }
 .global-search-field input { width: 100%; box-sizing: border-box; padding: 14px 46px 14px 15px; border: 1px solid #aebdb3; border-radius: 6px; font: inherit; font-size: 16px; }
 .global-search-field button { position: absolute; top: 50%; right: 7px; width: 34px; height: 34px; transform: translateY(-50%); color: #53635a; background: transparent; border: 0; font-size: 25px; cursor: pointer; }
@@ -501,12 +710,22 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .empty-search { margin: 10px 0 0; color: #6a756e; font-size: 14px; }
 .quick-product-panel { margin-top: 14px; padding-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 18px; border-top: 1px solid #e0e6e2; }
 .quick-product-actions { display: flex; gap: 9px; }
+.review-panel { margin-top: 20px; overflow: hidden; background: #fff8e4; border: 1px solid #e5ca7d; border-radius: 8px; }
+.review-heading { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ead9a7; }
+.review-heading > span { min-width: 30px; height: 30px; display: grid; place-items: center; color: white; background: #9a5b13; border-radius: 50%; font-weight: 900; }
+.review-panel > button { width: 100%; padding: 11px 16px; display: flex; justify-content: space-between; align-items: center; gap: 14px; color: inherit; text-align: left; background: transparent; border: 0; border-bottom: 1px solid #eee0ba; cursor: pointer; }
+.review-panel > button:last-child { border-bottom: 0; }
+.review-panel small { display: block; margin-top: 3px; color: #756744; }
+.review-panel > button > b { color: #94372e; }
 .primary-actions { margin-top: 38px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .action-button { min-height: 150px; padding: 24px; display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 18px; text-align: left; border: 0; border-radius: 8px; cursor: pointer; box-shadow: 0 10px 28px rgba(23,60,43,.11); transition: transform .18s ease, box-shadow .18s ease; }
 .action-button:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(23,60,43,.16); }
 .action-button.audit { color: white; background: #206644; }
 .action-button.daily { color: #17211a; background: #f0c653; }
 .action-button.bar { color: white; background: #285777; }
+.action-button.workshop { color: white; background: #7a4937; }
+.action-button.workshop-manual { color: #17211a; background: #d9b98c; }
+.action-button.produce { color: white; background: #52733d; }
 .action-icon { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 50%; font-size: 22px; font-weight: 900; background: rgba(255,255,255,.18); }
 .action-button strong { display: block; font-size: clamp(18px, 2.2vw, 23px); }
 .action-button small { display: block; margin-top: 7px; font-size: 14px; opacity: .8; }
@@ -522,10 +741,13 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .queue-row { min-height: 68px; padding: 10px 16px; display: grid; grid-template-columns: 28px minmax(180px, 1fr) 150px 118px 90px; align-items: center; gap: 14px; border-bottom: 1px solid #e5e9e6; }
 .queue-row:last-child { border-bottom: 0; }
 .queue-row input[type="checkbox"] { width: 19px; height: 19px; accent-color: #176a43; }
+.queue-name { padding: 6px 0; color: inherit; text-align: left; background: transparent; border: 0; cursor: pointer; }
 .queue-name small, .product-row small { display: block; margin-top: 4px; color: #77827b; }
 .queue-row label { color: #738077; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .queue-row label span { display: block; margin-top: 5px; color: #17211a; font-size: 14px; }
 .queue-row input[type="text"], .queue-row input[type="number"], .queue-row input[type="date"] { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px; border: 1px solid #cbd4ce; border-radius: 4px; }
+.queue-quick-edit { grid-column: 2 / -1; padding: 12px; display: flex; align-items: center; justify-content: flex-end; gap: 9px; background: #f3f7f4; border-top: 1px solid #dfe7e1; }
+.queue-quick-edit p { margin: 0 auto 0 0; color: #59675e; font-size: 13px; }
 .print-sheet { display: none; }
 .filters { margin-bottom: 20px; }
 .filters > input { width: 100%; box-sizing: border-box; padding: 14px 16px; border: 1px solid #bec9c1; border-radius: 6px; font-size: 16px; }
@@ -543,7 +765,8 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .active-button.restore { color: #17603e; background: #eff9f3; border-color: #a8cfb7; }
 .life { color: #3e5949; font-weight: 700; }
 .flags { display: flex; gap: 5px; }
-.flags button { width: 29px; height: 29px; padding: 0; display: grid; place-items: center; color: #667169; background: #edf0ee; border: 1px solid #d5dcd7; border-radius: 4px; font-size: 12px; font-weight: 900; cursor: pointer; }
+.flags { flex-wrap: wrap; max-width: 108px; }
+.flags button { width: 32px; height: 29px; padding: 0; display: grid; place-items: center; color: #667169; background: #edf0ee; border: 1px solid #d5dcd7; border-radius: 4px; font-size: 11px; font-weight: 900; cursor: pointer; }
 .flags button.on { color: white; background: #347252; border-color: #347252; }
 .flags button:disabled { color: #a8b0aa; background: #ecefed; border-color: transparent; }
 .edit-view { max-width: 760px; }
@@ -558,6 +781,10 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 button:disabled { opacity: .55; cursor: default; }
 
 @media (max-width: 720px) {
+  .printer-reminder { padding: 22px; grid-template-columns: 42px 1fr; gap: 13px; }
+  .reminder-icon { width: 42px; height: 42px; }
+  .printer-reminder h2 { font-size: 23px; }
+  .printer-reminder > button { grid-column: 1 / -1; width: 100%; }
   .rz-header { padding: 14px 18px; }
   .printer-status { display: none; }
   .home-view, .preview-view, .manage-view, .edit-view { width: min(100% - 28px, 1080px); padding: 36px 0; }
@@ -573,6 +800,7 @@ button:disabled { opacity: .55; cursor: default; }
   .queue-row label:nth-of-type(1) { grid-column: 2; }
   .queue-row label:nth-of-type(2) { grid-column: 3; }
   .queue-row label:nth-of-type(3) { grid-column: 3; grid-row: 3; }
+  .queue-quick-edit { grid-column: 1 / -1; align-items: stretch; flex-direction: column; }
   .product-row { padding-right: 8px; }
   .product-main { grid-template-columns: minmax(0, 1fr) 75px 16px; padding-left: 12px; }
   .active-button { min-width: 78px; padding: 8px 7px; font-size: 12px; }

@@ -229,6 +229,8 @@ const storageByCategory = {
 }
 
 const barProductPattern = /^(limonada|leche|bebida vegetal|sirope|canela molida$|cacao$|matcha biberon$|pulpa de mango$|fruta de la pasion$|zumo de naranja$)/i
+const barDailyPattern = /^(leche|bebida vegetal|zumo de naranja$)/i
+const producePattern = /^(aguacate$|espinacas|freson$|kiwi$|manzana$|rucula$|tomate|mango dados$|limon |naranja |fruta de la pasion$)/i
 
 export const defaultRuzafaProducts = rows.map(([name, category, shelfLife], index) => ({
   id: `rz-${String(index + 1).padStart(3, '0')}`,
@@ -240,5 +242,11 @@ export const defaultRuzafaProducts = rows.map(([name, category, shelfLife], inde
   audit: true,
   daily: category === 'Elaborados',
   bar: barProductPattern.test(name),
+  barDaily: barDailyPattern.test(name),
+  barWeekly: barProductPattern.test(name) && !barDailyPattern.test(name),
+  workshopDaily: category === 'Elaborados',
+  workshopManual: category === 'Congelados' || category === 'Refrigerados',
+  produce: producePattern.test(name),
+  currentLot: '',
   active: true,
 }))

@@ -1,8 +1,9 @@
-import { collection, doc, getDocs, setDoc, writeBatch } from 'firebase/firestore'
+import { addDoc, collection, doc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { defaultRuzafaProducts } from '@/data/ruzafaProducts'
 
 const collectionRef = collection(db, 'ruzafaPrinterProducts')
+const printHistoryRef = collection(db, 'ruzafaPrinterHistory')
 
 export const getRuzafaProducts = async () => {
   const snapshot = await getDocs(collectionRef)
@@ -38,4 +39,14 @@ export const seedRuzafaProducts = async () => {
     batch.set(doc(collectionRef, id), data)
   })
   await batch.commit()
+}
+
+export const saveRuzafaPrintHistory = async labels => addDoc(printHistoryRef, {
+  createdAt: serverTimestamp(),
+  labels,
+})
+
+export const getRuzafaPrintHistory = async () => {
+  const snapshot = await getDocs(query(printHistoryRef, orderBy('createdAt', 'desc'), limit(60)))
+  return snapshot.docs.map(item => ({ id: item.id, ...item.data() }))
 }
