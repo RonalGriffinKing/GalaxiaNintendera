@@ -1,0 +1,34 @@
+{
+  "appId": "com.galaxianintendera.app",
+  "appName": "Galaxia Nintendera",
+  "webDir": "dist",
+  "backgroundColor": "#050816",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#050816",
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "native",
+      "style": "DARK",
+      "hidden": false,
+      "animation": "NONE"
+    },
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    },
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "launchShowDuration": 3000,
+      "backgroundColor": "#050816",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "overlaysWebView": false
+    }
+  }
+}

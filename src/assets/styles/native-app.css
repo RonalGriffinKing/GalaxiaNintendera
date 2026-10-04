@@ -1,0 +1,58 @@
+html.is-native-app {
+  /* Android reserva fisicamente las barras y el recorte fuera de la WebView.
+     Estos valores quedan a cero para no duplicar ese espacio dentro del UI. */
+  --safe-top: 0px;
+  --safe-right: 0px;
+  --safe-bottom: 0px;
+  --safe-left: 0px;
+  background: #050816;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.is-native-app body {
+  min-height: 100dvh;
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
+}
+
+html.is-native-app button,
+html.is-native-app a,
+html.is-native-app [role='button'] {
+  touch-action: manipulation;
+}
+
+/* En Android la cabecera permanece completa y estable durante todo el scroll. */
+html.is-native-app .public-nav,
+html.is-native-app .public-nav.hidden,
+html.is-native-app .public-nav.compact {
+  transform: translate3d(0, 0, 0) !important;
+  will-change: auto !important;
+}
+
+html.is-native-app .public-nav {
+  transition-property: background-color, border-color, box-shadow !important;
+}
+
+/* Los filtros animados fuerzan repintados grandes en Android WebView. */
+html.is-native-app .route-page-enter-active,
+html.is-native-app .route-page-leave-active,
+html.is-native-app .global-loader-enter-active,
+html.is-native-app .global-loader-leave-active {
+  transition-property: opacity, transform !important;
+  will-change: opacity, transform !important;
+}
+
+html.is-native-app .route-page-enter-from,
+html.is-native-app .route-page-leave-to,
+html.is-native-app .global-loader-enter-from,
+html.is-native-app .global-loader-leave-to {
+  filter: none !important;
+  transform: translate3d(0, 8px, 0) !important;
+}
+
+html.is-native-paused *,
+html.is-native-paused *::before,
+html.is-native-paused *::after {
+  animation-play-state: paused !important;
+}

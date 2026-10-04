@@ -14,7 +14,7 @@ const emit = defineEmits(['update:expanded', 'open-post'])
 </script>
 
 <template>
-  <section v-if="favorites.length" class="favorite-preview-section">
+  <section class="favorite-preview-section">
     <div class="section-head compact-head">
       <div>
         <span>Favoritos</span>
@@ -29,7 +29,8 @@ const emit = defineEmits(['update:expanded', 'open-post'])
       </button>
     </div>
 
-    <div class="favorite-chip-list">
+    <p v-if="!favorites.length" class="favorite-empty">Todavía no hay posts guardados.</p>
+    <div v-else class="favorite-chip-list">
       <button
         v-for="item in (expanded ? favorites : favorites.slice(0, 4))"
         :key="item.id"
@@ -46,6 +47,8 @@ const emit = defineEmits(['update:expanded', 'open-post'])
 </template>
 
 <style scoped>
+.favorite-preview-section { min-height: 142px; align-content: start; }
+.favorite-empty { min-height: 46px; color: #94a3b8; font-size: 13px; margin: 0; display: flex; align-items: center; }
 .favorite-preview-section {
   background: rgba(11, 16, 32, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.1);

@@ -50,8 +50,8 @@ const emit = defineEmits(['update:search', 'update:sort', 'update:pageSize'])
 
 .list-search {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--control-surface, #ffffff);
+  border: 1px solid var(--control-border, #e5e7eb);
   border-radius: 12px;
   color: #94a3b8;
   display: flex;
@@ -64,7 +64,7 @@ const emit = defineEmits(['update:search', 'update:sort', 'update:pageSize'])
 .list-search input {
   background: transparent;
   border: 0;
-  color: #334155;
+  color: var(--control-text, #334155);
   flex: 1;
   font-size: 12px;
   font-weight: 800;
@@ -77,10 +77,10 @@ const emit = defineEmits(['update:search', 'update:sort', 'update:pageSize'])
 }
 
 .list-controls select {
-  background-color: #ffffff;
-  border: 1px solid #e5e7eb;
+  background-color: var(--control-surface, #ffffff);
+  border: 1px solid var(--control-border, #e5e7eb);
   border-radius: 12px;
-  color: #334155;
+  color: var(--control-text, #334155);
   font-size: 12px;
   font-weight: 800;
   height: 42px;

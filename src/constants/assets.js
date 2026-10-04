@@ -1,5 +1,6 @@
 import defaultBannerUrl from '@/iconos/Banner.png'
 import defaultLogoUrl from '@/iconos/logo.png'
+import { apiUrl } from '@/services/appEnvironment'
 
 const LEGACY_ASSET_URLS = {
   '/src/iconos/Banner.png': defaultBannerUrl,
@@ -44,7 +45,7 @@ export const shouldProxyImageUrl = (url = '') => {
 export const proxiedImageUrl = (url, fallback = '') => {
   const resolved = resolveAssetUrl(url, fallback, { proxy: false })
   if (!shouldProxyImageUrl(resolved)) return resolved
-  return `${IMAGE_PROXY_PATH}?src=${encodeProxySource(resolved)}`
+  return apiUrl(`${IMAGE_PROXY_PATH}?src=${encodeProxySource(resolved)}`)
 }
 
 export const resolveAssetUrl = (url, fallback = '', options = {}) => {

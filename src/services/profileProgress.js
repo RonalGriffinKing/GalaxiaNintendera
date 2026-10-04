@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/firebase'
+import { earnedAchievements } from './achievementProgress'
 
 export const READ_REWARD_STARS = 10
 export const READ_REWARD_DELAY_MS = 30000
@@ -80,6 +81,7 @@ export const normalizeProfileIcon = (id, data = {}) => ({
   src: data.src || data.imageUrl || '',
   saga: data.saga || data.category || 'Especiales',
   special: Boolean(data.special),
+  rarity: ['normal', 'rare', 'epic', 'legendary'].includes(data.rarity) ? data.rarity : data.special ? 'epic' : 'normal',
   effectColor: data.effectColor || '#a855f7',
   cost: Number(data.cost ?? ICON_COST),
   builtIn: Boolean(data.builtIn),
@@ -109,13 +111,14 @@ export const loadUploadedProfileIcons = async ({ includeHidden = false } = {}) =
   return localIcons.filter(icon => icon.src && (includeHidden || (icon.visible && !icon.archived)))
 }
 
-export const updateProfileIcon = async ({ iconId, name, saga, cost, visible = true, sourcePath = '', src = '', special = false, effectColor = '#a855f7' }) => {
+export const updateProfileIcon = async ({ iconId, name, saga, cost, visible = true, sourcePath = '', src = '', special = false, effectColor = '#a855f7', rarity = 'normal' }) => {
   if (!iconId) throw new Error('missing-icon')
 
   const updates = {
     name: String(name || 'Icono de comunidad').trim(),
     saga: String(saga || 'Especiales').trim(),
     special: Boolean(special),
+    rarity: ['normal', 'rare', 'epic', 'legendary'].includes(rarity) ? rarity : 'normal',
     effectColor: String(effectColor || '#a855f7'),
     cost: Math.max(0, Number(cost || 0)),
     visible: Boolean(visible),
@@ -161,8 +164,8 @@ export const resolveProfileIconMeta = (profile = {}) => {
   }
 }
 
-export const unlockedAchievements = (readCount = 0) => {
-  return achievements.filter(item => readCount >= item.reads)
+export const unlockedAchievements = (readCount = 0, items = achievements) => {
+  return earnedAchievements(items.filter(item => !item.type || item.type === 'reads'), { reads: readCount })
 }
 
 export const ensureUserProgress = async (user) => {
@@ -197,6 +200,7 @@ export const awardPostRead = async ({ user, post }) => {
   return runTransaction(db, async (transaction) => {
     const readSnap = await transaction.get(readRef)
     const userSnap = await transaction.get(userRef)
+    const achievementSnap = await transaction.get(doc(db, 'siteConfig', 'profileAchievements'))
 
     if (readSnap.exists()) {
       return { awarded: false }
@@ -229,24 +233,32 @@ export const awardPostRead = async ({ user, post }) => {
       awardedStars: rewardStars,
       stars: nextStars,
       readPostsCount: nextReadCount,
-      achievements: unlockedAchievements(nextReadCount)
+      achievements: unlockedAchievements(nextReadCount, achievementSnap.exists() && Array.isArray(achievementSnap.data().items) ? achievementSnap.data().items : achievements)
     }
   })
 }
 
-export const redeemIcon = async ({ userId, iconId, stars, unlockedIcons = [], cost = ICON_COST, iconUrl = '', iconEffect = null }) => {
-  if (!userId || !iconId) return
-  const currentUnlocked = unlockedIcons.length ? unlockedIcons : ['kirby-01']
-  if (currentUnlocked.includes(iconId)) return
-  const iconCost = Math.max(0, Number(cost || 0))
-  if (Number(stars || 0) < iconCost) throw new Error('not-enough-stars')
-
-  await updateDoc(doc(db, 'users', userId), {
-    stars: Number(stars || 0) - iconCost,
-    unlockedIcons: [...currentUnlocked, iconId],
-    selectedIcon: iconId,
-    selectedIconUrl: iconUrl,
-    ...(iconEffect ? { selectedIconEffect: iconEffect } : {}),
-    updatedAt: Date.now()
+export const redeemIcon = async ({ userId, iconId, expectedCost }) => {
+  if (!userId || !iconId) throw new Error('missing-icon')
+  return runTransaction(db, async (transaction) => {
+    const userRef = doc(db, 'users', userId)
+    const iconRef = doc(db, 'profileIcons', iconId)
+    const userSnap = await transaction.get(userRef)
+    const iconSnap = await transaction.get(iconRef)
+    if (!userSnap.exists()) throw new Error('missing-user')
+    const user = userSnap.data()
+    const currentUnlocked = user.unlockedIcons?.length ? user.unlockedIcons : ['kirby-01']
+    const balance = Number(user.stars || 0)
+    if (currentUnlocked.includes(iconId)) return { stars: balance, unlockedIcons: currentUnlocked, redeemed: false }
+    const localIcon = kirbyIcons.find(icon => icon.id === iconId)
+    const icon = iconSnap.exists() ? iconSnap.data() : localIcon
+    if (!icon || icon.visible === false || icon.archived) throw new Error('unavailable-icon')
+    const cost = Number(icon.cost ?? ICON_COST)
+    if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(balance)) throw new Error('invalid-cost')
+    if (expectedCost !== undefined && cost !== Number(expectedCost)) throw new Error('price-changed')
+    if (balance < cost) throw new Error('not-enough-stars')
+    const result = { stars: balance - cost, unlockedIcons: [...currentUnlocked, iconId], redeemed: true }
+    transaction.update(userRef, { stars: result.stars, unlockedIcons: result.unlockedIcons, updatedAt: Date.now() })
+    return result
   })
 }

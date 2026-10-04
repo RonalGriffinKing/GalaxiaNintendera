@@ -244,14 +244,7 @@
     </Transition>
 
     <Teleport to="body">
-      <Transition name="toast">
-        <div v-if="toast.show" class="app-toast">
-          <div :class="['app-toast-icon', toast.type]">
-            <i :class="toast.type === 'delete' ? 'fas fa-trash-alt' : 'fas fa-check'"></i>
-          </div>
-          <span>{{ toast.message }}</span>
-        </div>
-      </Transition>
+      <AppNotice :visible="toast.show" :message="toast.message" :type="toast.type" />
     </Teleport>
 
     <PostEditor
@@ -268,6 +261,7 @@
 </template>
 
 <script setup>
+import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, deleteField, doc, getDocs, updateDoc } from 'firebase/firestore'
@@ -654,7 +648,7 @@ const executeDelete = async (id) => {
 }
 
 .post-kicker {
-  color: #7c3aed;
+  color: var(--accent-hover);
   display: block;
   font-size: 11px;
   font-weight: 950;
@@ -678,13 +672,13 @@ const executeDelete = async (id) => {
   align-items: start;
   display: grid;
   gap: 16px;
-  grid-template-columns: auto minmax(320px, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   margin-bottom: 18px;
 }
 
 .post-tabs {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-bg);
+  border: 1px solid var(--border);
   border-radius: 14px;
   display: flex;
   gap: 4px;
@@ -693,7 +687,7 @@ const executeDelete = async (id) => {
 
 .post-tabs button {
   border-radius: 10px;
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 900;
   min-height: 34px;
@@ -713,10 +707,10 @@ const executeDelete = async (id) => {
 }
 
 .post-filters select {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  color: #334155;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 800;
   height: 42px;
@@ -729,10 +723,10 @@ const executeDelete = async (id) => {
 
 .post-tools-btn {
   align-items: center;
-  background: #f5f3ff;
+  background: var(--admin-surface-raised);
   border: 1px solid #ddd6fe;
   border-radius: 12px;
-  color: #7c3aed;
+  color: var(--accent-hover);
   display: inline-flex;
   font-size: 12px;
   font-weight: 950;
@@ -743,8 +737,8 @@ const executeDelete = async (id) => {
 }
 
 .post-tools-dropdown {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
   box-shadow: 0 20px 46px rgba(15, 23, 42, 0.16);
   display: grid;
@@ -760,7 +754,7 @@ const executeDelete = async (id) => {
 .post-tools-dropdown button {
   align-items: center;
   border-radius: 10px;
-  color: #475569;
+  color: var(--text-secondary);
   display: flex;
   font-size: 12px;
   font-weight: 900;
@@ -771,13 +765,13 @@ const executeDelete = async (id) => {
 }
 
 .post-tools-dropdown button:hover {
-  background: #f5f3ff;
-  color: #7c3aed;
+  background: var(--admin-surface-raised);
+  color: var(--accent-hover);
 }
 
 .post-table-wrap {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   overflow: hidden;
 }
@@ -789,8 +783,8 @@ const executeDelete = async (id) => {
 
 .post-table th,
 .post-table td {
-  border-bottom: 1px solid #eef2f7;
-  color: #64748b;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 800;
   padding: 12px 14px;
@@ -816,7 +810,7 @@ const executeDelete = async (id) => {
 .post-mobile-card img,
 .post-mobile-card > span {
   aspect-ratio: 16 / 10;
-  background: #ede9fe;
+  background: var(--admin-surface-raised);
   border-radius: 10px;
   object-fit: cover;
   width: 100%;
@@ -832,7 +826,7 @@ const executeDelete = async (id) => {
 
 .post-title-cell strong,
 .post-mobile-card strong {
-  color: #111827;
+  color: var(--text-primary);
   display: -webkit-box;
   font-size: 13px;
   font-weight: 950;
@@ -852,8 +846,8 @@ const executeDelete = async (id) => {
 }
 
 .category-pill {
-  background: #ede9fe;
-  color: #7c3aed;
+  background: var(--admin-surface-raised);
+  color: var(--accent-hover);
 }
 
 .category-list {
@@ -881,8 +875,8 @@ const executeDelete = async (id) => {
 }
 
 .category-panel {
-  background: #ffffff;
-  border: 1px solid #eef2f7;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 22px;
   box-shadow: 0 30px 90px rgba(15, 23, 42, 0.26);
   display: grid;
@@ -897,7 +891,7 @@ const executeDelete = async (id) => {
 
 .category-panel-head {
   align-items: start;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid var(--border);
   display: flex;
   gap: 16px;
   justify-content: space-between;
@@ -905,13 +899,13 @@ const executeDelete = async (id) => {
 }
 
 .category-panel-head h2 {
-  color: #111827;
+  color: var(--text-primary);
   font-size: 20px;
   font-weight: 950;
 }
 
 .category-panel-head p {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 750;
   margin-top: 4px;
@@ -924,10 +918,10 @@ const executeDelete = async (id) => {
 }
 
 .category-add-row input {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-bg);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  color: #111827;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 800;
   min-height: 42px;
@@ -968,8 +962,8 @@ const executeDelete = async (id) => {
 
 .category-manage-item {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-bg);
+  border: 1px solid var(--border);
   border-radius: 14px;
   display: grid;
   gap: 12px;
@@ -980,9 +974,9 @@ const executeDelete = async (id) => {
 
 .category-manage-item > span {
   align-items: center;
-  background: #ede9fe;
+  background: var(--admin-surface-raised);
   border-radius: 999px;
-  color: #7c3aed;
+  color: var(--accent-hover);
   display: flex;
   font-size: 11px;
   font-weight: 950;
@@ -992,7 +986,7 @@ const executeDelete = async (id) => {
 }
 
 .category-manage-item strong {
-  color: #111827;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 950;
   min-width: 0;
@@ -1008,10 +1002,10 @@ const executeDelete = async (id) => {
 
 .category-manage-item button {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #64748b;
+  color: var(--text-muted);
   display: flex;
   height: 32px;
   justify-content: center;
@@ -1030,7 +1024,7 @@ const executeDelete = async (id) => {
 }
 
 .state-pill.pending {
-  background: #fef3c7;
+  background: var(--admin-surface-raised);
   color: #b45309;
 }
 
@@ -1056,9 +1050,9 @@ const executeDelete = async (id) => {
 
 .post-share-btn {
   align-items: center;
-  background: #f5f3ff;
+  background: var(--admin-surface-raised);
   border-radius: 8px;
-  color: #7c3aed;
+  color: var(--accent-hover);
   display: inline-flex;
   font-size: 10px;
   font-weight: 950;
@@ -1074,10 +1068,10 @@ const executeDelete = async (id) => {
 
 .post-empty-results {
   align-items: center;
-  background: #ffffff;
+  background: var(--admin-surface);
   border: 1px dashed #d8b4fe;
   border-radius: 16px;
-  color: #64748b;
+  color: var(--text-muted);
   display: grid;
   gap: 8px;
   justify-items: center;
@@ -1092,7 +1086,7 @@ const executeDelete = async (id) => {
 }
 
 .post-empty-results strong {
-  color: #111827;
+  color: var(--text-primary);
   font-size: 15px;
   font-weight: 950;
 }
@@ -1123,7 +1117,7 @@ const executeDelete = async (id) => {
   transform: translate(-50%, 20px);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1100px) {
   .panel-header,
   .post-toolbar {
     align-items: stretch;
@@ -1184,8 +1178,8 @@ const executeDelete = async (id) => {
 
   .post-mobile-card {
     align-items: center;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
+    background: var(--admin-surface);
+    border: 1px solid var(--border);
     border-radius: 14px;
     display: grid;
     gap: 10px;
@@ -1213,9 +1207,9 @@ const executeDelete = async (id) => {
 
   .post-mobile-card button {
     align-items: center;
-    background: #f1f5f9;
+    background: var(--admin-surface-raised);
     border-radius: 10px;
-    color: #7c3aed;
+    color: var(--accent-hover);
     display: flex;
     height: 34px;
     justify-content: center;

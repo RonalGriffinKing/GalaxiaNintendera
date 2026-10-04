@@ -1,4 +1,5 @@
 <script setup>
+import { computed, ref } from 'vue'
 const draft = defineModel('draft', {
   type: Object,
   default: () => ({
@@ -10,7 +11,8 @@ const draft = defineModel('draft', {
   })
 })
 
-defineProps({
+const props = defineProps({
+  inline: Boolean,
   open: {
     type: Boolean,
     default: false
@@ -49,6 +51,10 @@ defineProps({
   }
 })
 
+const status = ref('all')
+const category = ref('all')
+const filteredRoadmap = computed(() => props.roadmap.filter(item => (category.value === 'all' || (item.type || 'reads') === category.value) && (status.value === 'all' || (status.value === 'earned' ? item.unlocked : !item.unlocked))))
+
 const emit = defineEmits([
   'close',
   'start-create',
@@ -61,16 +67,16 @@ const emit = defineEmits([
 
 <template>
   <Transition name="modal-fade">
-    <div v-if="open" class="achievement-modal-backdrop" @click.self="emit('close')">
+    <div v-if="open" class="achievement-modal-backdrop" :class="{ inline }" @click.self="emit('close')">
       <section class="achievement-roadmap achievement-modal-card">
-        <button class="icon-modal-close" type="button" aria-label="Cerrar logros" @click="emit('close')">
+        <button v-if="!inline" class="icon-modal-close" type="button" aria-label="Cerrar logros" @click="emit('close')">
           <i class="fas fa-xmark"></i>
         </button>
 
         <div class="achievement-roadmap-head">
           <div>
             <span>Progreso del perfil</span>
-            <h2>Logros por desbloquear</h2>
+            <h2>Logros</h2>
           </div>
           <div class="achievement-roadmap-actions">
             <button v-if="canManage" type="button" @click="emit('start-create')">
@@ -81,6 +87,16 @@ const emit = defineEmits([
           </div>
         </div>
 
+        <section v-if="inline && !canManage" class="achievement-summary">
+          <span class="summary-star"><i class="fas fa-star" aria-hidden="true"></i></span>
+          <div><h3>Progreso general</h3><p>{{ earnedCount }} / {{ totalCount }} logros completados</p><progress :value="earnedCount" :max="totalCount || 1" aria-label="Logros completados"></progress></div>
+          <strong>{{ totalCount ? Math.round(earnedCount / totalCount * 100) : 0 }}%</strong>
+          <footer><span><strong>{{ earnedCount }}</strong> Completados</span><span><strong>{{ totalCount - earnedCount }}</strong> En progreso</span><span><strong>{{ totalCount }}</strong> Disponibles</span></footer>
+        </section>
+        <div class="achievement-filters">
+          <label>Estado<select v-model="status"><option value="all">Todos</option><option value="progress">En progreso</option><option value="earned">Ganados</option></select></label>
+          <label>Categoría<select v-model="category"><option value="all">Todas</option><option v-for="type in typeCounts" :key="type.value" :value="type.value">{{ type.label }}</option></select></label>
+        </div>
         <div class="achievement-type-row" aria-label="Categorias de logros">
           <span v-for="type in typeCounts" :key="type.value">
             <i :class="type.icon"></i>
@@ -122,7 +138,7 @@ const emit = defineEmits([
 
         <div class="achievement-roadmap-grid">
           <article
-            v-for="achievement in roadmap"
+            v-for="achievement in filteredRoadmap"
             :key="achievement.id"
             class="achievement-roadmap-card"
             :class="{ unlocked: achievement.unlocked, next: achievement.isNext }"
@@ -135,11 +151,11 @@ const emit = defineEmits([
               <em class="achievement-type-chip">{{ achievement.typeMeta.label }}</em>
               <strong>{{ achievement.label }}</strong>
               <p>{{ achievement.description }}</p>
-              <div class="achievement-progress">
+              <div class="achievement-progress" role="progressbar" :aria-label="achievement.label" :aria-valuenow="achievement.progress" aria-valuemin="0" aria-valuemax="100">
                 <i :style="{ width: achievement.progress + '%' }"></i>
               </div>
               <small>
-                {{ achievement.unlocked ? 'Desbloqueado' : `${achievement.currentValue} / ${achievement.target} ${achievement.typeMeta.unit}` }}
+                {{ achievement.unlocked ? 'Ganado' : `${achievement.currentValue} / ${achievement.target} ${achievement.typeMeta.unit}` }}
               </small>
               <div v-if="canManage" class="achievement-card-actions">
                 <button type="button" @click="emit('edit', achievement)">Editar</button>
@@ -148,6 +164,7 @@ const emit = defineEmits([
             </div>
           </article>
         </div>
+        <p v-if="!filteredRoadmap.length" class="achievement-empty">No hay logros en este filtro. Prueba con Todos.</p>
       </section>
     </div>
   </Transition>
@@ -592,4 +609,33 @@ const emit = defineEmits([
     min-height: 0;
   }
 }
+.achievement-modal-backdrop.inline { position: static; display: block; padding: 0; background: transparent; backdrop-filter: none; }
+.inline .achievement-modal-card { width: 100%; max-width: none; max-height: none; overflow: visible; }
+.achievement-filters { display: flex; gap: 16px; flex-wrap: wrap; }
+.achievement-filters label { display: grid; gap: 8px; color: var(--text-secondary); font-size: 13px; }
+.achievement-filters select { background-color: var(--surface-elevated); color: var(--text-primary); border-color: var(--border); }
+.achievement-empty { color: var(--text-secondary); padding: 16px; }
+.inline .achievement-editor { grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }
+.inline .achievement-roadmap-grid { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
+
+
+.achievement-summary { display: grid; grid-template-columns: 64px minmax(0,1fr) auto; gap: 18px; align-items: center; padding: 22px; border: 1px solid #a855f733; background: linear-gradient(110deg, #7c3aed26, #161b30); border-radius: 16px; }.summary-star { display: grid; place-items: center; width: 60px; height: 60px; font-size: 30px; color: #fde047; background: #a855f733; border: 1px solid #c084fc66; border-radius: 50%; box-shadow: 0 0 25px #a855f730; }.achievement-summary h3 { font-size: 17px; }.achievement-summary p { margin: 5px 0 12px; color: #cbd5e1; font-size: 14px; }.achievement-summary progress { width: 100%; height: 9px; overflow: hidden; border-radius: 20px; border: 0; background: #ffffff15; }.achievement-summary progress::-webkit-progress-bar { background: #ffffff15; }.achievement-summary progress::-webkit-progress-value { background: linear-gradient(90deg,#a855f7,#6384ff); border-radius: 20px; }.achievement-summary progress::-moz-progress-bar { background: #a855f7; }.achievement-summary footer { grid-column: 1/-1; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); padding-top: 16px; border-top: 1px solid #ffffff12; }.achievement-summary footer span { display: grid; gap: 6px; font-size: 12px; color: #cbd5e1; text-align: center; }.achievement-summary footer strong { font-size: 21px; color: white; }
+.inline .achievement-roadmap-grid { gap: 16px; }.inline .achievement-card { padding: 20px; border-radius: 16px; background: linear-gradient(135deg,#191e32,#0d1120); }.inline .achievement-card.unlocked { background: linear-gradient(135deg,#80542255,#23162a); border-color: #f59e0b66; }.inline .achievement-card.next { border-color: #a855f780; background: linear-gradient(135deg,#642c8b30,#121329); }.inline .achievement-orb { height: 54px; width: 54px; font-size: 22px; }.inline .achievement-card strong { line-height: 1.4; }.inline .achievement-card p { line-height: 1.6; }.inline .achievement-progress { height: 7px; margin: 12px 0 10px; }.inline .achievement-card.unlocked small { color: #6ee7b7; }
+@media(max-width:600px) { .achievement-summary { grid-template-columns: 44px minmax(0,1fr) auto; gap: 12px; padding: 16px; }.summary-star { width: 44px; height: 44px; font-size: 24px; }.achievement-summary p { font-size: 12px; }.inline .achievement-card { padding: 16px; } }
+.inline .achievement-modal-card { padding: 14px; gap: 12px; }
+.inline .achievement-roadmap-head { margin-bottom: 8px; }
+.inline .achievement-roadmap-head > div > span { display: none; }
+.inline .achievement-summary { padding: 12px; gap: 10px; grid-template-columns: 36px minmax(0,1fr) auto; }
+.inline .summary-star { width: 36px; height: 36px; font-size: 20px; }
+.inline .achievement-summary h3 { display: none; }
+.inline .achievement-summary p { margin: 0 0 8px; font-size: 13px; }
+.inline .achievement-summary footer,.inline .achievement-type-row { display: none; }
+.inline .achievement-filters { gap: 10px; }
+.inline .achievement-filters label { flex: 1; min-width: 0; gap: 4px; }
+.inline .achievement-roadmap-grid { gap: 10px; }
+.inline .achievement-roadmap-card { padding: 12px; gap: 12px; }
+.inline .achievement-orb { width: 40px; height: 40px; font-size: 18px; }
+.inline .achievement-roadmap-card p { font-size: 13px; margin: 4px 0; line-height: 1.4; }
+.inline .achievement-progress { margin: 8px 0 6px; }
+@media(max-width:600px) { .inline .achievement-roadmap-grid { grid-template-columns: minmax(0,1fr); }.inline .achievement-modal-card { padding: 12px; } }
 </style>

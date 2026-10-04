@@ -30,6 +30,7 @@ import {
   stopPlayback
 } from '@/services/playerState'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
+import { apiUrl } from '@/services/appEnvironment'
 import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
 import CommunityHero from '@/components/community/CommunityHero.vue'
 import CommunityLiveHub from '@/components/community/CommunityLiveHub.vue'
@@ -1628,7 +1629,7 @@ const hydrateYoutubeVideos = async (videos) => {
 const loadYoutubeFeedFallback = async () => {
   if (!youtubeChannelId.value?.startsWith('UC')) return false
 
-  const response = await fetch(`/.netlify/functions/youtube-feed?channelId=${encodeURIComponent(youtubeChannelId.value)}`)
+  const response = await fetch(apiUrl(`/.netlify/functions/youtube-feed?channelId=${encodeURIComponent(youtubeChannelId.value)}`))
   if (!response.ok) return false
 
   const data = await response.json()

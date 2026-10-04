@@ -19,13 +19,14 @@ const mapGiphyItem = (item = {}) => {
 
 export const hasGiphyKey = () => Boolean(GIPHY_API_KEY)
 
-export const fetchGiphyItems = async ({ query = '', limit = 18, rating = 'pg-13', lang = 'es' } = {}) => {
+export const fetchGiphyItems = async ({ query = '', limit = 18, offset = 0, rating = 'pg-13', lang = 'es' } = {}) => {
   if (!GIPHY_API_KEY) return []
 
   const endpoint = query.trim() ? 'search' : 'trending'
   const params = new URLSearchParams({
     api_key: GIPHY_API_KEY,
     limit: String(limit),
+    offset: String(Math.max(0, offset)),
     rating,
     lang
   })

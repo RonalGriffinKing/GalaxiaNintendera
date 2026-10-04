@@ -63,7 +63,7 @@ const emit = defineEmits(['page'])
 }
 
 .pagination-nav p {
-  color: #64748b;
+  color: var(--control-muted, #64748b);
   font-size: 12px;
   font-weight: 850;
 }
@@ -83,10 +83,10 @@ const emit = defineEmits(['page'])
 .pagination-nav strong,
 .pagination-nav span {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--control-surface, #ffffff);
+  border: 1px solid var(--control-border, #e5e7eb);
   border-radius: 10px;
-  color: #64748b;
+  color: var(--control-muted, #64748b);
   display: inline-flex;
   font-size: 12px;
   font-weight: 900;
@@ -107,7 +107,7 @@ const emit = defineEmits(['page'])
 .pagination-nav button.active {
   background: linear-gradient(135deg, #8b5cf6, #ec4899);
   border-color: transparent;
-  color: #ffffff;
+  color: var(--control-surface, #ffffff);
   box-shadow: 0 10px 20px rgba(147, 51, 234, 0.16);
 }
 

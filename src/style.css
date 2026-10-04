@@ -1,11 +1,10 @@
 @import './assets/styles/base.css';
 @import './assets/styles/theme.css';
 @import './assets/styles/animations.css';
+@import './assets/styles/native-app.css';
 
 :root {
   --app-bg: #070816;
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
   scroll-behavior: smooth;
   scrollbar-color: rgba(168, 85, 247, 0.65) transparent;
   scrollbar-width: thin;
@@ -22,6 +21,24 @@ body {
   margin: 0;
   min-height: 100dvh;
   overflow-x: hidden;
+}
+
+/* Shared sizing rules for nested grids, forms and administrative surfaces. */
+*, *::before, *::after { box-sizing: border-box; }
+input, textarea, select { min-width: 0; max-width: 100%; }
+img, video { max-width: 100%; }
+button, a, input, textarea, select { touch-action: manipulation; }
+:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 3px; }
+.workspace-surface, .module-panel { min-width: 0; }
+.workspace-page, .global-manager-page, .post-editor-panel {
+  color-scheme: dark;
+  --control-surface: var(--admin-surface);
+  --control-text: var(--text-secondary);
+  --control-muted: var(--text-muted);
+  --control-border: var(--border);
+  --color-panel-text: var(--text-primary);
+  --color-muted-text: var(--text-muted);
+  --color-soft-border: var(--border);
 }
 
 .app-shell,

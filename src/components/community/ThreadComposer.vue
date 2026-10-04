@@ -346,7 +346,7 @@ const publish = async () => {
 }
 
 const exploreCommunities = () => {
-  router.push('/comunidad?explore=1')
+  router.push('/comunidades')
 }
 
 watch(() => props.initialCommunityId, pickInitialCommunity)

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { proxiedImageUrl } from '@/constants/assets'
 import { useTimedCarousel } from '@/composables/useTimedCarousel'
+import { apiUrl } from '@/services/appEnvironment'
 
 const props = defineProps({
   items: {
@@ -189,7 +190,7 @@ const loadYoutubeFeed = async () => {
   youtubeLoading.value = true
   youtubeError.value = ''
   try {
-    const feedResponse = await fetch(`/.netlify/functions/youtube-feed?channelId=${encodeURIComponent(channelId)}`)
+    const feedResponse = await fetch(apiUrl(`/.netlify/functions/youtube-feed?channelId=${encodeURIComponent(channelId)}`))
     if (feedResponse.ok) {
       const feed = await feedResponse.json()
       youtubeVideos.value = (feed.items || []).map(mapFeedItem).slice(0, 12)

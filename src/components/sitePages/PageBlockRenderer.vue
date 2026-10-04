@@ -330,4 +330,12 @@ hr { border: 0; border-top: 1px solid rgba(255,255,255,0.14); }
     padding: 18px;
   }
 }
+
+/* Preview layout follows the available panel width, including desktop previews. */
+@container (max-width: 720px) {
+  .block-hero { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 24px; }
+  .hero-star { display: none; }
+  .hero-copy h1, .page-legal.block-hero .hero-copy h1 { font-size: clamp(28px, 8cqi, 48px); line-height: 1.12; overflow-wrap: anywhere; }
+  .block-card-grid, .page-legal .block-card-grid { grid-template-columns: minmax(0, 1fr); }
+}
 </style>

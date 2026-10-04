@@ -18,10 +18,7 @@ defineProps({
     type: Object,
     required: true
   },
-  rewardsExpanded: {
-    type: Boolean,
-    default: false
-  },
+  nextProgress: { type: Object, default: null },
   isOwnProfile: {
     type: Boolean,
     default: false
@@ -83,7 +80,7 @@ const emit = defineEmits([
     <button
       class="profile-level-pill"
       type="button"
-      :aria-expanded="rewardsExpanded"
+      aria-label="Ver logros y recompensas"
       @click="emit('toggle-rewards')"
     >
       <span class="profile-level-icon">
@@ -92,7 +89,7 @@ const emit = defineEmits([
       </span>
       <span class="profile-level-label">{{ currentAchievement.label }}</span>
       <i class="fas fa-crown profile-level-crown" aria-hidden="true"></i>
-      <i :class="rewardsExpanded ? 'fas fa-chevron-down' : 'fas fa-chevron-up'"></i>
+      <i class="fas fa-chevron-right"></i>
     </button>
 
     <div class="profile-avatar-wrap">
@@ -126,23 +123,7 @@ const emit = defineEmits([
       </div>
     </div>
 
-    <div class="hero-rewards-panel">
-      <button type="button" @click.stop.prevent="emit('open-icon-collection')">
-        <i class="fas fa-icons"></i>
-        <span>{{ redeemedIconCount }} iconos</span>
-      </button>
-      <div v-if="visibleProfileIcons.length" class="hero-icon-stack">
-        <ProfileAvatar
-          v-for="icon in visibleProfileIcons.slice(0, 4)"
-          :key="icon.id"
-          class="hero-stack-avatar"
-          :src="icon.src"
-          :alt="icon.name"
-          :effect="icon"
-          decorative
-        />
-      </div>
-    </div>
+
 
     <div class="profile-social-panel">
       <strong>Mis redes</strong>
@@ -163,14 +144,40 @@ const emit = defineEmits([
       </div>
     </div>
 
-    <div class="star-wallet" :class="{ spending: isSpending }">
+
+
+
+    <aside class="hero-side"><div class="star-wallet" :class="{ spending: isSpending }">
       <i class="fas fa-star"></i>
       <strong>{{ displayStars }}</strong>
       <span>estrellas</span>
       <small>Gana mas leyendo noticias y participando en la galaxia.</small>
-    </div>
-
-    <div class="profile-actions">
+      <button v-if="nextProgress" class="hero-next-goal" type="button" @click="emit('toggle-rewards')">
+        <span>Siguiente logro</span><strong>{{ nextProgress.label }}</strong>
+        <progress :value="nextProgress.progress" max="100" :aria-label="`Progreso de ${nextProgress.label}`"></progress>
+        <span>{{ nextProgress.currentValue }} / {{ nextProgress.target }}</span>
+      </button>
+    </div><div class="hero-rewards-panel">
+      <button type="button" @click.stop.prevent="emit('open-icon-collection')">
+        <i class="fas fa-icons"></i>
+        <span>{{ redeemedIconCount }} iconos</span>
+      </button>
+      <div v-if="visibleProfileIcons.length" class="hero-icon-stack">
+        <ProfileAvatar
+          v-for="icon in visibleProfileIcons.slice(0, 4)"
+          :key="icon.id"
+          class="hero-stack-avatar"
+          :src="icon.src"
+          :alt="icon.name"
+          :effect="icon"
+          decorative
+        />
+      </div>
+    </div><div class="profile-actions" :class="{ 'profile-actions-three': !isOwnProfile && canUseDirectChat }">
+      <button type="button" class="ghost" @click="emit('toggle-rewards')">
+        <i class="fas fa-trophy"></i>
+        Logros y recompensas
+      </button>
       <button
         v-if="isOwnProfile"
         class="profile-edit-main-action"
@@ -189,492 +196,43 @@ const emit = defineEmits([
         <i class="far fa-envelope"></i>
         Enviar mensaje
       </button>
-      <button type="button" class="ghost" @click="emit('share')">
+      <button type="button" class="ghost profile-share-action" @click="emit('share')">
         <i class="fas fa-share-nodes"></i>
         Compartir perfil
       </button>
-    </div>
+    </div></aside>
   </section>
 </template>
 
 <style scoped>
-.profile-hero {
-  align-items: center;
-  background:
-    linear-gradient(135deg, rgba(7, 10, 24, 0.92), rgba(31, 19, 55, 0.86)),
-    url('@/iconos/Banner.png') center / cover;
-  border: 1px solid rgba(168, 85, 247, 0.18);
-  border-radius: 28px;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
-  color: #ffffff;
-  display: grid;
-  gap: 18px;
-  grid-template-areas:
-    "level level level"
-    "avatar info wallet"
-    "avatar socials rewards"
-    "actions actions actions";
-  grid-template-columns: 136px minmax(0, 1fr) minmax(170px, auto);
-  margin: 0 auto;
-  max-width: 1120px;
-  overflow: hidden;
-  padding: 26px;
-  position: relative;
-}
+.profile-hero { display:grid; grid-template-columns:160px minmax(0,1fr) 260px; grid-template-areas:'avatar level wallet' 'avatar info wallet' 'avatar socials rewards' 'avatar socials actions'; gap:12px 24px; padding:24px; width:100%; border:1px solid #a855f770; border-radius:18px; background:linear-gradient(90deg,#080a1da8,#140b3266),url('@/iconos/Banner.png') center/cover; color:white; min-width:0; }
+.profile-level-pill { grid-area:level; display:flex; gap:8px; align-items:center; width:fit-content; max-width:100%; min-height:38px; padding:5px 12px 5px 5px; border:1px solid #fbbf24; border-radius:24px; background:linear-gradient(135deg,#6d28d970,#78350f80); color:#fde68a; font-size:12px; font-weight:700; }
+.profile-level-icon { display:grid; place-items:center; width:27px; height:27px; flex-shrink:0; border-radius:50%; background:#a855f7; }.profile-level-icon img { width:100%; height:100%; object-fit:cover; border-radius:50%; }.profile-level-label { overflow-wrap:anywhere; }.profile-level-pill > .fa-chevron-right { display:none; }
+.profile-avatar-wrap { grid-area:avatar; align-self:center; justify-self:center; }.profile-avatar-circle { --avatar-size:150px; }.avatar-edit-shortcut { display:none; }.profile-main-copy { grid-area:info; min-width:0; }.profile-main-copy h1 { font-size:clamp(28px,3vw,40px); line-height:1.15; font-weight:800; letter-spacing:-.03em; margin:0 0 8px; overflow-wrap:anywhere; }.profile-username { font-size:16px; font-weight:700; color:#c084fc; }.profile-main-copy p { font-size:13px; line-height:1.65; margin:10px 0 0; max-width:560px; }.profile-meta-row { display:flex; flex-wrap:wrap; gap:12px; margin-top:12px; color:#cbd5e1; font-size:11px; }
+.profile-social-panel { grid-area:socials; align-self:end; }.profile-social-panel > strong { display:none; }.profile-social-links { display:flex; gap:8px; }.profile-social-links :is(a,span) { display:grid; place-items:center; width:36px; height:36px; color:white; background:#080c2480; border:1px solid #ffffff26; border-radius:50%; }.profile-social-links .disabled { opacity:.4; }
+.star-wallet { grid-area:wallet; display:grid; grid-template-columns:30px minmax(0,1fr); gap:2px 10px; padding:14px; background:#080c24d9; border:1px solid #a855f744; border-radius:12px 12px 0 0; }.star-wallet > i { grid-row:span 2; align-self:center; color:#facc15; font-size:27px; }.star-wallet > strong { font-size:24px; }.star-wallet > span { color:#cbd5e1; font-size:9px; text-transform:uppercase; }.star-wallet > small { display:none; }.hero-next-goal { grid-column:1/-1; display:grid; gap:6px; text-align:left; padding-top:10px; margin-top:8px; border-top:1px solid #ffffff15; color:white; }.hero-next-goal strong { font-size:12px; line-height:1.4; }.hero-next-goal span { font-size:10px; color:#cbd5e1; }.hero-next-goal progress { width:100%; height:7px; border:0; border-radius:20px; overflow:hidden; background:#ffffff15; }.hero-next-goal progress::-webkit-progress-bar { background:#ffffff15; }.hero-next-goal progress::-webkit-progress-value { background:linear-gradient(90deg,#a855f7,#ec4899); }.hero-next-goal progress::-moz-progress-bar { background:#a855f7; }
+.hero-rewards-panel { grid-area:rewards; display:grid; gap:8px; padding:10px 14px; margin-top:-12px; background:#080c24d9; border:1px solid #a855f744; border-top:0; border-radius:0 0 12px 12px; }.hero-rewards-panel > button { color:#cbd5e1; text-align:left; font-size:11px; min-height:26px; }.hero-icon-stack { display:flex; gap:8px; justify-content:center; }.hero-stack-avatar { --avatar-size:36px; }.profile-actions { grid-area:actions; display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }.profile-actions > button { min-height:40px; padding:9px 12px; border:1px solid #a855f755; border-radius:22px; font-size:11px; color:white; background:#080c2480; }.profile-actions .profile-edit-main-action { background:linear-gradient(135deg,#7c3aed,#a855f7); }.profile-actions > .ghost:first-child { display:none; }
+button:focus-visible,a:focus-visible { outline:2px solid #c084fc; outline-offset:4px; }
+@media(max-width:1100px) { .profile-hero { grid-template-columns:120px minmax(0,1fr) 220px; gap:12px 16px; padding:20px; }.profile-avatar-circle { --avatar-size:116px; } }
+@media(max-width:760px) { .profile-hero { grid-template-columns:100px minmax(0,1fr); grid-template-areas:'avatar level' 'avatar info' 'socials socials' 'wallet wallet' 'rewards rewards' 'actions actions'; padding:18px; gap:14px; }.profile-avatar-circle { --avatar-size:96px; }.profile-main-copy h1 { font-size:28px; }.profile-social-links { justify-content:center; }.profile-level-pill { font-size:10px; min-height:34px; }.profile-main-copy p { font-size:12px; }.hero-rewards-panel { margin-top:-14px; }.profile-actions { justify-content:center; }.profile-actions button { flex:1; }.hero-icon-stack { gap:12px; }.hero-stack-avatar { --avatar-size:38px; } }
+@media(max-width:420px) { .profile-hero { grid-template-columns:82px minmax(0,1fr); gap:12px; padding:16px; }.profile-avatar-circle { --avatar-size:80px; }.profile-main-copy h1 { font-size:24px; }.profile-level-crown { display:none; }.profile-username { font-size:13px; } }
 
-.profile-level-pill,
-.hero-rewards-panel button {
-  align-items: center;
-  background: rgba(168, 85, 247, 0.14);
-  border: 1px solid rgba(168, 85, 247, 0.22);
-  border-radius: 999px;
-  color: #c084fc;
-  display: inline-grid;
-  font-size: 12px;
-  font-weight: 950;
-  gap: 9px;
-  grid-template-columns: 32px minmax(0, 1fr) 16px 14px;
-  min-height: 42px;
-  padding: 5px 12px 5px 5px;
-}
 
-.profile-level-pill {
-  background:
-    radial-gradient(circle at 10% 50%, rgba(236, 72, 153, 0.34), transparent 30%),
-    linear-gradient(135deg, rgba(88, 28, 135, 0.78), rgba(120, 53, 15, 0.5));
-  border-color: rgba(250, 204, 21, 0.58);
-  color: #fde68a;
-  grid-area: level;
-  justify-self: start;
-  max-width: min(520px, 100%);
-  min-width: 0;
-  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
-  width: auto;
-}
+.profile-hero { grid-template-areas:'avatar level side' 'avatar info side' 'avatar socials side'; gap:12px 24px; align-items:start; }.hero-side { grid-area:side; display:flex; flex-direction:column; gap:0; min-width:0; }.hero-side .star-wallet { display:grid; }.hero-side .hero-rewards-panel { margin:0; }.hero-side .profile-actions { margin-top:10px; }.profile-social-panel { align-self:start; }.profile-avatar-wrap { align-self:center; }.profile-main-copy p { margin-bottom:0; }
+@media(max-width:760px) { .profile-hero { grid-template-columns:100px minmax(0,1fr); grid-template-areas:'avatar level' 'avatar info' 'socials socials' 'side side'; gap:12px; }.hero-side { margin-top:4px; }.hero-side .star-wallet { grid-template-columns:30px 80px minmax(0,1fr); }.hero-side .hero-next-goal { grid-column:3; grid-row:1/span 2; margin:0; padding:0 0 0 12px; border-top:0; border-left:1px solid #ffffff15; }.hero-side .star-wallet > i { grid-column:1; grid-row:1/span 2; }.hero-side .star-wallet > strong { grid-column:2; grid-row:1; }.hero-side .star-wallet > span { grid-column:2; grid-row:2; }.hero-side .hero-rewards-panel { display:flex; align-items:center; justify-content:space-between; gap:10px; }.hero-side .hero-stack-avatar { --avatar-size:32px; }.hero-side .hero-icon-stack { gap:6px; } }
+@media(max-width:420px) { .profile-hero { grid-template-columns:82px minmax(0,1fr); } }
 
-.profile-level-icon {
-  align-items: center;
-  background: linear-gradient(135deg, #f59e0b, #facc15);
-  border-radius: 999px;
-  color: #ffffff;
-  display: flex;
-  font-size: 14px;
-  height: 32px;
-  justify-content: center;
-  overflow: hidden;
-  width: 32px;
-}
 
-.profile-level-icon img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.profile-level-label {
-  align-self: center;
-  min-width: 0;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-level-crown {
-  color: #fde68a;
-}
-
-.profile-avatar-wrap {
-  grid-area: avatar;
-  position: relative;
-}
-
-.profile-avatar-circle {
-  --avatar-size: 136px;
-  --avatar-border: 4px;
-  --avatar-role-offset: -8px;
-}
-
-.avatar-edit-shortcut {
-  align-items: center;
-  background: linear-gradient(135deg, #9333ea, #ec4899);
-  border: 2px solid rgba(255, 255, 255, 0.82);
-  border-radius: 999px;
-  bottom: -8px;
-  color: #ffffff;
-  display: none;
-  font-size: 11px;
-  font-weight: 950;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 12px;
-  position: absolute;
-  right: -8px;
-}
-
-.profile-main-copy {
-  grid-area: info;
-  min-width: 0;
-}
-
-.profile-main-copy h1 {
-  font-size: clamp(32px, 5vw, 56px);
-  font-weight: 950;
-  letter-spacing: 0;
-  line-height: 0.98;
-  overflow-wrap: anywhere;
-}
-
-.profile-username {
-  color: #c084fc;
-  display: block;
-  font-size: 13px;
-  font-weight: 950;
-  margin-top: 8px;
-}
-
-.profile-main-copy p {
-  color: #dbe4f4;
-  font-size: 15px;
-  font-weight: 750;
-  line-height: 1.5;
-  margin-top: 10px;
-  max-width: 680px;
-}
-
-.profile-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.profile-meta-row span {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  color: #e2e8f0;
-  display: inline-flex;
-  font-size: 11px;
-  font-weight: 900;
-  gap: 7px;
-  min-height: 30px;
-  padding: 0 10px;
-}
-
-.hero-rewards-panel {
-  align-self: center;
-  display: grid;
-  gap: 10px;
-  grid-area: rewards;
-  justify-items: center;
-}
-
-.hero-rewards-panel button {
-  grid-template-columns: auto minmax(0, 1fr);
-  justify-content: center;
-}
-
-.hero-icon-stack {
-  display: flex;
-  flex-direction: row-reverse;
-  justify-content: center;
-  min-width: 118px;
-}
-
-.hero-stack-avatar {
-  --avatar-size: 36px;
-  --avatar-border: 2px;
-  margin-left: -8px;
-}
-
-.profile-social-panel {
-  align-self: center;
-  display: grid;
-  gap: 8px;
-  grid-area: socials;
-}
-
-.profile-social-panel strong {
-  color: #cbd5e1;
-  font-size: 10px;
-  font-weight: 950;
-  text-transform: uppercase;
-}
-
-.profile-social-links {
-  display: flex;
-  gap: 8px;
-}
-
-.profile-social-links a,
-.profile-social-links span {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  color: #ffffff;
-  display: flex;
-  height: 36px;
-  justify-content: center;
-  width: 36px;
-}
-
-.profile-social-links .disabled {
-  opacity: 0.42;
-}
-
-.star-wallet {
-  align-items: center;
-  align-self: center;
-  background: rgba(15, 23, 42, 0.82);
-  border: 1px solid rgba(250, 204, 21, 0.24);
-  border-radius: 18px;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
-  color: #fef3c7;
-  display: grid;
-  gap: 2px;
-  grid-area: wallet;
-  justify-items: center;
-  min-width: 138px;
-  padding: 12px 18px;
-}
-
-.star-wallet.spending {
-  animation: walletSpend 0.55s ease;
-}
-
-.star-wallet i {
-  color: #facc15;
-}
-
-.star-wallet strong {
-  color: #ffffff;
-  font-size: 28px;
-  font-weight: 950;
-}
-
-.star-wallet span {
-  font-size: 10px;
-  font-weight: 950;
-  text-transform: uppercase;
-}
-
-.star-wallet small {
-  color: #cbd5e1;
-  display: none;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.25;
- }
-
-.profile-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  grid-area: actions;
-  justify-content: flex-end;
-}
-
-.profile-actions button {
-  align-items: center;
-  background: linear-gradient(135deg, #9333ea, #ec4899);
-  border-radius: 999px;
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 950;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 16px;
-}
-
-.profile-actions .ghost {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-}
-
-.profile-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-@keyframes walletSpend {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-
-  45% {
-    transform: scale(1.06);
-  }
-}
-
-@media (max-width: 760px) {
-  .profile-hero {
-    align-items: start;
-    grid-template-areas:
-      "avatar info"
-      "level level"
-      "rewards socials"
-      "wallet wallet"
-      "actions actions";
-    grid-template-columns: minmax(112px, 34%) minmax(0, 1fr);
-    gap: 16px 14px;
-    padding: 20px 16px 18px;
-  }
-
-  .profile-avatar-wrap {
-    align-self: start;
-    display: grid;
-    justify-items: center;
-    padding-top: 8px;
-  }
-
-  .profile-avatar-circle {
-    --avatar-size: clamp(104px, 30vw, 132px);
-    --avatar-border: 4px;
-    --avatar-role-offset: -5px;
-  }
-
-  .avatar-edit-shortcut {
-    display: inline-flex;
-    bottom: -42px;
-    box-shadow: 0 12px 24px rgba(147, 51, 234, 0.36);
-    gap: 6px;
-    height: 36px;
-    left: 50%;
-    min-height: 36px;
-    padding: 0 13px;
-    right: auto;
-    transform: translateX(-50%);
-  }
-
-  .avatar-edit-shortcut span {
-    display: inline;
-    font-size: 10px;
-    line-height: 1;
-    text-transform: uppercase;
-  }
-
-  .profile-main-copy {
-    align-self: start;
-    padding-top: 2px;
-  }
-
-  .profile-main-copy h1 {
-    font-size: clamp(34px, 10vw, 48px);
-    line-height: 0.94;
-    max-width: 8ch;
-  }
-
-  .profile-main-copy p {
-    display: -webkit-box;
-    font-size: 14px;
-    line-height: 1.42;
-    margin-top: 12px;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 6;
-    overflow: hidden;
-  }
-
-  .profile-level-pill {
-    font-size: 12px;
-    grid-template-columns: 34px minmax(0, 1fr) 18px 14px;
-    justify-self: stretch;
-    max-width: 100%;
-    min-height: 44px;
-    padding: 5px 12px 5px 5px;
-    width: 100%;
-  }
-
-  .profile-level-icon {
-    height: 34px;
-    width: 34px;
-  }
-
-  .star-wallet {
-    column-gap: 12px;
-    grid-template-columns: 52px auto minmax(0, 1fr);
-    justify-items: start;
-    min-width: 0;
-    padding: 14px 16px;
-  }
-
-  .star-wallet i {
-    align-items: center;
-    background: rgba(250, 204, 21, 0.14);
-    border-radius: 999px;
-    display: inline-flex;
-    font-size: 26px;
-    height: 52px;
-    justify-content: center;
-    grid-row: span 2;
-    width: 52px;
-  }
-
-  .star-wallet strong {
-    font-size: 34px;
-    line-height: 0.95;
-  }
-
-  .star-wallet span {
-    align-self: end;
-  }
-
-  .star-wallet small {
-    display: block;
-    grid-column: 3;
-    grid-row: 1 / span 2;
-    max-width: 22ch;
-  }
-
-  .hero-rewards-panel,
-  .profile-social-panel {
-    background: rgba(7, 10, 24, 0.54);
-    border: 1px solid rgba(168, 85, 247, 0.18);
-    border-radius: 20px;
-    min-height: 110px;
-    padding: 14px 10px;
-  }
-
-  .hero-rewards-panel {
-    justify-items: center;
-  }
-
-  .hero-icon-stack {
-    min-width: 0;
-  }
-
-  .hero-stack-avatar {
-    --avatar-size: 36px;
-    margin-left: -10px;
-  }
-
-  .profile-social-panel {
-    align-content: center;
-    justify-items: center;
-  }
-
-  .profile-social-links {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .profile-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .profile-actions button {
-    border-radius: 999px;
-    justify-content: center;
-    min-height: 48px;
-  }
-
-  .profile-actions .profile-edit-main-action {
-    display: none;
-  }
-}
+.hero-side .star-wallet { padding:10px 14px; row-gap:0; }.star-wallet > strong { font-size:24px; line-height:1.1; }.star-wallet > span { line-height:1.2; }.hero-next-goal { gap:4px; padding:8px 0 0; margin-top:6px; }.hero-next-goal span { font-size:9px; line-height:1.2; }.hero-next-goal strong { font-size:12px; line-height:1.3; }.hero-side .hero-rewards-panel { padding:8px 14px; gap:6px; }.hero-rewards-panel > button { padding:0; min-height:18px; line-height:1.2; }.hero-side .hero-stack-avatar { --avatar-size:32px; }.hero-side .profile-actions button { min-height:38px; padding:8px 10px; }.profile-hero { grid-template-rows:auto auto auto; }.profile-main-copy { align-self:start; }
+/* Keep action labels readable and give the optional third action a full row. */
+.profile-hero { font-family: var(--font-family-base, 'Roboto', system-ui, sans-serif); }
+.profile-hero button { font-family: inherit; }
+.hero-side .profile-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); width: 100%; gap: 8px; }
+.hero-side .profile-actions > button { display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; min-height: 44px; padding: 10px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; line-height: 1.35; text-align: center; }
+.hero-side .profile-actions > .ghost:first-child { display: none; }
+.profile-actions > button i { flex-shrink: 0; font-size: 13px; }
+.profile-actions-three .profile-share-action { grid-column: 1 / -1; }
+.hero-rewards-panel > button { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+@media(max-width:1100px) and (min-width:761px) { .profile-hero { grid-template-columns: 120px minmax(0,1fr) 260px; } }
+@media(prefers-reduced-motion:no-preference) { .profile-actions > button { transition: background-color 160ms ease, border-color 160ms ease; } }
 </style>

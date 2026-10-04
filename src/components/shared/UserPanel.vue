@@ -263,19 +263,13 @@
     </Transition>
 
     <Teleport to="body">
-      <Transition name="toast">
-        <div v-if="toast.show" class="app-toast">
-          <div :class="['app-toast-icon', toast.type]">
-            <i :class="toast.type === 'delete' ? 'fas fa-trash-alt' : 'fas fa-check'"></i>
-          </div>
-          <span>{{ toast.message }}</span>
-        </div>
-      </Transition>
+      <AppNotice :visible="toast.show" :message="toast.message" :type="toast.type" />
     </Teleport>
   </div>
 </template>
 
 <script setup>
+import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { initializeApp, deleteApp } from 'firebase/app'
@@ -546,7 +540,7 @@ const saveUser = async () => {
     }
   } catch (error) {
     console.error(error)
-    showToast(error.code === 'auth/email-already-in-use' ? 'EL EMAIL YA EXISTE' : 'NO SE PUDO GUARDAR', 'delete')
+    showToast(error.code === 'auth/email-already-in-use' ? 'EL EMAIL YA EXISTE' : 'NO SE PUDO GUARDAR', 'error')
   } finally {
     isSaving.value = false
   }
@@ -596,7 +590,7 @@ const executeDelete = async () => {
     showToast('USUARIO ELIMINADO', 'delete')
   } catch (error) {
     console.error(error)
-    showToast('NO SE PUDO ELIMINAR', 'delete')
+    showToast('NO SE PUDO ELIMINAR', 'error')
   } finally {
     isDeleting.value = false
   }
@@ -635,15 +629,15 @@ onUnmounted(() => {
 .users-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
 }
 
 .users-empty {
   align-items: center;
-  background: #ffffff;
+  background: var(--admin-surface);
   border: 1px dashed #d8b4fe;
   border-radius: 16px;
-  color: #64748b;
+  color: var(--text-muted);
   display: grid;
   gap: 8px;
   justify-items: center;
@@ -658,7 +652,7 @@ onUnmounted(() => {
 }
 
 .users-empty strong {
-  color: #111827;
+  color: var(--text-primary);
   font-size: 15px;
   font-weight: 950;
 }
@@ -670,12 +664,12 @@ onUnmounted(() => {
 
 .user-card {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #f1f5f9;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-surface-raised);
   border-radius: 14px;
   display: grid;
   gap: 12px;
-  grid-template-columns: 48px 1fr auto;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
   padding: 14px;
   transition: all 0.2s ease;
 }
@@ -703,7 +697,7 @@ onUnmounted(() => {
 }
 
 .user-row h3 {
-  color: #1f2937;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 900;
   overflow: hidden;
@@ -712,7 +706,7 @@ onUnmounted(() => {
 }
 
 .user-info p {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 11px;
   font-weight: 700;
   margin-top: 3px;
@@ -738,8 +732,8 @@ onUnmounted(() => {
 }
 
 .role-pill.admin {
-  background: #f3e8ff;
-  color: #7c3aed;
+  background: var(--admin-surface-raised);
+  color: var(--accent-hover);
 }
 
 .role-pill.user {
@@ -784,7 +778,7 @@ onUnmounted(() => {
 }
 
 .user-panel {
-  background: white;
+  background: var(--admin-surface);
   border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 22px;
   box-shadow: 0 30px 90px rgba(15, 23, 42, 0.26);
@@ -804,21 +798,21 @@ onUnmounted(() => {
 
 .panel-top {
   align-items: center;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   padding: 24px;
 }
 
 .panel-top h2 {
-  color: #1f2937;
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .panel-top p {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 700;
   margin-top: 3px;
@@ -841,15 +835,15 @@ onUnmounted(() => {
 }
 
 .panel-footer {
-  background: #ffffff;
-  border-top: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border-top: 1px solid var(--border);
   flex-shrink: 0;
   margin-top: auto;
   padding: 24px 24px max(24px, env(safe-area-inset-bottom));
 }
 
 .field {
-  color: #64748b;
+  color: var(--text-muted);
   display: grid;
   font-size: 11px;
   font-weight: 900;
@@ -860,10 +854,10 @@ onUnmounted(() => {
 .field input,
 .field textarea,
 .field select {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-bg);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  color: #111827;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 700;
   outline: none;
@@ -886,8 +880,8 @@ onUnmounted(() => {
 
 .chat-toggle {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-bg);
+  border: 1px solid var(--border);
   border-radius: 12px;
   display: grid;
   gap: 12px;
@@ -896,14 +890,14 @@ onUnmounted(() => {
 }
 
 .chat-toggle input {
-  accent-color: #7c3aed;
+  accent-color: var(--accent-hover);
   height: 18px;
   width: 18px;
 }
 
 .danger-toggle {
-  background: #fff1f2;
-  border-color: #fecdd3;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .danger-toggle input {
@@ -911,7 +905,7 @@ onUnmounted(() => {
 }
 
 .chat-toggle strong {
-  color: #111827;
+  color: var(--text-primary);
   display: block;
   font-size: 12px;
   font-weight: 900;
@@ -919,7 +913,7 @@ onUnmounted(() => {
 }
 
 .chat-toggle small {
-  color: #64748b;
+  color: var(--text-muted);
   display: block;
   font-size: 11px;
   font-weight: 700;
@@ -929,7 +923,7 @@ onUnmounted(() => {
 
 .panel-loading-cover {
   align-items: center;
-  background: rgba(255, 255, 255, 0.64);
+  background: var(--admin-surface-raised);
   backdrop-filter: blur(10px);
   display: flex;
   inset: 0;

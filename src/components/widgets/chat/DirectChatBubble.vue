@@ -1749,10 +1749,33 @@ onUnmounted(() => {
   color: #94a3b8;
 }
 
+/* Keep both the header and composer within short tablet/landscape viewports. */
+@media (min-width: 860px) {
+  .direct-chat-panel, .direct-chat-panel.raised {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    bottom: max(16px, env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 32px);
+    width: min(640px, calc(100vw - 32px));
+  }
+  .direct-chat-body, .direct-chat-body:not(.has-active-chat) {
+    height: min(430px, calc(100dvh - 112px));
+  }
+  .direct-message-list { min-height: 0; max-height: none; overscroll-behavior: contain; }
+}
+
 @media (max-width: 390px) {
   .direct-chat-fab {
     height: 50px;
     width: 50px;
   }
 }
+/* Only messages scroll; the composer always keeps its own space. */
+.direct-chat-panel .direct-chat-room { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
+.direct-chat-panel .direct-message-list { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.direct-chat-panel .direct-chat-room > .direct-chat-empty { flex: 1 1 0; min-height: 0; }
+.direct-chat-panel .direct-chat-composer,.direct-chat-panel .direct-reply-bar,.direct-chat-panel .direct-live-goal-chip { flex: 0 0 auto; position: static; }
+.direct-chat-panel .direct-chat-composer { min-height: 66px; padding-bottom: max(12px,env(safe-area-inset-bottom)); }
+.direct-chat-panel .direct-chat-composer input { min-width: 0; min-height: 42px; font-size: 16px; }
+.direct-chat-body { min-height: 0; overflow: hidden; }
 </style>

@@ -25,10 +25,10 @@ const showCommunityAccess = computed(() => {
   return true
 })
 const layoutStyle = computed(() => ({
-  '--public-nav-offset': '72px',
-  '--public-page-top': '88px',
-  '--public-page-top-mobile': '76px',
-  '--public-page-bottom-mobile': 'calc(92px + env(safe-area-inset-bottom))',
+  '--public-nav-offset': 'calc(72px + var(--safe-top, 0px))',
+  '--public-page-top': 'calc(88px + var(--safe-top, 0px))',
+  '--public-page-top-mobile': 'calc(76px + var(--safe-top, 0px))',
+  '--public-page-bottom-mobile': 'calc(92px + var(--safe-bottom, 0px))',
   '--public-page-gutter': '18px'
 }))
 
@@ -97,10 +97,7 @@ const openCommunity = (community) => {
 }
 
 const openExplore = () => {
-  const query = route.path === '/comunidad' && route.query.id
-    ? { id: route.query.id, explore: '1' }
-    : { explore: '1' }
-  router.push({ path: '/comunidad', query })
+  router.push('/comunidades')
 }
 
 const ensureOfficialCommunityRoute = () => {
@@ -173,25 +170,25 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
 
 @media (max-width: 859px) {
   :global(body) {
-    --galaxy-dock-bottom: calc(104px + env(safe-area-inset-bottom));
-    --galaxy-dock-chat-right: max(18px, env(safe-area-inset-right));
-    --galaxy-dock-music-right: calc(max(18px, env(safe-area-inset-right)) + 68px);
-    --galaxy-dock-community-right: calc(max(18px, env(safe-area-inset-right)) + 136px);
-    --galaxy-dock-panel-bottom: calc(174px + env(safe-area-inset-bottom));
+    --galaxy-dock-bottom: calc(94px + var(--safe-bottom, 0px));
+    --galaxy-dock-chat-right: max(18px, var(--safe-right, 0px));
+    --galaxy-dock-music-right: calc(max(18px, var(--safe-right, 0px)) + 68px);
+    --galaxy-dock-community-right: calc(max(18px, var(--safe-right, 0px)) + 136px);
+    --galaxy-dock-panel-bottom: calc(164px + var(--safe-bottom, 0px));
   }
 
   :global(body.direct-chat-available) {
-    --galaxy-dock-music-right: calc(max(18px, env(safe-area-inset-right)) + 68px);
-    --galaxy-dock-community-right: calc(max(18px, env(safe-area-inset-right)) + 136px);
+    --galaxy-dock-music-right: calc(max(18px, var(--safe-right, 0px)) + 68px);
+    --galaxy-dock-community-right: calc(max(18px, var(--safe-right, 0px)) + 136px);
   }
 }
 
 @media (max-width: 390px) {
   :global(body) {
-    --galaxy-dock-bottom: calc(108px + env(safe-area-inset-bottom));
-    --galaxy-dock-chat-right: max(14px, env(safe-area-inset-right));
-    --galaxy-dock-music-right: calc(max(14px, env(safe-area-inset-right)) + 62px);
-    --galaxy-dock-community-right: calc(max(14px, env(safe-area-inset-right)) + 124px);
+    --galaxy-dock-bottom: calc(98px + var(--safe-bottom, 0px));
+    --galaxy-dock-chat-right: max(14px, var(--safe-right, 0px));
+    --galaxy-dock-music-right: calc(max(14px, var(--safe-right, 0px)) + 62px);
+    --galaxy-dock-community-right: calc(max(14px, var(--safe-right, 0px)) + 124px);
   }
 }
 
@@ -227,7 +224,7 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
 
 @media (max-width: 680px) {
   .public-layout-shell {
-    --public-nav-offset: 64px;
+    --public-nav-offset: calc(64px + var(--safe-top, 0px));
   }
 }
 

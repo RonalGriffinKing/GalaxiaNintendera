@@ -7,6 +7,7 @@ import { deleteApp, initializeApp } from 'firebase/app'
 import { auth, db, firebaseConfig } from '@/firebase'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { resetPlayerSession } from '@/services/playerState'
+import { isNativeApp } from '@/services/appEnvironment'
 import PostEditor from '@/components/posts/PostEditor.vue'
 import PublicCreateSheet from '@/components/nav/PublicCreateSheet.vue'
 import NotificationDropdown from '@/components/nav/NotificationDropdown.vue'
@@ -61,6 +62,7 @@ const scrollY = ref(0)
 const navHidden = ref(false)
 const navCompact = ref(false)
 const readingProgress = ref(0)
+const keepNativeNavigationVisible = isNativeApp()
 const quickCommunityDraft = ref({
   name: '',
   description: '',
@@ -179,7 +181,7 @@ const accountMenuItems = computed(() => {
   return [
     { label: 'Mi perfil', icon: 'far fa-user', to: currentUser.value ? `/perfil/${currentUser.value.uid}` : '/login?mode=register' },
     { label: 'Guardados', icon: 'fas fa-bookmark', to: '/mis-favoritos' },
-    { label: 'Comunidades', icon: 'fas fa-users', to: '/comunidad' }
+    { label: 'Comunidades', icon: 'fas fa-users', to: '/comunidades' }
   ]
 })
 const accountAdminItems = computed(() => {
@@ -477,8 +479,19 @@ const updateScrollNavigation = () => {
   const maxScroll = Math.max(1, doc.scrollHeight - window.innerHeight)
 
   scrollY.value = nextY
-  navCompact.value = nextY > (isReadingRoute.value ? 8 : 28)
   readingProgress.value = isReadingRoute.value ? Math.min(100, Math.max(0, (nextY / maxScroll) * 100)) : 0
+
+  // En la APK el nav debe conservar siempre su tamano y posicion completos.
+  // Evitamos que el scroll lo compacte u oculte debajo de la barra del sistema.
+  if (keepNativeNavigationVisible) {
+    navCompact.value = false
+    navHidden.value = false
+    lastScrollY = nextY
+    scrollTicking = false
+    return
+  }
+
+  navCompact.value = nextY > (isReadingRoute.value ? 8 : 28)
 
   if (isMobileNav() && !menuOpen.value && !accountMenuOpen.value && !searchOpen.value && !notificationsOpen.value) {
     const hideThreshold = isReadingRoute.value ? 72 : 150
@@ -2283,12 +2296,12 @@ onUnmounted(() => {
     display: flex;
     justify-content: space-between;
     max-width: none;
-    padding: 8px 16px;
+    padding: calc(8px + var(--safe-top, 0px)) max(16px, var(--safe-right, 0px)) 8px max(16px, var(--safe-left, 0px));
   }
 
   .public-nav.compact .public-nav-inner {
     min-height: 52px;
-    padding: 4px 14px;
+    padding: calc(4px + var(--safe-top, 0px)) max(14px, var(--safe-right, 0px)) 4px max(14px, var(--safe-left, 0px));
   }
 
   .public-brand-zone {
@@ -2375,7 +2388,7 @@ onUnmounted(() => {
     margin: 0;
     max-height: none;
     overflow-y: auto;
-    padding: calc(16px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
+    padding: calc(16px + var(--safe-top, 0px)) 18px calc(18px + var(--safe-bottom, 0px));
     position: relative;
     right: auto;
     top: auto;
@@ -2475,7 +2488,7 @@ onUnmounted(() => {
     backdrop-filter: blur(22px) saturate(1.25);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 24px;
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+    bottom: max(4px, var(--safe-bottom, 0px)) !important;
     box-shadow:
       0 18px 48px rgba(0, 0, 0, 0.34),
       0 0 34px rgba(168, 85, 247, 0.12),
@@ -2483,13 +2496,13 @@ onUnmounted(() => {
     display: grid;
     gap: 2px;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    left: 12px !important;
+    left: max(12px, var(--safe-left, 0px)) !important;
     margin: 0;
     overflow: visible;
-    padding: 7px 8px max(7px, env(safe-area-inset-bottom, 0px));
+    padding: 7px 8px;
     pointer-events: auto;
     position: fixed !important;
-    right: 12px !important;
+    right: max(12px, var(--safe-right, 0px)) !important;
     transform: translate3d(0, 0, 0);
     transition:
       opacity 0.24s ease,
@@ -2649,7 +2662,7 @@ onUnmounted(() => {
   .mobile-create-layer {
     align-items: end;
     display: flex;
-    padding: 18px 14px calc(88px + env(safe-area-inset-bottom));
+    padding: 18px 14px calc(82px + var(--safe-bottom, 0px));
   }
 }
 
@@ -3011,4 +3024,20 @@ onUnmounted(() => {
   }
 }
 
+@media (min-width: 860px) and (max-width: 1200px) {
+  .public-nav-inner {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    max-width: calc(100% - 24px);
+  }
+  .public-links { gap: 2px; min-width: 0; }
+  .public-nav-link { padding: 0 10px; white-space: nowrap; }
+  .public-actions { min-width: 0; gap: 6px; }
+  .public-profile-nav { min-width: 0; }
+  .public-account-btn { max-width: 150px; }
+  .public-account-btn > i, .public-icon, .account-btn-avatar { flex-shrink: 0; }
+}
+@media (min-width: 860px) and (max-width: 960px) {
+  .public-brand span { display: none; }
+}
 </style>

@@ -584,14 +584,7 @@
         </aside>
       </main>
 
-      <Transition name="toast">
-        <div v-if="toast.show" class="app-toast">
-          <span :class="['app-toast-icon', toast.type]">
-            <i :class="toast.type === 'delete' ? 'fas fa-triangle-exclamation' : 'fas fa-check'"></i>
-          </span>
-          <span>{{ toast.message }}</span>
-        </div>
-      </Transition>
+      <AppNotice :visible="toast.show" :message="toast.message" :type="toast.type" />
 
       <Transition name="fade">
         <div v-if="loading" class="editor-loading-cover">
@@ -747,6 +740,7 @@
 </template>
 
 <script setup>
+import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { addDoc, collection, deleteField, doc, updateDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
@@ -755,6 +749,7 @@ import { loadPostCategories } from '@/services/postCategories'
 import { READ_REWARD_STARS } from '@/services/profileProgress'
 import { renderRichText } from '@/services/richText'
 import { playPublishSound } from '@/services/uiSounds'
+import { apiUrl } from '@/services/appEnvironment'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
 import PostCinematicHero from '@/components/posts/PostCinematicHero.vue'
 
@@ -1458,7 +1453,7 @@ const searchIgdbImages = async () => {
   igdbError.value = ''
   igdbHasSearched.value = true
   try {
-    const response = await fetch('/.netlify/functions/igdb', {
+    const response = await fetch(apiUrl('/.netlify/functions/igdb'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query })
@@ -1503,12 +1498,12 @@ const assignedLabel = (url) => {
 }
 
 const savePost = async (targetStatus = 'pending') => {
-  if (!post.value.title.trim()) return alert('El titulo es obligatorio')
+  if (!post.value.title.trim()) return showEditorToast('El titulo es obligatorio', 'error')
   if (targetStatus !== 'draft' && !isInitialFlowComplete.value) {
     openAccordions.value = ['main']
-    return alert('Completa titulo, resumen y portada antes de publicar.')
+    return showEditorToast('Completa titulo, resumen y portada antes de publicar.', 'error')
   }
-  if (!selectedCategories.value.length) return alert('Selecciona al menos una categoria')
+  if (!selectedCategories.value.length) return showEditorToast('Selecciona al menos una categoria', 'error')
 
   savingTargetStatus.value = targetStatus
   loading.value = true
@@ -1600,7 +1595,7 @@ const savePost = async (targetStatus = 'pending') => {
     }, 900)
   } catch (error) {
     console.error(error)
-    alert('Error al guardar')
+    showEditorToast('Error al guardar. Intentalo de nuevo.', 'error')
     loading.value = false
   }
 }
@@ -1624,13 +1619,13 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .post-editor-panel {
-  background: #ffffff;
+  background: var(--admin-surface);
   border:
     1px solid
     rgba(168, 85, 247, 0.28);
   border-radius: 22px;
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
-  color: #111827;
+  color: var(--text-primary);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   height: calc(100dvh - 56px);
@@ -1646,8 +1641,8 @@ const savePost = async (targetStatus = 'pending') => {
 
 .editor-topbar {
   align-items: center;
-  background: rgba(255, 255, 255, 0.96);
-  border-bottom: 1px solid #eef2f7;
+  background: var(--admin-surface);
+  border-bottom: 1px solid var(--border);
   display: grid;
   gap: 16px;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -1658,7 +1653,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .editor-title-block h2 {
-  color: #111827;
+  color: var(--text-primary);
   font-size: 20px;
   font-weight: 950;
   line-height: 1.15;
@@ -1673,7 +1668,7 @@ const savePost = async (targetStatus = 'pending') => {
 .editor-title-block p,
 .column-heading p,
 .field-help {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 750;
   line-height: 1.4;
@@ -1710,16 +1705,16 @@ const savePost = async (targetStatus = 'pending') => {
 .back-btn,
 .utility-btn,
 .draft-btn {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  color: #475569;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
 }
 
 .utility-btn:hover,
 .draft-btn:hover,
 .back-btn:hover {
   border-color: #c4b5fd;
-  color: #7c3aed;
+  color: var(--accent-hover);
 }
 
 .publish-top-btn {
@@ -1728,7 +1723,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .panel-close-btn {
-  background: #f8fafc;
+  background: var(--admin-bg);
   color: #94a3b8;
   height: 40px;
   padding: 0;
@@ -1740,8 +1735,8 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .editor-accordion {
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid #eef2f7;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.04);
   overflow: hidden;
@@ -1756,7 +1751,7 @@ const savePost = async (targetStatus = 'pending') => {
 .main-accordion.incomplete {
   background:
     radial-gradient(circle at top right, rgba(236, 72, 153, 0.1), transparent 34%),
-    linear-gradient(180deg, #ffffff, #fbf8ff);
+    linear-gradient(180deg, var(--admin-surface), var(--admin-surface-raised));
   border-color: rgba(168, 85, 247, 0.34);
 }
 
@@ -1779,7 +1774,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .editor-accordion:has(.accordion-body:not([style*='display: none'])) {
-  background: #ffffff;
+  background: var(--admin-surface);
   box-shadow: 0 20px 54px rgba(15, 23, 42, 0.08);
 }
 
@@ -1788,7 +1783,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .info-column:has(.accordion-body:not([style*='display: none'])) .editor-accordion:not(:has(.accordion-body:not([style*='display: none']))) {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 250, 252, 0.72));
+  background: linear-gradient(180deg, var(--admin-surface-raised), var(--admin-surface-raised));
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.035);
   opacity: 0.9;
 }
@@ -1800,7 +1795,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .accordion-trigger {
   align-items: center;
-  color: #111827;
+  color: var(--text-primary);
   display: grid;
   gap: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -1820,7 +1815,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .accordion-trigger small {
-  color: #64748b;
+  color: var(--text-muted);
   display: block;
   font-size: 11px;
   font-weight: 750;
@@ -1829,7 +1824,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .accordion-icon {
   align-items: center;
-  background: #f3e8ff;
+  background: var(--admin-surface-raised);
   border-radius: 12px;
   color: #9333ea;
   display: flex;
@@ -1839,7 +1834,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .accordion-lock {
-  background: #f3e8ff;
+  background: var(--admin-surface-raised);
   border-radius: 999px;
   color: #9333ea;
   font-size: 10px;
@@ -1862,25 +1857,25 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .editor-accordion.gated {
-  background: rgba(248, 250, 252, 0.72);
+  background: var(--admin-surface);
   border-color: rgba(226, 232, 240, 0.8);
   filter: saturate(0.82);
   opacity: 0.62;
 }
 
 .editor-accordion.gated .accordion-icon {
-  background: #f1f5f9;
+  background: var(--admin-surface-raised);
   color: #94a3b8;
 }
 
 .editor-accordion.gated .accordion-lock {
-  background: #f8fafc;
-  border-color: #e2e8f0;
+  background: var(--admin-bg);
+  border-color: var(--border);
   color: #94a3b8;
 }
 
 .accordion-body {
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--admin-surface-raised);
   display: grid;
   gap: 18px;
   min-height: 0;
@@ -1913,7 +1908,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .game-platform-item {
   align-items: stretch;
-  background: #f5f3ff;
+  background: var(--admin-surface-raised);
   border: 1px solid #c084fc;
   border-radius: 10px;
   display: flex;
@@ -1921,7 +1916,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .game-platform-item.pending {
-  background: #f8fafc;
+  background: var(--admin-bg);
   border-color: #cbd5e1;
 }
 
@@ -1937,7 +1932,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .game-platform-item.pending > button:first-child {
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .game-platform-item small {
@@ -1949,7 +1944,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .game-platform-item.pending small {
-  background: #e2e8f0;
+  background: var(--border);
 }
 
 .game-platform-item .remove-platform {
@@ -1959,7 +1954,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .game-platform-editor > p {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 750;
   margin: 0;
@@ -1971,7 +1966,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .summary-field .textarea-shell {
   align-items: stretch;
-  background: linear-gradient(180deg, #ffffff, #fbfdff);
+  background: linear-gradient(180deg, var(--admin-surface), var(--admin-bg));
   border-radius: 16px;
   min-height: 148px;
   padding: 12px 14px;
@@ -1984,8 +1979,8 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .seo-preview {
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
-  border: 1px solid #e5e7eb;
+  background: linear-gradient(180deg, var(--admin-surface), var(--admin-bg));
+  border: 1px solid var(--border);
   border-radius: 14px;
   display: grid;
   gap: 4px;
@@ -2006,7 +2001,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .seo-preview p {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 750;
   line-height: 1.45;
@@ -2040,7 +2035,7 @@ const savePost = async (targetStatus = 'pending') => {
   background: linear-gradient(135deg, rgba(147, 51, 234, 0.09), rgba(236, 72, 153, 0.08));
   border: 1px solid #eadcff;
   border-radius: 18px;
-  color: #475569;
+  color: var(--text-secondary);
   display: grid;
   gap: 6px;
   justify-items: center;
@@ -2051,7 +2046,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .flow-lock-card i {
   align-items: center;
-  background: #f3e8ff;
+  background: var(--admin-surface-raised);
   border-radius: 999px;
   color: #9333ea;
   display: flex;
@@ -2061,23 +2056,23 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .flow-lock-card strong {
-  color: #111827;
+  color: var(--text-primary);
   font-size: 15px;
   font-weight: 950;
 }
 
 .flow-lock-card span {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 750;
   max-width: 360px;
 }
 
 .editor-layout {
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  background: linear-gradient(180deg, var(--admin-surface) 0%, var(--admin-bg) 100%);
   display: grid;
   gap: 20px;
-  grid-template-columns: minmax(320px, 0.62fr) minmax(720px, 1.62fr) minmax(380px, 0.82fr);
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.3fr) minmax(280px, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -2085,7 +2080,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .preview-collapsed .editor-layout {
-  grid-template-columns: minmax(320px, 0.52fr) minmax(860px, 1.88fr);
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.8fr);
 }
 
 .hero-editor-layout {
@@ -2093,6 +2088,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .editor-column {
+  min-width: 0;
   align-content: start;
   display: grid;
   gap: 18px;
@@ -2128,7 +2124,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .field-group > span,
 .field-row span {
-  color: #334155;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 950;
 }
@@ -2138,15 +2134,15 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .field-row small {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 11px;
   font-weight: 850;
 }
 
 .input-shell {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   display: flex;
   gap: 10px;
@@ -2169,7 +2165,7 @@ const savePost = async (targetStatus = 'pending') => {
 .section-copy textarea,
 .igdb-search-row input {
   background: transparent;
-  color: #111827;
+  color: var(--text-primary);
   font: inherit;
   font-size: 13px;
   font-weight: 800;
@@ -2200,10 +2196,10 @@ const savePost = async (targetStatus = 'pending') => {
 
 .category-combobox select {
   appearance: none;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  color: #111827;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 900;
   min-height: 44px;
@@ -2234,10 +2230,10 @@ const savePost = async (targetStatus = 'pending') => {
 
 .selected-category-list button {
   align-items: center;
-  background: #f3e8ff;
+  background: var(--admin-surface-raised);
   border: 1px solid #e9d5ff;
   border-radius: 999px;
-  color: #7c3aed;
+  color: var(--accent-hover);
   display: inline-flex;
   font-size: 12px;
   font-weight: 950;
@@ -2252,8 +2248,8 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .cover-preview-card {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-bg);
+  border: 1px solid var(--border);
   border-radius: 14px;
   min-height: 150px;
   overflow: hidden;
@@ -2274,8 +2270,8 @@ const savePost = async (targetStatus = 'pending') => {
 .field-group > input,
 .field-group > textarea,
 .field-group > select {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   min-height: 42px;
   padding: 0 12px;
@@ -2324,10 +2320,10 @@ const savePost = async (targetStatus = 'pending') => {
 .cover-actions button,
 .cover-actions label {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  color: #7c3aed;
+  color: var(--accent-hover);
   display: flex;
   font-size: 12px;
   font-weight: 950;
@@ -2353,7 +2349,7 @@ const savePost = async (targetStatus = 'pending') => {
 .analysis-editor {
   background:
     radial-gradient(circle at 88% 0%, rgba(236, 72, 153, 0.09), transparent 34%),
-    linear-gradient(135deg, #faf5ff, #fff7ed);
+    linear-gradient(135deg, var(--admin-surface-raised), #fff7ed);
   border: 1px solid #e9d5ff;
   border-radius: 18px;
   display: grid;
@@ -2384,7 +2380,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .release-editor {
-  background: linear-gradient(135deg, #f5f3ff, #eef2ff);
+  background: linear-gradient(135deg, var(--admin-surface-raised), #eef2ff);
   border: 1px solid #ddd6fe;
   border-radius: 18px;
   display: grid;
@@ -2394,7 +2390,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .release-toggle {
   align-items: center;
-  color: #475569;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   font-size: 12px;
@@ -2415,7 +2411,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .release-toggle span::after {
-  background: #ffffff;
+  background: var(--admin-surface);
   border-radius: 999px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
   content: '';
@@ -2440,20 +2436,20 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .analysis-editor-head span {
-  color: #7c3aed;
+  color: var(--accent-hover);
   font-size: 11px;
   font-weight: 950;
 }
 
 .analysis-editor-head h3 {
-  color: #111827;
+  color: var(--text-primary);
   font-size: 18px;
   font-weight: 950;
 }
 
 .score-editor-row {
   align-items: center;
-  background: rgba(255, 255, 255, 0.64);
+  background: var(--admin-surface-raised);
   border: 1px solid rgba(233, 213, 255, 0.8);
   border-radius: 16px;
   gap: 14px;
@@ -2473,7 +2469,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .score-circle strong {
   background: transparent;
-  color: #111827;
+  color: var(--text-primary);
   font-size: 24px;
   font-weight: 950;
   line-height: 1;
@@ -2487,7 +2483,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .analysis-criteria-grid label,
 .analysis-pros-cons label {
-  color: #475569;
+  color: var(--text-secondary);
   display: grid;
   font-size: 11px;
   font-weight: 900;
@@ -2496,10 +2492,10 @@ const savePost = async (targetStatus = 'pending') => {
 
 .analysis-criteria-grid input,
 .analysis-pros-cons textarea {
-  background: #ffffff;
+  background: var(--admin-surface);
   border: 1px solid #e9d5ff;
   border-radius: 12px;
-  color: #111827;
+  color: var(--text-primary);
   min-height: 42px;
   outline: none;
   padding: 10px 12px;
@@ -2513,7 +2509,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .analysis-criteria-grid label {
   align-items: center;
-  background: rgba(255, 255, 255, 0.64);
+  background: var(--admin-surface-raised);
   border: 1px solid rgba(233, 213, 255, 0.78);
   border-radius: 14px;
   grid-template-columns: minmax(0, 1fr) 72px;
@@ -2535,7 +2531,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .analysis-pros-cons label {
-  background: rgba(255, 255, 255, 0.64);
+  background: var(--admin-surface-raised);
   border: 1px solid rgba(233, 213, 255, 0.78);
   border-radius: 16px;
   padding: 12px;
@@ -2551,8 +2547,8 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .content-column {
-  background: rgba(248, 250, 252, 0.72);
-  border: 1px solid #eef2f7;
+  background: var(--admin-surface-raised);
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 18px;
 }
@@ -2574,7 +2570,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .post-section-card {
   align-items: stretch;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--admin-surface);
   border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 16px;
   cursor: pointer;
@@ -2645,10 +2641,10 @@ const savePost = async (targetStatus = 'pending') => {
 
 .section-side-rail button {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #334155;
+  color: var(--text-secondary);
   display: flex;
   height: 34px;
   justify-content: center;
@@ -2691,7 +2687,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .section-number {
   align-items: center;
-  background: #f3e8ff;
+  background: var(--admin-surface-raised);
   border-radius: 999px;
   color: #a855f7;
   display: flex;
@@ -2718,7 +2714,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .section-card-head small {
-  background: #f3e8ff;
+  background: var(--admin-surface-raised);
   border-radius: 999px;
   color: #a855f7;
   font-size: 10px;
@@ -2779,7 +2775,7 @@ const savePost = async (targetStatus = 'pending') => {
 .section-copy input,
 .section-copy textarea,
 .section-image-row {
-  background: #ffffff;
+  background: var(--admin-surface);
   border: 1px solid #e9edf5;
   border-radius: 12px;
   padding: 10px 12px;
@@ -2788,7 +2784,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .writing-toolbar {
   align-items: center;
-  background: #ffffff;
+  background: var(--admin-surface);
   border: 1px solid #e9edf5;
   border-radius: 12px;
   display: flex;
@@ -2800,7 +2796,7 @@ const savePost = async (targetStatus = 'pending') => {
 .writing-toolbar button {
   align-items: center;
   border-radius: 9px;
-  color: #475569;
+  color: var(--text-secondary);
   display: inline-flex;
   height: 30px;
   justify-content: center;
@@ -2809,7 +2805,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .writing-toolbar button:hover {
-  background: #f3e8ff;
+  background: var(--admin-surface-raised);
   color: #9333ea;
 }
 
@@ -2819,7 +2815,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .section-copy strong {
-  color: #111827;
+  color: var(--text-primary);
   font-size: 15px;
   font-weight: 950;
 }
@@ -2836,7 +2832,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .section-copy p {
-  color: #64748b;
+  color: var(--text-muted);
   display: -webkit-box;
   font-size: 12px;
   font-weight: 750;
@@ -2861,10 +2857,10 @@ const savePost = async (targetStatus = 'pending') => {
 .section-image-row button,
 .section-side-rail button {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #475569;
+  color: var(--text-secondary);
   display: flex;
   height: 36px;
   justify-content: center;
@@ -2912,7 +2908,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .preview-column {
-  background: #ffffff;
+  background: var(--admin-surface);
   border-radius: 18px;
   padding: 0;
 }
@@ -2923,8 +2919,8 @@ const savePost = async (targetStatus = 'pending') => {
 
 .preview-device-switch {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-bg);
+  border: 1px solid var(--border);
   border-radius: 12px;
   display: inline-flex;
   gap: 4px;
@@ -2934,7 +2930,7 @@ const savePost = async (targetStatus = 'pending') => {
 .preview-device-switch button {
   align-items: center;
   border-radius: 9px;
-  color: #64748b;
+  color: var(--text-muted);
   display: flex;
   height: 30px;
   justify-content: center;
@@ -2942,7 +2938,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .preview-device-switch button.active {
-  background: #ffffff;
+  background: var(--admin-surface);
   color: #9333ea;
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
 }
@@ -2983,7 +2979,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .post-live-preview h1 {
-  color: #111827;
+  color: var(--text-primary);
   font-size: 24px;
   font-weight: 950;
   line-height: 1.12;
@@ -2993,14 +2989,14 @@ const savePost = async (targetStatus = 'pending') => {
 .post-live-preview.analysis-tier-legendary {
   background:
     radial-gradient(circle at 52% 0%, rgba(250, 204, 21, 0.12), transparent 34%),
-    linear-gradient(180deg, #ffffff, #fff8e1);
+    linear-gradient(180deg, var(--admin-surface), var(--admin-surface-raised));
   border-color: rgba(245, 158, 11, 0.42);
   box-shadow: 0 22px 68px rgba(120, 53, 15, 0.16);
 }
 
 .post-live-preview.analysis-tier-legendary {
   background:
-    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.45), transparent 22%),
+    radial-gradient(circle at 12% 0%, var(--admin-surface-raised), transparent 22%),
     radial-gradient(circle at 84% 8%, rgba(250, 204, 21, 0.22), transparent 30%),
     linear-gradient(135deg, #111827, #3b2605 56%, #0f172a);
   border-color: rgba(250, 204, 21, 0.68);
@@ -3023,14 +3019,14 @@ const savePost = async (targetStatus = 'pending') => {
 .preview-subtitle,
 .preview-summary,
 .preview-section p {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 750;
   line-height: 1.5;
 }
 
 .rich-content {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 750;
   line-height: 1.62;
@@ -3041,7 +3037,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .rich-content :deep(strong) {
-  color: #111827;
+  color: var(--text-primary);
   font-weight: 950;
 }
 
@@ -3066,14 +3062,14 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .rich-content :deep(li) {
-  color: #475569;
+  color: var(--text-secondary);
   list-style: none;
   padding: 0 0 7px 28px;
   position: relative;
 }
 
 .rich-content :deep(li::before) {
-  background: radial-gradient(circle, #fef3c7 0 28%, #f59e0b 42%, #a855f7 82%);
+  background: radial-gradient(circle, var(--admin-surface-raised) 0 28%, #f59e0b 42%, #a855f7 82%);
   border-radius: 999px;
   box-shadow: 0 0 12px rgba(245, 158, 11, 0.28), 0 0 22px rgba(168, 85, 247, 0.2);
   content: "";
@@ -3118,10 +3114,10 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .rich-content :deep(blockquote) {
-  background: #faf5ff;
+  background: var(--admin-surface-raised);
   border-left: 4px solid #a855f7;
   border-radius: 10px;
-  color: #475569;
+  color: var(--text-secondary);
   margin: 10px 0;
   padding: 10px 12px;
 }
@@ -3140,7 +3136,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .preview-meta {
-  color: #64748b;
+  color: var(--text-muted);
   display: flex;
   flex-wrap: wrap;
   font-size: 11px;
@@ -3179,7 +3175,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .preview-cover.placeholder {
-  background: #f8fafc;
+  background: var(--admin-bg);
   color: #a78bfa;
   display: grid;
   min-height: 210px;
@@ -3193,7 +3189,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .preview-section-subtitle {
-  color: #7c3aed;
+  color: var(--accent-hover);
   font-size: 14px;
   font-weight: 900;
   line-height: 1.35;
@@ -3213,7 +3209,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .preview-score-card {
-  background: #faf5ff;
+  background: var(--admin-surface-raised);
   border: 1px solid #e9d5ff;
   border-radius: 16px;
   display: grid;
@@ -3222,7 +3218,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .preview-score-card > strong {
-  color: #7c3aed;
+  color: var(--accent-hover);
   font-size: 34px;
   font-weight: 950;
 }
@@ -3239,7 +3235,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .preview-score-card small {
-  color: #64748b;
+  color: var(--text-muted);
   display: grid;
   font-size: 10px;
   font-weight: 850;
@@ -3247,7 +3243,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .preview-score-card b {
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .image-picker-modal,
@@ -3266,7 +3262,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .image-picker-panel {
-  background: #ffffff;
+  background: var(--admin-surface);
   border-radius: 22px;
   box-shadow: 0 30px 90px rgba(15, 23, 42, 0.4);
   display: grid;
@@ -3286,27 +3282,27 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .image-picker-panel header span {
-  color: #7c3aed;
+  color: var(--accent-hover);
   font-size: 11px;
   font-weight: 950;
 }
 
 .image-picker-panel header h2 {
-  color: #111827;
+  color: var(--text-primary);
   font-size: 20px;
   font-weight: 950;
 }
 
 .image-picker-panel header p {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 750;
 }
 
 .image-picker-panel header button {
-  background: #f8fafc;
+  background: var(--admin-bg);
   border-radius: 999px;
-  color: #64748b;
+  color: var(--text-muted);
   height: 38px;
   width: 38px;
 }
@@ -3318,8 +3314,8 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .igdb-search-row input {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-bg);
+  border: 1px solid var(--border);
   border-radius: 12px;
   min-height: 44px;
   padding: 0 14px;
@@ -3336,7 +3332,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .igdb-search-hint {
   align-items: center;
-  color: #64748b;
+  color: var(--text-muted);
   display: flex;
   font-size: 11px;
   font-weight: 750;
@@ -3357,10 +3353,10 @@ const savePost = async (targetStatus = 'pending') => {
 
 .igdb-game-matches button {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #334155;
+  color: var(--text-secondary);
   display: inline-flex;
   flex: 0 0 auto;
   font-size: 11px;
@@ -3372,7 +3368,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .igdb-game-matches button.active {
   background: #111827;
-  border-color: #111827;
+  border-color: var(--text-primary);
   color: #ffffff;
 }
 
@@ -3397,7 +3393,7 @@ const savePost = async (targetStatus = 'pending') => {
 .igdb-targets,
 .igdb-results-pane,
 .igdb-selection-pane {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   border-radius: 14px;
   min-height: 0;
 }
@@ -3431,10 +3427,10 @@ const savePost = async (targetStatus = 'pending') => {
 
 .igdb-targets > button {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #64748b;
+  color: var(--text-muted);
   display: grid;
   gap: 9px;
   grid-template-columns: 38px minmax(0, 1fr) 12px;
@@ -3445,16 +3441,16 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .igdb-targets > button.active {
-  background: #f5f3ff;
+  background: var(--admin-surface-raised);
   border-color: #a855f7;
-  color: #7c3aed;
+  color: var(--accent-hover);
 }
 
 .igdb-targets > button img,
 .igdb-targets > button > b {
   align-items: center;
   aspect-ratio: 1;
-  background: #ede9fe;
+  background: var(--admin-surface-raised);
   border-radius: 7px;
   display: flex;
   font-size: 12px;
@@ -3487,10 +3483,10 @@ const savePost = async (targetStatus = 'pending') => {
 
 .igdb-filter-tabs button {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  color: #475569;
+  color: var(--text-secondary);
   display: inline-flex;
   font-size: 12px;
   font-weight: 950;
@@ -3500,9 +3496,9 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .igdb-filter-tabs button.active {
-  background: #f5f3ff;
+  background: var(--admin-surface-raised);
   border-color: #a855f7;
-  color: #7c3aed;
+  color: var(--accent-hover);
 }
 
 .igdb-filter-tabs span {
@@ -3516,9 +3512,9 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .igdb-empty {
-  background: #f8fafc;
+  background: var(--admin-bg);
   border-radius: 14px;
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 850;
   padding: 24px;
@@ -3536,7 +3532,7 @@ const savePost = async (targetStatus = 'pending') => {
 
 .igdb-gallery > button {
   aspect-ratio: 16 / 10;
-  background: #e2e8f0;
+  background: var(--border);
   border: 2px solid transparent;
   border-radius: 10px;
   overflow: hidden;
@@ -3593,8 +3589,8 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .igdb-selection-copy { display: grid; gap: 3px; }
-.igdb-selection-copy strong { color: #111827; font-size: 13px; line-height: 1.25; }
-.igdb-selection-copy span { color: #7c3aed; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.igdb-selection-copy strong { color: var(--text-primary); font-size: 13px; line-height: 1.25; }
+.igdb-selection-copy span { color: var(--accent-hover); font-size: 10px; font-weight: 900; text-transform: uppercase; }
 
 .igdb-use-image {
   align-items: center;
@@ -3612,9 +3608,9 @@ const savePost = async (targetStatus = 'pending') => {
 
 .igdb-selection-pane > a {
   align-items: center;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #475569;
+  color: var(--text-secondary);
   display: flex;
   font-size: 10px;
   font-weight: 900;
@@ -3625,9 +3621,9 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 .igdb-selection-pane > p {
-  background: #faf5ff;
+  background: var(--admin-surface-raised);
   border-radius: 10px;
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 750;
   line-height: 1.4;
@@ -3693,10 +3689,20 @@ const savePost = async (targetStatus = 'pending') => {
   box-shadow: none;
 }
 
-@media (max-width: 1240px) {
+@media (min-width: 761px) and (max-width: 1440px) {
+  .post-editor-modal { padding: 12px; }
+  .post-editor-panel { width: 100%; max-width: 100%; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); }
+  .editor-topbar { grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
+  .editor-actions-top { grid-column: 1 / -1; flex-wrap: wrap; }
+  .editor-layout { padding: 16px; gap: 16px; overflow-y: auto; align-content: start; }
+  .editor-column { height: auto; max-height: none; overflow: visible; }
+  .preview-column { min-height: 420px; }
+}
+
+@media (max-width: 1440px) {
   .editor-layout,
   .preview-collapsed .editor-layout {
-    grid-template-columns: minmax(280px, 0.9fr) minmax(420px, 1.1fr);
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   }
 
   .preview-column {
@@ -3752,8 +3758,8 @@ const savePost = async (targetStatus = 'pending') => {
   }
 
   .mobile-stepper {
-    background: #ffffff;
-    border-bottom: 1px solid #eef2f7;
+    background: var(--admin-surface);
+    border-bottom: 1px solid var(--border);
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     padding: 10px 14px;
@@ -3761,7 +3767,7 @@ const savePost = async (targetStatus = 'pending') => {
 
   .mobile-stepper button {
     align-items: center;
-    color: #64748b;
+    color: var(--text-muted);
     display: grid;
     font-size: 10px;
     font-weight: 850;
@@ -3771,7 +3777,7 @@ const savePost = async (targetStatus = 'pending') => {
 
   .mobile-stepper span {
     align-items: center;
-    background: #e2e8f0;
+    background: var(--border);
     border-radius: 999px;
     display: flex;
     height: 24px;
@@ -3944,7 +3950,7 @@ const savePost = async (targetStatus = 'pending') => {
   .mobile-editor-actionbar {
     align-items: center;
     backdrop-filter: blur(18px);
-    background: rgba(255, 255, 255, 0.94);
+    background: var(--admin-surface);
     border: 1px solid rgba(226, 232, 240, 0.86);
     border-radius: 24px;
     bottom: var(--post-editor-mobile-actionbar-bottom);
@@ -3962,10 +3968,10 @@ const savePost = async (targetStatus = 'pending') => {
 
   .mobile-editor-actionbar button {
     align-items: center;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
+    background: var(--admin-surface);
+    border: 1px solid var(--border);
     border-radius: 16px;
-    color: #475569;
+    color: var(--text-secondary);
     display: inline-flex;
     font-size: 15px;
     font-weight: 950;
@@ -3987,6 +3993,10 @@ const savePost = async (targetStatus = 'pending') => {
     font-size: 13px;
     padding: 0 14px;
   }
+}
+
+@media (min-width: 761px) and (max-width: 1000px) {
+  .editor-layout, .preview-collapsed .editor-layout { grid-template-columns: minmax(0, 1fr); }
 }
 
 .analysis-tier-gold .preview-score-card {

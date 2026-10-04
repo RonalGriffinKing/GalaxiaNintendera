@@ -1,4 +1,9 @@
 :root {
+  --admin-bg: #0b1020;
+  --admin-surface: #131a2e;
+  --admin-surface-raised: #1c2540;
+  --content-max: 1280px;
+  --page-gutter: clamp(12px, 2.5vw, 28px);
   --background: #050816;
   --surface: rgba(9, 13, 32, 0.92);
   --surface-elevated: rgba(15, 20, 46, 0.96);

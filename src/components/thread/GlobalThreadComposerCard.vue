@@ -404,7 +404,7 @@ const publish = async () => {
 
 const exploreCommunities = () => {
   emit('close')
-  router.push('/comunidad?explore=1')
+  router.push('/comunidades')
 }
 
 watch(() => props.initialCommunityId, pickInitialCommunity)
@@ -1396,5 +1396,15 @@ onUnmounted(() => {
   .global-thread-publish span {
     display: none;
   }
+}
+.global-thread-card { height: auto; max-height: calc(var(--global-thread-vvh,100dvh) - 32px); }
+.global-thread-content { flex: 0 1 auto; overflow-y: auto; }
+.global-thread-compose,.global-thread-mode-panel { height: auto; }
+.global-thread-compose { overflow: visible; }
+.global-thread-mode-panel { max-height: min(480px,60dvh); overflow-y: auto; }
+@media(max-width:768px) {
+  .global-thread-card { width: calc(100vw - 24px); border: 1px solid var(--border); border-radius: 18px; height: auto; max-height: calc(var(--global-thread-vvh,100dvh) - 24px); }
+  .global-thread-header { padding: 12px 14px 8px; }
+  .global-thread-content { flex: 0 1 auto; padding-bottom: 14px; }
 }
 </style>

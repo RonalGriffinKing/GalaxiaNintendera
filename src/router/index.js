@@ -46,6 +46,11 @@ const routes = [
         component: () => import('@/pages/CategoryPage.vue')
       },
       {
+        path: 'comunidades',
+        name: 'communities',
+        component: () => import('@/pages/CommunitiesPage.vue')
+      },
+      {
         path: 'comunidad',
         name: 'community',
         component: () => import('@/pages/CommunityPage.vue')
@@ -68,6 +73,11 @@ const routes = [
         path: ':slug(politica-privacidad|terminos-condiciones|normas-comunidad|politica-cookies|contacto-reportes|aviso-legal)',
         name: 'legal-site-page',
         component: () => import('@/pages/SitePage.vue')
+      },
+      {
+        path: 'perfil/:uid/recompensas',
+        name: 'profile-rewards',
+        component: () => import('@/pages/ProfilePage.vue')
       },
       {
         path: 'perfil/:uid',

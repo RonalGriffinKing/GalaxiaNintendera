@@ -1,12 +1,16 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { updateProfile } from 'firebase/auth'
-import { collection, deleteDoc, doc, getDoc, getDocs, increment, limit, query, setDoc, updateDoc } from 'firebase/firestore'
+import { onAuthStateChanged, updateProfile } from 'firebase/auth'
+import { collection, deleteDoc, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
+import ProfileRewardDialog from '@/components/profile/ProfileRewardDialog.vue'
+import ProfileRewardsHub from '@/components/profile/ProfileRewardsHub.vue'
+import AppNotice from '@/components/shared/AppNotice.vue'
 import ProfileAchievementsPanel from '@/components/profile/ProfileAchievementsPanel.vue'
 import ProfileHeaderCard from '@/components/profile/ProfileHeaderCard.vue'
-import ProfileIconEditor from '@/components/profile/ProfileIconEditor.vue'
+import { achievementTarget, achievementValue } from '@/services/achievementProgress'
+const ProfileIconEditor = defineAsyncComponent(() => import('@/components/profile/ProfileIconEditor.vue'))
 import ProfileRelationModal from '@/components/profile/ProfileRelationModal.vue'
 import ProfileStatsPanel from '@/components/profile/ProfileStatsPanel.vue'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
@@ -32,6 +36,7 @@ const profile = ref(null)
 const favorites = ref([])
 const threads = ref([])
 const posts = ref([])
+const readPosts = ref([])
 const userCommunities = ref([])
 const publicProfiles = ref([])
 const followersList = ref([])
@@ -40,9 +45,10 @@ const relationModal = ref('')
 const activityTab = ref('posts')
 const recentPostIndex = ref(0)
 const showAllRecentPosts = ref(false)
-const rewardsExpanded = ref(false)
 const favoritesExpanded = ref(false)
 const viewerProfile = ref({ role: 'user', canChat: false })
+const viewerUid = ref(auth.currentUser?.uid || '')
+let unsubscribeViewer
 const isFollowing = ref(false)
 const followBusy = ref(false)
 const followersTotal = ref(0)
@@ -51,39 +57,32 @@ const isLoading = ref(true)
 const isRedeeming = ref(false)
 const isSavingProfile = ref(false)
 const isSavingIcon = ref(false)
-const unlockBurst = ref('')
-const redeemingIcon = ref('')
-const deniedIcon = ref('')
 const message = ref('')
-const flyingStars = ref([])
+const redemptionResult = ref(null)
+const redemptionError = ref('')
+const selectionReset = ref(0)
 const confirmRedeem = ref(null)
 const iconTestMode = ref(false)
 const testStars = ref(100)
 const testUnlockedIcons = ref([])
 const iconPanelOpen = ref(false)
-const iconCollectionOpen = ref(false)
 const iconUploadOpen = ref(false)
 const achievementEditorOpen = ref(false)
 const editingAchievementId = ref('')
-const iconSearch = ref('')
-const iconFilter = ref('Todos')
-const previewIconId = ref('')
 const customIcons = ref([])
 const uploadIconPreview = ref('')
 const isUploadingIcon = ref(false)
-const isDeletingIcon = ref(false)
 const uploadIconMessage = ref('')
 const editingIconId = ref('')
 const uploadIconDraft = ref({
   name: '',
   saga: 'Kirby',
+  rarity: 'normal',
   cost: ICON_COST,
   visible: true,
   special: false,
   effectColor: '#a855f7'
 })
-const mobileEditorTab = ref('details')
-const mobileIconPage = ref(0)
 const editMessage = ref('')
 let profileLoadRequestId = 0
 const profileDraft = ref({
@@ -103,10 +102,19 @@ const achievementDraft = ref({
   iconUrl: ''
 })
 const pendingSelectedIcon = ref('')
-const iconEditorRef = ref(null)
 
+const isRewardsPage = computed(() => route.name === 'profile-rewards')
+const rewardsTab = computed(() => {
+  const allowed = ['achievements', 'collection', ...(isOwnProfile.value ? ['redeem'] : []), ...(isAdminOwnProfile.value ? ['manage'] : [])]
+  return allowed.includes(route.query.tab) ? route.query.tab : 'achievements'
+})
+const openRewards = (tab = 'achievements') => {
+  closeIconPanel()
+  router.push({ name: 'profile-rewards', params: { uid: profileId.value }, query: { tab } })
+}
+const changeRewardsTab = (tab) => router.replace({ query: { ...route.query, tab } })
 const profileId = computed(() => String(route.params.uid || ''))
-const isOwnProfile = computed(() => auth.currentUser?.uid === profileId.value)
+const isOwnProfile = computed(() => viewerUid.value === profileId.value)
 const readCount = computed(() => Number(profile.value?.readPostsCount || 0))
 const stars = computed(() => Number(profile.value?.stars || 0))
 const unlockedIcons = computed(() => profile.value?.unlockedIcons?.length ? profile.value.unlockedIcons : ['kirby-01'])
@@ -147,16 +155,10 @@ const achievementTypeCounts = computed(() => {
     count: managedAchievements.value.filter(achievement => (achievement.type || 'reads') === type.value).length
   })).filter(type => type.count)
 })
-const achievementMetricValue = (achievement) => {
-  const type = achievement?.type || 'reads'
-  if (type === 'posts') return posts.value.length
-  if (type === 'communities') return userCommunities.value.length
-  if (type === 'months') return profileActiveMonths.value
-  if (type === 'icons') return redeemedProfileIcons.value.length
-  if (type === 'followers') return followersTotal.value
-  return readCount.value
-}
-const achievementTarget = (achievement) => Math.max(1, Number(achievement?.target ?? achievement?.reads ?? 1))
+const achievementMetricValue = (achievement) => achievementValue(achievement, {
+  reads: readCount.value, posts: posts.value.length, communities: userCommunities.value.length,
+  months: profileActiveMonths.value, icons: unlockedIcons.value.length, followers: followersTotal.value
+})
 const achievementTypeMeta = (achievement) => achievementTypeMap[achievement?.type || 'reads'] || achievementTypeMap.reads
 const earnedAchievements = computed(() => managedAchievements.value.filter(item => achievementMetricValue(item) >= achievementTarget(item)))
 const nextAchievement = computed(() => managedAchievements.value.find(item => achievementMetricValue(item) < achievementTarget(item)) || managedAchievements.value[managedAchievements.value.length - 1] || achievements[0])
@@ -203,7 +205,7 @@ const allProfileIcons = computed(() => {
 
   return isAdminOwnProfile.value
     ? icons
-    : icons.filter(icon => icon.visible && !icon.archived)
+    : icons.filter(icon => (icon.visible && !icon.archived) || unlockedIcons.value.includes(icon.id))
 })
 const manageableProfileIcons = computed(() => allProfileIcons.value)
 const redeemedProfileIcons = computed(() => allProfileIcons.value.filter(icon => unlockedIcons.value.includes(icon.id)))
@@ -214,30 +216,6 @@ const iconFilters = computed(() => {
 })
 const iconSaga = (icon) => icon.saga || 'Especiales'
 const iconCost = (icon) => Math.max(0, Number(icon?.cost ?? ICON_COST))
-const filteredIconCatalog = computed(() => {
-  const search = normalizeText(iconSearch.value)
-  return allProfileIcons.value.filter(icon => {
-    const matchesFilter = iconFilter.value === 'Todos' || (iconFilter.value === 'Especiales' ? icon.special : iconSaga(icon) === iconFilter.value)
-    const matchesSearch = !search || normalizeText(`${icon.name} ${iconSaga(icon)} ${icon.special ? 'especial' : ''}`).includes(search)
-    return matchesFilter && matchesSearch
-  })
-})
-const mobileIconPageSize = 6
-const mobileIconPageCount = computed(() => Math.max(1, Math.ceil(filteredIconCatalog.value.length / mobileIconPageSize)))
-const mobileIconCatalog = computed(() => {
-  const start = mobileIconPage.value * mobileIconPageSize
-  return filteredIconCatalog.value.slice(start, start + mobileIconPageSize)
-})
-const previewIcon = computed(() => {
-  const id = previewIconId.value || pendingSelectedIcon.value || profile.value?.selectedIcon || 'kirby-01'
-  return allProfileIcons.value.find(icon => icon.id === id) || kirbyIcons[0]
-})
-const previewIconEquipped = computed(() => previewIcon.value?.id && profile.value?.selectedIcon === previewIcon.value.id)
-const commentsCount = computed(() => threads.value.reduce((total, thread) => total + Number(thread.comments?.length || 0), 0))
-const receivedLikesCount = computed(() => threads.value.reduce((total, thread) => total + Number(thread.likes || 0), 0))
-const hasPendingIconChange = computed(() => {
-  return isOwnProfile.value && pendingSelectedIcon.value && pendingSelectedIcon.value !== profile.value?.selectedIcon
-})
 const socialItems = computed(() => [
   { id: 'tiktok', label: 'TikTok', icon: 'fab fa-tiktok', url: profile.value?.socialLinks?.tiktok || '' },
   { id: 'youtube', label: 'YouTube', icon: 'fab fa-youtube', url: profile.value?.socialLinks?.youtube || '' },
@@ -249,32 +227,21 @@ const heroStats = computed(() => [
   { id: 'achievements', icon: 'fas fa-trophy', value: earnedAchievements.value.length, label: 'Logros' },
   { id: 'communities', icon: 'fas fa-people-roof', value: userCommunities.value.length, label: 'Comunidades' }
 ])
-const groupedRedeemedIcons = computed(() => {
-  const groups = redeemedProfileIcons.value.reduce((collection, icon) => {
-    const saga = iconSaga(icon)
-    if (!collection.has(saga)) collection.set(saga, [])
-    collection.get(saga).push(icon)
-    return collection
-  }, new Map())
-
-  return [...groups.entries()]
-    .map(([saga, icons]) => ({ saga, icons }))
-    .sort((a, b) => a.saga.localeCompare(b.saga, 'es'))
-})
 const canUseDirectChat = computed(() => {
   return Boolean(auth.currentUser) && !isOwnProfile.value && isFollowing.value && (
     ['admin', 'publisher'].includes(viewerProfile.value.role) || viewerProfile.value.canChat
   )
 })
 const communityCards = computed(() => userCommunities.value)
-const postActivityItems = computed(() => posts.value.map(post => ({
+const showingReadPosts = computed(() => !posts.value.length)
+const postActivityItems = computed(() => (showingReadPosts.value ? readPosts.value : posts.value).map(post => ({
   icon: 'fas fa-newspaper',
   id: post.id,
   image: post.image || post.imageUrl || post.coverUrl || '',
   title: post.title || 'Publicacion',
   label: post.category || 'Post',
-  time: formatAgo(post.updatedAt || post.createdAt),
-  rawAt: post.updatedAt || post.createdAt,
+  time: formatAgo(post.readAt || post.updatedAt || post.createdAt),
+  rawAt: post.readAt || post.updatedAt || post.createdAt,
   action: () => openPost(post)
 })).sort((a, b) => getTime(b.rawAt) - getTime(a.rawAt)))
 const currentRecentPost = computed(() => postActivityItems.value[recentPostIndex.value] || null)
@@ -408,12 +375,6 @@ const deleteAchievement = async (achievement) => {
   }
 }
 
-const normalizeText = (value) => String(value || '')
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-  .trim()
-
 const applyProfileData = (userData = {}) => {
   profile.value = {
     id: profileId.value,
@@ -440,17 +401,19 @@ const applyProfileData = (userData = {}) => {
 }
 
 const loadProfile = async () => {
+  if (iconTestMode.value) { iconTestMode.value = false; testUnlockedIcons.value = []; testStars.value = 100 }
+  closeRedeemConfirm()
   const requestId = ++profileLoadRequestId
   isLoading.value = true
   message.value = ''
   editMessage.value = ''
   iconPanelOpen.value = false
-  iconCollectionOpen.value = false
   relationModal.value = ''
   isFollowing.value = false
   favorites.value = []
   threads.value = []
   posts.value = []
+  readPosts.value = []
   userCommunities.value = []
   publicProfiles.value = []
   followersList.value = []
@@ -466,15 +429,14 @@ const loadProfile = async () => {
     }
 
     applyProfileData(userSnap.data())
-    isLoading.value = false
-    loadProfileExtras(requestId).catch(console.error)
+    await loadProfileExtras(requestId).catch(console.error)
   } finally {
-    if (requestId === profileLoadRequestId && !profile.value) isLoading.value = false
+    if (requestId === profileLoadRequestId) isLoading.value = false
   }
 }
 
 const loadProfileExtras = async (requestId) => {
-  const [favoritesSnap, threadsSnap, postsSnap, usersSnap, communitiesSnap, followersSnap, followingSnap, followSnap, viewerSnap, uploadedIcons, achievementsSnap] = await Promise.all([
+  const [favoritesSnap, threadsSnap, postsSnap, usersSnap, communitiesSnap, followersSnap, followingSnap, followSnap, viewerSnap, uploadedIcons, achievementsSnap, readsSnap] = await Promise.all([
     getDocs(query(collection(db, 'users', profileId.value, 'favorites'), limit(6))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'communityThreads'), limit(80))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'posts'), limit(120))).catch(() => ({ docs: [] })),
@@ -489,7 +451,8 @@ const loadProfileExtras = async (requestId) => {
       ? getDoc(doc(db, 'users', auth.currentUser.uid)).catch(() => ({ exists: () => false, data: () => ({}) }))
       : Promise.resolve({ exists: () => false, data: () => ({}) }),
     loadUploadedProfileIcons({ includeHidden: true }).catch(() => []),
-    getDoc(doc(db, 'siteConfig', 'profileAchievements')).catch(() => ({ exists: () => false, data: () => ({}) }))
+    getDoc(doc(db, 'siteConfig', 'profileAchievements')).catch(() => ({ exists: () => false, data: () => ({}) })),
+    getDocs(query(collection(db, 'users', profileId.value, 'readPosts'), orderBy('readAt', 'desc'), limit(12))).catch(() => ({ docs: [] }))
   ])
 
   if (requestId !== profileLoadRequestId || !profile.value) return
@@ -526,6 +489,7 @@ const loadProfileExtras = async (requestId) => {
       usersById.set(missingUserIds[index], { id: missingUserIds[index], ...snap.data() })
     }
   })
+  if (requestId !== profileLoadRequestId || !profile.value) return
   followersList.value = followersSnap.docs.map(item => relationFromDoc(item, usersById))
   followingList.value = followingSnap.docs.map(item => relationFromDoc(item, usersById))
   threads.value = allThreads
@@ -537,6 +501,20 @@ const loadProfileExtras = async (requestId) => {
     .filter(post => post.authorId === profileId.value && post.status === 'approved' && post.visibility !== 'private' && post.visibility !== 'unlisted' && post.placement !== 'hero' && !post.isMainEntry)
     .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
     .slice(0, 6)
+  // Resolve history against current posts: never expose removed or private content.
+  const postsById = new Map(postsSnap.docs.map(item => [item.id, { ...item.data(), id: item.id }]))
+  const history = readsSnap.docs.map(item => ({ ...item.data(), postId: item.data().postId || item.id }))
+  const missingPosts = [...new Set(history.map(item => item.postId))].filter(id => !postsById.has(id))
+  const historySnaps = await Promise.all(missingPosts.map(id => getDoc(doc(db, 'posts', id)).catch(() => null)))
+  if (requestId !== profileLoadRequestId || !profile.value) return
+  historySnaps.forEach(snap => {
+    if (snap?.exists()) postsById.set(snap.id, { ...snap.data(), id: snap.id })
+  })
+  readPosts.value = history.flatMap(read => {
+    const post = postsById.get(read.postId)
+    if (!post || post.status !== 'approved' || ['private', 'unlisted'].includes(post.visibility)) return []
+    return [{ ...post, readAt: read.readAt }]
+  }).slice(0, 6)
   publicProfiles.value = buildPublicProfiles({
     threads: allThreads,
     usersById,
@@ -664,16 +642,12 @@ const canUnlock = (icon) => {
   return isOwnProfile.value && !effectiveUnlockedIcons.value.includes(icon.id) && displayStars.value >= iconCost(icon)
 }
 
-const iconState = (icon) => {
-  if (profile.value?.selectedIcon === icon.id) return 'Equipado'
-  if (effectiveUnlockedIcons.value.includes(icon.id)) return iconTestMode.value && testUnlockedIcons.value.includes(icon.id) ? 'Test' : 'Desbloqueado'
-  return `${iconCost(icon)} estrellas`
-}
-
 const toggleIconTestMode = () => {
   if (!isAdminOwnProfile.value) return
 
   iconTestMode.value = !iconTestMode.value
+  redemptionResult.value = null
+  selectionReset.value++
   confirmRedeem.value = null
   message.value = ''
 
@@ -686,54 +660,20 @@ const toggleIconTestMode = () => {
 
   testStars.value = 100
   testUnlockedIcons.value = []
-  if (!unlockedIcons.value.includes(pendingSelectedIcon.value)) {
-    pendingSelectedIcon.value = profile.value?.selectedIcon || 'kirby-01'
-  }
+  pendingSelectedIcon.value = profile.value?.selectedIcon || 'kirby-01'
 }
 
-const launchSpendStars = (event) => {
-  if (typeof window === 'undefined' || !event?.currentTarget) return
-
-  const wallet = iconEditorRef.value?.getWalletRect?.() || event.currentTarget.getBoundingClientRect()
-  const target = event.currentTarget.getBoundingClientRect()
-  const startX = wallet.left + wallet.width / 2
-  const startY = wallet.top + wallet.height / 2
-  const endX = target.left + target.width / 2
-  const endY = target.top + target.height / 2
-  const id = Date.now()
-
-  flyingStars.value = Array.from({ length: 7 }, (_, index) => ({
-    id: `${id}-${index}`,
-    x: startX,
-    y: startY,
-    tx: endX - startX + (index - 3) * 7,
-    ty: endY - startY + (index % 2 === 0 ? -8 : 8),
-    delay: index * 45
-  }))
-
-  setTimeout(() => {
-    flyingStars.value = []
-  }, 1050)
-}
-
-const requestRedeemIcon = (icon, event) => {
-  const targetRect = event?.currentTarget?.getBoundingClientRect()
-  confirmRedeem.value = {
-    icon,
-    targetRect: targetRect
-      ? {
-          left: targetRect.left,
-          top: targetRect.top,
-          width: targetRect.width,
-          height: targetRect.height
-        }
-      : null
-  }
+const requestRedeemIcon = (icon) => {
+  if (!isOwnProfile.value || effectiveUnlockedIcons.value.includes(icon.id) || isRedeeming.value) return
+  redemptionError.value = ''
+  confirmRedeem.value = { icon }
 }
 
 const closeRedeemConfirm = () => {
-  if (isRedeeming.value) return
+  if (isRedeeming.value || isSavingIcon.value) return
   confirmRedeem.value = null
+  redemptionResult.value = null
+  redemptionError.value = ''
 }
 
 const toggleIconPanel = async () => {
@@ -741,11 +681,6 @@ const toggleIconPanel = async () => {
   if (iconPanelOpen.value) {
     editMessage.value = ''
     message.value = ''
-    mobileEditorTab.value = 'details'
-    mobileIconPage.value = 0
-    iconSearch.value = ''
-    iconFilter.value = 'Todos'
-    previewIconId.value = pendingSelectedIcon.value || profile.value?.selectedIcon || 'kirby-01'
     await nextTick()
   }
 }
@@ -753,29 +688,8 @@ const toggleIconPanel = async () => {
 const closeIconPanel = () => {
   iconPanelOpen.value = false
   iconUploadOpen.value = false
-  iconSearch.value = ''
   editMessage.value = ''
   resetUploadIconForm()
-}
-
-const openIconCollection = () => {
-  iconCollectionOpen.value = true
-}
-
-const closeIconCollection = () => {
-  iconCollectionOpen.value = false
-}
-
-const openIconDetailFromCollection = async (icon) => {
-  if (!icon?.id) return
-  previewIconId.value = icon.id
-  iconCollectionOpen.value = false
-  iconPanelOpen.value = true
-  mobileEditorTab.value = 'icons'
-  iconSearch.value = ''
-  iconFilter.value = icon.special ? 'Especiales' : iconSaga(icon)
-  mobileIconPage.value = 0
-  await nextTick()
 }
 
 const openIconUpload = (icon = null) => {
@@ -793,6 +707,7 @@ const openIconUpload = (icon = null) => {
   uploadIconDraft.value = {
     name: editableIcon.name,
     saga: iconSaga(editableIcon),
+    rarity: editableIcon.rarity || (editableIcon.special ? 'epic' : 'normal'),
     cost: iconCost(editableIcon),
     visible: Boolean(editableIcon.visible && !editableIcon.archived),
     special: Boolean(editableIcon.special),
@@ -813,42 +728,14 @@ const resetUploadIconForm = () => {
   editingIconId.value = ''
   uploadIconDraft.value = {
     name: '',
-    saga: iconFilter.value !== 'Todos' ? iconFilter.value : 'Kirby',
+    saga: 'Kirby',
+    rarity: 'normal',
     cost: ICON_COST,
     visible: true,
     special: false,
     effectColor: '#a855f7'
   }
 }
-
-const selectManagedIcon = (icon) => {
-  if (!icon || isUploadingIcon.value) return
-  editingIconId.value = icon.id
-  uploadIconPreview.value = icon.src
-  uploadIconDraft.value = {
-    name: icon.name,
-    saga: iconSaga(icon),
-    cost: iconCost(icon),
-    visible: Boolean(icon.visible && !icon.archived),
-    special: Boolean(icon.special),
-    effectColor: icon.effectColor || '#a855f7'
-  }
-  uploadIconMessage.value = ''
-}
-
-const toggleManagedIconVisibility = (icon) => {
-  if (!icon || isUploadingIcon.value) return
-  if (editingIconId.value !== icon.id) {
-    selectManagedIcon(icon)
-  }
-  uploadIconDraft.value.visible = !uploadIconDraft.value.visible
-}
-
-const managedIconVisible = (icon) => (
-  editingIconId.value === icon.id
-    ? uploadIconDraft.value.visible
-    : Boolean(icon.visible && !icon.archived)
-)
 
 const saveUploadedIcon = async () => {
   if (!isAdminOwnProfile.value || isUploadingIcon.value) return
@@ -866,6 +753,7 @@ const saveUploadedIcon = async () => {
       iconId: icon.id,
       name: uploadIconDraft.value.name,
       saga: uploadIconDraft.value.saga,
+      rarity: uploadIconDraft.value.rarity,
       cost: uploadIconDraft.value.cost,
       visible: uploadIconDraft.value.visible,
       special: uploadIconDraft.value.special,
@@ -899,9 +787,6 @@ const saveUploadedIcon = async () => {
         }
       }))
     }
-    previewIconId.value = icon.id
-    iconFilter.value = saved.saga
-    iconSearch.value = ''
     iconUploadOpen.value = false
     resetUploadIconForm()
     message.value = saved.visible ? 'Icono visible para todo el mundo.' : 'Icono oculto para todo el mundo.'
@@ -912,153 +797,36 @@ const saveUploadedIcon = async () => {
   }
 }
 
-const deleteUploadedIcon = async () => {
-  if (!isAdminOwnProfile.value || !previewIcon.value || previewIcon.value.builtIn || isDeletingIcon.value) return
-  const icon = previewIcon.value
-
-  isDeletingIcon.value = true
-  message.value = ''
-
-  try {
-    await updateProfileIcon({
-      iconId: icon.id,
-      name: icon.name,
-      saga: iconSaga(icon),
-      cost: iconCost(icon),
-      visible: false,
-      sourcePath: icon.sourcePath,
-      src: icon.src
-    })
-    customIcons.value = customIcons.value.map(item => (
-      item.id === icon.id ? { ...item, visible: false, archived: true } : item
-    ))
-    previewIconId.value = pendingSelectedIcon.value === icon.id ? 'kirby-01' : pendingSelectedIcon.value || 'kirby-01'
-    if (editingIconId.value === icon.id) closeIconUpload()
-    message.value = 'Icono oculto para todo el mundo.'
-  } catch (error) {
-    message.value = 'No se pudo ocultar el icono.'
-  } finally {
-    isDeletingIcon.value = false
-  }
-}
-
-const changeMobileIconPage = (direction) => {
-  mobileIconPage.value = (mobileIconPage.value + direction + mobileIconPageCount.value) % mobileIconPageCount.value
-}
-
-const chooseIconCard = (icon, event) => {
-  previewIconId.value = icon.id
-  unlockIcon(icon, event)
-}
-
-const equipPreviewIcon = async (event) => {
-  const icon = previewIcon.value
-  if (!icon) return
-  if (effectiveUnlockedIcons.value.includes(icon.id)) {
-    await selectIcon(icon.id)
-    return
-  }
-  unlockIcon(icon, event)
-}
-
-const unlockIcon = async (icon, event) => {
-  if (!isOwnProfile.value || isRedeeming.value || isSavingIcon.value) return
-
-  if (effectiveUnlockedIcons.value.includes(icon.id)) {
-    return
-  }
-
-  if (!canUnlock(icon)) {
-    deniedIcon.value = icon.id
-    setTimeout(() => {
-      if (deniedIcon.value === icon.id) deniedIcon.value = ''
-    }, 620)
-    return
-  }
-
-  requestRedeemIcon(icon, event)
-}
-
 const confirmUnlockIcon = async () => {
   const icon = confirmRedeem.value?.icon
   if (!icon || !canUnlock(icon) || isRedeeming.value) return
-  const targetRect = confirmRedeem.value?.targetRect || null
-
   isRedeeming.value = true
-  message.value = ''
-  redeemingIcon.value = icon.id
-  confirmRedeem.value = null
-
-  await nextTick()
-
-  if (targetRect) {
-    launchSpendStars({
-      currentTarget: {
-        getBoundingClientRect: () => targetRect
-      }
-    })
-  }
-
-  if (iconTestMode.value) {
-    setTimeout(() => {
-      testStars.value = Math.max(0, testStars.value - iconCost(icon))
-      testUnlockedIcons.value = [...new Set([...testUnlockedIcons.value, icon.id])]
-      pendingSelectedIcon.value = icon.id
-      redeemingIcon.value = ''
-      unlockBurst.value = icon.id
-      isRedeeming.value = false
-      setTimeout(() => {
-        unlockBurst.value = ''
-      }, 1500)
-    }, 900)
-    return
-  }
-
+  redemptionError.value = ''
   try {
-    await redeemIcon({
-      userId: profileId.value,
-      iconId: icon.id,
-      stars: displayStars.value,
-      unlockedIcons: unlockedIcons.value,
-      cost: iconCost(icon),
-      iconUrl: icon.builtIn ? '' : icon.src,
-      iconEffect: {
-        special: Boolean(icon.special),
-        effectColor: icon.effectColor || '#a855f7',
-        saga: iconSaga(icon)
-      }
-    })
-    profile.value = {
-      ...profile.value,
-      stars: Math.max(0, stars.value - iconCost(icon)),
-      unlockedIcons: [...unlockedIcons.value, icon.id],
-      selectedIcon: icon.id,
-      selectedIconUrl: icon.builtIn ? '' : icon.src,
-      selectedIconEffect: {
-        special: Boolean(icon.special),
-        effectColor: icon.effectColor || '#a855f7',
-        saga: iconSaga(icon)
-      },
-      updatedAt: Date.now()
+    if (iconTestMode.value) {
+      testStars.value -= iconCost(icon)
+      testUnlockedIcons.value = [...new Set([...testUnlockedIcons.value, icon.id])]
+    } else {
+      const result = await redeemIcon({ userId: profileId.value, iconId: icon.id, expectedCost: iconCost(icon) })
+      profile.value = { ...profile.value, stars: result.stars, unlockedIcons: result.unlockedIcons, updatedAt: Date.now() }
+      window.dispatchEvent(new CustomEvent('galaxy-profile-updated', { detail: { uid: profileId.value, profile: profile.value } }))
     }
-    pendingSelectedIcon.value = icon.id
-    window.dispatchEvent(new CustomEvent('galaxy-profile-updated', {
-      detail: {
-        uid: profileId.value,
-        profile: profile.value
-      }
-    }))
-    redeemingIcon.value = ''
-    unlockBurst.value = icon.id
-    setTimeout(() => {
-      unlockBurst.value = ''
-    }, 1500)
+    redemptionResult.value = { icon }
+    confirmRedeem.value = null
   } catch (error) {
-    redeemingIcon.value = ''
-    message.value = 'No se pudo canjear el icono.'
+    redemptionError.value = error.message === 'not-enough-stars' ? 'No tienes suficientes estrellas. Actualiza el saldo e intenta de nuevo.' : 'No se pudo canjear. Actualiza el catálogo e intenta de nuevo.'
   } finally {
     isRedeeming.value = false
   }
+}
+const useRedeemedIcon = async (id) => {
+  if (await selectIcon(id)) closeRedeemConfirm()
+  else redemptionError.value = 'No se pudo guardar el icono. Sigue en tu colección; puedes volver a intentarlo.'
+}
+const redeemAnother = () => {
+  closeRedeemConfirm()
+  selectionReset.value++
+  changeRewardsTab('redeem')
 }
 
 const saveProfile = async () => {
@@ -1103,9 +871,10 @@ const saveProfile = async () => {
 const selectIcon = async (iconId) => {
   if (!isOwnProfile.value || !effectiveUnlockedIcons.value.includes(iconId) || isSavingIcon.value) return
 
-  if (iconTestMode.value && testUnlockedIcons.value.includes(iconId)) {
+  if (iconTestMode.value) {
     pendingSelectedIcon.value = iconId
-    return
+    message.value = 'Icono usado en simulación. Tu perfil real no ha cambiado.'
+    return true
   }
 
   isSavingIcon.value = true
@@ -1141,10 +910,13 @@ const selectIcon = async (iconId) => {
       selectedIconEffect,
       updatedAt: Date.now()
     })
+    message.value = 'Icono actualizado.'
+    return true
   } catch (error) {
     profile.value = previousProfile
     pendingSelectedIcon.value = previousProfile?.selectedIcon || 'kirby-01'
     message.value = 'No se pudo guardar el icono.'
+    return false
   } finally {
     isSavingIcon.value = false
   }
@@ -1325,66 +1097,65 @@ const shareProfile = async () => {
   }
 }
 
+let noticeTimer
+watch(message, (value) => {
+  clearTimeout(noticeTimer)
+  if (value) noticeTimer = setTimeout(() => { message.value = '' }, 5000)
+})
 watch(() => route.params.uid, loadProfile)
+watch(() => route.fullPath, () => { closeIconPanel(); closeRedeemConfirm(); achievementEditorOpen.value = false; message.value = ''; if (!isRewardsPage.value && iconTestMode.value) toggleIconTestMode() })
 watch(postActivityItems, (items) => {
   if (recentPostIndex.value >= items.length) recentPostIndex.value = 0
 })
 watch(activityTab, () => {
   showAllRecentPosts.value = false
 })
-watch([iconSearch, iconFilter], () => {
-  mobileIconPage.value = 0
-})
-watch([iconPanelOpen, iconCollectionOpen, iconUploadOpen, rewardsExpanded, relationModal, confirmRedeem], ([isIconOpen, isCollectionOpen, isUploadOpen, isRewardsOpen, isRelationOpen, isRedeemOpen]) => {
-  document.body.style.overflow = isIconOpen || isCollectionOpen || isUploadOpen || isRewardsOpen || Boolean(isRelationOpen) || Boolean(isRedeemOpen) ? 'hidden' : ''
+watch([iconPanelOpen, iconUploadOpen, relationModal, confirmRedeem, redemptionResult], values => {
+  document.body.style.overflow = values.some(Boolean) ? 'hidden' : ''
 })
 onMounted(() => {
+  unsubscribeViewer = onAuthStateChanged(auth, user => { viewerUid.value = user?.uid || '' })
   window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
   loadProfile()
 })
 onUnmounted(() => {
+  unsubscribeViewer?.()
+  clearTimeout(noticeTimer)
   document.body.style.overflow = ''
 })
 </script>
 
 <template>
-  <main class="profile-page">
+  <main class="profile-page" :class="{ 'profile-ready': !isLoading && profile }" :aria-busy="isLoading">
+    <section v-if="isLoading && isRewardsPage" class="rewards-loading" :class="{ 'loading-achievements': rewardsTab === 'achievements' }" role="status" aria-label="Cargando logros y recompensas">
+      <span class="profile-loading-label">Cargando logros y recompensas…</span>
+      <div class="rewards-loading-back" aria-hidden="true"></div>
+      <div class="rewards-loading-title" aria-hidden="true"></div>
+      <div class="rewards-loading-tabs" aria-hidden="true"><span v-for="index in 3" :key="index"></span></div>
+      <div class="rewards-loading-summary" aria-hidden="true"></div>
+      <div class="rewards-loading-grid" aria-hidden="true"><div v-for="index in (rewardsTab === 'achievements' ? 4 : 10)" :key="index"><span></span><span></span></div></div>
+    </section>
+    <section v-else-if="isLoading" class="profile-loading" role="status" aria-label="Cargando perfil">
+      <span class="profile-loading-label">Cargando perfil…</span>
+      <div class="profile-loading-hero" aria-hidden="true">
+        <div class="profile-loading-avatar"></div>
+        <div class="profile-loading-info"><span></span><strong></strong><span></span><span></span></div>
+        <div class="profile-loading-summary"></div>
+      </div>
+      <div class="profile-loading-stats" aria-hidden="true"><span v-for="index in 4" :key="index"></span></div>
+      <div class="profile-loading-columns" aria-hidden="true"><div v-for="index in 3" :key="index"><span></span><span></span><span></span></div></div>
+    </section>
     <div v-if="!isLoading && !profile" class="profile-empty">
       Este perfil no existe.
     </div>
 
     <template v-if="!isLoading && profile">
-      <ProfileHeaderCard
-        :profile="profile"
-        :profile-icon="profileIcon"
-        :profile-icon-meta="profileIconMeta"
-        :current-achievement="currentAchievement"
-        :rewards-expanded="rewardsExpanded"
-        :is-own-profile="isOwnProfile"
-        :member-since="memberSince"
-        :redeemed-icon-count="redeemedProfileIcons.length"
-        :visible-profile-icons="visibleProfileIcons"
-        :social-items="socialItems"
-        :display-stars="displayStars"
-        :is-spending="Boolean(flyingStars.length)"
-        :icon-panel-open="iconPanelOpen"
-        :follow-busy="followBusy"
-        :is-following="isFollowing"
-        :can-use-direct-chat="canUseDirectChat"
-        @toggle-rewards="rewardsExpanded = !rewardsExpanded"
-        @toggle-icon-panel="toggleIconPanel"
-        @open-icon-collection="openIconCollection"
-        @toggle-follow="toggleFollow"
-        @open-direct-message="openDirectMessage"
-        @share="shareProfile"
-      />
-
-      <ProfileStatsPanel :stats="heroStats" />
-
-      <ProfileAchievementsPanel
+      <ProfileRewardsHub v-if="isRewardsPage" :tab="rewardsTab" :profile="{ ...profile, selectedIcon: pendingSelectedIcon || profile.selectedIcon }" :icons="allProfileIcons" :unlocked="effectiveUnlockedIcons" :stars="displayStars" :simulated="iconTestMode" :selection-reset="selectionReset" :own="isOwnProfile" :admin="isAdminOwnProfile" :busy="isRedeeming || isSavingIcon" :cost="iconCost" :saga="iconSaga"
+        @tab="changeRewardsTab" @back="router.push({ name: 'profile', params: { uid: profileId } })" @equip="selectIcon" @redeem="requestRedeemIcon" @manage-icon="openIconUpload" @toggle-simulation="toggleIconTestMode" @add-stars="testStars += 100" @reset-simulation="testStars = 100; testUnlockedIcons = []; pendingSelectedIcon = profile.selectedIcon; selectionReset++">
+        <template #achievements>      <ProfileAchievementsPanel
         v-model:draft="achievementDraft"
-        :open="rewardsExpanded"
-        :can-manage="canManageAchievements"
+        :open="true" inline
+        :can-manage="isAdminOwnProfile && rewardsTab === 'manage'"
         :editor-open="achievementEditorOpen"
         :editing-id="editingAchievementId"
         :earned-count="earnedAchievements.length"
@@ -1392,31 +1163,78 @@ onUnmounted(() => {
         :type-counts="achievementTypeCounts"
         :types="achievementTypes"
         :roadmap="achievementRoadmap"
-        @close="rewardsExpanded = false"
         @start-create="startCreateAchievement"
         @cancel-edit="achievementEditorOpen = false; resetAchievementDraft()"
         @save="saveAchievementDraft"
         @edit="editAchievement"
         @delete="deleteAchievement"
+      /></template>
+        <template #management>      <ProfileAchievementsPanel
+        v-model:draft="achievementDraft"
+        :open="true" inline
+        :can-manage="isAdminOwnProfile && rewardsTab === 'manage'"
+        :editor-open="achievementEditorOpen"
+        :editing-id="editingAchievementId"
+        :earned-count="earnedAchievements.length"
+        :total-count="managedAchievements.length"
+        :type-counts="achievementTypeCounts"
+        :types="achievementTypes"
+        :roadmap="achievementRoadmap"
+        @start-create="startCreateAchievement"
+        @cancel-edit="achievementEditorOpen = false; resetAchievementDraft()"
+        @save="saveAchievementDraft"
+        @edit="editAchievement"
+        @delete="deleteAchievement"
+      /></template>
+      </ProfileRewardsHub>
+      <template v-else>
+      <ProfileHeaderCard
+        :profile="profile"
+        :profile-icon="profileIcon"
+        :profile-icon-meta="profileIconMeta"
+        :current-achievement="currentAchievement"
+        :next-progress="achievementRoadmap.find(item => item.isNext || !item.unlocked)"
+        :is-own-profile="isOwnProfile"
+        :member-since="memberSince"
+        :redeemed-icon-count="redeemedProfileIcons.length"
+        :visible-profile-icons="visibleProfileIcons"
+        :social-items="socialItems"
+        :display-stars="displayStars"
+
+        :icon-panel-open="iconPanelOpen"
+        :follow-busy="followBusy"
+        :is-following="isFollowing"
+        :can-use-direct-chat="canUseDirectChat"
+        @toggle-rewards="openRewards()"
+        @toggle-icon-panel="toggleIconPanel"
+        @open-icon-collection="openRewards('collection')"
+        @toggle-follow="toggleFollow"
+        @open-direct-message="openDirectMessage"
+        @share="shareProfile"
       />
 
-      <span
-        v-for="star in flyingStars"
-        :key="star.id"
-        class="spend-star"
-        :style="{
-          left: `${star.x}px`,
-          top: `${star.y}px`,
-          '--tx': `${star.tx}px`,
-          '--ty': `${star.ty}px`,
-          '--delay': `${star.delay}ms`
-        }"
-        aria-hidden="true"
-      >
-        <i class="fas fa-star"></i>
-      </span>
+      <ProfileStatsPanel :stats="heroStats" @open="openRewards($event === 'icons' ? 'collection' : 'achievements')" />
 
-      <section class="profile-social-grid">
+
+      <section class="profile-dashboard">
+        <aside class="profile-middle">
+          <div class="profile-section profile-about"><div class="section-head"><h2>Sobre mí</h2><button v-if="isOwnProfile" type="button" aria-label="Editar información del perfil" @click="toggleIconPanel"><i class="fas fa-pen"></i></button></div><p>{{ profile.description || 'Miembro de la comunidad de Galaxia Nintendera.' }}</p><p v-if="profile.location"><i class="fas fa-location-dot"></i> {{ profile.location }}</p><p v-if="memberSince"><i class="fas fa-calendar"></i> Miembro desde {{ memberSince }}</p></div>
+      <section class="profile-highlights" aria-label="Colección y logros destacados">
+        <div class="profile-section collection-preview">
+          <div class="section-head"><div><span>Tu identidad en la galaxia</span><h2>Colección de iconos</h2></div><button type="button" @click="openRewards('collection')">Ver colección →</button></div>
+          <div class="collection-preview-icons"><button v-for="icon in visibleProfileIcons" :key="icon.id" type="button" :aria-label="`Ver colección: ${icon.name}`" @click="openRewards('collection')"><ProfileAvatar :src="icon.src" :alt="icon.name" :effect="icon" /><small>{{ icon.name }}</small></button></div>
+        </div>
+        <div class="profile-section achievement-preview">
+          <div class="section-head"><div><span>Progreso del perfil</span><h2>Vitrina de logros</h2></div><button type="button" @click="openRewards('achievements')">Ver todos →</button></div>
+          <div class="achievement-preview-items"><button v-for="item in achievementRoadmap.filter(item => item.unlocked || item.isNext).slice(0,3)" :key="item.id" type="button" :class="{ earned: item.unlocked }" @click="openRewards('achievements')"><span><img v-if="item.iconUrl" :src="item.iconUrl" alt="" /><i v-else class="fas fa-trophy" aria-hidden="true"></i></span><strong>{{ item.label }}</strong><small>{{ item.unlocked ? 'Completado' : `${item.currentValue} / ${item.target}` }}</small><progress :value="item.progress" max="100" :aria-label="item.label"></progress></button></div>
+        </div>
+      </section>
+
+
+
+
+        </aside>
+        <aside class="profile-right">
         <div class="profile-section profile-communities">
           <div class="section-head">
             <div>
@@ -1444,15 +1262,44 @@ onUnmounted(() => {
           <p v-if="!communityCards.length" class="mini-empty">Todavia no pertenece a ninguna comunidad.</p>
         </div>
 
+      <section v-if="!isRewardsPage && publicProfiles.length" class="profile-section profile-directory">
+        <div class="section-head">
+          <div>
+            <span>Comunidad</span>
+            <h2>Otros perfiles</h2>
+          </div>
+        </div>
+
+        <div class="profile-directory-grid">
+          <button
+            v-for="user in publicProfiles"
+            :key="user.id"
+            type="button"
+            @click="router.push(`/perfil/${user.id}`)"
+          >
+            <ProfileAvatar
+              class="directory-profile-avatar"
+              :src="resolveProfileIcon(user)"
+              :alt="user.name || user.email || 'Usuario'"
+              :label="user.name || user.email || 'Usuario'"
+              :effect="user.iconMeta"
+            />
+            <strong>{{ user.name || user.email || 'Usuario' }}</strong>
+            <small>{{ user.relationLabel }}</small>
+          </button>
+        </div>
+      </section>
+
+        </aside>
         <div class="profile-section profile-activity">
           <div class="section-head">
             <div>
               <span>Actividad reciente</span>
-              <h2>{{ activityTab === 'threads' ? 'Hilos publicados' : 'Posts recientes' }}</h2>
+              <h2>{{ activityTab === 'threads' ? 'Hilos publicados' : showingReadPosts ? 'Posts leídos' : 'Posts recientes' }}</h2>
             </div>
             <div class="activity-tabs">
               <button type="button" :class="{ active: activityTab === 'posts' }" @click="activityTab = 'posts'">
-                Posts
+                {{ showingReadPosts ? 'Lecturas' : 'Posts' }}
               </button>
               <button type="button" :class="{ active: activityTab === 'threads' }" @click="activityTab = 'threads'">
                 Hilos
@@ -1460,6 +1307,7 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <div class="profile-activity-body">
           <Transition name="activity-swap" mode="out-in">
             <div v-if="activityTab === 'posts'" key="posts" class="recent-post-showcase">
               <button
@@ -1491,6 +1339,7 @@ onUnmounted(() => {
                 </button>
               </div>
 
+              <div v-if="postActivityItems.length > 1" class="activity-preview-pair"><button v-for="item in postActivityItems.filter(item => item.id !== currentRecentPost?.id).slice(0,2)" :key="item.id" type="button" @click="item.action"><img v-if="item.image" :src="item.image" alt="" /><div><small>{{ item.label }}</small><strong>{{ item.title }}</strong><em>{{ item.time }}</em></div></button></div>
               <div v-if="showAllRecentPosts" class="recent-post-list">
                 <button v-for="item in postActivityItems" :key="item.id" type="button" @click="item.action">
                   <span v-if="item.image"><img :src="item.image" alt="" /></span>
@@ -1511,7 +1360,8 @@ onUnmounted(() => {
               </button>
             </div>
           </Transition>
-          <p v-if="!visibleActivityItems.length" class="mini-empty">Todavia no hay actividad publica.</p>
+          <p v-if="!visibleActivityItems.length" class="mini-empty">{{ activityTab === 'threads' ? 'Todavía no hay hilos publicados.' : showingReadPosts ? 'Todavía no hay lecturas disponibles.' : 'Todavía no hay publicaciones.' }}</p>
+          </div>
         </div>
       </section>
 
@@ -1521,100 +1371,12 @@ onUnmounted(() => {
         @open-post="openPost"
       />
 
-      <ProfileIconEditor
-        ref="iconEditorRef"
-        v-model:profile-draft="profileDraft"
-        v-model:icon-search="iconSearch"
-        v-model:icon-filter="iconFilter"
-        v-model:mobile-editor-tab="mobileEditorTab"
-        v-model:upload-icon-draft="uploadIconDraft"
-        :profile="profile"
-        :profile-icon="profileIcon"
-        :profile-icon-meta="profileIconMeta"
-        :collection-open="iconCollectionOpen"
-        :panel-open="iconPanelOpen"
-        :upload-open="iconUploadOpen"
-        :confirm-redeem="confirmRedeem"
-        :redeemed-profile-icons="redeemedProfileIcons"
-        :grouped-redeemed-icons="groupedRedeemedIcons"
-        :icon-filters="iconFilters"
-        :filtered-icon-catalog="filteredIconCatalog"
-        :mobile-icon-catalog="mobileIconCatalog"
-        :mobile-icon-page="mobileIconPage"
-        :mobile-icon-page-count="mobileIconPageCount"
-        :effective-unlocked-icons="effectiveUnlockedIcons"
-        :test-unlocked-icons="testUnlockedIcons"
-        :icon-test-mode="iconTestMode"
-        :is-admin-own-profile="isAdminOwnProfile"
-        :message="message"
-        :edit-message="editMessage"
-        :is-saving-profile="isSavingProfile"
-        :is-saving-icon="isSavingIcon"
-        :is-redeeming="isRedeeming"
-        :is-deleting-icon="isDeletingIcon"
-        :is-uploading-icon="isUploadingIcon"
-        :redeeming-icon="redeemingIcon"
-        :denied-icon="deniedIcon"
-        :unlock-burst="unlockBurst"
-        :display-stars="displayStars"
-        :is-spending="Boolean(flyingStars.length)"
-        :preview-icon="previewIcon"
-        :preview-icon-equipped="previewIconEquipped"
-        :manageable-profile-icons="manageableProfileIcons"
-        :editing-icon-id="editingIconId"
-        :upload-icon-preview="uploadIconPreview"
-        :upload-icon-message="uploadIconMessage"
-        :icon-state="iconState"
-        :icon-cost="iconCost"
-        :icon-saga="iconSaga"
-        :managed-icon-visible="managedIconVisible"
-        @close-collection="closeIconCollection"
-        @close-panel="closeIconPanel"
-        @close-upload="closeIconUpload"
-        @save-profile="saveProfile"
-        @toggle-test-mode="toggleIconTestMode"
-        @choose-icon="chooseIconCard"
-        @open-icon-detail="openIconDetailFromCollection"
-        @change-mobile-page="changeMobileIconPage"
-        @confirm-purchase="(event) => confirmRedeem ? confirmUnlockIcon() : equipPreviewIcon(event)"
-        @upload-icon="openIconUpload"
-        @edit-icon="openIconUpload"
-        @delete-icon="deleteUploadedIcon"
-        @select-managed-icon="selectManagedIcon"
-        @toggle-managed-visibility="toggleManagedIconVisibility"
-        @save-uploaded-icon="saveUploadedIcon"
-        @close-redeem="closeRedeemConfirm"
-      />
+      </template>
+      <AppNotice :message="message" :type="message.startsWith('No se') ? 'error' : 'success'" />
+      <ProfileRewardDialog v-if="confirmRedeem || redemptionResult" :pending="confirmRedeem" :result="redemptionResult" :busy="isRedeeming" :saving="isSavingIcon" :stars="displayStars" :cost="iconCost" :simulated="iconTestMode" :error="redemptionError" @close="closeRedeemConfirm" @confirm="confirmUnlockIcon" @use="useRedeemedIcon" @another="redeemAnother" />
+      <ProfileIconEditor v-if="iconPanelOpen || iconUploadOpen" v-model:profile-draft="profileDraft" v-model:upload-icon-draft="uploadIconDraft" :profile="profile" :profile-icon="profileIcon" :profile-icon-meta="profileIconMeta" :panel-open="iconPanelOpen" :upload-open="iconUploadOpen" :edit-message="editMessage" :is-saving-profile="isSavingProfile" :is-uploading-icon="isUploadingIcon" :editing-icon-id="editingIconId" :upload-icon-preview="uploadIconPreview" :upload-icon-message="uploadIconMessage" :icon-filters="iconFilters" @close-panel="closeIconPanel" @close-upload="closeIconUpload" @save-profile="saveProfile" @open-rewards="openRewards('collection')" @save-uploaded-icon="saveUploadedIcon" />
 
-      <section v-if="publicProfiles.length" class="profile-section profile-directory">
-        <div class="section-head">
-          <div>
-            <span>Comunidad</span>
-            <h2>Otros perfiles</h2>
-          </div>
-        </div>
-
-        <div class="profile-directory-grid">
-          <button
-            v-for="user in publicProfiles"
-            :key="user.id"
-            type="button"
-            @click="router.push(`/perfil/${user.id}`)"
-          >
-            <ProfileAvatar
-              class="directory-profile-avatar"
-              :src="resolveProfileIcon(user)"
-              :alt="user.name || user.email || 'Usuario'"
-              :label="user.name || user.email || 'Usuario'"
-              :effect="user.iconMeta"
-            />
-            <strong>{{ user.name || user.email || 'Usuario' }}</strong>
-            <small>{{ user.relationLabel }}</small>
-          </button>
-        </div>
-      </section>
-
-      <section v-if="posts.length && !isCreatorProfile" class="profile-section">
+      <section v-if="!isRewardsPage && posts.length && !isCreatorProfile" class="profile-section">
         <div class="section-head">
           <div>
             <span>Publicaciones</span>
@@ -1666,8 +1428,6 @@ onUnmounted(() => {
 }
 
 .profile-empty,
-.profile-hero,
-.profile-hero-stats,
 .profile-section {
   margin: 0 auto;
   max-width: var(--profile-content-width);
@@ -1683,89 +1443,6 @@ onUnmounted(() => {
   text-align: center;
 }
 
-.profile-hero {
-  align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 18px;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
-  display: grid;
-  gap: 22px;
-  grid-template-columns: auto minmax(260px, 0.9fr) minmax(180px, 1fr) auto;
-  padding: 24px;
-  position: relative;
-}
-
-.profile-hero-stats {
-  background: rgba(15, 23, 42, 0.05);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 16px;
-  display: grid;
-  gap: 0;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-top: 14px;
-  overflow: hidden;
-  width: 100%;
-}
-
-.profile-hero-stats div {
-  align-items: center;
-  display: grid;
-  gap: 3px 10px;
-  grid-template-columns: 34px minmax(0, 1fr);
-  min-height: 72px;
-  padding: 12px 14px;
-  position: relative;
-}
-
-.profile-hero-stats div + div::before {
-  background: rgba(148, 163, 184, 0.16);
-  bottom: 16px;
-  content: '';
-  left: 0;
-  position: absolute;
-  top: 16px;
-  width: 1px;
-}
-
-.profile-hero-stats i {
-  align-items: center;
-  color: #a855f7;
-  display: flex;
-  font-size: 18px;
-  grid-row: span 2;
-  justify-content: center;
-}
-
-.profile-hero-stats strong {
-  color: #111827;
-  font-size: 22px;
-  font-weight: 950;
-  line-height: 1;
-}
-
-.profile-hero-stats span {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 900;
-  line-height: 1.15;
-  text-transform: uppercase;
-}
-
-.profile-avatar-wrap {
-  position: relative;
-}
-
-.profile-avatar-circle {
-  background: #ffffff;
-  border: 4px solid #f5f3ff;
-  border-radius: 999px;
-  display: block;
-  height: 118px;
-  overflow: hidden;
-  width: 118px;
-}
-
 .profile-avatar {
   height: 138%;
   margin-left: -19%;
@@ -1775,44 +1452,7 @@ onUnmounted(() => {
   width: 138%;
 }
 
-.role-badge {
-  background: #111827;
-  border: 2px solid #ffffff;
-  border-radius: 999px;
-  bottom: -8px;
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 900;
-  left: 50%;
-  padding: 5px 10px;
-  position: absolute;
-  text-transform: uppercase;
-  transform: translateX(-50%);
-}
 
-.avatar-edit-shortcut {
-  align-items: center;
-  background: rgba(15, 23, 42, 0.92);
-  border: 2px solid rgba(255, 255, 255, 0.84);
-  border-radius: 999px;
-  bottom: 0;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
-  color: #ffffff;
-  display: none;
-  font-size: 15px;
-  height: 38px;
-  justify-content: center;
-  position: absolute;
-  right: -2px;
-  width: 38px;
-  z-index: 3;
-}
-
-.avatar-edit-shortcut span {
-  display: none;
-}
-
-.profile-main-copy span,
 .section-head span {
   color: #7c3aed;
   display: block;
@@ -1821,537 +1461,15 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
-.profile-level-pill {
-  align-items: center;
-  background:
-    radial-gradient(circle at 10% 50%, rgba(236, 72, 153, 0.28), transparent 30%),
-    linear-gradient(135deg, rgba(88, 28, 135, 0.42), rgba(120, 53, 15, 0.22));
-  border: 1px solid rgba(250, 204, 21, 0.46);
-  border-radius: 999px;
-  box-shadow: 0 16px 34px rgba(124, 58, 237, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.28);
-  color: #7c3aed;
-  display: inline-grid;
-  font-size: 15px;
-  gap: 10px;
-  grid-area: level;
-  grid-template-columns: 34px minmax(0, 1fr) 16px 14px;
-  min-height: 42px;
-  min-width: 0;
-  padding: 4px 14px 4px 5px;
-  position: relative;
-  text-transform: none;
-  width: fit-content;
-  max-width: min(100%, 420px);
-  z-index: 0;
-}
-
-.profile-level-pill::before {
-  animation: level-border-flow 3.2s linear infinite;
-  background: conic-gradient(from var(--level-angle), #ec4899, #a855f7, #facc15, #fb7185, #ec4899);
-  border-radius: inherit;
-  content: '';
-  inset: -2px;
-  opacity: 0.92;
-  padding: 2px;
-  pointer-events: none;
-  position: absolute;
-  z-index: -2;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-
-.profile-level-pill::after {
-  animation: level-glow-pulse 2.4s ease-in-out infinite;
-  background: linear-gradient(90deg, rgba(236, 72, 153, 0.64), rgba(250, 204, 21, 0.46));
-  border-radius: inherit;
-  content: '';
-  filter: blur(12px);
-  inset: -4px;
-  opacity: 0.35;
-  pointer-events: none;
-  position: absolute;
-  z-index: -3;
-}
-
-.profile-level-pill > i {
-  color: #fde68a;
-  font-size: 10px;
-  justify-self: end;
-}
-
-.profile-level-crown {
-  color: #facc15 !important;
-  font-size: 13px !important;
-  justify-self: center !important;
-  text-shadow: 0 0 12px rgba(250, 204, 21, 0.58);
-}
-
-.profile-level-label {
-  color: inherit !important;
-  display: block !important;
-  font-size: 13px !important;
-  font-weight: 950 !important;
-  letter-spacing: 0;
-  line-height: 1.15;
-  min-width: 0;
-  overflow: visible;
-  text-transform: uppercase;
-  white-space: normal;
-}
-
-.profile-level-icon {
-  align-items: center;
-  background:
-    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.48), transparent 24%),
-    linear-gradient(135deg, #a855f7, #ec4899);
-  border-radius: 999px;
-  box-shadow: 0 0 18px rgba(236, 72, 153, 0.34);
-  color: #fde68a !important;
-  display: grid !important;
-  flex: 0 0 auto;
-  font-size: 15px !important;
-  height: 34px;
-  place-items: center;
-  overflow: hidden;
-  width: 34px;
-}
-
-.profile-level-icon i {
-  display: block;
-  line-height: 1;
-  margin: 0;
-  transform: translateY(0.5px);
-}
-
-.profile-level-icon img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.profile-main-copy h1 {
-  color: #111827;
-  font-size: 34px;
-  font-weight: 950;
-  line-height: 1.05;
-  margin-top: 5px;
-}
-
-.profile-main-copy p {
-  color: #64748b;
-  display: -webkit-box;
-  font-size: 14px;
-  font-weight: 750;
-  line-height: 1.55;
-  margin-top: 8px;
-  max-width: 52ch;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.profile-social-links {
-  align-items: center;
-  align-self: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: center;
-  justify-self: center;
-  min-width: 0;
-}
-
-.profile-social-links a {
-  align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 999px;
-  color: #111827;
-  display: inline-flex;
-  font-size: 16px;
-  height: 44px;
-  justify-content: center;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
-  width: 44px;
-}
-
-.profile-social-links a:hover {
-  background: #111827;
-  border-color: #111827;
-  color: #ffffff;
-  transform: translateY(-1px);
-}
-
-.profile-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 0;
-}
-
-.profile-actions button {
-  align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #c026d3);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 900;
-  gap: 8px;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 16px;
-}
-
 .profile-actions button.active {
   background: linear-gradient(135deg, #7c3aed, #ec4899);
   box-shadow: 0 10px 24px rgba(124, 58, 237, 0.24);
-}
-
-.profile-actions .profile-edit-main-action {
-  animation: edit-action-gradient 5.5s ease-in-out infinite;
-  background: linear-gradient(110deg, #7c3aed, #c026d3, #ec4899, #7c3aed);
-  background-size: 260% 260%;
-  box-shadow: 0 14px 36px rgba(192, 38, 211, 0.28);
-  overflow: hidden;
-  position: relative;
-}
-
-.profile-actions .profile-edit-main-action::before {
-  background: linear-gradient(110deg, transparent, rgba(255, 255, 255, 0.34), transparent);
-  content: '';
-  inset: 0 auto 0 -45%;
-  pointer-events: none;
-  position: absolute;
-  transform: skewX(-18deg);
-  width: 36%;
-}
-
-.profile-actions .profile-edit-main-action:hover::before {
-  animation: edit-action-shine 0.82s ease;
-}
-
-.profile-actions .profile-edit-main-action i,
-.profile-actions .profile-edit-main-action span {
-  position: relative;
-  z-index: 1;
-}
-
-.hero-rewards-panel {
-  align-self: center;
-  display: grid;
-  gap: 10px;
-  justify-items: center;
-}
-
-.hero-rewards-panel button {
-  align-items: center;
-  background: rgba(124, 58, 237, 0.1);
-  border: 1px solid rgba(124, 58, 237, 0.18);
-  border-radius: 999px;
-  color: #7c3aed;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 950;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 12px;
-  position: relative;
-  z-index: 0;
-}
-
-.hero-rewards-panel button::before {
-  animation: level-border-flow 3.4s linear infinite;
-  background: conic-gradient(from var(--level-angle), #a855f7, #22d3ee, #facc15, #ec4899, #a855f7);
-  border-radius: inherit;
-  content: '';
-  inset: -2px;
-  opacity: 0.92;
-  padding: 2px;
-  pointer-events: none;
-  position: absolute;
-  z-index: -1;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-
-.hero-rewards-panel button::after {
-  animation: reward-glow-pulse 2.8s ease-in-out infinite;
-  background: linear-gradient(90deg, rgba(168, 85, 247, 0.72), rgba(34, 211, 238, 0.42), rgba(236, 72, 153, 0.58));
-  border-radius: inherit;
-  content: '';
-  filter: blur(13px);
-  inset: -6px;
-  opacity: 0.35;
-  pointer-events: none;
-  position: absolute;
-  z-index: -2;
-}
-
-.hero-icon-stack {
-  display: flex;
-  justify-content: center;
-}
-
-.hero-icon-stack span {
-  background: #ffffff;
-  border: 2px solid rgba(255, 255, 255, 0.94);
-  border-radius: 999px;
-  box-shadow:
-    0 0 0 1px rgba(168, 85, 247, 0.32),
-    0 0 18px rgba(168, 85, 247, 0.34),
-    0 0 24px rgba(34, 211, 238, 0.16);
-  display: block;
-  height: 36px;
-  margin-left: -8px;
-  overflow: hidden;
-  width: 36px;
-}
-
-.hero-icon-stack span:first-child {
-  margin-left: 0;
-}
-
-.hero-icon-stack img {
-  height: 136%;
-  margin-left: -18%;
-  margin-top: -17%;
-  max-width: none;
-  object-fit: cover;
-  width: 136%;
 }
 
 @property --level-angle {
   syntax: '<angle>';
   inherits: false;
   initial-value: 0deg;
-}
-
-@keyframes level-border-flow {
-  to {
-    --level-angle: 360deg;
-  }
-}
-
-@keyframes level-glow-pulse {
-  0%,
-  100% {
-    opacity: 0.26;
-  }
-
-  50% {
-    opacity: 0.48;
-  }
-}
-
-@keyframes reward-glow-pulse {
-  0%,
-  100% {
-    opacity: 0.28;
-    transform: scale(0.98);
-  }
-
-  50% {
-    opacity: 0.58;
-    transform: scale(1.04);
-  }
-}
-
-@keyframes wallet-glow-pulse {
-  0%,
-  100% {
-    opacity: 0.36;
-    transform: scale(0.98);
-  }
-
-  50% {
-    opacity: 0.66;
-    transform: scale(1.05);
-  }
-}
-
-@keyframes edit-action-gradient {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-@keyframes edit-action-shine {
-  from {
-    left: -45%;
-  }
-
-  to {
-    left: 115%;
-  }
-}
-
-.edit-profile-section {
-  border-color: #ddd6fe;
-}
-
-.profile-edit-form {
-  display: grid;
-  gap: 14px;
-}
-
-.social-edit-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.profile-edit-form label {
-  color: #64748b;
-  display: grid;
-  font-size: 11px;
-  font-weight: 900;
-  gap: 7px;
-  text-transform: uppercase;
-}
-
-.profile-edit-form input,
-.profile-edit-form textarea {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  color: #111827;
-  font-size: 14px;
-  font-weight: 750;
-  outline: none;
-  padding: 11px 12px;
-  resize: vertical;
-  text-transform: none;
-}
-
-.profile-edit-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: space-between;
-}
-
-.profile-edit-actions p {
-  color: #16a34a;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.profile-edit-actions button {
-  background: linear-gradient(to right, #9333ea, #ec4899);
-  border-radius: 12px;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 900;
-  min-height: 42px;
-  padding: 0 16px;
-  text-transform: uppercase;
-}
-
-.profile-edit-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.65;
-}
-
-.star-wallet {
-  align-items: center;
-  background: linear-gradient(135deg, #fef3c7, #fce7f3);
-  border: 1px solid rgba(253, 230, 138, 0.82);
-  border-radius: 16px;
-  box-shadow:
-    0 0 0 1px rgba(250, 204, 21, 0.22),
-    0 16px 42px rgba(245, 158, 11, 0.18);
-  color: #92400e;
-  display: grid;
-  justify-items: center;
-  min-width: 120px;
-  padding: 16px;
-  position: relative;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  z-index: 0;
-}
-
-.star-wallet::before {
-  animation: level-border-flow 3s linear infinite;
-  background: conic-gradient(from var(--level-angle), #facc15, #fb923c, #fce7f3, #a855f7, #facc15);
-  border-radius: inherit;
-  content: '';
-  inset: -3px;
-  opacity: 0.95;
-  padding: 3px;
-  pointer-events: none;
-  position: absolute;
-  z-index: -1;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-
-.star-wallet::after {
-  animation: wallet-glow-pulse 2.5s ease-in-out infinite;
-  background: radial-gradient(circle, rgba(250, 204, 21, 0.56), rgba(236, 72, 153, 0.18), transparent 68%);
-  border-radius: inherit;
-  content: '';
-  filter: blur(14px);
-  inset: -10px;
-  opacity: 0.48;
-  pointer-events: none;
-  position: absolute;
-  z-index: -2;
-}
-
-.star-wallet i {
-  color: #f59e0b;
-}
-
-.star-wallet.spending {
-  animation: walletSpend 0.55s ease;
-  box-shadow: 0 14px 34px rgba(245, 158, 11, 0.24);
-}
-
-.star-wallet strong {
-  font-size: 28px;
-  font-weight: 950;
-}
-
-.star-wallet span {
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.spend-star {
-  animation: spendStarFly 0.92s cubic-bezier(0.2, 0.76, 0.28, 1) var(--delay) both;
-  color: #f59e0b;
-  filter: drop-shadow(0 8px 12px rgba(245, 158, 11, 0.34));
-  font-size: 16px;
-  left: 0;
-  pointer-events: none;
-  position: fixed;
-  top: 0;
-  transform: translate(-50%, -50%);
-  z-index: 3600;
-}
-
-.spend-star:nth-of-type(odd) {
-  color: #facc15;
-  font-size: 19px;
 }
 
 .profile-section {
@@ -2387,92 +1505,10 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
-.achievement-grid,
-.profile-directory-grid,
-.profile-columns {
+
+.profile-directory-grid {
   display: grid;
   gap: 14px;
-}
-
-.achievement-grid {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.achievement-grid.compact {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-}
-
-.achievement-grid.compact.collapsed {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.rewards-overview {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
-}
-
-.profile-reward-icons {
-  align-content: start;
-  background: rgba(168, 85, 247, 0.08);
-  border: 1px solid rgba(168, 85, 247, 0.18);
-  border-radius: 14px;
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-}
-
-.profile-reward-icons span {
-  color: #7c3aed;
-  display: block;
-  font-size: 10px;
-  font-weight: 950;
-  text-transform: uppercase;
-}
-
-.profile-reward-icons strong {
-  color: #111827;
-  display: block;
-  font-size: 15px;
-  font-weight: 950;
-  margin-top: 3px;
-}
-
-.reward-icon-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.reward-icon-row span {
-  background: #ffffff;
-  border: 2px solid rgba(168, 85, 247, 0.28);
-  border-radius: 999px;
-  display: block;
-  height: 42px;
-  overflow: hidden;
-  width: 42px;
-}
-
-.reward-icon-row img {
-  height: 136%;
-  margin-left: -18%;
-  margin-top: -17%;
-  max-width: none;
-  object-fit: cover;
-  width: 136%;
-}
-
-.achievement-card {
-  align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 28px minmax(0, 1fr);
-  min-height: 72px;
-  padding: 12px;
 }
 
 .achievement-card.unlocked {
@@ -2485,11 +1521,6 @@ onUnmounted(() => {
   background: #ffffff;
   border-color: #c4b5fd;
   box-shadow: 0 10px 24px rgba(124, 58, 237, 0.1);
-}
-
-.achievement-card i {
-  color: #cbd5e1;
-  font-size: 18px;
 }
 
 .achievement-card.unlocked i {
@@ -2508,8 +1539,7 @@ onUnmounted(() => {
   color: #b45309;
 }
 
-.achievement-card strong,
-.link-list strong,
+
 .post-strip strong {
   color: #111827;
   display: block;
@@ -2517,40 +1547,13 @@ onUnmounted(() => {
   font-weight: 950;
 }
 
-.achievement-card p,
-.profile-directory-grid small,
-.link-list span {
+
+.profile-directory-grid small {
   color: #64748b;
   display: block;
   font-size: 11px;
   font-weight: 800;
   margin-top: 5px;
-}
-
-.achievement-progress {
-  background: rgba(148, 163, 184, 0.24);
-  border-radius: 999px;
-  display: block;
-  height: 7px;
-  margin-top: 10px;
-  overflow: hidden;
-  width: 100%;
-}
-
-.achievement-progress i {
-  background: linear-gradient(90deg, #7c3aed, #ec4899);
-  border-radius: inherit;
-  display: block;
-  height: 100%;
-  min-width: 4px;
-}
-
-.achievement-card small {
-  color: #94a3b8;
-  display: block;
-  font-size: 10px;
-  font-weight: 900;
-  margin-top: 6px;
 }
 
 .achievement-card.unlocked .achievement-progress i {
@@ -2585,147 +1588,6 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-@keyframes walletSpend {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  42% {
-    transform: scale(1.07) rotate(-1deg);
-  }
-  70% {
-    transform: scale(0.97) rotate(1deg);
-  }
-}
-
-@keyframes spendStarFly {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.3) rotate(0deg);
-  }
-  16% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1.25) rotate(18deg);
-  }
-  78% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.35) rotate(220deg);
-  }
-}
-
-
-.creator-showcase {
-  border-color: #ddd6fe;
-}
-
-.creator-grid {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
-}
-
-.featured-post {
-  background: #111827;
-  border-radius: 16px;
-  color: #ffffff;
-  display: grid;
-  min-height: 190px;
-  overflow: hidden;
-  position: relative;
-  text-align: left;
-}
-
-.featured-post img,
-.featured-post > span {
-  height: 100%;
-  inset: 0;
-  object-fit: cover;
-  opacity: 0.58;
-  position: absolute;
-  width: 100%;
-}
-
-.featured-post > span {
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-}
-
-.featured-post div {
-  align-self: end;
-  padding: 18px;
-  position: relative;
-}
-
-.featured-post small,
-.creator-list small {
-  color: #c4b5fd;
-  display: block;
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.featured-post strong {
-  color: #ffffff;
-  display: block;
-  font-size: 20px;
-  font-weight: 950;
-  line-height: 1.2;
-  margin-top: 5px;
-}
-
-.creator-list {
-  display: grid;
-  gap: 10px;
-}
-
-.creator-list button {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 12px;
-  text-align: left;
-}
-
-.creator-list strong {
-  color: #111827;
-  display: -webkit-box;
-  font-size: 13px;
-  font-weight: 950;
-  line-height: 1.3;
-  margin-top: 4px;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-
-.profile-columns {
-  align-items: start;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 0 auto;
-  max-width: 1120px;
-}
-
-.profile-columns.single {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.link-list {
-  display: grid;
-  gap: 10px;
-}
-
-.link-list button {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 12px;
-  text-align: left;
 }
 
 .mini-empty {
@@ -2764,130 +1626,8 @@ onUnmounted(() => {
     padding-right: 12px;
   }
 
-  .profile-hero {
-    align-items: start;
-    gap: 16px;
-    grid-template-columns: auto minmax(0, 1fr);
-    min-height: 236px;
-    padding: 24px 20px 20px;
-  }
-
-  .profile-avatar-circle {
-    height: 112px;
-    width: 112px;
-  }
-
-  .profile-main-copy {
-    grid-column: 1 / -1;
-    padding-top: 2px;
-  }
-
-  .profile-main-copy h1 {
-    font-size: 30px;
-  }
-
-  .profile-main-copy p {
-    margin-right: 0;
-  }
-
-  .profile-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .profile-actions button {
-    justify-content: center;
-    padding: 0 10px;
-  }
-
-  .profile-social-links {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-    justify-self: stretch;
-    margin-top: -4px;
-  }
-
-  .profile-social-links a {
-    font-size: 14px;
-    height: 36px;
-    width: 36px;
-  }
-
-  .social-edit-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .star-wallet {
-    align-self: start;
-    display: grid;
-    column-gap: 5px;
-    grid-template-columns: auto auto;
-    justify-content: center;
-    justify-items: center;
-    min-width: 104px;
-    padding: 11px 12px;
-    position: absolute;
-    right: 18px;
-    top: 18px;
-  }
-
-  .star-wallet strong {
-    font-size: 24px;
-    line-height: 1;
-  }
-
-  .star-wallet span {
-    grid-column: 1 / -1;
-    margin-top: 4px;
-    text-align: center;
-    width: 100%;
-  }
-
-  .achievements-section {
-    overflow: hidden;
-    padding: 18px 0 18px 18px;
-  }
-
   .achievements-section .section-head {
     margin-right: 18px;
-  }
-
-  .achievement-grid.compact {
-    display: grid;
-    gap: 10px;
-    grid-auto-columns: minmax(210px, 74%);
-    grid-auto-flow: column;
-    grid-template-columns: none;
-    overflow-x: auto;
-    padding: 1px 18px 2px 0;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-  }
-
-  .achievement-grid.compact.collapsed {
-    grid-auto-columns: minmax(260px, calc(100% - 18px));
-  }
-
-  .rewards-overview {
-    grid-template-columns: 1fr;
-  }
-
-  .profile-reward-icons {
-    margin-right: 18px;
-  }
-
-  .achievement-grid.compact::-webkit-scrollbar {
-    display: none;
-  }
-
-  .achievement-card {
-    min-height: 78px;
-    scroll-snap-align: start;
-  }
-
-  .profile-columns,
-  .creator-grid {
-    grid-template-columns: 1fr;
   }
 
 }
@@ -2900,7 +1640,7 @@ onUnmounted(() => {
   color: #f8fafc;
 }
 
-.profile-hero,
+
 .profile-section {
   background: rgba(11, 16, 32, 0.88);
   border-color: rgba(255, 255, 255, 0.1);
@@ -2908,160 +1648,11 @@ onUnmounted(() => {
   color: #f8fafc;
 }
 
-.profile-hero {
-  background:
-    linear-gradient(90deg, rgba(7, 10, 22, 0.92), rgba(7, 10, 22, 0.54)),
-    url('@/iconos/Banner.png') center / cover;
-  align-items: center;
-  gap: 18px 28px;
-  grid-template-columns: 150px minmax(300px, 1fr) minmax(170px, auto) minmax(160px, auto) minmax(130px, auto);
-  grid-template-areas:
-    "avatar info rewards socials wallet"
-    "level level actions actions actions";
-  min-height: 300px;
-  padding: 28px 30px;
-}
 
-.profile-avatar-wrap {
-  grid-area: avatar;
-  justify-self: center;
-}
-
-.profile-main-copy {
-  grid-area: info;
-  align-self: center;
-}
-
-.hero-rewards-panel {
-  grid-area: rewards;
-  padding-right: 18px;
-}
-
-.profile-social-panel {
-  grid-area: socials;
-  border-left: 1px solid rgba(255, 255, 255, 0.16);
-  min-height: 108px;
-  padding-left: 28px;
-}
-
-.star-wallet {
-  grid-area: wallet;
-  justify-self: end;
-}
-
-.profile-hero-stats {
-  background: rgba(6, 9, 24, 0.68);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.profile-hero-stats strong {
-  color: #ffffff;
-}
-
-.profile-hero-stats span {
-  color: #aeb8d3;
-}
-
-.profile-actions {
-  grid-area: actions;
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
-  justify-self: stretch;
-  width: 100%;
-}
-
-.profile-actions button {
-  flex: none;
-  min-height: 50px;
-}
-
-.profile-main-copy h1,
 .section-head h2,
 .activity-list strong,
 .community-card-row strong {
   color: #ffffff;
-}
-
-.profile-username {
-  color: #a855f7;
-  display: block;
-  font-size: 13px;
-  font-weight: 900;
-  margin-top: 4px;
-}
-
-.profile-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 22px;
-}
-
-.profile-meta-row span {
-  align-items: center;
-  color: #cbd5e1;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 800;
-  gap: 7px;
-}
-
-.profile-actions .ghost {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-}
-
-.profile-level-pill,
-.hero-rewards-panel button {
-  background: rgba(168, 85, 247, 0.14);
-  border-color: rgba(168, 85, 247, 0.22);
-  color: #c084fc;
-}
-
-.profile-level-pill {
-  background:
-    radial-gradient(circle at 10% 50%, rgba(236, 72, 153, 0.34), transparent 30%),
-    linear-gradient(135deg, rgba(88, 28, 135, 0.78), rgba(120, 53, 15, 0.5));
-  border-color: rgba(250, 204, 21, 0.58);
-  color: #fde68a;
-  justify-self: stretch;
-  min-width: 0;
-  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
-  width: 100%;
-  max-width: 100%;
-}
-
-.profile-social-panel {
-  align-self: center;
-  display: grid;
-  gap: 10px;
-  justify-items: center;
-}
-
-.profile-social-panel strong {
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 950;
-  text-transform: uppercase;
-}
-
-.profile-social-links {
-  gap: 10px;
-  justify-content: center;
-}
-
-.profile-social-links a,
-.profile-social-links span {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
-}
-
-.profile-social-links .disabled {
-  color: #64748b;
-  filter: grayscale(1);
-  opacity: 0.55;
 }
 
 .profile-social-grid {
@@ -3129,17 +1720,6 @@ onUnmounted(() => {
 .activity-tabs button.active {
   background: linear-gradient(135deg, #7c3aed, #ec4899);
   color: #ffffff;
-}
-
-.activity-swap-enter-active,
-.activity-swap-leave-active {
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-
-.activity-swap-enter-from,
-.activity-swap-leave-to {
-  opacity: 0;
-  transform: translateY(6px);
 }
 
 .community-card-row {
@@ -3423,19 +2003,8 @@ onUnmounted(() => {
 
 .activity-list p,
 .activity-list time,
-.section-head p,
-.achievement-card p,
-.link-list span {
+.section-head p {
   color: #cbd5e1;
-}
-
-.profile-reward-icons {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.profile-reward-icons strong {
-  color: #ffffff;
 }
 
 .activity-list time {
@@ -3445,37 +2014,9 @@ onUnmounted(() => {
 }
 
 @media (max-width: 900px) {
-  .profile-hero,
+
   .profile-social-grid {
     grid-template-columns: 1fr;
-  }
-
-  .profile-hero {
-    grid-template-areas:
-      "avatar info info wallet"
-      "level level level level"
-      "rewards rewards socials socials"
-      "actions actions actions actions";
-    grid-template-columns: 96px minmax(0, 1fr) minmax(0, 1fr) 92px;
-    justify-items: stretch;
-  }
-
-  .profile-level-pill {
-    justify-self: stretch;
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .star-wallet {
-    justify-self: stretch;
-  }
-
-  .profile-edit-main-action {
-    display: none;
-  }
-
-  .avatar-edit-shortcut {
-    display: inline-flex;
   }
 
   .community-card-row {
@@ -3495,271 +2036,6 @@ onUnmounted(() => {
 @media (max-width: 760px) {
   .profile-page {
     padding: var(--public-page-top-mobile, 76px) 10px var(--public-page-bottom-mobile, calc(92px + env(safe-area-inset-bottom)));
-  }
-
-  .profile-hero {
-    align-items: start;
-    border-radius: 16px;
-    gap: 16px 14px;
-    grid-template-areas:
-      "avatar info"
-      "level level"
-      "rewards socials"
-      "wallet wallet"
-      "actions actions";
-    grid-template-columns: minmax(126px, 36%) minmax(0, 1fr);
-    min-height: 0;
-    overflow: hidden;
-    padding: 18px 14px;
-    pointer-events: auto;
-    isolation: isolate;
-  }
-
-  .profile-avatar-wrap,
-  .profile-main-copy,
-  .profile-level-pill,
-  .hero-rewards-panel,
-  .profile-social-panel,
-  .star-wallet,
-  .profile-actions {
-    pointer-events: auto;
-    position: relative;
-    z-index: 2;
-  }
-
-  .profile-avatar-wrap {
-    justify-self: center;
-    padding-top: 6px;
-  }
-
-  .profile-avatar-circle {
-    height: clamp(112px, 31vw, 132px);
-    width: clamp(112px, 31vw, 132px);
-  }
-
-  .role-badge {
-    bottom: -5px;
-    font-size: 9px;
-    padding: 4px 8px;
-  }
-
-  .avatar-edit-shortcut {
-    bottom: -36px;
-    height: 36px;
-    left: 50%;
-    min-width: 96px;
-    right: auto;
-    transform: translateX(-50%);
-    width: auto;
-  }
-
-  .profile-main-copy {
-    align-self: start;
-    min-width: 0;
-    padding-top: 4px;
-  }
-
-  .profile-level-pill {
-    justify-self: stretch;
-    max-width: 100%;
-    font-size: 11px;
-    grid-template-columns: 28px minmax(0, 1fr) 14px 12px;
-    min-height: 38px;
-    min-width: 0;
-    padding: 4px 10px 4px 4px;
-    width: 100%;
-  }
-
-  .profile-level-label {
-    font-size: 10.5px !important;
-    line-height: 1.2;
-    white-space: normal;
-  }
-
-  .profile-level-icon {
-    height: 28px;
-    font-size: 12px;
-    width: 28px;
-  }
-
-  .profile-main-copy h1 {
-    display: -webkit-box;
-    font-size: clamp(34px, 10vw, 46px);
-    line-height: 0.94;
-    max-width: 8ch;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .profile-username {
-    font-size: 13px;
-    margin-top: 7px;
-  }
-
-  .profile-main-copy p {
-    display: -webkit-box;
-    font-size: 13px;
-    line-height: 1.42;
-    margin-top: 10px;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 6;
-  }
-
-  .hero-rewards-panel {
-    align-items: center;
-    background: rgba(6, 9, 24, 0.56);
-    border: 1px solid rgba(168, 85, 247, 0.18);
-    border-radius: 14px;
-    display: grid;
-    gap: 8px;
-    justify-items: center;
-    min-height: 96px;
-    padding: 10px;
-  }
-
-  .hero-rewards-panel button {
-    min-height: 32px;
-    padding: 0 10px;
-  }
-
-  .hero-icon-stack span {
-    height: 30px;
-    width: 30px;
-  }
-
-  .profile-hero-stats {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    margin-top: 10px;
-  }
-
-  .profile-hero-stats div {
-    align-content: center;
-    gap: 5px;
-    grid-template-columns: 1fr;
-    justify-items: center;
-    min-height: 70px;
-    padding: 10px 4px;
-    text-align: center;
-  }
-
-  .profile-hero-stats div + div::before {
-    bottom: 14px;
-    top: 14px;
-  }
-
-  .profile-hero-stats i {
-    font-size: 15px;
-    grid-row: auto;
-  }
-
-  .profile-hero-stats strong {
-    font-size: 18px;
-  }
-
-  .profile-hero-stats span {
-    font-size: 8.5px;
-    line-height: 1.15;
-  }
-
-  .profile-meta-row {
-    display: none;
-  }
-
-  .hero-rewards-panel,
-  .profile-social-panel {
-    align-content: center;
-    align-items: center;
-    align-self: stretch;
-    border-left: 0;
-    border-radius: 14px;
-    display: grid;
-    justify-items: center;
-    min-height: 96px;
-    padding-left: 0;
-    width: 100%;
-  }
-
-  .hero-rewards-panel {
-    padding: 10px;
-  }
-
-  .hero-rewards-panel button {
-    width: min(100%, 140px);
-  }
-
-  .profile-social-panel strong {
-    font-size: 10px;
-  }
-
-  .profile-social-links {
-    gap: 7px;
-    justify-content: center;
-  }
-
-  .profile-social-links a,
-  .profile-social-links span {
-    height: 34px;
-    width: 34px;
-  }
-
-  .star-wallet {
-    align-self: center;
-    align-content: center;
-    border-radius: 18px;
-    display: grid;
-    grid-template-columns: 56px minmax(0, 1fr);
-    justify-items: start;
-    justify-self: stretch;
-    min-width: 0;
-    width: 100%;
-    padding: 14px 18px;
-    position: static;
-  }
-
-  .star-wallet i {
-    align-items: center;
-    background: rgba(250, 204, 21, 0.14);
-    border-radius: 999px;
-    display: inline-flex;
-    font-size: 26px;
-    grid-row: span 2;
-    height: 52px;
-    justify-content: center;
-    width: 52px;
-  }
-
-  .star-wallet strong {
-    font-size: 34px;
-    line-height: 0.95;
-  }
-
-  .star-wallet span {
-    font-size: 10px;
-    margin-top: 2px;
-  }
-
-  .profile-actions {
-    grid-area: actions;
-    margin-top: 0;
-  }
-
-  .profile-actions .profile-edit-main-action {
-    display: none !important;
-  }
-
-  .profile-actions {
-    display: grid;
-    gap: 10px;
-    grid-template-columns: 1fr;
-  }
-
-  .profile-actions button {
-    flex: none;
-    min-height: 38px;
   }
 
   .profile-section {
@@ -3942,4 +2218,104 @@ onUnmounted(() => {
   }
 
 }
+
+
+.profile-page { max-width: 1360px; margin: 0 auto; }.profile-highlights { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 18px; margin: 18px 0; }.profile-highlights .profile-section { margin: 0; }.profile-highlights h2 { font-size: 18px; }.profile-highlights .section-head > button { white-space: nowrap; color: #c084fc; font-size: 12px; min-height: 44px; }.collection-preview-icons { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; }.collection-preview-icons button { display: grid; justify-items: center; gap: 8px; color: #e2e8f0; min-width: 0; }.collection-preview-icons :deep(.profile-avatar-ui) { --avatar-size: 56px; }.collection-preview-icons small { font-size: 10px; line-height: 1.4; }.achievement-preview-items { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }.achievement-preview-items button { display: grid; justify-items: center; align-content: start; padding: 14px 10px; gap: 8px; background: #6d28d920; border: 1px solid #a855f755; border-radius: 14px; color: white; }.achievement-preview-items .earned { border-color: #f59e0b66; background: #b4530918; }.achievement-preview-items span { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; background: #9333ea; box-shadow: 0 0 20px #a855f722; }.achievement-preview-items .earned span { background: linear-gradient(135deg,#f59e0b,#ffd454); }.achievement-preview-items img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }.achievement-preview-items strong { font-size: 12px; line-height: 1.5; }.achievement-preview-items small { font-size: 10px; color: #cbd5e1; }.achievement-preview-items progress { width: 100%; height: 5px; border: 0; overflow: hidden; border-radius: 10px; }.achievement-preview-items progress::-webkit-progress-bar { background: #ffffff15; }.achievement-preview-items progress::-webkit-progress-value { background: #c084fc; }.achievement-preview-items progress::-moz-progress-bar { background: #c084fc; }
+.profile-social-grid { grid-template-columns: minmax(0,1.65fr) minmax(0,1fr); align-items: start; }.profile-activity { grid-column: 1; grid-row: 1; }.profile-communities { grid-column: 2; grid-row: 1; }.community-card-row { display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; }.community-card-row button { display: grid; grid-template-columns: 46px minmax(0,1fr); grid-template-rows: auto auto; gap: 3px 12px; min-height: 68px; padding: 10px; background: #ffffff04; text-align: left; }.community-card-row img,.community-card-row .community-letter { position: static; grid-row: 1/span 2; width: 46px; height: 46px; border-radius: 50%; object-fit: cover; }.community-card-row .community-overlay { display: none; }.community-card-row strong,.community-card-row small,.community-card-row em { position: static; z-index: auto; }.community-card-row strong { font-size: 13px; align-self: end; }.community-card-row small { background: none; padding: 0; color: #94a3b8; font-size: 11px; }.community-card-row em { display: none; }.recent-post-card { min-height: 280px; }.recent-post-card strong { font-size: 20px; line-height: 1.45; }
+@media(max-width:1000px) { .profile-highlights { grid-template-columns: minmax(0,1fr); }.collection-preview-icons { grid-template-columns: repeat(8,minmax(0,1fr)); }.collection-preview-icons :deep(.profile-avatar-ui) { --avatar-size: 48px; }.profile-social-grid { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); }.recent-post-card { min-height: 250px; } }
+@media(max-width:700px) { .profile-highlights { gap: 12px; }.collection-preview-icons { grid-template-columns: repeat(4,minmax(0,1fr)); }.profile-social-grid { grid-template-columns: minmax(0,1fr); }.profile-activity { grid-column: 1; grid-row: 1; }.profile-communities { grid-column: 1; grid-row: 2; }.community-card-row { margin: 0; overflow: visible; padding: 0; grid-auto-columns: auto; }.community-card-row button { min-height: 68px; border-radius: 12px; }.profile-highlights .section-head { flex-wrap: wrap; gap: 4px; }.recent-post-card { min-height: 220px; }.recent-post-card strong { font-size: 17px; }.achievement-preview-items { gap: 8px; }.achievement-preview-items button { padding: 12px 8px; } }
+
+
+.community-card-row strong { grid-column: 2; grid-row: 1; margin: 0; }.community-card-row small { grid-column: 2; grid-row: 2; margin: 0; }.community-card-row img { opacity: 1; }.community-card-row button { align-items: center; }.community-card-row .community-letter { font-size: 16px; }.community-card-row strong { align-self: end; }.community-card-row small { align-self: start; }
+
+
+.profile-right { grid-column:3; grid-row:1; min-width:0; display:grid; gap:14px; }.profile-right .profile-directory { margin:0; padding:14px; }.profile-right .profile-directory-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; }.profile-right .profile-directory-grid button { display:grid; grid-template-columns:40px minmax(0,1fr); gap:4px 10px; padding:10px; text-align:left; }.profile-right .directory-profile-avatar { --avatar-size:40px; grid-row:1/span 2; margin:0; }.profile-right .profile-directory-grid strong,.profile-right .profile-directory-grid small { margin:0; white-space:normal; }.activity-preview-pair { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }.activity-preview-pair button { position:relative; min-height:190px; overflow:hidden; border:1px solid #a855f733; border-radius:12px; color:white; text-align:left; }.activity-preview-pair img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }.activity-preview-pair button > div { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:end; gap:8px; padding:14px; background:linear-gradient(transparent,#080b1f 95%); }.activity-preview-pair small { font-size:10px; color:#e9d5ff; }.activity-preview-pair strong { font-size:13px; line-height:1.4; }.activity-preview-pair em { font-size:10px; color:#cbd5e1; font-style:normal; }
+@media(max-width:1100px) { .profile-right { grid-column:2; grid-row:2; } }
+@media(max-width:760px) { .profile-right { grid-column:1; grid-row:3; }.profile-right .profile-directory-grid { overflow:visible; grid-auto-columns:auto; }.profile-right .profile-directory-grid button { min-width:0; }.activity-preview-pair button { min-height:170px; } }
+
+
+.profile-page { --profile-content-width: 100%; width:100%; max-width:1400px; padding-left:24px; padding-right:24px; box-sizing:border-box; }.profile-hero,.profile-hero-stats { width:100%; max-width:none; margin-left:0; margin-right:0; }
+.profile-dashboard { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1.05fr) minmax(0,1fr); gap:16px; align-items:start; margin:16px 0; }.profile-dashboard > .profile-activity { grid-column:1; grid-row:1; }.profile-middle { grid-column:2; grid-row:1; min-width:0; display:grid; gap:14px; }.profile-dashboard > .profile-communities { grid-column:3; grid-row:1; }.profile-dashboard .profile-section { margin:0; min-width:0; padding:16px; border-radius:14px; }.profile-dashboard .section-head { margin-bottom:12px; align-items:center; gap:10px; }.profile-dashboard .section-head h2 { font-size:17px; line-height:1.3; }.profile-dashboard .section-head span { display:none; }.profile-dashboard .section-head > button { font-size:11px; color:#c084fc; white-space:nowrap; min-height:36px; }.profile-about p { font-size:13px; line-height:1.65; color:#cbd5e1; margin:8px 0; }
+.profile-highlights { display:flex; flex-direction:column; margin:0; gap:14px; }.achievement-preview { order:0; }.collection-preview { order:1; }.achievement-preview-items { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }.achievement-preview-items > button:last-child:nth-child(3) { display:none; }.achievement-preview-items button { padding:12px 10px; }.collection-preview-icons { grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }.collection-preview-icons :deep(.profile-avatar-ui) { --avatar-size:44px; }.collection-preview-icons small { display:none; }
+.community-card-row { gap:6px; }.community-card-row button { padding:10px 0; border:0; border-bottom:1px solid #ffffff12; background:transparent; border-radius:0; grid-template-columns:42px minmax(0,1fr); min-height:68px; }.community-card-row img,.community-card-row .community-letter { width:42px; height:42px; }.community-card-row strong { font-size:12px; }.community-card-row em { display:block; grid-column:2; position:static; font-size:9px; color:#94a3b8; }.community-card-row button { grid-template-rows:auto auto auto; }.community-card-row img { grid-row:1/span 3; }.recent-post-card { min-height:290px; border-radius:12px; }.recent-post-card strong { font-size:17px; }.profile-directory { max-width:none; }
+@media(max-width:1100px) { .profile-dashboard { grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); }.profile-dashboard > .profile-activity { grid-column:1; grid-row:1/span 2; }.profile-middle { grid-column:2; grid-row:1; }.profile-dashboard > .profile-communities { grid-column:2; grid-row:2; }.profile-page { padding-left:18px; padding-right:18px; } }
+@media(max-width:760px) { .profile-page { padding-left:12px; padding-right:12px; }.profile-dashboard { grid-template-columns:minmax(0,1fr); gap:12px; }.profile-dashboard > .profile-activity { grid-column:1; grid-row:1; }.profile-middle { grid-column:1; grid-row:2; }.profile-dashboard > .profile-communities { grid-column:1; grid-row:3; }.collection-preview-icons { grid-template-columns:repeat(6,minmax(0,1fr)); }.collection-preview-icons > button:nth-child(n+7) { display:none; }.collection-preview-icons :deep(.profile-avatar-ui) { --avatar-size:40px; }.recent-post-card { min-height:230px; } }
+
+
+.profile-right { grid-template-columns:minmax(0,1fr); }.profile-right > .profile-communities,.profile-right > .profile-directory { grid-column:1; grid-row:auto; }.profile-right > .profile-communities { order:0; }.profile-right > .profile-directory { order:1; }
+
+
+.community-card-row button { grid-template-rows:18px 15px 12px; row-gap:2px; min-height:69px; }.community-card-row strong { line-height:1.4; align-self:start; }.community-card-row em { grid-row:3; line-height:1.2; }.profile-dashboard > .profile-activity { min-height:0; }.profile-right .profile-directory-grid button { min-height:65px; }
+
+/* Activity content scrolls within its column; tabs never resize the dashboard. */
+.profile-dashboard { align-items: stretch; }
+.profile-middle, .profile-right { align-content: start; }
+.profile-right { min-height: 640px; }
+.profile-dashboard > .profile-activity { position: relative; min-height: 640px; }
+.profile-activity > .section-head { min-height: 40px; }
+.profile-activity-body { position: absolute; inset: 72px 16px 16px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior: contain; }
+.recent-post-showcase { display: grid; gap: 12px; }
+.recent-post-controls { margin: 0; }
+.profile-activity-body .mini-empty { margin: 0; }
+.profile-middle { grid-template-rows: auto minmax(0,1fr); }
+.profile-middle .profile-highlights { height: 100%; }
+.profile-middle .collection-preview { flex: 1; }
+.profile-right { grid-template-rows: minmax(230px,1fr) auto; }
+.profile-ready > .profile-hero,
+.profile-ready > .profile-hero-stats,
+.profile-ready > .profile-dashboard,
+.profile-ready > .favorite-preview-section { animation: profileReveal 320ms ease-out both; }
+@keyframes profileReveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.profile-loading-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.profile-loading-hero,.profile-loading-stats,.profile-loading-columns > div { border: 1px solid #a78bfa26; border-radius: 16px; background: #0b1020; }
+.profile-loading-hero { min-height: 300px; display: grid; grid-template-columns: 150px minmax(0,1fr) 260px; align-items: center; gap: 28px; padding: 28px; }
+.profile-loading-avatar,.profile-loading-info > *, .profile-loading-summary,.profile-loading-stats span,.profile-loading-columns span { display: block; background: linear-gradient(90deg,#94a3b82e,#d8b4fe42,#94a3b82e); animation: profileLoadingPulse 1.5s ease-in-out infinite alternate; border-radius: 12px; }
+.profile-loading-avatar { width: 150px; height: 150px; border-radius: 50%; }
+.profile-loading-info { display: grid; gap: 18px; }
+.profile-loading-info span { height: 18px; width: 75%; }
+.profile-loading-info strong { height: 42px; width: 85%; }
+.profile-loading-summary { height: 180px; }
+.profile-loading-stats { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 28px; margin-top: 14px; padding: 20px; }
+.profile-loading-stats span { height: 40px; }
+.profile-loading-columns { display: grid; grid-template-columns: 2fr 1.05fr 1fr; gap: 16px; margin-top: 16px; }
+.profile-loading-columns > div { min-height: 640px; padding: 16px; }
+.profile-loading-columns span { height: 140px; margin-bottom: 16px; }
+.profile-loading-columns span:first-child { width: 60%; height: 24px; }
+@keyframes profileLoadingPulse { from { opacity: .55; } to { opacity: .9; } }
+@media(max-width:1100px) {
+  .profile-middle,.profile-right { grid-template-rows: auto; }
+  .profile-middle .collection-preview { flex: none; }
+  .profile-loading-hero { grid-template-columns: 100px minmax(0,1fr); }
+  .profile-loading-avatar { width: 100px; height: 100px; }
+  .profile-loading-summary { display: none; }
+  .profile-loading-columns { grid-template-columns: 1.6fr 1fr; }
+  .profile-loading-columns > div:last-child { display: none; }
+}
+@media(max-width:760px) {
+  .profile-dashboard > .profile-activity { height: 600px; min-height: 600px; }
+  .profile-right { min-height: 0; }
+  .profile-middle .profile-highlights { height: auto; }
+  .profile-loading-hero { padding: 20px; gap: 16px; min-height: 300px; }
+  .profile-loading-stats { gap: 12px; padding: 16px; }
+  .profile-loading-columns { grid-template-columns: minmax(0,1fr); }
+  .profile-loading-columns > div { min-height: 600px; }
+  .profile-loading-columns > div:nth-child(n+2) { display: none; }
+}
+@media(prefers-reduced-motion:reduce) { .profile-ready > *, .profile-loading * { animation: none !important; } }
+.rewards-loading { max-width: var(--content-max,1280px); margin: 0 auto; }
+.rewards-loading-back,.rewards-loading-title,.rewards-loading-tabs span,.rewards-loading-summary,.rewards-loading-grid span { background: linear-gradient(90deg,#94a3b82e,#d8b4fe42,#94a3b82e); border-radius: 10px; animation: profileLoadingPulse 1.5s ease-in-out infinite alternate; }
+.rewards-loading-back { width: 120px; height: 20px; margin: 12px 0 20px; }
+.rewards-loading-title { width: min(300px,75%); height: 28px; margin-bottom: 12px; }
+.rewards-loading-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.rewards-loading-tabs span { flex: 1; max-width: 140px; height: 44px; }
+.rewards-loading-summary { height: 64px; margin-bottom: 16px; }
+.rewards-loading-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 14px; }
+.rewards-loading-grid > div { display: grid; justify-items: center; align-content: center; gap: 14px; min-height: 180px; padding: 16px; border: 1px solid #a78bfa26; border-radius: 14px; background: #0b1020; }
+.rewards-loading-grid span:first-child { width: 76px; height: 76px; border-radius: 50%; }
+.rewards-loading-grid span:last-child { width: 75%; height: 16px; }
+.loading-achievements .rewards-loading-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.loading-achievements .rewards-loading-grid > div { min-height: 140px; }
+@media(max-width:900px) { .rewards-loading-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+@media(max-width:600px) { .rewards-loading-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }.loading-achievements .rewards-loading-grid { grid-template-columns: minmax(0,1fr); } }
+@media(prefers-reduced-motion:reduce) { .rewards-loading * { animation: none !important; } }
 </style>

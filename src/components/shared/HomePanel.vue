@@ -16,7 +16,7 @@ const readerLinks = [
   { label: 'Noticias', text: 'Lee las ultimas publicaciones aprobadas.', icon: 'fas fa-newspaper', to: '/noticias' },
   { label: 'Guias', text: 'Explora consejos y ayuda para tus juegos.', icon: 'fas fa-book-open', to: '/guias' },
   { label: 'Rumores', text: 'Mira filtraciones y teorias recientes.', icon: 'fas fa-question-circle', to: '/rumores' },
-  { label: 'Comunidades', text: 'Entra a hilos y conversaciones en vivo.', icon: 'fas fa-comments', to: '/comunidad' }
+  { label: 'Comunidades', text: 'Explora comunidades y encuentra tus sagas favoritas.', icon: 'fas fa-comments', to: '/comunidades' }
 ]
 
 const goTo = (to) => {

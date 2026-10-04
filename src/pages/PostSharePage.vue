@@ -6,6 +6,7 @@ import JSZip from 'jszip'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { resolveProfileIcon } from '@/services/profileProgress'
+import { apiUrl } from '@/services/appEnvironment'
 import fallbackCover from '@/iconos/Banner.png'
 import galaxyLogo from '@/iconos/logo.png'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
@@ -706,7 +707,7 @@ function proxiedImageUrl(value) {
   if (!value || typeof window === 'undefined') return value || fallbackCover
   if (isLocalOrInlineImage(value)) return value
 
-  return `/.netlify/functions/image-proxy?url=${encodeURIComponent(value)}&cb=${imageCacheNonce.value}`
+  return apiUrl(`/.netlify/functions/image-proxy?url=${encodeURIComponent(value)}&cb=${imageCacheNonce.value}`)
 }
 
 function isLocalOrInlineImage(value) {

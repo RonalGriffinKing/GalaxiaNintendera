@@ -28,6 +28,23 @@ VITE_SOCKET_URL=http://localhost:3001
 
 En Netlify configura `VITE_YOUTUBE_CHANNEL_ID` en **Site configuration > Environment variables**. `VITE_SOCKET_URL` solo hace falta si despliegas el servidor Socket.IO en otro proveedor.
 
+## App Android
+
+La app usa Capacitor y empaqueta el mismo frontend Vue dentro de un proyecto Android nativo.
+
+```bash
+npm run android:sync
+npm run android:open
+```
+
+Para crear un APK de desarrollo directamente desde la terminal:
+
+```bash
+npm run android:apk
+```
+
+El APK se genera en `android/app/build/outputs/apk/debug/app-debug.apk`. Antes de publicar en Google Play hay que crear una clave de firma y configurar el paquete `release` como AAB.
+
 ## Netlify
 
 Netlify usa:

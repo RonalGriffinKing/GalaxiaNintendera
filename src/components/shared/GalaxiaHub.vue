@@ -2356,7 +2356,8 @@ onUnmounted(() => {
   max-height: min(360px, 54dvh);
   right: 0;
   top: auto;
-  width: min(360px, calc(100vw - 40px));
+  left: 0;
+  width: 100%;
   z-index: 20;
 }
 
@@ -2842,4 +2843,22 @@ onUnmounted(() => {
     transform: translateY(18px);
   }
 }
+/* Bound the conversation itself, not only the surrounding overlay. */
+@media (min-width: 860px) {
+  .galaxia-hub-panel.chat-active { height: min(780px,calc(100dvh - 36px)); }
+}
+@media (max-width: 859px) {
+  .galaxia-hub-panel.chat-active {
+    height: var(--hub-vvh,100dvh);
+    max-height: var(--hub-vvh,100dvh);
+    bottom: auto;
+  }
+}
+.galaxia-hub-panel.chat-active .hub-content { height: 100%; min-height: 0; overflow: hidden; }
+.galaxia-hub-panel.chat-active .hub-content-measure { height: 100%; min-height: 0; grid-template-rows: minmax(0,1fr); }
+.galaxia-hub-panel.chat-active .hub-section.chat-room { display: flex; flex-direction: column; height: 100%; max-height: 100%; min-height: 0; overflow: hidden; box-sizing: border-box; }
+.chat-room .hub-chat-room-head,.chat-room .hub-chat-composer,.chat-room .hub-media-preview { flex: 0 0 auto; }
+.chat-room .hub-chat-messages { flex: 1 1 0; min-height: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; }
+.chat-room .hub-chat-composer { min-height: 52px; padding-bottom: max(8px,env(safe-area-inset-bottom)); }
+.chat-room .hub-chat-composer textarea { min-width: 0; font-size: 16px; }
 </style>

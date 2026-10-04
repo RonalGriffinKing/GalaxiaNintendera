@@ -1,4 +1,5 @@
 <script setup>
+import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, ref, watch } from 'vue'
 import { BLOCK_TYPES, FOOTER_COLUMNS, SITE_PAGE_TYPES, createBlock, normalizeSitePage, pageTemplate, saveSitePage, slugifyPage } from '@/services/sitePages'
 import SitePagePreview from '@/components/sitePages/SitePagePreview.vue'
@@ -346,7 +347,7 @@ const save = async (status = page.value.status) => {
           </aside>
         </main>
       </section>
-      <div v-if="toast" class="page-toast">{{ toast }}</div>
+      <AppNotice :message="toast" />
     </div>
   </Teleport>
 </template>
@@ -412,9 +413,15 @@ textarea { min-height: 84px; padding-top: 10px; resize: vertical; }
 .preview-head { align-items: center; display: flex; justify-content: space-between; padding: 0 4px 10px; }
 .preview-head span { color: #a78bfa; font-size: 11px; font-weight: 950; text-transform: uppercase; }
 .page-toast { background: #111827; border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; bottom: 24px; color: #fff; font-size: 13px; font-weight: 950; left: 50%; padding: 12px 18px; position: fixed; transform: translateX(-50%); z-index: 5200; }
-@media (max-width: 1180px) {
+@media (max-width: 1440px) {
+  .site-editor-topbar { flex-wrap: wrap; }
+  .editor-actions { flex-wrap: wrap; }
   .site-editor-layout { grid-template-columns: 260px minmax(0, 1fr); }
-  .preview-panel { display: none; }
+  .site-editor-layout { overflow-y: auto; align-content: start; }
+  .settings-panel, .blocks-panel { overflow: visible; }
+  .blocks-panel { grid-template-rows: auto auto auto; }
+  .block-inspector { overflow: visible; }
+  .preview-panel { grid-column: 1 / -1; min-height: 420px; }
 }
 @media (max-width: 760px) {
   .site-editor-modal { padding: 0; }
@@ -423,5 +430,15 @@ textarea { min-height: 84px; padding-top: 10px; resize: vertical; }
   .site-editor-layout { grid-template-columns: 1fr; overflow: auto; }
   .settings-panel, .blocks-panel { overflow: visible; }
   .blocks-panel { grid-template-rows: auto auto auto; }
+}
+.settings-panel, .blocks-panel, .preview-panel { min-width: 0; }
+@media (max-width: 1000px) {
+  .site-editor-layout { grid-template-columns: minmax(0, 1fr); }
+  .editor-title { flex-wrap: wrap; }
+  .editor-title strong { white-space: normal; overflow-wrap: anywhere; }
+  .editor-actions { gap: 8px; }
+  .block-card { grid-template-columns: 38px minmax(0, 1fr); }
+  .block-card nav { grid-column: 1 / -1; justify-content: flex-end; }
+  .block-card nav button { width: 40px; height: 40px; }
 }
 </style>

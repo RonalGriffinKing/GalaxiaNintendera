@@ -1,4 +1,5 @@
 <script setup>
+import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { deleteSitePage, listSitePages, pageTemplate, saveSitePage, seedMissingLegalPages, seedMissingStarterPages } from '@/services/sitePages'
@@ -287,7 +288,7 @@ onMounted(() => loadPages({ signal: true }))
           </div>
         </section>
       </div>
-      <div v-if="toast" class="site-page-toast">{{ toast }}</div>
+      <AppNotice :message="toast" />
     </Teleport>
   </section>
 </template>
@@ -296,42 +297,46 @@ onMounted(() => loadPages({ signal: true }))
 .site-pages-panel { display: grid; gap: 18px; }
 .site-pages-head { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
 .site-pages-toolbar { align-items: start; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(300px, auto) auto; }
-.site-pages-head span { color: #7c3aed; font-size: 11px; font-weight: 950; text-transform: uppercase; }
-.site-pages-head h1 { color: #111827; font-size: 28px; font-weight: 950; }
-.site-pages-head p { color: #64748b; font-size: 13px; font-weight: 750; }
+.site-pages-head span { color: var(--accent-hover); font-size: 11px; font-weight: 950; text-transform: uppercase; }
+.site-pages-head h1 { color: var(--text-primary); font-size: 28px; font-weight: 950; }
+.site-pages-head p { color: var(--text-muted); font-size: 13px; font-weight: 750; }
 .site-pages-head button, .create-page-btn, .legal-seed-btn, .starter-seed-btn, .pages-empty button { background: linear-gradient(135deg, #7c3aed, #ec4899); border-radius: 12px; color: #fff; font-size: 12px; font-weight: 950; min-height: 42px; padding: 0 16px; }
 .site-pages-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
 .legal-seed-btn, .starter-seed-btn, .create-page-btn { align-items: center; display: inline-flex; gap: 8px; justify-content: center; }
 .starter-seed-btn { background: linear-gradient(135deg, #facc15, #ec4899); }
 .legal-seed-btn:disabled, .starter-seed-btn:disabled { opacity: 0.62; }
-.page-tabs { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 14px; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; }
-.page-tabs button { border-radius: 10px; color: #64748b; font-size: 12px; font-weight: 900; min-height: 34px; padding: 0 12px; }
+.page-tabs { background: var(--admin-bg); border: 1px solid var(--border); border-radius: 14px; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; }
+.page-tabs button { border-radius: 10px; color: var(--text-muted); font-size: 12px; font-weight: 900; min-height: 34px; padding: 0 12px; }
 .page-tabs button.active { background: linear-gradient(135deg, #7c3aed, #ec4899); color: #fff; }
 .pages-grid { display: grid; gap: 12px; }
-.site-page-card { align-items: center; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; display: grid; gap: 14px; grid-template-columns: 58px minmax(0, 1fr) auto; padding: 14px; }
-.page-card-icon { align-items: center; background: color-mix(in srgb, var(--page-accent) 14%, #f8fafc); border-radius: 14px; color: var(--page-accent); display: flex; font-size: 22px; height: 54px; justify-content: center; width: 54px; }
+.site-page-card { align-items: center; background: var(--admin-surface); border: 1px solid var(--border); border-radius: 16px; display: grid; gap: 14px; grid-template-columns: 58px minmax(0, 1fr) auto; padding: 14px; }
+.page-card-icon { align-items: center; background: color-mix(in srgb, var(--page-accent) 14%, var(--admin-bg)); border-radius: 14px; color: var(--page-accent); display: flex; font-size: 22px; height: 54px; justify-content: center; width: 54px; }
 .site-page-card span { color: #94a3b8; display: block; font-size: 10px; font-weight: 950; text-transform: uppercase; }
 .site-page-card em { color: #f59e0b; font-style: normal; }
 .site-page-card em.published { color: #16a34a; }
-.site-page-card strong { color: #111827; display: block; font-size: 15px; font-weight: 950; }
-.site-page-card p { color: #64748b; font-size: 12px; font-weight: 750; margin-top: 4px; }
-.site-page-card small { color: #7c3aed; display: inline-flex; font-size: 11px; font-weight: 900; gap: 5px; margin-right: 10px; margin-top: 8px; }
+.site-page-card strong { color: var(--text-primary); display: block; font-size: 15px; font-weight: 950; }
+.site-page-card p { color: var(--text-muted); font-size: 12px; font-weight: 750; margin-top: 4px; }
+.site-page-card small { color: var(--accent-hover); display: inline-flex; font-size: 11px; font-weight: 900; gap: 5px; margin-right: 10px; margin-top: 8px; }
 .site-page-card nav { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
-.site-page-card nav a, .site-page-card nav button { align-items: center; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; color: #7c3aed; display: flex; height: 34px; justify-content: center; width: 34px; }
+.site-page-card nav a, .site-page-card nav button { align-items: center; background: var(--admin-bg); border: 1px solid var(--border); border-radius: 10px; color: var(--accent-hover); display: flex; height: 34px; justify-content: center; width: 34px; }
 .site-page-card nav .danger { color: #ef4444; }
-.pages-empty { align-items: center; background: #fff; border: 1px dashed #d8b4fe; border-radius: 18px; color: #64748b; display: grid; gap: 10px; justify-items: center; min-height: 220px; padding: 28px; text-align: center; }
+.pages-empty { align-items: center; background: var(--admin-surface); border: 1px dashed #d8b4fe; border-radius: 18px; color: var(--text-muted); display: grid; gap: 10px; justify-items: center; min-height: 220px; padding: 28px; text-align: center; }
 .pages-empty i { color: #a855f7; font-size: 32px; }
-.pages-empty strong { color: #111827; font-size: 18px; font-weight: 950; }
+.pages-empty strong { color: var(--text-primary); font-size: 18px; font-weight: 950; }
 .delete-modal { align-items: center; display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 5100; }
 .delete-backdrop { background: rgba(0,0,0,0.48); inset: 0; position: absolute; }
-.delete-modal section { background: #fff; border-radius: 20px; box-shadow: 0 30px 90px rgba(0,0,0,0.3); max-width: 360px; padding: 24px; position: relative; text-align: center; }
+.delete-modal section { background: var(--admin-surface); border-radius: 20px; box-shadow: 0 30px 90px rgba(0,0,0,0.3); max-width: 360px; padding: 24px; position: relative; text-align: center; }
 .delete-modal i { color: #ef4444; font-size: 28px; }
-.delete-modal h2 { color: #111827; font-size: 20px; font-weight: 950; margin-top: 10px; }
-.delete-modal p { color: #64748b; font-size: 13px; font-weight: 750; line-height: 1.5; margin-top: 8px; }
+.delete-modal h2 { color: var(--text-primary); font-size: 20px; font-weight: 950; margin-top: 10px; }
+.delete-modal p { color: var(--text-muted); font-size: 13px; font-weight: 750; line-height: 1.5; margin-top: 8px; }
 .delete-modal div { display: flex; gap: 10px; margin-top: 18px; }
-.delete-modal div button { background: #f1f5f9; border-radius: 12px; color: #334155; flex: 1; font-size: 12px; font-weight: 950; min-height: 40px; }
+.delete-modal div button { background: var(--admin-surface-raised); border-radius: 12px; color: var(--text-secondary); flex: 1; font-size: 12px; font-weight: 950; min-height: 40px; }
 .delete-modal div .danger { background: #ef4444; color: #fff; }
 .site-page-toast { background: #111827; border-radius: 999px; bottom: 24px; color: #fff; font-size: 13px; font-weight: 950; left: 50%; padding: 12px 18px; position: fixed; transform: translateX(-50%); z-index: 5200; }
+@media (max-width: 1100px) {
+  .site-pages-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .site-pages-actions { flex-wrap: wrap; }
+}
 @media (max-width: 760px) {
   .site-pages-head { align-items: stretch; flex-direction: column; }
   .site-pages-toolbar { align-items: stretch; grid-template-columns: 1fr; }

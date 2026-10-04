@@ -6,6 +6,8 @@ import { doc, getDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import CommunityPanel from '@/components/community/CommunityPanel.vue'
 import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
+import CommunitiesPage from '@/pages/CommunitiesPage.vue'
+import { OFFICIAL_COMMUNITY_ID } from '@/constants/community'
 
 defineOptions({
   name: 'CommunityPage'
@@ -49,6 +51,7 @@ onUnmounted(() => {
       <main v-if="!isCheckingAuth" class="community-member-page">
         <FloatingBackButton />
         <CommunityPanel :user-role="currentRole" :initial-community-id="selectedCommunityId" :show-rail="false" />
+        <CommunitiesPage v-if="!selectedCommunityId || selectedCommunityId === OFFICIAL_COMMUNITY_ID" embedded />
       </main>
     </Transition>
   </div>
@@ -610,4 +613,6 @@ onUnmounted(() => {
     min-height: 86px;
   }
 }
+.community-member-page :deep(.galaxy-hero) { overflow: hidden; isolation: isolate; contain: paint; }
+.community-member-page :deep(.galaxy-hero::before),.community-member-page :deep(.galaxy-hero::after) { border-radius: inherit; pointer-events: none; }
 </style>

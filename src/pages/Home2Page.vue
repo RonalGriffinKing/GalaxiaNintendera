@@ -626,9 +626,9 @@ onUnmounted(() => {
   display: grid;
   gap: 24px;
   margin: 0 auto;
-  max-width: 1200px;
+  max-width: 1320px;
   position: relative;
-  width: calc(100% - clamp(48px, 12vw, 180px));
+  width: 100%;
   z-index: 1;
 }
 
@@ -684,7 +684,8 @@ onUnmounted(() => {
   cursor: pointer;
   display: grid;
   gap: 16px;
-  height: clamp(500px, 44vw, 560px);
+  min-height: 340px;
+  height: auto;
   overflow: hidden;
   padding: clamp(24px, 4vw, 42px);
   position: relative;
@@ -708,9 +709,9 @@ onUnmounted(() => {
 
 .home2-main-hero h1 {
   display: -webkit-box;
-  font-size: clamp(34px, 4.2vw, 58px);
+  font-size: clamp(28px, 3.4vw, 48px);
   font-weight: 950;
-  line-height: 0.98;
+  line-height: 1.12;
   max-width: 760px;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -1330,11 +1331,12 @@ onUnmounted(() => {
 
 @media (max-height: 760px) and (min-width: 641px) {
   .home2-main-hero {
-    height: clamp(430px, calc(100dvh - var(--public-page-top, 88px) - 32px), 500px);
+    height: auto;
+    min-height: 300px;
   }
 
   .home2-main-hero h1 {
-    font-size: clamp(32px, 3.7vw, 50px);
+    font-size: clamp(26px, 2.8vw, 36px);
   }
 }
 
@@ -1389,7 +1391,8 @@ onUnmounted(() => {
   }
 
   .home2-main-hero {
-    height: 520px;
+    height: auto;
+    min-height: 360px;
   }
 
   .home2-hero-controls {
@@ -1534,5 +1537,46 @@ onUnmounted(() => {
   .analysis-page-leave-active {
     transition-duration: 0.01ms;
   }
+}
+/* Keep tablet and short desktop layouts dense without scaling the interface. */
+@media (min-width: 641px) and (max-width: 1440px), (min-width: 641px) and (max-height: 900px) {
+  .home2-page { padding-left: clamp(12px, 2vw, 24px); padding-right: clamp(12px, 2vw, 24px); }
+  .home2-shell { gap: 16px; }
+  .home2-main-hero { min-height: 260px; gap: 10px; padding: 22px; box-sizing: border-box; }
+  .home2-main-hero h1 { font-size: clamp(26px, 2.8vw, 36px); line-height: 1.12; -webkit-line-clamp: 3; margin: 0; }
+  .home2-main-hero p { font-size: 14px; line-height: 1.45; font-weight: 600; -webkit-line-clamp: 2; margin: 0; }
+  .home2-loading { min-height: 260px; padding: 22px; }
+  .home2-panel { padding: 16px; }
+  .home2-community-band { gap: 14px; padding: 18px; }
+  .home2-community-band h2 { font-size: clamp(24px, 2.4vw, 30px); line-height: 1.12; }
+  .home2-community-band p { margin: 8px 0 12px; line-height: 1.4; font-weight: 600; }
+  .home2-community-carousel { gap: 8px; }
+  .home2-community-grid { gap: 8px; }
+  .home2-community-card { min-height: 58px; padding: 8px; gap: 8px; grid-template-columns: 40px minmax(0, 1fr); }
+  .home2-community-grid img, .home2-community-grid span { width: 40px; height: 40px; }
+  .home2-analysis-featured { min-height: 320px; padding: 20px; box-sizing: border-box; }
+  .home2-analysis-featured h3 { font-size: clamp(26px, 2.8vw, 36px); line-height: 1.12; }
+  .home2-analysis-featured p { font-size: 14px; font-weight: 600; margin-top: 8px; -webkit-line-clamp: 2; }
+  .home2-analysis-featured footer { margin-top: 12px; }
+}
+/* Reserve the same space for every slide, including longer news headlines. */
+.home2-main-hero {
+  height: 400px;
+  min-height: 0;
+  box-sizing: border-box;
+  grid-template-rows: auto auto auto auto auto;
+}
+.home2-main-hero h1, .home2-main-hero p { margin: 0; }
+.home2-main-hero h1 { -webkit-line-clamp: 3; }
+.home2-main-hero p { -webkit-line-clamp: 2; }
+@media (min-width: 641px) and (max-width: 1440px), (min-width: 641px) and (max-height: 900px) {
+  .home2-main-hero { height: 320px; min-height: 0; }
+  .home2-main-hero h1 { -webkit-line-clamp: 2; }
+}
+@media (max-width: 640px) {
+  .home2-main-hero { height: 380px; min-height: 0; gap: 10px; padding: 18px; }
+  .home2-main-hero h1 { font-size: clamp(24px, 6.5vw, 30px); line-height: 1.12; -webkit-line-clamp: 3; }
+  .home2-main-hero p { font-size: 14px; line-height: 1.45; }
+  .home2-meta { gap: 6px; }
 }
 </style>

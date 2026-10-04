@@ -257,7 +257,7 @@ onMounted(loadRole)
 .global-manager-page {
   background:
     radial-gradient(circle at top left, rgba(168, 85, 247, 0.16), transparent 30%),
-    linear-gradient(180deg, #f8fafc 0%, #f3f4ff 100%);
+    linear-gradient(180deg, var(--admin-bg) 0%, var(--admin-bg) 100%);
   min-height: 100vh;
   padding: calc(var(--public-nav-offset, 0px) + 24px) 22px 36px;
 }
@@ -279,7 +279,7 @@ onMounted(loadRole)
 
 .global-manager-head span,
 .module-head span {
-  color: #7c3aed;
+  color: var(--accent-hover);
   display: block;
   font-size: 11px;
   font-weight: 950;
@@ -287,7 +287,7 @@ onMounted(loadRole)
 }
 
 .global-manager-head h1 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: clamp(28px, 4vw, 42px);
   font-weight: 950;
   line-height: 1.05;
@@ -296,7 +296,7 @@ onMounted(loadRole)
 
 .global-manager-head p,
 .module-head p {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 750;
   line-height: 1.5;
@@ -305,8 +305,8 @@ onMounted(loadRole)
 
 .global-manager-tabs {
   align-items: center;
-  background: rgba(255, 255, 255, 0.74);
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 18px;
   box-shadow: 0 20px 46px rgba(88, 28, 135, 0.08);
   display: flex;
@@ -319,7 +319,7 @@ onMounted(loadRole)
 .global-manager-tabs button {
   align-items: center;
   border-radius: 14px;
-  color: #64748b;
+  color: var(--text-muted);
   display: inline-flex;
   flex: 0 0 auto;
   font-size: 13px;
@@ -337,8 +337,8 @@ onMounted(loadRole)
 }
 
 .global-manager-shell {
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid #e5e7eb;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
   border-radius: 24px;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
   overflow: visible;
@@ -347,7 +347,7 @@ onMounted(loadRole)
 
 .module-head {
   align-items: end;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid var(--border);
   display: flex;
   gap: 16px;
   justify-content: space-between;
@@ -356,7 +356,7 @@ onMounted(loadRole)
 }
 
 .module-head h2 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 26px;
   font-weight: 950;
   line-height: 1.08;
@@ -394,7 +394,7 @@ onMounted(loadRole)
 }
 
 .module-loading-layer {
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--admin-surface);
   border-radius: 16px;
   inset: 0;
   padding: 0;
@@ -423,6 +423,10 @@ onMounted(loadRole)
   transform: translateY(8px);
 }
 
+@media (max-width: 1100px) {
+  .module-head { flex-wrap: wrap; align-items: start; }
+  .module-actions { justify-content: flex-start; }
+}
 @media (max-width: 760px) {
   .global-manager-page {
     padding: calc(var(--public-nav-offset, 0px) + 16px) 12px 26px;

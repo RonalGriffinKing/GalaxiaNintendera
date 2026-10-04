@@ -39,6 +39,7 @@ defineProps({
 }
 
 .preview-shell {
+  container-type: inline-size;
   display: grid;
   gap: 18px;
   margin: 0 auto;

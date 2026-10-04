@@ -4,7 +4,7 @@ export const PUBLIC_NAV_LINKS = [
   { label: 'Inicio', icon: 'fas fa-house', to: '/' },
   { label: 'Noticias', icon: 'fas fa-newspaper', to: '/noticias' },
   { label: 'Eventos', icon: 'far fa-calendar', to: '/eventos' },
-  { label: 'Comunidades', icon: 'fas fa-users', to: '/comunidad' }
+  { label: 'Comunidades', icon: 'fas fa-users', to: '/comunidades' }
 ]
 
 export const QUICK_STICKER_POOL = ['⭐', '🔥', '🎮', '👾', '💥', '🟣', '🌟', '🧠', '💜', '🎯']

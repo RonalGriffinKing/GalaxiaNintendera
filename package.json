@@ -6,9 +6,22 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap": "node scripts/run-capacitor.cjs",
+    "android:add": "npm run build && npm run cap -- add android",
+    "android:assets": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-android-assets.ps1",
+    "android:sync": "npm run build && npm run cap -- sync android",
+    "android:open": "npm run cap -- open android",
+    "android:apk": "npm run android:sync && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-apk.ps1"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "^8.5.2",
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
     "firebase": "^12.12.1",
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
@@ -18,6 +31,7 @@
     "vue-router": "^5.0.6"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@chromatic-com/storybook": "^5.2.1",
     "@storybook/addon-a11y": "^10.4.0",
     "@storybook/vue3-vite": "^10.4.0",

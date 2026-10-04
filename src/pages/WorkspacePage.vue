@@ -180,7 +180,7 @@ onMounted(loadRole)
 
 <style scoped>
 .workspace-page {
-  background: #f8fafc;
+  background: var(--admin-bg);
   min-height: 100vh;
   padding: calc(var(--public-nav-offset, 0px) + 22px) 22px 34px;
   transition: padding-top 0.2s ease;
@@ -254,7 +254,7 @@ onMounted(loadRole)
 }
 
 .workspace-head span {
-  color: #7c3aed;
+  color: var(--accent-hover);
   display: block;
   font-size: 11px;
   font-weight: 900;
@@ -262,7 +262,7 @@ onMounted(loadRole)
 }
 
 .workspace-head h1 {
-  color: #111827;
+  color: var(--text-primary);
   font-size: 28px;
   font-weight: 900;
   line-height: 1.1;
@@ -270,7 +270,7 @@ onMounted(loadRole)
 }
 
 .workspace-head p {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 700;
   margin-top: 5px;
@@ -281,6 +281,10 @@ onMounted(loadRole)
   max-width: 1280px;
 }
 
+@media (max-width: 1100px) {
+  .workspace-head { flex-wrap: wrap; align-items: start; }
+  .workspace-guide ol { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 760px) {
   .workspace-page {
     padding: calc(var(--public-nav-offset, 0px) + 16px) 12px 24px;

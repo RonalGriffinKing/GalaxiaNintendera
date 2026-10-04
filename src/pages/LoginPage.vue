@@ -95,7 +95,8 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createUserWithEmailAndPassword, GoogleAuthProvider, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, GoogleAuthProvider, sendEmailVerification, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from 'firebase/auth'
+import { Capacitor } from '@capacitor/core'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { defaultLogoUrl } from '@/constants/assets'
@@ -145,8 +146,21 @@ const loginWithGoogle = async () => {
   loading.value = true
 
   try {
-    const provider = new GoogleAuthProvider()
-    const credential = await signInWithPopup(auth, provider)
+    let credential
+
+    if (Capacitor.isNativePlatform()) {
+      const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
+      const nativeResult = await FirebaseAuthentication.signInWithGoogle({
+        skipNativeAuth: true,
+        useCredentialManager: true
+      })
+      const idToken = nativeResult.credential?.idToken
+      if (!idToken) throw new Error('auth/native-google-token-missing')
+      credential = await signInWithCredential(auth, GoogleAuthProvider.credential(idToken))
+    } else {
+      credential = await signInWithPopup(auth, new GoogleAuthProvider())
+    }
+
     const user = credential.user
     const userRef = doc(db, 'users', user.uid)
     const userSnap = await getDoc(userRef)
@@ -202,6 +216,14 @@ const getAuthErrorMessage = (e, fallback) => {
 
   if (e?.code === 'auth/popup-closed-by-user') {
     return 'Se cerro la ventana de Google antes de terminar'
+  }
+
+  if (e?.message?.includes('12501') || e?.message?.toLowerCase().includes('cancel')) {
+    return 'Se cancelo el inicio de sesion con Google'
+  }
+
+  if (e?.message?.includes('10') || e?.code === 'auth/native-google-token-missing') {
+    return 'Google no pudo validar la configuracion Android. Instala la ultima version de la app.'
   }
 
   return fallback
@@ -299,7 +321,7 @@ const submit = async () => {
   min-height: 100dvh;
   overflow-x: hidden;
   overflow-y: hidden;
-  padding: 24px;
+  padding: calc(24px + var(--safe-top, 0px)) max(24px, var(--safe-right, 0px)) calc(24px + var(--safe-bottom, 0px)) max(24px, var(--safe-left, 0px));
   position: relative;
   width: 100%;
 }
@@ -591,13 +613,13 @@ const submit = async () => {
     height: 100dvh;
     min-height: 100svh;
     overflow: hidden;
-    padding: 16px;
+    padding: calc(16px + var(--safe-top, 0px)) max(16px, var(--safe-right, 0px)) calc(16px + var(--safe-bottom, 0px)) max(16px, var(--safe-left, 0px));
   }
 
   .login-card {
     border-radius: 18px;
     gap: 12px;
-    max-height: calc(100dvh - 32px);
+    max-height: calc(100dvh - 32px - var(--safe-top, 0px) - var(--safe-bottom, 0px));
     padding: 20px;
   }
 

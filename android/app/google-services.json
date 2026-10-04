@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "416372701871",
+    "project_id": "widget-dreams",
+    "storage_bucket": "widget-dreams.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:416372701871:android:a567cd2cbe6d00297ab25a",
+        "android_client_info": {
+          "package_name": "com.galaxianintendera.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "416372701871-kskp87cqhgcmbv54rjbeb4a2bb0596bd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.galaxianintendera.app",
+            "certificate_hash": "384001d9fbdcea85c2f161e0596d0bb7384be332"
+          }
+        },
+        {
+          "client_id": "416372701871-13oltgkrg3sfqbmm0r9vh714lh7ua48k.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCvzkq-iVI1pvslH5TgKvm_KVRhaxrHQCA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "416372701871-13oltgkrg3sfqbmm0r9vh714lh7ua48k.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

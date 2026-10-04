@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { fetchGiphyItems, hasGiphyKey } from '@/services/giphy'
 
 const props = defineProps({
@@ -14,6 +14,9 @@ const query = ref('')
 const items = ref([])
 const isLoading = ref(false)
 const error = ref('')
+const hasMore = ref(true)
+const nextOffset = ref(0)
+let requestId = 0
 
 const fallbackItems = [
   { id: 'emoji-star', type: 'emoji', text: '\u2b50', title: 'Estrella' },
@@ -31,23 +34,37 @@ const visibleFallback = computed(() => !canUseGiphy.value || error.value || (!is
 
 let searchTimer = null
 
-const loadItems = async () => {
+const loadItems = async (append = false) => {
   if (!props.open || !canUseGiphy.value) return
+  if (append && (isLoading.value || !hasMore.value)) return
+  const currentRequest = ++requestId
+  const offset = append ? nextOffset.value : 0
+  const term = query.value
   isLoading.value = true
   error.value = ''
   try {
-    items.value = await fetchGiphyItems({ query: query.value })
+    const results = await fetchGiphyItems({ query: term, offset, limit: 18 })
+    if (currentRequest !== requestId || !props.open) return
+    const merged = append ? [...items.value, ...results] : results
+    items.value = [...new Map(merged.map(item => [item.id, item])).values()]
+    nextOffset.value = offset + 18
+    hasMore.value = results.length === 18
   } catch (loadError) {
     console.error(loadError)
-    error.value = 'GIPHY no respondio ahora.'
+    if (currentRequest === requestId) error.value = 'No se pudo cargar. Intenta de nuevo.'
   } finally {
-    isLoading.value = false
+    if (currentRequest === requestId) isLoading.value = false
   }
 }
 
 const scheduleLoad = () => {
   window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(loadItems, 260)
+  requestId++
+  items.value = []
+  nextOffset.value = 0
+  hasMore.value = true
+  isLoading.value = true
+  searchTimer = window.setTimeout(() => loadItems(), 260)
 }
 
 const selectItem = (item) => {
@@ -56,9 +73,11 @@ const selectItem = (item) => {
 
 watch(() => props.open, (open) => {
   if (open) loadItems()
+  else { requestId++; window.clearTimeout(searchTimer); isLoading.value = false }
 })
 
 watch(query, scheduleLoad)
+onUnmounted(() => { requestId++; window.clearTimeout(searchTimer) })
 </script>
 
 <template>
@@ -81,6 +100,11 @@ watch(query, scheduleLoad)
       </button>
       <span v-if="isLoading">Cargando...</span>
     </div>
+
+    <p v-if="error" class="giphy-error" role="status">{{ error }}</p>
+    <button v-if="canUseGiphy && (hasMore || error)" class="giphy-more" type="button" :disabled="isLoading" @click="loadItems(items.length > 0)">
+      {{ isLoading ? 'Cargando…' : error ? 'Reintentar' : 'Ver más GIFs' }}
+    </button>
 
     <div v-if="visibleFallback" class="giphy-fallback">
       <small>{{ canUseGiphy ? 'Prueba rapida' : 'Agrega VITE_GIPHY_API_KEY para activar GIPHY real' }}</small>
@@ -253,4 +277,13 @@ watch(query, scheduleLoad)
     height: 74px;
   }
 }
+.giphy-more { min-height: 44px; border-radius: 10px; border: 1px solid #a855f766; background: #7c3aed33; color: white; font-size: 14px; font-weight: 600; }
+.giphy-more:disabled { opacity: .6; }
+.giphy-error { color: #fda4af; font-size: 12px; margin: 0; }
+.giphy-search input { font-size: 16px; }
+.giphy-picker { display: flex; flex-direction: column; min-height: 0; box-sizing: border-box; }
+.giphy-picker-head,.giphy-search,.giphy-more,.giphy-error { flex: 0 0 auto; }
+.giphy-grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.giphy-more { width: 100%; }
+.giphy-fallback { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
 </style>
