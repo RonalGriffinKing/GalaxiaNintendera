@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore'
+import { addDoc, collection, doc, getDocs, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { defaultRuzafaProducts } from '@/data/ruzafaProducts'
 
@@ -45,8 +45,3 @@ export const saveRuzafaPrintHistory = async labels => addDoc(printHistoryRef, {
   createdAt: serverTimestamp(),
   labels,
 })
-
-export const getRuzafaPrintHistory = async () => {
-  const snapshot = await getDocs(query(printHistoryRef, orderBy('createdAt', 'desc'), limit(60)))
-  return snapshot.docs.map(item => ({ id: item.id, ...item.data() }))
-}

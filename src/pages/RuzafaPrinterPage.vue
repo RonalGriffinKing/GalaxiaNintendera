@@ -1,7 +1,7 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { defaultRuzafaProducts } from '@/data/ruzafaProducts'
-import { getRuzafaPrintHistory, getRuzafaProducts, saveRuzafaPrintHistory, saveRuzafaProduct, saveRuzafaProducts } from '@/services/ruzafaProducts'
+import { getRuzafaProducts, saveRuzafaPrintHistory, saveRuzafaProduct, saveRuzafaProducts } from '@/services/ruzafaProducts'
 
 const products = ref([])
 const loading = ref(true)
@@ -9,17 +9,25 @@ const saving = ref(false)
 const message = ref('')
 const mode = ref('home')
 const printTitle = ref('')
+const printType = ref('standard')
 const queue = ref([])
 const search = ref('')
 const homeSearch = ref('')
 const selectedProduct = ref(null)
 const expandedQueueId = ref(null)
-const printHistory = ref([])
+const searchQueue = ref([])
 const showPrinterReminder = ref(false)
 const category = ref('Todos')
 const editing = reactive({})
 const editReturnMode = ref('manage')
 const pendingProductIds = ref(new Set())
+const creativeCanvas = ref(null)
+const creativeElements = ref([])
+const selectedCreativeId = ref(null)
+const creativeFileInput = ref(null)
+const creativeSymbols = ['★', '✓', '!', '+', '♥', '●', '▲', '☕']
+let creativeCounter = 0
+let draggingCreativeId = null
 
 const categories = ['Todos', 'Congelados', 'Refrigerados', 'Elaborados', 'Secos']
 const shelfLifeOptions = [
@@ -70,6 +78,8 @@ const normalizeProduct = product => {
     workshopDaily: false,
     workshopManual: false,
     produce: false,
+    book: false,
+    productCode: '',
     storage: 'Refrigeracion (+)',
     state: 'Abierto',
     ...product,
@@ -87,12 +97,14 @@ onMounted(async () => {
   const lastReminder = Number(window.localStorage.getItem(reminderKey) || 0)
   showPrinterReminder.value = Date.now() - lastReminder >= 6 * 60 * 60 * 1000
   try {
+    creativeElements.value = JSON.parse(window.localStorage.getItem('ruzafa-creative-label') || '[]')
+    creativeCounter = creativeElements.value.length
+  } catch (error) {
+    creativeElements.value = []
+  }
+  window.addEventListener('paste', handleCreativePaste)
+  try {
     products.value = (await getRuzafaProducts()).map(normalizeProduct)
-    try {
-      printHistory.value = await getRuzafaPrintHistory()
-    } catch (error) {
-      printHistory.value = []
-    }
   } catch (error) {
     products.value = defaultRuzafaProducts.map(normalizeProduct)
     message.value = 'Catalogo local cargado. Firebase no esta disponible en este momento.'
@@ -119,25 +131,6 @@ const globalSearchResults = computed(() => {
 })
 
 const pendingCount = computed(() => pendingProductIds.value.size)
-
-const expiryReviews = computed(() => {
-  const latestByProduct = new Map()
-  printHistory.value.forEach(entry => {
-    ;(entry.labels || []).forEach(label => {
-      if (!latestByProduct.has(label.productId)) latestByProduct.set(label.productId, label)
-    })
-  })
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return [...latestByProduct.values()].map(label => {
-    const expiry = dateFromValue(label.expiry)
-    if (!expiry) return null
-    expiry.setHours(0, 0, 0, 0)
-    const days = Math.round((expiry - today) / 86400000)
-    if (days > 1) return null
-    return { ...label, days }
-  }).filter(Boolean).sort((a, b) => a.days - b.days).slice(0, 8)
-})
 
 const updateHomeSearch = event => {
   homeSearch.value = event.target.value
@@ -183,7 +176,7 @@ const addShelfLife = (date, shelfLife) => {
   return expiry
 }
 
-const prepareQueue = (source, title) => {
+const prepareQueue = (source, title, type = 'standard') => {
   const now = new Date()
   queue.value = source.map((product, index) => {
     const primaryDate = dateFromValue(product.primaryExpiry)
@@ -198,6 +191,7 @@ const prepareQueue = (source, title) => {
     }
   })
   printTitle.value = title
+  printType.value = type
   mode.value = 'preview'
   selectedProduct.value = null
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -219,12 +213,9 @@ const createQueue = type => {
     workshopDaily: 'Impresion diaria de obrador',
     workshopManual: 'Impresion de obrador',
     produce: 'Recepcion de fruta y verdura',
+    book: 'Etiquetas libro',
   }
-  prepareQueue(source, titles[type] || 'Impresion de etiquetas')
-}
-
-const printSingleProduct = product => {
-  prepareQueue([product], `Imprimir ${product.name}`)
+  prepareQueue(source, titles[type] || 'Impresion de etiquetas', type)
 }
 
 const selectGlobalProduct = product => {
@@ -233,10 +224,140 @@ const selectGlobalProduct = product => {
   homeSearch.value = product.name
 }
 
+const addSelectedToQueue = () => {
+  const product = selectedProduct.value
+  if (!product) return
+  if (!searchQueue.value.some(item => item.id === product.id)) searchQueue.value.push(product)
+  message.value = `${product.name} agregado a la cola.`
+  selectedProduct.value = null
+  homeSearch.value = ''
+}
+
+const removeFromSearchQueue = productId => {
+  searchQueue.value = searchQueue.value.filter(product => product.id !== productId)
+}
+
+const openSearchQueue = () => {
+  if (!searchQueue.value.length) return
+  prepareQueue(searchQueue.value, 'Cola de impresion')
+  searchQueue.value = []
+}
+
 const printableLabels = computed(() => queue.value.flatMap(item => {
   if (!item.selected) return []
   return Array.from({ length: Math.max(1, Number(item.quantity) || 1) }, () => item)
 }))
+
+const bookPages = computed(() => {
+  if (printType.value !== 'book') return []
+  const pages = []
+  for (let index = 0; index < printableLabels.value.length; index += 2) {
+    pages.push(printableLabels.value.slice(index, index + 2))
+  }
+  return pages
+})
+
+onUnmounted(() => window.removeEventListener('paste', handleCreativePaste))
+
+watch(creativeElements, value => {
+  try {
+    window.localStorage.setItem('ruzafa-creative-label', JSON.stringify(value))
+  } catch (error) {
+    message.value = 'El diseño funciona, pero la imagen es demasiado grande para guardarla en este dispositivo.'
+  }
+}, { deep: true })
+
+const selectedCreativeElement = computed(() => creativeElements.value.find(item => item.id === selectedCreativeId.value) || null)
+
+const creativeElementStyle = item => ({
+  left: `${item.x}%`,
+  top: `${item.y}%`,
+  width: item.type === 'image' ? `${item.width}%` : `${item.width || 90}%`,
+  fontSize: item.type === 'text' ? `${item.fontSize}mm` : undefined,
+  fontWeight: item.bold ? '800' : '400',
+  textAlign: item.align || 'center',
+})
+
+const addCreativeText = () => {
+  const item = { id: `creative-${++creativeCounter}`, type: 'text', text: 'Nuevo texto', x: 50, y: 30, width: 90, fontSize: 4, bold: false, align: 'center' }
+  creativeElements.value.push(item)
+  selectedCreativeId.value = item.id
+}
+
+const addCreativeSymbol = symbol => {
+  const item = { id: `creative-${++creativeCounter}`, type: 'text', text: symbol, x: 50, y: 50, width: 30, fontSize: 8, bold: true, align: 'center' }
+  creativeElements.value.push(item)
+  selectedCreativeId.value = item.id
+}
+
+const addCreativeImage = source => {
+  const item = { id: `creative-${++creativeCounter}`, type: 'image', source, x: 50, y: 50, width: 35 }
+  creativeElements.value.push(item)
+  selectedCreativeId.value = item.id
+}
+
+const readCreativeImage = file => {
+  if (!file?.type?.startsWith('image/')) return
+  const reader = new FileReader()
+  reader.onload = event => addCreativeImage(event.target.result)
+  reader.readAsDataURL(file)
+}
+
+const uploadCreativeImage = event => {
+  readCreativeImage(event.target.files?.[0])
+  event.target.value = ''
+}
+
+function handleCreativePaste(event) {
+  if (mode.value !== 'creative') return
+  const image = [...(event.clipboardData?.items || [])].find(item => item.type.startsWith('image/'))
+  if (image) {
+    event.preventDefault()
+    readCreativeImage(image.getAsFile())
+  }
+}
+
+const startCreativeDrag = (event, item) => {
+  draggingCreativeId = item.id
+  selectedCreativeId.value = item.id
+  event.currentTarget.setPointerCapture?.(event.pointerId)
+  moveCreativeElement(event)
+}
+
+const moveCreativeElement = event => {
+  if (!draggingCreativeId || !creativeCanvas.value) return
+  const item = creativeElements.value.find(candidate => candidate.id === draggingCreativeId)
+  if (!item) return
+  const rect = creativeCanvas.value.getBoundingClientRect()
+  item.x = Math.min(98, Math.max(2, ((event.clientX - rect.left) / rect.width) * 100))
+  item.y = Math.min(98, Math.max(2, ((event.clientY - rect.top) / rect.height) * 100))
+}
+
+const stopCreativeDrag = () => { draggingCreativeId = null }
+
+const centerCreativeElement = () => {
+  if (!selectedCreativeElement.value) return
+  selectedCreativeElement.value.x = 50
+  selectedCreativeElement.value.y = 50
+}
+
+const removeCreativeElement = () => {
+  creativeElements.value = creativeElements.value.filter(item => item.id !== selectedCreativeId.value)
+  selectedCreativeId.value = null
+}
+
+const clearCreativeCanvas = () => {
+  creativeElements.value = []
+  selectedCreativeId.value = null
+}
+
+const printCreativeLabel = () => {
+  if (!creativeElements.value.length) {
+    message.value = 'Agrega texto, un símbolo o una imagen antes de imprimir.'
+    return
+  }
+  window.print()
+}
 
 const expiryText = item => {
   if (item.manualExpiry) return formatDate(new Date(`${item.manualExpiry}T12:00:00`))
@@ -274,6 +395,7 @@ const printedDateLabel = item => item.category === 'Congelados' ? 'Inicio Descon
 const printedState = item => item.category === 'Congelados' ? 'Descongelación + uso' : item.state
 
 const isPrimaryProduct = item => Boolean(item.primaryExpiry) || String(item.shelfLife).toLowerCase().includes('primaria')
+const usesPrimaryExpiry = item => printType.value === 'book' || isPrimaryProduct(item)
 
 const toggleQueueEditor = item => {
   if (expandedQueueId.value === item.id) {
@@ -292,13 +414,14 @@ const saveQueueProduct = async item => {
     const updated = normalizeProduct({
       ...product,
       currentLot: item.lot || '',
-      primaryExpiry: isPrimaryProduct(item) ? item.manualExpiry || product.primaryExpiry || '' : product.primaryExpiry || '',
+      productCode: item.productCode || '',
+      primaryExpiry: usesPrimaryExpiry(item) ? item.manualExpiry || product.primaryExpiry || '' : product.primaryExpiry || '',
     })
     await saveRuzafaProduct(updated)
     products.value[products.value.findIndex(candidate => candidate.id === item.id)] = updated
     item.currentLot = updated.currentLot
     item.primaryExpiry = updated.primaryExpiry
-    message.value = `${isPrimaryProduct(item) ? 'Lote y fecha' : 'Lote'} de ${item.name} guardado para todos.`
+    message.value = `${usesPrimaryExpiry(item) ? 'Lote y fecha' : 'Lote'} de ${item.name} guardado para todos.`
     expandedQueueId.value = null
   } catch (error) {
     message.value = 'No se pudo guardar en Firebase. Puedes imprimir usando estos datos solo esta vez.'
@@ -370,7 +493,7 @@ const toggleProductActive = product => {
 }
 
 const togglePrintGroup = (product, field) => {
-  if (!product.active || !['audit', 'barDaily', 'barWeekly', 'workshopDaily', 'workshopManual', 'produce'].includes(field)) return
+  if (!product.active || !['audit', 'barDaily', 'barWeekly', 'workshopDaily', 'workshopManual', 'produce', 'book'].includes(field)) return
   const index = products.value.findIndex(item => item.id === product.id)
   if (index < 0) return
   products.value[index] = { ...product, [field]: !product[field] }
@@ -426,7 +549,10 @@ const goHome = () => {
         <p class="location">Ruzafa · Etiquetado interno</p>
         <h1>Impresora de etiquetas</h1>
       </div>
-      <div class="printer-status"><span></span> Seleccionar TD-4550 al imprimir</div>
+      <div class="header-actions">
+        <button class="creative-entry-button" type="button" @click="mode = 'creative'">Impresión creativa</button>
+        <div class="printer-status"><span></span> Seleccionar TD-4550 al imprimir</div>
+      </div>
     </header>
 
     <p v-if="message" class="notice no-print">{{ message }}</p>
@@ -470,21 +596,23 @@ const goHome = () => {
             <small>{{ selectedProduct.category }} · {{ selectedProduct.primaryExpiry ? `Caducidad primaria: ${formatDate(dateFromValue(selectedProduct.primaryExpiry))}` : selectedProduct.shelfLife }}</small>
           </div>
           <div class="quick-product-actions">
-            <button class="print-button" type="button" @click="printSingleProduct(selectedProduct)">Imprimir etiqueta</button>
+            <button class="print-button" type="button" @click="addSelectedToQueue">Agregar a la cola</button>
             <button class="secondary-button" type="button" @click="editProduct(selectedProduct)">Modificar producto</button>
           </div>
         </div>
       </div>
 
-      <section v-if="expiryReviews.length" class="review-panel">
-        <div class="review-heading">
-          <div><p class="eyebrow">Revisiones pendientes</p><strong>Productos que caducan pronto</strong></div>
-          <span>{{ expiryReviews.length }}</span>
+      <section v-if="searchQueue.length" class="search-queue">
+        <div class="search-queue-heading">
+          <div><p class="eyebrow">Cola manual</p><strong>{{ searchQueue.length }} producto(s) preparados</strong></div>
+          <button class="print-button" type="button" @click="openSearchQueue">Revisar e imprimir cola</button>
         </div>
-        <button v-for="review in expiryReviews" :key="`${review.productId}-${review.printedAt}`" type="button" @click="selectGlobalProduct(products.find(product => product.id === review.productId))">
-          <span><strong>{{ review.productName }}</strong><small>Lote {{ review.lot || 'sin indicar' }}</small></span>
-          <b>{{ review.days < 0 ? 'Caducado' : review.days === 0 ? 'Caduca hoy' : 'Caduca manana' }}</b>
-        </button>
+        <div class="search-queue-items">
+          <span v-for="product in searchQueue" :key="product.id">
+            {{ product.name }}
+            <button type="button" :aria-label="`Quitar ${product.name}`" @click="removeFromSearchQueue(product.id)">&times;</button>
+          </span>
+        </div>
       </section>
 
       <div class="primary-actions">
@@ -518,6 +646,11 @@ const goHome = () => {
           <span><strong>Fruta y verdura</strong><small>Etiquetas para recepcion de producto</small></span>
           <span class="arrow" aria-hidden="true">&rarr;</span>
         </button>
+        <button class="action-button book" type="button" @click="createQueue('book')">
+          <span class="action-icon" aria-hidden="true">L</span>
+          <span><strong>Etiquetas libro</strong><small>Productos congelados del libro</small></span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+        </button>
       </div>
 
       <button class="manage-button" type="button" @click="mode = 'manage'">
@@ -528,6 +661,93 @@ const goHome = () => {
         <span><strong>55 × 50 mm</strong> etiqueta</span>
         <span><strong>4 mm</strong> separación</span>
         <span><strong>{{ products.length }}</strong> productos</span>
+      </div>
+    </section>
+
+    <section v-else-if="mode === 'creative'" class="creative-view">
+      <div class="creative-heading no-print">
+        <div>
+          <p class="eyebrow">Diseño libre · 55 × 50 mm</p>
+          <h2>Impresión creativa</h2>
+          <p>Agrega elementos, tócalos y arrástralos directamente sobre la etiqueta.</p>
+        </div>
+        <button class="print-button" type="button" @click="printCreativeLabel">Imprimir diseño</button>
+      </div>
+
+      <div class="creative-workspace no-print">
+        <aside class="creative-toolbar" aria-label="Herramientas del lienzo">
+          <div class="creative-add-actions">
+            <button type="button" @click="addCreativeText"><span aria-hidden="true">T</span> Texto</button>
+            <button type="button" @click="creativeFileInput?.click()"><span aria-hidden="true">▧</span> Imagen</button>
+            <input ref="creativeFileInput" class="visually-hidden" type="file" accept="image/*" @change="uploadCreativeImage">
+          </div>
+
+          <div class="creative-symbols">
+            <p>Símbolos</p>
+            <button v-for="symbol in creativeSymbols" :key="symbol" type="button" :title="`Agregar ${symbol}`" @click="addCreativeSymbol(symbol)">{{ symbol }}</button>
+          </div>
+
+          <div v-if="selectedCreativeElement" class="creative-properties">
+            <p>Elemento seleccionado</p>
+            <label v-if="selectedCreativeElement.type === 'text'">Texto
+              <textarea v-model="selectedCreativeElement.text" rows="3"></textarea>
+            </label>
+            <label v-if="selectedCreativeElement.type === 'text'">Tamaño
+              <input v-model.number="selectedCreativeElement.fontSize" type="range" min="2" max="12" step="0.5">
+            </label>
+            <label v-else>Ancho
+              <input v-model.number="selectedCreativeElement.width" type="range" min="10" max="95" step="1">
+            </label>
+            <div v-if="selectedCreativeElement.type === 'text'" class="creative-format-actions">
+              <button type="button" :class="{ active: selectedCreativeElement.bold }" title="Negrita" @click="selectedCreativeElement.bold = !selectedCreativeElement.bold"><b>B</b></button>
+              <button type="button" title="Alinear a la izquierda" @click="selectedCreativeElement.align = 'left'">≡</button>
+              <button type="button" title="Centrar texto" @click="selectedCreativeElement.align = 'center'">≣</button>
+              <button type="button" title="Alinear a la derecha" @click="selectedCreativeElement.align = 'right'">≡</button>
+            </div>
+            <div class="creative-selection-actions">
+              <button class="secondary-button" type="button" @click="centerCreativeElement">Centrar</button>
+              <button class="danger-button" type="button" @click="removeCreativeElement">Eliminar</button>
+            </div>
+          </div>
+
+          <div class="creative-help">
+            También puedes copiar una imagen y pegarla aquí. El diseño se guarda automáticamente en este dispositivo.
+          </div>
+          <button class="clear-canvas-button" type="button" @click="clearCreativeCanvas">Limpiar lienzo</button>
+        </aside>
+
+        <div class="creative-stage">
+          <div
+            ref="creativeCanvas"
+            class="creative-canvas"
+            @pointermove="moveCreativeElement"
+            @pointerup="stopCreativeDrag"
+            @pointercancel="stopCreativeDrag"
+            @pointerleave="stopCreativeDrag"
+            @click.self="selectedCreativeId = null"
+          >
+            <div
+              v-for="item in creativeElements"
+              :key="item.id"
+              class="creative-element"
+              :class="[{ selected: selectedCreativeId === item.id }, `creative-${item.type}`]"
+              :style="creativeElementStyle(item)"
+              @pointerdown.prevent="startCreativeDrag($event, item)"
+            >
+              <span v-if="item.type === 'text'">{{ item.text }}</span>
+              <img v-else :src="item.source" alt="">
+            </div>
+            <p v-if="!creativeElements.length" class="creative-empty">Agrega texto, símbolos o imágenes</p>
+          </div>
+          <div class="creative-ruler"><span>55 mm</span><span>50 mm de alto</span></div>
+        </div>
+      </div>
+
+      <div class="creative-print-sheet" aria-label="Diseño creativo para imprimir">
+        <div v-for="item in creativeElements" :key="`print-${item.id}`" class="creative-element" :class="`creative-${item.type}`" :style="creativeElementStyle(item)">
+          <span v-if="item.type === 'text'">{{ item.text }}</span>
+          <img v-else :src="item.source" alt="">
+        </div>
       </div>
     </section>
 
@@ -542,24 +762,40 @@ const goHome = () => {
       </div>
 
       <div class="queue-table no-print">
-        <div v-for="item in queue" :key="item.id" class="queue-row">
+        <p v-if="!queue.length" class="empty-queue">Todavía no hay productos en este grupo. Puedes asignarlos desde Gestionar productos.</p>
+        <div v-for="item in queue" :key="item.id" class="queue-row" :class="{ 'book-queue-row': printType === 'book' }">
           <input v-model="item.selected" type="checkbox" :aria-label="`Incluir ${item.name}`">
           <button class="queue-name" type="button" @click="toggleQueueEditor(item)"><strong>{{ item.name }}</strong><small>{{ item.shelfLife }} · Tocar para editar</small></button>
           <label>Caducidad
-            <input v-if="expandedQueueId === item.id || !item.expiry || isPrimaryProduct(item)" v-model="item.manualExpiry" type="date">
+            <input v-if="expandedQueueId === item.id || !item.expiry || usesPrimaryExpiry(item)" v-model="item.manualExpiry" type="date">
             <span v-else>{{ expiryText(item) }}</span>
           </label>
           <label>Lote<input v-model="item.lot" type="text" inputmode="numeric"></label>
+          <label v-if="printType === 'book'">Código<input v-model.trim="item.productCode" type="text"></label>
           <label>Cantidad<input v-model.number="item.quantity" type="number" min="1" max="99"></label>
           <div v-if="expandedQueueId === item.id" class="queue-quick-edit">
             <p>Los datos de arriba sirven para esta impresion. Tambien puedes guardarlos para las proximas.</p>
             <button class="secondary-button" type="button" @click="expandedQueueId = null">Usar solo esta vez</button>
-            <button class="print-button" type="button" :disabled="saving" @click="saveQueueProduct(item)">{{ saving ? 'Guardando...' : isPrimaryProduct(item) ? 'Guardar lote y fecha' : 'Guardar lote actual' }}</button>
+            <button class="print-button" type="button" :disabled="saving" @click="saveQueueProduct(item)">{{ saving ? 'Guardando...' : usesPrimaryExpiry(item) ? 'Guardar lote y fecha' : 'Guardar lote actual' }}</button>
           </div>
         </div>
       </div>
 
       <div class="print-sheet" aria-label="Etiquetas para imprimir">
+        <template v-if="printType === 'book'">
+          <article v-for="(page, pageIndex) in bookPages" :key="`book-${pageIndex}`" class="book-label-page">
+            <section v-for="(item, itemIndex) in page" :key="`${item.id}-${itemIndex}`" class="book-label">
+              <strong class="book-product">{{ item.name }}</strong>
+              <div class="book-label-grid">
+                <span>Código</span><b>{{ item.productCode || '—' }}</b>
+                <span>Lote</span><b>{{ item.lot || '—' }}</b>
+                <span>Caducidad primaria</span><b>{{ expiryText(item) }}</b>
+                <span>Temperatura</span><b>{{ item.storage }}</b>
+              </div>
+            </section>
+          </article>
+        </template>
+        <template v-else>
         <article v-for="(item, index) in printableLabels" :key="`${item.id}-${index}`" class="thermal-label">
           <div class="label-product"><b>PRODUCTO</b><strong>{{ item.name }}</strong></div>
           <div class="label-rule"></div>
@@ -575,6 +811,7 @@ const goHome = () => {
             <span>Estado</span><b>{{ printedState(item) }}</b>
           </div>
         </article>
+        </template>
       </div>
     </section>
 
@@ -623,6 +860,7 @@ const goHome = () => {
             <button type="button" :class="{ on: product.workshopDaily }" :disabled="!product.active" title="Obrador diario" @click="togglePrintGroup(product, 'workshopDaily')">OD</button>
             <button type="button" :class="{ on: product.workshopManual }" :disabled="!product.active" title="Obrador manual" @click="togglePrintGroup(product, 'workshopManual')">OM</button>
             <button type="button" :class="{ on: product.produce }" :disabled="!product.active" title="Fruta y verdura" @click="togglePrintGroup(product, 'produce')">FV</button>
+            <button type="button" :class="{ on: product.book }" :disabled="!product.active" title="Etiquetas libro" @click="togglePrintGroup(product, 'book')">L</button>
           </span>
           <button
             class="active-button"
@@ -649,6 +887,7 @@ const goHome = () => {
             </select>
           </label>
           <label>Fecha de caducidad primaria<input v-model="editing.primaryExpiry" type="date"></label>
+          <label>Código del producto (opcional)<input v-model.trim="editing.productCode"></label>
           <label>Lote actual (opcional)<input v-model.trim="editing.currentLot" placeholder="Se genera uno si se deja vacio"></label>
           <label>Categoría<select v-model="editing.category" @change="applyCategoryDefaults"><option v-for="item in categories.slice(1)" :key="item">{{ item }}</option></select></label>
           <label>Almacenamiento<input v-model.trim="editing.storage" required></label>
@@ -662,6 +901,7 @@ const goHome = () => {
           <label><input v-model="editing.workshopDaily" type="checkbox"> Obrador diario</label>
           <label><input v-model="editing.workshopManual" type="checkbox"> Obrador manual</label>
           <label><input v-model="editing.produce" type="checkbox"> Fruta y verdura</label>
+          <label><input v-model="editing.book" type="checkbox"> Etiquetas libro</label>
         </div>
         <div class="form-actions">
           <button class="secondary-button" type="button" @click="mode = editReturnMode">Cancelar</button>
@@ -679,7 +919,9 @@ const goHome = () => {
 .rz-header h1 { margin: 2px 0 0; font-size: clamp(22px, 3vw, 31px); line-height: 1.1; }
 .location, .eyebrow { margin: 0; text-transform: uppercase; font-size: 12px; font-weight: 800; letter-spacing: .12em; }
 .location { color: #b8d6c6; }
-.printer-status { margin-left: auto; padding: 9px 12px; display: flex; align-items: center; gap: 8px; font-size: 13px; background: #244d3b; border: 1px solid #3b6954; border-radius: 6px; }
+.header-actions { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+.creative-entry-button { min-height: 38px; padding: 0 14px; color: #17382a; background: #fff; border: 1px solid #b8d2c3; border-radius: 6px; font-weight: 800; cursor: pointer; }
+.printer-status { padding: 9px 12px; display: flex; align-items: center; gap: 8px; font-size: 13px; background: #244d3b; border: 1px solid #3b6954; border-radius: 6px; }
 .printer-status span { width: 8px; height: 8px; border-radius: 50%; background: #f0c653; box-shadow: 0 0 0 3px rgba(240,198,83,.14); }
 .back-button { width: 42px; height: 42px; color: white; border: 1px solid #547465; border-radius: 6px; background: transparent; font-size: 25px; cursor: pointer; }
 .reminder-backdrop { position: fixed; z-index: 50; inset: 0; padding: 18px; display: grid; place-items: center; background: rgba(13, 26, 19, .58); backdrop-filter: blur(4px); }
@@ -690,12 +932,12 @@ const goHome = () => {
 .printer-reminder > button { grid-column: 2; justify-self: start; }
 .notice { max-width: 1080px; margin: 18px auto 0; padding: 12px 16px; color: #643f00; background: #fff4d5; border: 1px solid #ead18a; border-radius: 6px; }
 .loading-state { padding: 15vh 20px; text-align: center; font-weight: 700; }
-.home-view, .preview-view, .manage-view, .edit-view { width: min(1080px, calc(100% - 40px)); margin: 0 auto; padding: clamp(42px, 7vw, 76px) 0; }
+.home-view, .preview-view, .manage-view, .edit-view, .creative-view { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 30px 0; }
 .intro { max-width: 640px; }
 .eyebrow { color: #35704f; }
 h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .intro > p:last-child, .preview-heading p { color: #5a675e; font-size: 17px; }
-.global-product-search { position: relative; margin-top: 28px; padding: 20px; background: white; border: 1px solid #cbd4ce; border-radius: 8px; }
+.global-product-search { position: relative; margin-top: 20px; padding: 15px; background: white; border: 1px solid #cbd4ce; border-radius: 8px; }
 .search-title-row { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .search-title-row label { color: #315440; font-size: 13px; font-weight: 800; }
 .add-product-button { width: 38px; height: 38px; display: grid; place-items: center; color: white; background: #176a43; border: 1px solid #176a43; border-radius: 6px; font-size: 26px; line-height: 1; cursor: pointer; }
@@ -710,15 +952,13 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .empty-search { margin: 10px 0 0; color: #6a756e; font-size: 14px; }
 .quick-product-panel { margin-top: 14px; padding-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 18px; border-top: 1px solid #e0e6e2; }
 .quick-product-actions { display: flex; gap: 9px; }
-.review-panel { margin-top: 20px; overflow: hidden; background: #fff8e4; border: 1px solid #e5ca7d; border-radius: 8px; }
-.review-heading { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ead9a7; }
-.review-heading > span { min-width: 30px; height: 30px; display: grid; place-items: center; color: white; background: #9a5b13; border-radius: 50%; font-weight: 900; }
-.review-panel > button { width: 100%; padding: 11px 16px; display: flex; justify-content: space-between; align-items: center; gap: 14px; color: inherit; text-align: left; background: transparent; border: 0; border-bottom: 1px solid #eee0ba; cursor: pointer; }
-.review-panel > button:last-child { border-bottom: 0; }
-.review-panel small { display: block; margin-top: 3px; color: #756744; }
-.review-panel > button > b { color: #94372e; }
-.primary-actions { margin-top: 38px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-.action-button { min-height: 150px; padding: 24px; display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 18px; text-align: left; border: 0; border-radius: 8px; cursor: pointer; box-shadow: 0 10px 28px rgba(23,60,43,.11); transition: transform .18s ease, box-shadow .18s ease; }
+.search-queue { margin-top: 14px; padding: 14px 15px; background: #eaf4ee; border: 1px solid #b8d1c1; border-radius: 8px; }
+.search-queue-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
+.search-queue-items { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 7px; }
+.search-queue-items > span { min-width: 0; padding: 6px 6px 6px 10px; display: inline-flex; align-items: center; gap: 7px; color: #234331; background: white; border: 1px solid #c5d8ca; border-radius: 6px; font-size: 13px; }
+.search-queue-items button { width: 25px; height: 25px; padding: 0; color: #6b3832; background: #fff2f0; border: 0; border-radius: 4px; font-size: 18px; cursor: pointer; }
+.primary-actions { margin-top: 20px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.action-button { min-height: 104px; padding: 15px; display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 12px; text-align: left; border: 0; border-radius: 8px; cursor: pointer; box-shadow: 0 7px 20px rgba(23,60,43,.1); transition: transform .18s ease, box-shadow .18s ease; }
 .action-button:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(23,60,43,.16); }
 .action-button.audit { color: white; background: #206644; }
 .action-button.daily { color: #17211a; background: #f0c653; }
@@ -726,10 +966,11 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .action-button.workshop { color: white; background: #7a4937; }
 .action-button.workshop-manual { color: #17211a; background: #d9b98c; }
 .action-button.produce { color: white; background: #52733d; }
-.action-icon { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 50%; font-size: 22px; font-weight: 900; background: rgba(255,255,255,.18); }
-.action-button strong { display: block; font-size: clamp(18px, 2.2vw, 23px); }
-.action-button small { display: block; margin-top: 7px; font-size: 14px; opacity: .8; }
-.arrow { font-size: 28px; }
+.action-button.book { color: white; background: #5b477d; }
+.action-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; font-size: 16px; font-weight: 900; background: rgba(255,255,255,.18); }
+.action-button strong { display: block; font-size: 17px; line-height: 1.18; }
+.action-button small { display: block; margin-top: 5px; font-size: 12px; line-height: 1.3; opacity: .82; }
+.arrow { font-size: 21px; }
 .manage-button { width: 100%; margin-top: 18px; padding: 17px; color: #274234; background: #fff; border: 1px solid #cbd4ce; border-radius: 7px; font-weight: 800; cursor: pointer; }
 .spec-strip { margin-top: 30px; padding-top: 22px; display: flex; gap: 34px; color: #5d6b62; border-top: 1px solid #d7ddd9; font-size: 14px; }
 .spec-strip strong { color: #1d2d23; }
@@ -738,7 +979,9 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .print-button { color: white; background: #176a43; border: 1px solid #176a43; }
 .secondary-button { color: #274234; background: white; border: 1px solid #bdc9c1; }
 .queue-table { overflow: hidden; background: white; border: 1px solid #d4dbd6; border-radius: 7px; }
+.empty-queue { margin: 0; padding: 28px 18px; color: #66736b; text-align: center; }
 .queue-row { min-height: 68px; padding: 10px 16px; display: grid; grid-template-columns: 28px minmax(180px, 1fr) 150px 118px 90px; align-items: center; gap: 14px; border-bottom: 1px solid #e5e9e6; }
+.queue-row.book-queue-row { grid-template-columns: 28px minmax(180px, 1fr) 150px 118px 118px 90px; }
 .queue-row:last-child { border-bottom: 0; }
 .queue-row input[type="checkbox"] { width: 19px; height: 19px; accent-color: #176a43; }
 .queue-name { padding: 6px 0; color: inherit; text-align: left; background: transparent; border: 0; cursor: pointer; }
@@ -749,6 +992,40 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .queue-quick-edit { grid-column: 2 / -1; padding: 12px; display: flex; align-items: center; justify-content: flex-end; gap: 9px; background: #f3f7f4; border-top: 1px solid #dfe7e1; }
 .queue-quick-edit p { margin: 0 auto 0 0; color: #59675e; font-size: 13px; }
 .print-sheet { display: none; }
+.creative-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 22px; }
+.creative-heading h2 { margin: 4px 0; font-size: 32px; }
+.creative-heading p:last-child { margin: 0; color: #647168; }
+.creative-workspace { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 24px; align-items: start; }
+.creative-toolbar { padding: 16px; display: grid; gap: 18px; background: #fff; border: 1px solid #d1dad4; border-radius: 8px; }
+.creative-add-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.creative-add-actions button, .creative-symbols button, .creative-format-actions button { min-height: 40px; color: #263b30; background: #f3f7f4; border: 1px solid #c8d4cc; border-radius: 5px; font-weight: 800; cursor: pointer; }
+.creative-add-actions button { display: flex; align-items: center; justify-content: center; gap: 7px; }
+.creative-add-actions span { font-size: 18px; }
+.creative-symbols p, .creative-properties > p { margin: 0 0 8px; color: #405247; font-size: 12px; font-weight: 900; text-transform: uppercase; }
+.creative-symbols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.creative-symbols p { grid-column: 1 / -1; }
+.creative-symbols button { padding: 0; font-size: 18px; }
+.creative-properties { padding-top: 15px; display: grid; gap: 12px; border-top: 1px solid #e0e6e2; }
+.creative-properties label { display: grid; gap: 6px; color: #526259; font-size: 12px; font-weight: 800; }
+.creative-properties textarea { box-sizing: border-box; width: 100%; padding: 9px; resize: vertical; border: 1px solid #bdc9c1; border-radius: 5px; font: inherit; }
+.creative-properties input[type="range"] { width: 100%; accent-color: #176a43; }
+.creative-format-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.creative-format-actions button.active { color: #fff; background: #176a43; border-color: #176a43; }
+.creative-selection-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.creative-selection-actions button { min-height: 40px; padding: 0 8px; }
+.danger-button, .clear-canvas-button { color: #8b2720; background: #fff3f1; border: 1px solid #e1aaa5; border-radius: 5px; font-weight: 800; cursor: pointer; }
+.creative-help { padding: 11px; color: #526259; background: #f2f7f4; border-left: 3px solid #6b9d80; font-size: 12px; line-height: 1.45; }
+.clear-canvas-button { min-height: 40px; }
+.creative-stage { min-width: 0; display: grid; justify-items: center; }
+.creative-canvas { position: relative; width: min(100%, 550px); aspect-ratio: 55 / 50; overflow: hidden; touch-action: none; background: #fff; border: 1px solid #9ca9a1; box-shadow: 0 14px 34px rgba(26, 49, 36, .16); }
+.creative-element { position: absolute; z-index: 1; box-sizing: border-box; transform: translate(-50%, -50%); cursor: move; user-select: none; touch-action: none; }
+.creative-element.selected { outline: 2px solid #19895a; outline-offset: 3px; }
+.creative-text { min-height: 1em; line-height: 1.05; white-space: pre-wrap; overflow-wrap: anywhere; }
+.creative-image img { display: block; width: 100%; height: auto; pointer-events: none; }
+.creative-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: #9ba69f; font-size: 14px; pointer-events: none; }
+.creative-ruler { width: min(100%, 550px); padding-top: 8px; display: flex; justify-content: space-between; color: #69776e; font-size: 12px; }
+.creative-print-sheet { display: none; }
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
 .filters { margin-bottom: 20px; }
 .filters > input { width: 100%; box-sizing: border-box; padding: 14px 16px; border: 1px solid #bec9c1; border-radius: 6px; font-size: 16px; }
 .category-tabs { margin-top: 12px; display: flex; gap: 7px; overflow-x: auto; }
@@ -765,7 +1042,7 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .active-button.restore { color: #17603e; background: #eff9f3; border-color: #a8cfb7; }
 .life { color: #3e5949; font-weight: 700; }
 .flags { display: flex; gap: 5px; }
-.flags { flex-wrap: wrap; max-width: 108px; }
+.flags { flex-wrap: wrap; max-width: 145px; }
 .flags button { width: 32px; height: 29px; padding: 0; display: grid; place-items: center; color: #667169; background: #edf0ee; border: 1px solid #d5dcd7; border-radius: 4px; font-size: 11px; font-weight: 900; cursor: pointer; }
 .flags button.on { color: white; background: #347252; border-color: #347252; }
 .flags button:disabled { color: #a8b0aa; background: #ecefed; border-color: transparent; }
@@ -787,27 +1064,41 @@ button:disabled { opacity: .55; cursor: default; }
   .printer-reminder > button { grid-column: 1 / -1; width: 100%; }
   .rz-header { padding: 14px 18px; }
   .printer-status { display: none; }
-  .home-view, .preview-view, .manage-view, .edit-view { width: min(100% - 28px, 1080px); padding: 36px 0; }
-  .primary-actions { grid-template-columns: 1fr; }
+  .home-view, .preview-view, .manage-view, .edit-view, .creative-view { width: min(100% - 28px, 1080px); padding: 24px 0; }
+  .primary-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .quick-product-panel { align-items: stretch; flex-direction: column; }
   .quick-product-actions { display: grid; grid-template-columns: 1fr 1fr; }
-  .action-button { min-height: 128px; }
+  .action-button { min-height: 104px; padding: 13px; grid-template-columns: 38px 1fr; gap: 10px; }
+  .action-button .arrow { display: none; }
+  .action-icon { width: 38px; height: 38px; }
+  .search-queue-heading { align-items: stretch; flex-direction: column; }
   .spec-strip { gap: 12px; justify-content: space-between; font-size: 12px; }
   .preview-heading, .manage-heading { align-items: stretch; flex-direction: column; }
   .queue-row { grid-template-columns: 24px 1fr 76px; gap: 8px; }
+  .queue-row.book-queue-row { grid-template-columns: 24px 1fr 76px; }
   .queue-name { grid-column: 2 / 4; }
   .queue-row label { grid-row: 2; }
   .queue-row label:nth-of-type(1) { grid-column: 2; }
   .queue-row label:nth-of-type(2) { grid-column: 3; }
   .queue-row label:nth-of-type(3) { grid-column: 3; grid-row: 3; }
+  .book-queue-row label:nth-of-type(3) { grid-column: 2; grid-row: 3; }
+  .book-queue-row label:nth-of-type(4) { grid-column: 3; grid-row: 3; }
   .queue-quick-edit { grid-column: 1 / -1; align-items: stretch; flex-direction: column; }
-  .product-row { padding-right: 8px; }
-  .product-main { grid-template-columns: minmax(0, 1fr) 75px 16px; padding-left: 12px; }
+  .product-row { padding: 0 8px 9px; grid-template-columns: minmax(0, 1fr) auto; }
+  .product-main { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) 75px 16px; padding: 9px 4px 4px; }
+  .flags { max-width: none; }
   .active-button { min-width: 78px; padding: 8px 7px; font-size: 12px; }
   .form-grid { grid-template-columns: 1fr; }
+  .creative-heading { align-items: stretch; flex-direction: column; }
+  .creative-workspace { grid-template-columns: 1fr; }
+  .creative-stage { grid-row: 1; }
 }
 
-@media (min-width: 721px) and (max-width: 980px) {
+@media (min-width: 721px) and (max-width: 1050px) {
+  .primary-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 430px) {
   .primary-actions { grid-template-columns: 1fr; }
 }
 
@@ -817,8 +1108,19 @@ button:disabled { opacity: .55; cursor: default; }
   .no-print { display: none !important; }
   .preview-view { width: auto; margin: 0; padding: 0; }
   .print-sheet { display: block; }
+  .creative-view { width: 55mm; margin: 0; padding: 0; }
+  .creative-print-sheet { position: relative; display: block; width: 55mm; height: 50mm; overflow: hidden; color: #000; background: #fff; font-family: Arial, Helvetica, sans-serif; }
+  .creative-print-sheet .creative-element { outline: 0; }
   .thermal-label { width: 55mm; height: 50mm; box-sizing: border-box; padding: 2.1mm 2.2mm 1.7mm; overflow: hidden; color: #000; background: #fff; font-family: Arial, Helvetica, sans-serif; break-after: page; page-break-after: always; }
   .thermal-label:last-child { break-after: auto; page-break-after: auto; }
+  .book-label-page { width: 55mm; height: 50mm; box-sizing: border-box; overflow: hidden; color: #000; background: #fff; font-family: Arial, Helvetica, sans-serif; break-after: page; page-break-after: always; }
+  .book-label-page:last-child { break-after: auto; page-break-after: auto; }
+  .book-label { width: 55mm; height: 25mm; box-sizing: border-box; padding: 1.5mm 2mm 1.2mm; overflow: hidden; }
+  .book-label + .book-label { border-top: .3mm dashed #555; }
+  .book-product { display: block; padding-bottom: .7mm; overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; font-size: 8.5pt; line-height: 1; }
+  .book-label-grid { padding-top: .7mm; display: grid; grid-template-columns: 22mm 1fr; row-gap: .35mm; border-top: .2mm solid #777; font-size: 7pt; line-height: 1.05; }
+  .book-label-grid span { text-align: left; }
+  .book-label-grid b { overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; font-size: 7.2pt; }
   .label-product { min-height: 10mm; display: grid; grid-template-columns: 21mm 1fr; align-items: start; gap: 1mm; }
   .label-product b { padding-top: .5mm; font-family: Georgia, serif; font-size: 9pt; }
   .label-product strong { text-align: center; font-family: Georgia, serif; font-size: 9.5pt; line-height: 1.02; overflow-wrap: anywhere; }

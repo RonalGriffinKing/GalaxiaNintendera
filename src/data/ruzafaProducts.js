@@ -247,6 +247,8 @@ export const defaultRuzafaProducts = rows.map(([name, category, shelfLife], inde
   workshopDaily: category === 'Elaborados',
   workshopManual: category === 'Congelados' || category === 'Refrigerados',
   produce: producePattern.test(name),
+  book: false,
+  productCode: '',
   currentLot: '',
   active: true,
 }))
