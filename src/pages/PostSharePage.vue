@@ -1,10 +1,12 @@
 <script setup>
-import { computed, nextTick, onBeforeUpdate, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUpdate, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { toPng } from 'html-to-image'
+import { getFontEmbedCSS, toPng } from 'html-to-image'
 import JSZip from 'jszip'
-import { doc, getDoc } from 'firebase/firestore'
-import { db } from '@/firebase'
+import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
+import { auth, db } from '@/firebase'
+import { mergeSocialSettings, updateSocialSetting } from '@/services/socialTemplateState'
+import SocialVisualInspector from '@/components/posts/SocialVisualInspector.vue'
 import { resolveProfileIcon } from '@/services/profileProgress'
 import { apiUrl } from '@/services/appEnvironment'
 import fallbackCover from '@/iconos/Banner.png'
@@ -23,16 +25,30 @@ const selectedFormat = ref('story')
 const brokenImages = ref({})
 const imageCacheNonce = ref(Date.now())
 const exportProgress = ref({ current: 0, total: 0, label: '' })
+const editorViewport = ref({ width: window.innerWidth, height: window.innerHeight })
+const updateEditorViewport = () => { editorViewport.value = { width: window.innerWidth, height: window.innerHeight } }
 const editorOpen = ref(false)
+const advancedOpen = ref(false)
+const selectedElement = ref('title')
+const selectionHandle = ref(null)
+const textOverflow = ref(false)
+const centerGuide = ref(false)
+const savedTemplates = ref([])
+const templateNotice = ref('')
+const undoStack = ref([])
+const redoStack = ref([])
+let visualDrag = null
+let exportFontCache = null
 const stylePickerOpen = ref(false)
 const selectedSlideIndex = ref(0)
-const applyScope = ref('all')
+const applyScope = ref('single')
 const selectedStyle = ref('editorial')
 const selectedTemplate = ref('official')
 const activeDrawerSection = ref('image')
 const globalImageOverride = ref('')
 const slideImageOverrides = ref({})
 const slideTextOverrides = ref({})
+const slideDescriptionOverrides = ref({})
 const sourceType = computed(() => route.query.type === 'event' ? 'event' : 'post')
 
 const fontOptions = [
@@ -208,12 +224,19 @@ const cardStyle = computed(() => ({
   '--logo-bottom': selectedFormat.value === 'square' ? '26px' : '34px'
 }))
 const selectedSlide = computed(() => carouselSlides.value[selectedSlideIndex.value] || carouselSlides.value[0])
+const editingScale = computed(() => {
+ if (!editorOpen.value) return activeFormat.value.scale
+ const mobile = editorViewport.value.width <= 800
+ const width = Math.max(200, editorViewport.value.width - (mobile ? 50 : 420))
+ const height = Math.max(120, editorViewport.value.height - (mobile ? Math.min(350, editorViewport.value.height * .45) + 200 : 430))
+ return Math.min(.5, width / exportSize.value.width, height / exportSize.value.height)
+})
 const previewStyle = computed(() => ({
-  width: `${exportSize.value.width * activeFormat.value.scale}px`,
-  height: `${exportSize.value.height * activeFormat.value.scale}px`
+  width: `${exportSize.value.width * editingScale.value}px`,
+  height: `${exportSize.value.height * editingScale.value}px`
 }))
 const previewScaleStyle = computed(() => ({
-  transform: `scale(${activeFormat.value.scale})`
+  transform: `scale(${editingScale.value})`
 }))
 const imageIssueMessage = computed(() => {
   const failed = Object.values(brokenImages.value).filter(Boolean)
@@ -291,7 +314,8 @@ const carouselSlides = computed(() => {
   }))
 })
 
-onMounted(loadPost)
+onMounted(() => { loadPost(); loadTemplateLibrary(); window.addEventListener('resize', updateEditorViewport) })
+onUnmounted(() => window.removeEventListener('resize', updateEditorViewport))
 watch([() => route.params.id, () => route.query.type], loadPost)
 watch(() => carouselSlides.value.length, (length) => {
   if (!length) {
@@ -305,6 +329,80 @@ onBeforeUpdate(() => {
   cardRefs.value = []
 })
 
+
+function designSnapshot() { return cloneSettings({ global: globalTemplateSettings.value, overrides: slideTemplateOverrides.value, texts: slideTextOverrides.value, descriptions: slideDescriptionOverrides.value, format: selectedFormat.value }) }
+function rememberDesign() { undoStack.value = [...undoStack.value.slice(-49), designSnapshot()]; redoStack.value = [] }
+function restoreHistory(redo) {
+ const from = redo ? redoStack : undoStack; const to = redo ? undoStack : redoStack
+ if (!from.value.length) return
+ to.value.push(designSnapshot()); const state = from.value.pop()
+ globalTemplateSettings.value = state.global; slideTemplateOverrides.value = state.overrides; slideTextOverrides.value = state.texts; slideDescriptionOverrides.value = state.descriptions || {}; selectedFormat.value = state.format || selectedFormat.value
+}
+function resetSingleDesign() { rememberDesign(); const next = { ...slideTemplateOverrides.value }; delete next[selectedSlideIndex.value]; slideTemplateOverrides.value = next }
+function visualElementStyle(index, key) {
+ const settings = settingsForSlide(index); const layout = settings['visual_' + key] || {}; const typography = settings[key] || {}
+ return { translate: ((layout.x || 0) * exportSize.value.width / 100) + 'px ' + ((layout.y || 0) * exportSize.value.height / 100) + 'px', textAlign: typography.align || undefined, maxWidth: key === 'title' && typography.customWidth ? typography.width + 'px' : undefined, scale: key === 'button' && typography.size ? typography.size / 100 : undefined, fontWeight: typography.weight || undefined, fontFamily: typography.family || undefined, lineHeight: typography.line || undefined, outline: editorOpen.value && !isDownloading.value && selectedSlideIndex.value === index && selectedElement.value === key ? 'var(--selection-outline, 4px solid #c084fc)' : undefined, outlineOffset: '6px', position: key === 'title' ? 'relative' : undefined }
+}
+function startVisualDrag(event, index, resize = false) {
+ if (!editorOpen.value || isDownloading.value || event.button !== 0) return
+ const cardElement = cardRefs.value[index]
+ const element = resize ? cardElement?.querySelector('[data-edit="' + selectedElement.value + '"]') : event.target.closest('[data-edit]') || cardElement?.querySelector('.social-card-bg'); if (!element) return
+ event.preventDefault(); selectedSlideIndex.value = index; selectedElement.value = element.dataset.edit || 'image'; rememberDesign()
+ const card = cardElement.getBoundingClientRect(); const box = element.getBoundingClientRect(); const layout = selectedElement.value === 'image' ? settingsForSlide(index).image : settingsForSlide(index)['visual_' + selectedElement.value] || {}
+ visualDrag = { key: selectedElement.value, startX: event.clientX, startY: event.clientY, x: layout.x || 0, y: layout.y || 0, card, box, resize, size: selectedElement.value === 'gameLogo' && selectedStyle.value === 'impact' && index === 0 ? settingsForSlide(index).coverGameLogo.size : settingsForSlide(index)[selectedElement.value]?.size || 100, width: settingsForSlide(index).title.width }
+ event.currentTarget.setPointerCapture(event.pointerId)
+}
+function moveVisualDrag(event) {
+ if (!visualDrag) return
+ const d = visualDrag; const dx = event.clientX - d.startX; const dy = event.clientY - d.startY
+ if (d.key === 'image') { setSetting('image.x', Math.max(0, Math.min(100, d.x - dx / d.card.width * 100))); setSetting('image.y', Math.max(0, Math.min(100, d.y - dy / d.card.height * 100))); return }
+ if (d.resize && d.key !== 'title') {
+  const ratio = Math.max(0.2, 1 + dx / Math.max(20, d.box.width))
+  setVisualInspectorSetting({ path: d.key + '.size', value: Math.max(16, Math.min(760, d.size * ratio)) })
+  return
+ }
+ if (d.resize) { setSetting('title.width', Math.max(180, Math.min(1000, d.width + dx * exportSize.value.width / d.card.width))); setSetting('title.size', Math.max(24, Math.min(150, d.size + dy * exportSize.value.height / d.card.height / 5))); return }
+ let x = Math.max(d.card.left - d.box.left, Math.min(d.card.right - d.box.right, dx)); let y = Math.max(d.card.top - d.box.top, Math.min(d.card.bottom - d.box.bottom, dy))
+ const center = d.card.left + d.card.width / 2 - (d.box.left + d.box.width / 2); centerGuide.value = Math.abs(x - center) < 8; if (centerGuide.value) x = center
+ setSetting('visual_' + d.key + '.x', d.x + x / d.card.width * 100); setSetting('visual_' + d.key + '.y', d.y + y / d.card.height * 100)
+}
+function stopVisualDrag() { visualDrag = null; centerGuide.value = false }
+watch([globalTemplateSettings, slideTemplateOverrides, selectedSlideIndex, selectedElement, selectedFormat, editorOpen, editorViewport], async () => {
+ await nextTick()
+ const card = cardRefs.value[selectedSlideIndex.value]; const element = card?.querySelector('[data-edit="' + selectedElement.value + '"]'); const viewport = card?.closest('.share-card-viewport')
+ textOverflow.value = Boolean(element && ['title', 'description'].includes(selectedElement.value) && element.scrollHeight > element.clientHeight + 2)
+ if (!element || !viewport || selectedElement.value === 'image') { selectionHandle.value = null; return }
+ const box = element.getBoundingClientRect(); const area = viewport.getBoundingClientRect()
+ selectionHandle.value = { left: Math.max(0, Math.min(area.width - 24, box.right - area.left - 12)) + 'px', top: Math.max(0, Math.min(area.height - 24, box.bottom - area.top - 12)) + 'px' }
+}, { deep: true, flush: 'post' })
+function setVisualInspectorSetting({ path, value }) {
+ if (path === 'gameLogo.size' && selectedStyle.value === 'impact' && selectedSlideIndex.value === 0) {
+  if (applyScope.value === 'all') {
+   const ratio = value / globalTemplateSettings.value.coverGameLogo.size
+   setSetting('gameLogo.size', globalTemplateSettings.value.gameLogo.size * ratio)
+  }
+  setSetting('coverGameLogo.size', value)
+ } else setSetting(path, value)
+}
+function centerVisualElement() {
+ const card = cardRefs.value[selectedSlideIndex.value]; const element = card?.querySelector('[data-edit="' + selectedElement.value + '"]'); if (!element) return
+ const c = card.getBoundingClientRect(); const e = element.getBoundingClientRect(); const layout = settingsForSlide(selectedSlideIndex.value)['visual_' + selectedElement.value] || {}
+ setSetting('visual_' + selectedElement.value + '.x', (layout.x || 0) + (c.left + c.width / 2 - e.left - e.width / 2) / c.width * 100)
+}
+async function loadTemplateLibrary() {
+ try { savedTemplates.value = JSON.parse(localStorage.getItem('galaxia-social-library') || '[]'); if (auth.currentUser) { const result = await getDocs(collection(db, 'users', auth.currentUser.uid, 'socialTemplates')); const merged = new Map(savedTemplates.value.map(item => [item.id, item])); result.docs.forEach(item => merged.set(item.id, { ...item.data(), id: item.id })); savedTemplates.value = [...merged.values()] } } catch { templateNotice.value = 'Plantillas disponibles en este navegador.' }
+}
+async function saveNamedTemplate(name) {
+ if (!name.trim()) return
+ const item = { id: 'template-' + Date.now(), name: name.trim(), style: selectedStyle.value, format: selectedFormat.value, settings: cloneSettings(globalTemplateSettings.value) }
+ try { localStorage.setItem('galaxia-social-library', JSON.stringify([...savedTemplates.value, item])); savedTemplates.value.push(item); templateNotice.value = 'Plantilla guardada en este navegador.' } catch { templateNotice.value = 'No hay espacio para guardar la plantilla.'; return }
+ if (auth.currentUser) { try { await setDoc(doc(db, 'users', auth.currentUser.uid, 'socialTemplates', item.id), item); templateNotice.value = 'Plantilla guardada en tu cuenta.' } catch { templateNotice.value = 'Guardada en este navegador; la cuenta no permite sincronizarla.' } }
+}
+function loadNamedTemplate(id) {
+ const item = savedTemplates.value.find(template => template.id === id); if (!item || !styleDefinitions[item.style] || !formats[item.format]) return
+ switchStyle(item.style); rememberDesign(); selectedFormat.value = item.format; globalTemplateSettings.value = mergeSettings(styleDefinitions[item.style].settings, item.settings)
+ templateNotice.value = 'Diseno general aplicado; se conservan los ajustes individuales.'
+}
 function selectSlide(index) {
   selectedSlideIndex.value = index
 }
@@ -325,6 +423,7 @@ function switchStyle(key) {
   }
 
   selectedStyle.value = key
+  undoStack.value = []; redoStack.value = []; visualDrag = null
   globalTemplateSettings.value = cloneSettings(styleSettingsStore.value[key] || styleDefinitions[key].settings)
   slideTemplateOverrides.value = cloneSettings(styleOverridesStore.value[key] || {})
   selectedTemplate.value = key === 'editorial' ? 'official' : 'custom'
@@ -335,19 +434,6 @@ function settingsForSlide(index) {
   return mergeSettings(globalTemplateSettings.value, slideTemplateOverrides.value[index] || {})
 }
 
-function activeEditSettings() {
-  if (applyScope.value === 'all') return globalTemplateSettings.value
-
-  const index = selectedSlideIndex.value
-  if (!slideTemplateOverrides.value[index]) {
-    slideTemplateOverrides.value = {
-      ...slideTemplateOverrides.value,
-      [index]: cloneSettings(globalTemplateSettings.value)
-    }
-  }
-  return slideTemplateOverrides.value[index]
-}
-
 function settingValue(path) {
   return getByPath(applyScope.value === 'all'
     ? globalTemplateSettings.value
@@ -355,16 +441,11 @@ function settingValue(path) {
 }
 
 function setSetting(path, value) {
-  const target = activeEditSettings()
-  setByPath(target, path, value)
-  if (applyScope.value === 'all') {
-    globalTemplateSettings.value = { ...target }
-  } else {
-    slideTemplateOverrides.value = {
-      ...slideTemplateOverrides.value,
-      [selectedSlideIndex.value]: { ...target }
-    }
-  }
+  if (!visualDrag) rememberDesign()
+  let next = updateSocialSetting(globalTemplateSettings.value, slideTemplateOverrides.value, selectedSlideIndex.value, applyScope.value, path, value)
+  if (path === 'title.width') next = updateSocialSetting(next.global, next.overrides, selectedSlideIndex.value, applyScope.value, 'title.customWidth', true)
+  globalTemplateSettings.value = next.global
+  slideTemplateOverrides.value = next.overrides
 }
 
 function applyPreset(key) {
@@ -410,26 +491,10 @@ function resetLogoLayout(group) {
   })
 }
 
-function coverLogoValue(key) {
-  return globalTemplateSettings.value.coverGameLogo[key]
-}
-
-function setCoverLogoSetting(key, value) {
-  const coverGameLogo = {
-    ...globalTemplateSettings.value.coverGameLogo,
-    [key]: value
-  }
-  globalTemplateSettings.value = {
-    ...globalTemplateSettings.value,
-    coverGameLogo
-  }
-}
-
+function coverLogoValue(key) { return settingValue('coverGameLogo.' + key) }
+function setCoverLogoSetting(key, value) { setSetting('coverGameLogo.' + key, value) }
 function resetCoverLogoLayout() {
-  globalTemplateSettings.value = {
-    ...globalTemplateSettings.value,
-    coverGameLogo: cloneSettings(activeStyle.value.settings.coverGameLogo)
-  }
+  for (const key of ['size', 'x', 'y']) setCoverLogoSetting(key, activeStyle.value.settings.coverGameLogo[key])
 }
 
 function resetPositions() {
@@ -443,6 +508,7 @@ function resetPositions() {
     'button.y'
   ]
   paths.forEach(path => setSetting(path, getByPath(defaults, path)))
+  for (const key of ['title', 'description', 'logo', 'gameLogo', 'author', 'part', 'arrow', 'button', 'number']) { setSetting('visual_' + key + '.x', 0); setSetting('visual_' + key + '.y', 0) }
   setCoverLogoSetting('x', defaults.coverGameLogo.x)
   setCoverLogoSetting('y', defaults.coverGameLogo.y)
 }
@@ -451,6 +517,8 @@ function displaySlideTitle(slide) {
   return slideTextOverrides.value[slide.id] ?? slide.title
 }
 
+function displaySlideDescription(slide) { return slideDescriptionOverrides.value[slide.id] ?? slide.description }
+function setSlideDescription(value) { const slide = selectedSlide.value; if (slide) slideDescriptionOverrides.value = { ...slideDescriptionOverrides.value, [slide.id]: value } }
 function setSlideTitle(value) {
   const slide = selectedSlide.value
   if (!slide) return
@@ -577,30 +645,10 @@ function cloneSettings(settings) {
   return JSON.parse(JSON.stringify(settings))
 }
 
-function mergeSettings(base, override) {
-  const merged = cloneSettings(base)
-  Object.entries(override || {}).forEach(([key, value]) => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      merged[key] = { ...(merged[key] || {}), ...value }
-    } else {
-      merged[key] = value
-    }
-  })
-  return merged
-}
+function mergeSettings(base, override) { return mergeSocialSettings(base, override) }
 
 function getByPath(source, path) {
   return path.split('.').reduce((value, key) => value?.[key], source)
-}
-
-function setByPath(source, path, value) {
-  const keys = path.split('.')
-  const last = keys.pop()
-  const target = keys.reduce((node, key) => {
-    node[key] = { ...(node[key] || {}) }
-    return node[key]
-  }, source)
-  target[last] = value
 }
 
 function loadStoredTemplate(style = 'editorial') {
@@ -783,9 +831,32 @@ async function downloadCarousel() {
   }
 }
 
+async function exportFontCSS(target) {
+  const text = [...new Set(cardRefs.value.map(card => card?.textContent || '').join(''))].join('')
+  if (exportFontCache?.text === text) return exportFontCache.css
+  const inherited = await getFontEmbedCSS(target)
+  const query = 'family=Roboto:wght@400..900&family=Inter:wght@400..900&family=Space+Grotesk:wght@500..700&text=' + encodeURIComponent(text)
+  const response = await fetch('https://fonts.googleapis.com/css2?' + query, { signal: AbortSignal.timeout(15000) })
+  if (!response.ok) throw new Error('No se pudieron preparar las fuentes para exportar.')
+  let css = await response.text()
+  const urls = [...new Set([...css.matchAll(/url\((https:\/\/[^)]+)\)/g)].map(match => match[1]))]
+  for (const url of urls) {
+    const fontResponse = await fetch(url, { signal: AbortSignal.timeout(15000) })
+    if (!fontResponse.ok) throw new Error('No se pudo cargar una fuente de exportacion.')
+    const blob = await fontResponse.blob()
+    const data = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob) })
+    css = css.replaceAll(url, data)
+  }
+  exportFontCache = { text, css: inherited + '\n' + css }
+  return exportFontCache.css
+}
+
 async function renderSlidePng(target) {
   await waitForImages(target)
   return toPng(target, {
+    filter: node => !node.hasAttribute?.('data-editor-ui'),
+    style: { '--selection-outline': 'none' },
+    fontEmbedCSS: await exportFontCSS(target),
     cacheBust: true,
     includeQueryParams: true,
     pixelRatio: 1,
@@ -878,7 +949,7 @@ function slugify(value) {
 </script>
 
 <template>
-  <main class="post-share-page">
+  <main class="post-share-page" :class="{ 'visual-editing': editorOpen }">
     <GalaxyLoader
       v-if="isDownloading"
       class="share-export-loader"
@@ -965,14 +1036,14 @@ function slugify(value) {
         <div
           v-for="(slide, index) in carouselSlides"
           :key="`${post?.id || 'post'}-${selectedStyle}-${selectedFormat}-${slide.id}-${slide.image}`"
-          class="share-slide-shell"
+          class="share-slide-shell" v-show="!editorOpen || selectedSlideIndex === index"
           :class="{ active: selectedSlideIndex === index }"
         >
           <div class="share-card-viewport" :style="previewStyle">
             <div class="share-card-scale" :style="previewScaleStyle">
               <article
                 :ref="(el) => setCardRef(el, index)"
-                class="social-card"
+                class="social-card" @pointerdown="startVisualDrag($event, index)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag"
                 :class="[activeStyle.className, {
                   analysis: isAnalysisPost,
                   'impact-cover': selectedStyle === 'impact' && index === 0,
@@ -995,7 +1066,7 @@ function slugify(value) {
                   <span v-for="tile in 24" :key="tile">GOLD</span>
                 </div>
 
-                <div v-if="settingsForSlide(index).author.visible" class="social-card-top">
+                <div v-if="settingsForSlide(index).author.visible" class="social-card-top" data-edit="author" :style="visualElementStyle(index, 'author')">
                   <div class="social-author">
                     <span v-if="settingsForSlide(index).author.avatar" class="social-author-icon">
                       <img v-if="authorIcon" :src="authorIcon" alt="" />
@@ -1014,13 +1085,13 @@ function slugify(value) {
                 </div>
 
                 <div class="social-card-copy" :class="{ 'has-points': slide.points?.length }">
-                  <span v-if="settingsForSlide(index).part.visible" class="social-category">
+                  <span v-if="settingsForSlide(index).part.visible" class="social-category" data-edit="part" :style="visualElementStyle(index, 'part')">
                     <i class="fas fa-gamepad"></i>
                     {{ labelForPart(slide, index) }}
                   </span>
-                  <h2>{{ displaySlideTitle(slide) }}</h2>
+                  <h2 data-edit="title" :style="visualElementStyle(index, 'title')">{{ displaySlideTitle(slide) }}</h2>
                   <small v-if="settingsForSlide(index).subtitle.visible" class="social-subtitle">{{ slide.subtitle }}</small>
-                  <p v-if="settingsForSlide(index).description.visible || (selectedStyle === 'impact' && index > 0)">{{ slide.description }}</p>
+                  <p data-edit="description" :style="visualElementStyle(index, 'description')" v-if="settingsForSlide(index).description.visible || (selectedStyle === 'impact' && index > 0)">{{ displaySlideDescription(slide) }}</p>
                   <ul v-if="slide.points?.length && (selectedStyle !== 'impact' || index > 0)" class="social-points">
                     <li v-for="(point, pointIndex) in slide.points" :key="`${slide.id}-point-${pointIndex}`">
                       <span>{{ pointIndex + 1 }}</span>
@@ -1029,26 +1100,28 @@ function slugify(value) {
                   </ul>
                 </div>
 
-                <div v-if="!slide.isLast && settingsForSlide(index).arrow.visible" class="social-next-cue">
+                <div v-if="!slide.isLast && settingsForSlide(index).arrow.visible" class="social-next-cue" data-edit="arrow" :style="visualElementStyle(index, 'arrow')">
                   <span>Siguiente</span>
                   <i :class="['fas', settingsForSlide(index).arrow.icon]"></i>
                 </div>
 
                 <div class="social-card-footer">
-                  <span v-if="settingsForSlide(index).button.visible" class="social-cta">{{ settingsForSlide(index).button.text }}</span>
-                  <strong v-if="settingsForSlide(index).number.visible">{{ slide.number }} / {{ slide.total }}</strong>
+                  <span v-if="settingsForSlide(index).button.visible" class="social-cta" data-edit="button" :style="visualElementStyle(index, 'button')">{{ settingsForSlide(index).button.text }}</span>
+                  <strong data-edit="number" :style="visualElementStyle(index, 'number')" v-if="settingsForSlide(index).number.visible">{{ slide.number }} / {{ slide.total }}</strong>
                 </div>
 
-                <img v-if="settingsForSlide(index).logo.visible" class="social-brand-logo" :src="galaxyLogo" alt="Galaxia Nintendera" />
+                <img v-if="settingsForSlide(index).logo.visible" class="social-brand-logo" data-edit="logo" :style="visualElementStyle(index, 'logo')" :src="galaxyLogo" alt="Galaxia Nintendera" />
                 <img
                   v-if="settingsForSlide(index).gameLogo.visible && gameLogoSource(index)"
-                  class="social-game-logo"
+                  class="social-game-logo" data-edit="gameLogo" :style="visualElementStyle(index, 'gameLogo')"
                   :src="gameLogoSource(index)"
                   crossorigin="anonymous"
                   alt="Logo del juego"
                 />
               </article>
             </div>
+            <div v-if="editorOpen && centerGuide" class="visual-center-guide" data-editor-ui></div>
+            <button v-if="editorOpen && !isDownloading && selectedSlideIndex === index && selectionHandle" data-editor-ui class="visual-selection-handle" :style="selectionHandle" aria-label="Redimensionar elemento" @pointerdown.stop="startVisualDrag($event, index, true)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag" @lostpointercapture="stopVisualDrag"></button>
           </div>
         </div>
       </div>
@@ -1067,7 +1140,8 @@ function slugify(value) {
       </div>
     </section>
 
-    <aside v-if="editorOpen" class="template-drawer" aria-label="Editor de plantilla">
+    <SocialVisualInspector v-if="editorOpen && !advancedOpen" :element="selectedElement" :scope="applyScope" :cover-logo="selectedStyle === 'impact' && selectedSlideIndex === 0" :inert="isDownloading" :overflow="textOverflow" :has-exceptions="Object.keys(slideTemplateOverrides[selectedSlideIndex] || {}).length > 0" :settings="applyScope === 'all' ? globalTemplateSettings : settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :fonts="fontOptions" :templates="savedTemplates" :notice="templateNotice" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectedElement = $event" @scope="applyScope = $event" @setting="setVisualInspectorSetting" @title="rememberDesign(); setSlideTitle($event)" @description="rememberDesign(); setSlideDescription($event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @download="downloadCarousel" @center="centerVisualElement" @reset="resetSingleDesign" @save="saveNamedTemplate" @load="loadNamedTemplate" @advanced="advancedOpen = true" @close="editorOpen = false" />
+    <aside v-if="editorOpen && advancedOpen" class="template-drawer" aria-label="Editor de plantilla">
       <div class="drawer-head">
         <div>
           <span>Editor visual</span>
@@ -2510,5 +2584,26 @@ function slugify(value) {
     max-height: calc(100vh - 230px);
     padding: 12px;
   }
+}
+
+.visual-editing { padding-right: 340px; }
+.visual-editing .share-preview { justify-content: center; }
+.visual-editing .share-toolbar { gap: 10px; }
+.visual-editing .social-card [data-edit] { cursor: grab; touch-action: none; }
+.visual-center-guide { position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px solid #22d3ee; pointer-events: none; z-index: 9; }
+.visual-selection-handle { z-index: 10; position: absolute; width: 24px; height: 24px; border: 2px solid white; border-radius: 5px; background: #9333ea; cursor: nwse-resize; touch-action: none; }
+
+@media (max-width: 800px) { .visual-editing { padding-right: 12px; padding-bottom: 390px; } .visual-editing .share-preview { padding: 8px; } .visual-editing .share-toolbar h1 { font-size: 18px; } .visual-editing .format-switcher { margin: 8px 0; } }
+
+@media (max-width: 800px) {
+ .visual-editing .share-toolbar, .visual-editing .active-style-bar { display: none; }
+ .visual-editing .share-workbench { position: fixed; top: 72px; left: 10px; right: 10px; bottom: min(350px, 45dvh); display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+ .visual-editing .format-switcher { flex: 0 0 auto; margin: 0; }
+ .visual-editing .format-switcher button { min-height: 40px; padding: 6px 10px; }
+ .visual-editing .format-switcher button span { display: none; }
+ .visual-editing .share-preview { flex: 1; min-height: 0; align-items: center; margin: 0; }
+ .visual-editing .share-filmstrip { flex: 0 0 auto; padding: 4px; margin: 0; }
+ .visual-editing .share-filmstrip button { width: 38px; height: 46px; }
+ :global(body:has(.visual-editing) .public-bottom-nav) { display: none; }
 }
 </style>

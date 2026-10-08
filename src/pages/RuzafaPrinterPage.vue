@@ -17,9 +17,13 @@ const selectedProduct = ref(null)
 const expandedQueueId = ref(null)
 const searchQueue = ref([])
 const showPrinterReminder = ref(false)
+const orderingActions = ref(false)
+const homeActionOrder = ref(['audit', 'barDaily', 'barWeekly', 'workshopDaily', 'workshopManual', 'produce', 'book'])
 const category = ref('Todos')
+const workArea = ref('Todos')
 const editing = reactive({})
 const editReturnMode = ref('manage')
+const editingQueueId = ref(null)
 const pendingProductIds = ref(new Set())
 const creativeCanvas = ref(null)
 const creativeElements = ref([])
@@ -28,8 +32,26 @@ const creativeFileInput = ref(null)
 const creativeSymbols = ['★', '✓', '!', '+', '♥', '●', '▲', '☕']
 let creativeCounter = 0
 let draggingCreativeId = null
+let resizingCreative = null
+const queueSaveTimers = new Map()
 
 const categories = ['Todos', 'Congelados', 'Refrigerados', 'Elaborados', 'Secos']
+const workAreas = [
+  { label: 'Todos', value: 'Todos' },
+  { label: 'Barra', value: 'bar' },
+  { label: 'Obrador', value: 'workshop' },
+  { label: 'Libro', value: 'book' },
+  { label: 'Fruta y verdura', value: 'produce' },
+]
+const homeActions = {
+  audit: { icon: 'A', title: 'Imprimir para auditoría', subtitle: 'Todos los productos activos', className: 'audit' },
+  barDaily: { icon: 'BD', title: 'Barra diaria', subtitle: 'Leches, bebidas y productos diarios', className: 'daily' },
+  barWeekly: { icon: 'BS', title: 'Barra semanal', subtitle: 'Siropes, canela, cacao y toppings', className: 'bar' },
+  workshopDaily: { icon: 'OD', title: 'Obrador diario', subtitle: 'Elaboraciones que se renuevan cada día', className: 'workshop' },
+  workshopManual: { icon: 'OM', title: 'Obrador', subtitle: 'Productos que se etiquetan cuando se utilizan', className: 'workshop-manual' },
+  produce: { icon: 'FV', title: 'Fruta y verdura', subtitle: 'Etiquetas para recepción de producto', className: 'produce' },
+  book: { icon: 'L', title: 'Etiquetas libro', subtitle: 'Productos congelados o refrigerados del libro', className: 'book' },
+}
 const shelfLifeOptions = [
   { label: 'Caducidad primaria del envase', value: 'primaria' },
   ...[24, 48, 72, 96, 120, 144, 168].map(hours => ({ label: `${hours} horas`, value: `${hours} horas` })),
@@ -79,7 +101,10 @@ const normalizeProduct = product => {
     workshopManual: false,
     produce: false,
     book: false,
+    bookStorage: 'Congelado (-18 °C)',
+    bookPrimaryExpiry: '',
     productCode: '',
+    currentExpiry: '',
     storage: 'Refrigeracion (+)',
     state: 'Abierto',
     ...product,
@@ -102,6 +127,13 @@ onMounted(async () => {
   } catch (error) {
     creativeElements.value = []
   }
+  try {
+    const savedOrder = JSON.parse(window.localStorage.getItem('ruzafa-printer-action-order') || '[]')
+    const validOrder = savedOrder.filter(item => homeActions[item])
+    homeActionOrder.value = [...validOrder, ...Object.keys(homeActions).filter(item => !validOrder.includes(item))]
+  } catch (error) {
+    // Keep the default order when local preferences are invalid.
+  }
   window.addEventListener('paste', handleCreativePaste)
   try {
     products.value = (await getRuzafaProducts()).map(normalizeProduct)
@@ -117,8 +149,13 @@ const filteredProducts = computed(() => {
   const term = search.value.trim().toLocaleLowerCase('es')
   return products.value.filter(product => {
     const matchesCategory = category.value === 'Todos' || product.category === category.value
+    const matchesWorkArea = workArea.value === 'Todos'
+      || (workArea.value === 'bar' && (product.barDaily || product.barWeekly))
+      || (workArea.value === 'workshop' && (product.workshopDaily || product.workshopManual))
+      || (workArea.value === 'book' && product.book)
+      || (workArea.value === 'produce' && product.produce)
     const matchesTerm = !term || product.name.toLocaleLowerCase('es').includes(term)
-    return matchesCategory && matchesTerm
+    return matchesCategory && matchesWorkArea && matchesTerm
   })
 })
 
@@ -131,6 +168,17 @@ const globalSearchResults = computed(() => {
 })
 
 const pendingCount = computed(() => pendingProductIds.value.size)
+const orderedHomeActions = computed(() => homeActionOrder.value.map(type => ({ type, ...homeActions[type] })))
+
+const moveHomeAction = (type, direction) => {
+  const index = homeActionOrder.value.indexOf(type)
+  const target = index + direction
+  if (index < 0 || target < 0 || target >= homeActionOrder.value.length) return
+  const next = [...homeActionOrder.value]
+  ;[next[index], next[target]] = [next[target], next[index]]
+  homeActionOrder.value = next
+  window.localStorage.setItem('ruzafa-printer-action-order', JSON.stringify(next))
+}
 
 const updateHomeSearch = event => {
   homeSearch.value = event.target.value
@@ -179,14 +227,18 @@ const addShelfLife = (date, shelfLife) => {
 const prepareQueue = (source, title, type = 'standard') => {
   const now = new Date()
   queue.value = source.map((product, index) => {
-    const primaryDate = dateFromValue(product.primaryExpiry)
+    const productUsesPrimary = Boolean(product.primaryExpiry) || String(product.shelfLife).toLowerCase().includes('primaria')
+    const savedExpiry = type === 'book' ? product.bookPrimaryExpiry : productUsesPrimary ? product.primaryExpiry : product.currentExpiry
+    const savedDate = dateFromValue(savedExpiry)
+    const expiry = savedDate || (type === 'book' ? null : addShelfLife(now, product.shelfLife))
     return {
       ...product,
       selected: true,
       quantity: 1,
       printedAt: now,
-      expiry: primaryDate || addShelfLife(now, product.shelfLife),
-      manualExpiry: product.primaryExpiry || '',
+      expiry,
+      manualExpiry: savedExpiry || toDateInputValue(expiry),
+      saveState: '',
       lot: product.currentLot || makeLot(now, index),
     }
   })
@@ -273,7 +325,7 @@ const creativeElementStyle = item => ({
   left: `${item.x}%`,
   top: `${item.y}%`,
   width: item.type === 'image' ? `${item.width}%` : `${item.width || 90}%`,
-  fontSize: item.type === 'text' ? `${item.fontSize}mm` : undefined,
+  fontSize: item.type === 'text' ? `${(item.fontSize / 55) * 100}cqw` : undefined,
   fontWeight: item.bold ? '800' : '400',
   textAlign: item.align || 'center',
 })
@@ -325,6 +377,19 @@ const startCreativeDrag = (event, item) => {
 }
 
 const moveCreativeElement = event => {
+  if (resizingCreative && creativeCanvas.value) {
+    const item = creativeElements.value.find(candidate => candidate.id === resizingCreative.id)
+    if (!item) return
+    const rect = creativeCanvas.value.getBoundingClientRect()
+    const horizontalDirection = resizingCreative.corner.includes('e') ? 1 : -1
+    const delta = ((event.clientX - resizingCreative.startX) / rect.width) * 200 * horizontalDirection
+    const width = Math.min(96, Math.max(item.type === 'text' ? 12 : 8, resizingCreative.startWidth + delta))
+    item.width = width
+    if (item.type === 'text' && !['w', 'e'].includes(resizingCreative.corner)) {
+      item.fontSize = Math.min(18, Math.max(2, resizingCreative.startFontSize * (width / resizingCreative.startWidth)))
+    }
+    return
+  }
   if (!draggingCreativeId || !creativeCanvas.value) return
   const item = creativeElements.value.find(candidate => candidate.id === draggingCreativeId)
   if (!item) return
@@ -333,12 +398,47 @@ const moveCreativeElement = event => {
   item.y = Math.min(98, Math.max(2, ((event.clientY - rect.top) / rect.height) * 100))
 }
 
-const stopCreativeDrag = () => { draggingCreativeId = null }
+const stopCreativeDrag = () => {
+  draggingCreativeId = null
+  resizingCreative = null
+}
+
+const startCreativeResize = (event, item, corner) => {
+  event.stopPropagation()
+  event.preventDefault()
+  selectedCreativeId.value = item.id
+  draggingCreativeId = null
+  resizingCreative = {
+    id: item.id,
+    corner,
+    startX: event.clientX,
+    startWidth: item.width || 90,
+    startFontSize: item.fontSize || 4,
+  }
+  event.currentTarget.setPointerCapture?.(event.pointerId)
+}
 
 const centerCreativeElement = () => {
   if (!selectedCreativeElement.value) return
   selectedCreativeElement.value.x = 50
   selectedCreativeElement.value.y = 50
+}
+
+const alignCreativeElement = position => {
+  const item = selectedCreativeElement.value
+  if (!item || !creativeCanvas.value) return
+  const width = item.width || 90
+  const element = creativeCanvas.value.querySelector(`[data-creative-id="${item.id}"]`)
+  const canvasRect = creativeCanvas.value.getBoundingClientRect()
+  const elementHeight = element?.getBoundingClientRect().height || 24
+  const halfHeight = (elementHeight / canvasRect.height) * 50
+
+  if (position === 'left') item.x = Math.min(50, width / 2 + 2)
+  if (position === 'center-x') item.x = 50
+  if (position === 'right') item.x = Math.max(50, 98 - width / 2)
+  if (position === 'top') item.y = Math.min(50, halfHeight + 2)
+  if (position === 'center-y') item.y = 50
+  if (position === 'bottom') item.y = Math.max(50, 98 - halfHeight)
 }
 
 const removeCreativeElement = () => {
@@ -376,6 +476,12 @@ const printLabels = async () => {
     message.value = 'Selecciona al menos una etiqueta.'
     return
   }
+  const pendingItems = queue.value.filter(item => item.saveState === 'pending')
+  pendingItems.forEach(item => {
+    clearTimeout(queueSaveTimers.get(item.id))
+    queueSaveTimers.delete(item.id)
+  })
+  if (pendingItems.length) await Promise.all(pendingItems.map(saveQueueProduct))
   const labels = printableLabels.value.map(item => ({
     productId: item.id,
     productName: item.name,
@@ -407,7 +513,7 @@ const toggleQueueEditor = item => {
 }
 
 const saveQueueProduct = async item => {
-  saving.value = true
+  item.saveState = 'saving'
   try {
     const product = products.value.find(candidate => candidate.id === item.id)
     if (!product) return
@@ -415,26 +521,37 @@ const saveQueueProduct = async item => {
       ...product,
       currentLot: item.lot || '',
       productCode: item.productCode || '',
-      primaryExpiry: usesPrimaryExpiry(item) ? item.manualExpiry || product.primaryExpiry || '' : product.primaryExpiry || '',
+      primaryExpiry: printType.value !== 'book' && usesPrimaryExpiry(item) ? item.manualExpiry || product.primaryExpiry || '' : product.primaryExpiry || '',
+      bookPrimaryExpiry: printType.value === 'book' ? item.manualExpiry || product.bookPrimaryExpiry || '' : product.bookPrimaryExpiry || '',
+      currentExpiry: printType.value !== 'book' && !isPrimaryProduct(item) ? item.manualExpiry || product.currentExpiry || '' : product.currentExpiry || '',
     })
     await saveRuzafaProduct(updated)
     products.value[products.value.findIndex(candidate => candidate.id === item.id)] = updated
     item.currentLot = updated.currentLot
     item.primaryExpiry = updated.primaryExpiry
-    message.value = `${usesPrimaryExpiry(item) ? 'Lote y fecha' : 'Lote'} de ${item.name} guardado para todos.`
-    expandedQueueId.value = null
+    item.bookPrimaryExpiry = updated.bookPrimaryExpiry
+    item.currentExpiry = updated.currentExpiry
+    item.saveState = 'saved'
   } catch (error) {
-    message.value = 'No se pudo guardar en Firebase. Puedes imprimir usando estos datos solo esta vez.'
-  } finally {
-    saving.value = false
+    item.saveState = 'error'
   }
+}
+
+const autoSaveQueueProduct = item => {
+  item.saveState = 'pending'
+  clearTimeout(queueSaveTimers.get(item.id))
+  queueSaveTimers.set(item.id, setTimeout(() => {
+    queueSaveTimers.delete(item.id)
+    saveQueueProduct(item)
+  }, 350))
 }
 
 const editProduct = product => {
   Object.keys(editing).forEach(key => delete editing[key])
   Object.assign(editing, JSON.parse(JSON.stringify(product)))
   editing._isNew = false
-  editReturnMode.value = mode.value === 'home' ? 'home' : 'manage'
+  editReturnMode.value = mode.value
+  editingQueueId.value = mode.value === 'preview' ? product.id : null
   mode.value = 'edit'
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -458,6 +575,7 @@ const createProduct = () => {
     active: true,
   }), { _isNew: true })
   editReturnMode.value = 'home'
+  editingQueueId.value = null
   mode.value = 'edit'
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -475,13 +593,33 @@ const saveProduct = async () => {
     const index = products.value.findIndex(product => product.id === normalized.id)
     if (index >= 0) products.value[index] = normalized
     else products.value.push(normalized)
+    if (editingQueueId.value) {
+      const queueItem = queue.value.find(item => item.id === editingQueueId.value)
+      if (queueItem) {
+        const transient = {
+          selected: queueItem.selected,
+          quantity: queueItem.quantity,
+          printedAt: queueItem.printedAt,
+          manualExpiry: printType.value === 'book' ? editing.bookPrimaryExpiry || queueItem.manualExpiry : editing.primaryExpiry || queueItem.manualExpiry,
+          expiry: printType.value === 'book' ? dateFromValue(editing.bookPrimaryExpiry) : dateFromValue(editing.primaryExpiry) || queueItem.expiry,
+          lot: editing.currentLot || queueItem.lot,
+        }
+        Object.assign(queueItem, normalized, transient)
+      }
+    }
     message.value = isNew ? 'Producto creado y guardado para todos los dispositivos.' : 'Producto actualizado para todos los dispositivos.'
     mode.value = editReturnMode.value
+    editingQueueId.value = null
   } catch (error) {
     message.value = 'No se pudo guardar. Revisa los permisos de Firebase.'
   } finally {
     saving.value = false
   }
+}
+
+const cancelProductEdit = () => {
+  mode.value = editReturnMode.value
+  editingQueueId.value = null
 }
 
 const toggleProductActive = product => {
@@ -615,42 +753,26 @@ const goHome = () => {
         </div>
       </section>
 
-      <div class="primary-actions">
-        <button class="action-button audit" type="button" @click="createQueue('audit')">
-          <span class="action-icon" aria-hidden="true">A</span>
-          <span><strong>Imprimir para auditoría</strong><small>Todos los productos activos</small></span>
-          <span class="arrow" aria-hidden="true">→</span>
+      <div class="action-order-toolbar">
+        <span v-if="orderingActions">Mueve cada botón con las flechas. El orden se guarda automáticamente.</span>
+        <button class="secondary-button" type="button" @click="orderingActions = !orderingActions">
+          {{ orderingActions ? 'Terminar' : 'Ordenar botones' }}
         </button>
-        <button class="action-button daily" type="button" @click="createQueue('barDaily')">
-          <span class="action-icon" aria-hidden="true">BD</span>
-          <span><strong>Barra diaria</strong><small>Leches, bebidas y productos diarios</small></span>
-          <span class="arrow" aria-hidden="true">→</span>
-        </button>
-        <button class="action-button bar" type="button" @click="createQueue('barWeekly')">
-          <span class="action-icon" aria-hidden="true">BS</span>
-          <span><strong>Barra semanal</strong><small>Siropes, canela, cacao y toppings</small></span>
-          <span class="arrow" aria-hidden="true">→</span>
-        </button>
-        <button class="action-button workshop" type="button" @click="createQueue('workshopDaily')">
-          <span class="action-icon" aria-hidden="true">OD</span>
-          <span><strong>Obrador diario</strong><small>Elaboraciones que se renuevan cada dia</small></span>
-          <span class="arrow" aria-hidden="true">&rarr;</span>
-        </button>
-        <button class="action-button workshop-manual" type="button" @click="createQueue('workshopManual')">
-          <span class="action-icon" aria-hidden="true">OM</span>
-          <span><strong>Obrador</strong><small>Productos que se etiquetan cuando se utilizan</small></span>
-          <span class="arrow" aria-hidden="true">&rarr;</span>
-        </button>
-        <button class="action-button produce" type="button" @click="createQueue('produce')">
-          <span class="action-icon" aria-hidden="true">FV</span>
-          <span><strong>Fruta y verdura</strong><small>Etiquetas para recepcion de producto</small></span>
-          <span class="arrow" aria-hidden="true">&rarr;</span>
-        </button>
-        <button class="action-button book" type="button" @click="createQueue('book')">
-          <span class="action-icon" aria-hidden="true">L</span>
-          <span><strong>Etiquetas libro</strong><small>Productos congelados del libro</small></span>
-          <span class="arrow" aria-hidden="true">&rarr;</span>
-        </button>
+      </div>
+
+      <div class="primary-actions" :class="{ ordering: orderingActions }">
+        <div v-for="(action, index) in orderedHomeActions" :key="action.type" class="action-slot">
+          <button class="action-button" :class="action.className" type="button" :disabled="orderingActions" @click="createQueue(action.type)">
+            <span class="action-icon" aria-hidden="true">{{ action.icon }}</span>
+            <span><strong>{{ action.title }}</strong><small>{{ action.subtitle }}</small></span>
+            <span class="arrow" aria-hidden="true">&rarr;</span>
+          </button>
+          <div v-if="orderingActions" class="action-order-controls">
+            <button type="button" :disabled="index === 0" :aria-label="`Mover ${action.title} antes`" title="Mover antes" @click="moveHomeAction(action.type, -1)">&larr;</button>
+            <span>{{ index + 1 }}</span>
+            <button type="button" :disabled="index === orderedHomeActions.length - 1" :aria-label="`Mover ${action.title} después`" title="Mover después" @click="moveHomeAction(action.type, 1)">&rarr;</button>
+          </div>
+        </div>
       </div>
 
       <button class="manage-button" type="button" @click="mode = 'manage'">
@@ -692,17 +814,19 @@ const goHome = () => {
             <label v-if="selectedCreativeElement.type === 'text'">Texto
               <textarea v-model="selectedCreativeElement.text" rows="3"></textarea>
             </label>
-            <label v-if="selectedCreativeElement.type === 'text'">Tamaño
-              <input v-model.number="selectedCreativeElement.fontSize" type="range" min="2" max="12" step="0.5">
-            </label>
-            <label v-else>Ancho
-              <input v-model.number="selectedCreativeElement.width" type="range" min="10" max="95" step="1">
-            </label>
             <div v-if="selectedCreativeElement.type === 'text'" class="creative-format-actions">
               <button type="button" :class="{ active: selectedCreativeElement.bold }" title="Negrita" @click="selectedCreativeElement.bold = !selectedCreativeElement.bold"><b>B</b></button>
               <button type="button" title="Alinear a la izquierda" @click="selectedCreativeElement.align = 'left'">≡</button>
               <button type="button" title="Centrar texto" @click="selectedCreativeElement.align = 'center'">≣</button>
               <button type="button" title="Alinear a la derecha" @click="selectedCreativeElement.align = 'right'">≡</button>
+            </div>
+            <div class="creative-position-actions" aria-label="Alinear elemento">
+              <button type="button" title="Alinear a la izquierda" aria-label="Alinear a la izquierda" @click="alignCreativeElement('left')">←</button>
+              <button type="button" title="Centrar horizontalmente" aria-label="Centrar horizontalmente" @click="alignCreativeElement('center-x')">↔</button>
+              <button type="button" title="Alinear a la derecha" aria-label="Alinear a la derecha" @click="alignCreativeElement('right')">→</button>
+              <button type="button" title="Alinear arriba" aria-label="Alinear arriba" @click="alignCreativeElement('top')">↑</button>
+              <button type="button" title="Centrar verticalmente" aria-label="Centrar verticalmente" @click="alignCreativeElement('center-y')">↕</button>
+              <button type="button" title="Alinear abajo" aria-label="Alinear abajo" @click="alignCreativeElement('bottom')">↓</button>
             </div>
             <div class="creative-selection-actions">
               <button class="secondary-button" type="button" @click="centerCreativeElement">Centrar</button>
@@ -732,10 +856,14 @@ const goHome = () => {
               class="creative-element"
               :class="[{ selected: selectedCreativeId === item.id }, `creative-${item.type}`]"
               :style="creativeElementStyle(item)"
+              :data-creative-id="item.id"
               @pointerdown.prevent="startCreativeDrag($event, item)"
             >
               <span v-if="item.type === 'text'">{{ item.text }}</span>
               <img v-else :src="item.source" alt="">
+              <template v-if="selectedCreativeId === item.id">
+                <button v-for="corner in ['nw', 'ne', 'sw', 'se', 'w', 'e']" :key="corner" class="creative-resize-handle" :class="corner" type="button" :aria-label="corner === 'w' || corner === 'e' ? 'Ajustar ancho' : `Cambiar tamaño de ${item.type === 'text' ? 'texto' : 'imagen'}`" @pointerdown="startCreativeResize($event, item, corner)"></button>
+              </template>
             </div>
             <p v-if="!creativeElements.length" class="creative-empty">Agrega texto, símbolos o imágenes</p>
           </div>
@@ -765,18 +893,19 @@ const goHome = () => {
         <p v-if="!queue.length" class="empty-queue">Todavía no hay productos en este grupo. Puedes asignarlos desde Gestionar productos.</p>
         <div v-for="item in queue" :key="item.id" class="queue-row" :class="{ 'book-queue-row': printType === 'book' }">
           <input v-model="item.selected" type="checkbox" :aria-label="`Incluir ${item.name}`">
-          <button class="queue-name" type="button" @click="toggleQueueEditor(item)"><strong>{{ item.name }}</strong><small>{{ item.shelfLife }} · Tocar para editar</small></button>
+          <button class="queue-name" type="button" @click="toggleQueueEditor(item)"><strong>{{ item.name }}</strong><small>{{ printType === 'book' ? `${item.bookStorage} · Caducidad primaria` : item.shelfLife }} · Tocar para editar</small></button>
           <label>Caducidad
-            <input v-if="expandedQueueId === item.id || !item.expiry || usesPrimaryExpiry(item)" v-model="item.manualExpiry" type="date">
-            <span v-else>{{ expiryText(item) }}</span>
+            <input v-model="item.manualExpiry" type="date" @change="autoSaveQueueProduct(item)">
           </label>
-          <label>Lote<input v-model="item.lot" type="text" inputmode="numeric"></label>
-          <label v-if="printType === 'book'">Código<input v-model.trim="item.productCode" type="text"></label>
+          <label>Lote<input v-model="item.lot" type="text" inputmode="numeric" @blur="autoSaveQueueProduct(item)"></label>
+          <label v-if="printType === 'book'">Código<input v-model.trim="item.productCode" type="text" @blur="autoSaveQueueProduct(item)"></label>
           <label>Cantidad<input v-model.number="item.quantity" type="number" min="1" max="99"></label>
+          <span v-if="item.saveState" class="queue-save-state" :class="item.saveState">
+            {{ item.saveState === 'saved' ? 'Guardado' : item.saveState === 'error' ? 'No se pudo guardar' : 'Guardando...' }}
+          </span>
           <div v-if="expandedQueueId === item.id" class="queue-quick-edit">
-            <p>Los datos de arriba sirven para esta impresion. Tambien puedes guardarlos para las proximas.</p>
-            <button class="secondary-button" type="button" @click="expandedQueueId = null">Usar solo esta vez</button>
-            <button class="print-button" type="button" :disabled="saving" @click="saveQueueProduct(item)">{{ saving ? 'Guardando...' : usesPrimaryExpiry(item) ? 'Guardar lote y fecha' : 'Guardar lote actual' }}</button>
+            <p>Los cambios de lote, fecha y código se guardan automáticamente.</p>
+            <button class="secondary-button" type="button" @click="editProduct(item)">Modificar</button>
           </div>
         </div>
       </div>
@@ -790,7 +919,7 @@ const goHome = () => {
                 <span>Código</span><b>{{ item.productCode || '—' }}</b>
                 <span>Lote</span><b>{{ item.lot || '—' }}</b>
                 <span>Caducidad primaria</span><b>{{ expiryText(item) }}</b>
-                <span>Temperatura</span><b>{{ item.storage }}</b>
+                <span>Temperatura</span><b>{{ item.bookStorage }}</b>
               </div>
             </section>
           </article>
@@ -827,12 +956,18 @@ const goHome = () => {
         <div class="category-tabs">
           <button v-for="item in categories" :key="item" type="button" :class="{ active: category === item }" @click="category = item">{{ item }}</button>
         </div>
+        <div class="filter-section">
+          <span>Área de trabajo</span>
+          <div class="category-tabs work-area-tabs">
+            <button v-for="item in workAreas" :key="item.value" type="button" :class="{ active: workArea === item.value }" @click="workArea = item.value">{{ item.label }}</button>
+          </div>
+        </div>
       </div>
       <div class="product-list">
         <div v-for="product in filteredProducts" :key="product.id" class="product-row" :class="{ inactive: !product.active, pending: pendingProductIds.has(product.id) }">
           <button class="product-main" type="button" @click="editProduct(product)">
-            <span><strong>{{ product.name }}</strong><small>{{ product.active ? product.category : 'Desactivado' }}</small></span>
-            <span class="life">{{ product.shelfLife }}</span>
+            <span><strong>{{ product.name }}</strong><small>{{ product.active ? workArea === 'book' ? product.bookStorage : product.category : 'Desactivado' }}</small></span>
+            <span class="life">{{ workArea === 'book' ? 'Primaria' : product.shelfLife }}</span>
             <span aria-hidden="true">→</span>
           </button>
           <span class="flags">
@@ -893,18 +1028,34 @@ const goHome = () => {
           <label>Almacenamiento<input v-model.trim="editing.storage" required></label>
           <label>Estado<input v-model.trim="editing.state" required></label>
         </div>
-        <div class="toggles">
-          <label><input v-model="editing.active" type="checkbox"> Producto activo</label>
-          <label><input v-model="editing.audit" type="checkbox"> Incluir en auditoría</label>
-          <label><input v-model="editing.barDaily" type="checkbox"> Barra diaria</label>
-          <label><input v-model="editing.barWeekly" type="checkbox"> Barra semanal</label>
-          <label><input v-model="editing.workshopDaily" type="checkbox"> Obrador diario</label>
-          <label><input v-model="editing.workshopManual" type="checkbox"> Obrador manual</label>
-          <label><input v-model="editing.produce" type="checkbox"> Fruta y verdura</label>
-          <label><input v-model="editing.book" type="checkbox"> Etiquetas libro</label>
+        <div class="assignment-groups">
+          <label class="assignment-option primary-option"><input v-model="editing.active" type="checkbox"><span><strong>Producto activo</strong><small>Disponible para buscar e imprimir</small></span></label>
+          <label class="assignment-option"><input v-model="editing.audit" type="checkbox"><span><strong>Auditoría</strong><small>Listado general</small></span></label>
+          <fieldset>
+            <legend>Barra</legend>
+            <label class="assignment-option"><input v-model="editing.barDaily" type="checkbox"><span><strong>Diaria</strong><small>Se renueva cada día</small></span></label>
+            <label class="assignment-option"><input v-model="editing.barWeekly" type="checkbox"><span><strong>Semanal</strong><small>Se imprime cuando corresponde</small></span></label>
+          </fieldset>
+          <fieldset>
+            <legend>Obrador</legend>
+            <label class="assignment-option"><input v-model="editing.workshopDaily" type="checkbox"><span><strong>Diario</strong><small>Elaboraciones diarias</small></span></label>
+            <label class="assignment-option"><input v-model="editing.workshopManual" type="checkbox"><span><strong>Manual</strong><small>Al preparar o abrir</small></span></label>
+          </fieldset>
+          <label class="assignment-option"><input v-model="editing.produce" type="checkbox"><span><strong>Fruta y verdura</strong><small>Recepción de producto</small></span></label>
+          <label class="assignment-option book-option"><input v-model="editing.book" type="checkbox"><span><strong>Etiquetas libro</strong><small>Datos originales de la caja recibida</small></span></label>
         </div>
+        <section v-if="editing.book" class="book-settings">
+          <div><p class="eyebrow">Datos exclusivos del libro</p><strong>No cambian la caducidad del producto preparado</strong></div>
+          <label>Conservación en libro
+            <select v-model="editing.bookStorage">
+              <option>Congelado (-18 °C)</option>
+              <option>Refrigerado (≤4 °C)</option>
+            </select>
+          </label>
+          <label>Caducidad primaria del fabricante<input v-model="editing.bookPrimaryExpiry" type="date"></label>
+        </section>
         <div class="form-actions">
-          <button class="secondary-button" type="button" @click="mode = editReturnMode">Cancelar</button>
+          <button class="secondary-button" type="button" @click="cancelProductEdit">Cancelar</button>
           <button class="print-button" type="submit" :disabled="saving">{{ saving ? 'Guardando...' : editing._isNew ? 'Crear producto' : 'Guardar cambios' }}</button>
         </div>
       </form>
@@ -944,22 +1095,34 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .global-search-field { position: relative; }
 .global-search-field input { width: 100%; box-sizing: border-box; padding: 14px 46px 14px 15px; border: 1px solid #aebdb3; border-radius: 6px; font: inherit; font-size: 16px; }
 .global-search-field button { position: absolute; top: 50%; right: 7px; width: 34px; height: 34px; transform: translateY(-50%); color: #53635a; background: transparent; border: 0; font-size: 25px; cursor: pointer; }
-.global-results { position: absolute; z-index: 4; top: calc(100% - 17px); right: 20px; left: 20px; overflow: hidden; background: white; border: 1px solid #bdc9c1; border-radius: 0 0 7px 7px; box-shadow: 0 12px 25px rgba(23,60,43,.15); }
-.global-results button { width: 100%; min-height: 58px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 16px; color: inherit; text-align: left; background: white; border: 0; border-bottom: 1px solid #e5eae6; cursor: pointer; }
+.global-results { position: absolute; z-index: 4; top: calc(100% - 17px); right: 20px; left: 20px; padding: 8px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; background: white; border: 1px solid #bdc9c1; border-radius: 0 0 8px 8px; box-shadow: 0 12px 25px rgba(23,60,43,.15); }
+.global-results button { width: 100%; min-height: 58px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; color: inherit; text-align: left; background: #fff; border: 1px solid #e0e7e2; border-radius: 7px; cursor: pointer; }
 .global-results button:hover { background: #f3f8f5; }
-.global-results button:last-child { border-bottom: 0; }
 .global-results small, .quick-product-panel small { display: block; margin-top: 3px; color: #718078; }
 .empty-search { margin: 10px 0 0; color: #6a756e; font-size: 14px; }
 .quick-product-panel { margin-top: 14px; padding-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 18px; border-top: 1px solid #e0e6e2; }
 .quick-product-actions { display: flex; gap: 9px; }
 .search-queue { margin-top: 14px; padding: 14px 15px; background: #eaf4ee; border: 1px solid #b8d1c1; border-radius: 8px; }
 .search-queue-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
-.search-queue-items { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 7px; }
-.search-queue-items > span { min-width: 0; padding: 6px 6px 6px 10px; display: inline-flex; align-items: center; gap: 7px; color: #234331; background: white; border: 1px solid #c5d8ca; border-radius: 6px; font-size: 13px; }
+.search-queue-items { margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 7px; }
+.search-queue-items > span { min-width: 0; padding: 7px 7px 7px 10px; display: flex; align-items: center; justify-content: space-between; gap: 7px; color: #234331; background: white; border: 1px solid #c5d8ca; border-radius: 7px; font-size: 13px; }
 .search-queue-items button { width: 25px; height: 25px; padding: 0; color: #6b3832; background: #fff2f0; border: 0; border-radius: 4px; font-size: 18px; cursor: pointer; }
-.primary-actions { margin-top: 20px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.action-button { min-height: 104px; padding: 15px; display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 12px; text-align: left; border: 0; border-radius: 8px; cursor: pointer; box-shadow: 0 7px 20px rgba(23,60,43,.1); transition: transform .18s ease, box-shadow .18s ease; }
+.action-order-toolbar { min-height: 46px; margin-top: 16px; display: flex; justify-content: flex-end; align-items: center; gap: 14px; }
+.action-order-toolbar span { color: #647269; font-size: 13px; }
+.action-order-toolbar .secondary-button { min-height: 40px; padding: 0 15px; }
+.primary-actions { margin-top: 8px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.action-slot { min-width: 0; display: flex; flex-direction: column; }
+.action-button { width: 100%; min-height: 104px; padding: 15px; display: grid; grid-template-columns: 42px 1fr auto; align-items: center; flex: 1; gap: 12px; text-align: left; border: 0; border-radius: 8px; cursor: pointer; box-shadow: 0 7px 20px rgba(23,60,43,.1); transition: transform .18s ease, box-shadow .18s ease; }
 .action-button:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(23,60,43,.16); }
+.primary-actions.ordering .action-button { border-radius: 8px 8px 0 0; box-shadow: none; }
+.primary-actions.ordering .action-button:disabled { opacity: 1; }
+.action-order-controls { height: 42px; display: grid; grid-template-columns: 1fr 34px 1fr; align-items: center; overflow: hidden; color: #294738; background: #fff; border: 1px solid #bdc9c1; border-top: 0; border-radius: 0 0 8px 8px; }
+.action-order-controls button { height: 100%; color: #176a43; background: #f5f8f6; border: 0; font-size: 21px; font-weight: 900; cursor: pointer; }
+.action-order-controls button:first-child { border-right: 1px solid #dbe2dd; }
+.action-order-controls button:last-child { border-left: 1px solid #dbe2dd; }
+.action-order-controls button:hover:not(:disabled) { background: #e5f1e9; }
+.action-order-controls button:disabled { color: #adb8b1; }
+.action-order-controls span { text-align: center; font-size: 12px; font-weight: 900; }
 .action-button.audit { color: white; background: #206644; }
 .action-button.daily { color: #17211a; background: #f0c653; }
 .action-button.bar { color: white; background: #285777; }
@@ -978,18 +1141,27 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .print-button, .secondary-button { min-height: 46px; padding: 0 20px; border-radius: 6px; font-weight: 800; cursor: pointer; }
 .print-button { color: white; background: #176a43; border: 1px solid #176a43; }
 .secondary-button { color: #274234; background: white; border: 1px solid #bdc9c1; }
-.queue-table { overflow: hidden; background: white; border: 1px solid #d4dbd6; border-radius: 7px; }
+.queue-table { display: grid; grid-template-columns: repeat(auto-fit, minmax(390px, 1fr)); gap: 12px; }
 .empty-queue { margin: 0; padding: 28px 18px; color: #66736b; text-align: center; }
-.queue-row { min-height: 68px; padding: 10px 16px; display: grid; grid-template-columns: 28px minmax(180px, 1fr) 150px 118px 90px; align-items: center; gap: 14px; border-bottom: 1px solid #e5e9e6; }
-.queue-row.book-queue-row { grid-template-columns: 28px minmax(180px, 1fr) 150px 118px 118px 90px; }
-.queue-row:last-child { border-bottom: 0; }
+.queue-row { min-width: 0; padding: 14px; display: grid; grid-template-columns: 28px repeat(3, minmax(0, 1fr)); align-content: start; align-items: center; gap: 12px; background: #fff; border: 1px solid #d4dbd6; border-radius: 8px; }
+.queue-row.book-queue-row { grid-template-columns: 28px repeat(3, minmax(0, 1fr)); }
 .queue-row input[type="checkbox"] { width: 19px; height: 19px; accent-color: #176a43; }
-.queue-name { padding: 6px 0; color: inherit; text-align: left; background: transparent; border: 0; cursor: pointer; }
+.queue-name { grid-column: 2 / -1; padding: 6px 0; color: inherit; text-align: left; background: transparent; border: 0; cursor: pointer; }
 .queue-name small, .product-row small { display: block; margin-top: 4px; color: #77827b; }
 .queue-row label { color: #738077; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.queue-row label:nth-of-type(1) { grid-column: 1 / 3; }
+.queue-row label:nth-of-type(2) { grid-column: 3; }
+.queue-row label:nth-of-type(3) { grid-column: 4; }
+.book-queue-row label:nth-of-type(1) { grid-column: 1 / 3; }
+.book-queue-row label:nth-of-type(2) { grid-column: 3; }
+.book-queue-row label:nth-of-type(3) { grid-column: 4; }
+.book-queue-row label:nth-of-type(4) { grid-column: 1 / -1; }
 .queue-row label span { display: block; margin-top: 5px; color: #17211a; font-size: 14px; }
 .queue-row input[type="text"], .queue-row input[type="number"], .queue-row input[type="date"] { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px; border: 1px solid #cbd4ce; border-radius: 4px; }
-.queue-quick-edit { grid-column: 2 / -1; padding: 12px; display: flex; align-items: center; justify-content: flex-end; gap: 9px; background: #f3f7f4; border-top: 1px solid #dfe7e1; }
+.queue-save-state { grid-column: 1 / -1; justify-self: end; color: #68766d; font-size: 12px; font-weight: 800; }
+.queue-save-state.saved { color: #176a43; }
+.queue-save-state.error { color: #a6382e; }
+.queue-quick-edit { grid-column: 1 / -1; padding: 12px; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 9px; background: #f3f7f4; border-top: 1px solid #dfe7e1; border-radius: 6px; }
 .queue-quick-edit p { margin: 0 auto 0 0; color: #59675e; font-size: 13px; }
 .print-sheet { display: none; }
 .creative-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 22px; }
@@ -998,7 +1170,7 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .creative-workspace { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 24px; align-items: start; }
 .creative-toolbar { padding: 16px; display: grid; gap: 18px; background: #fff; border: 1px solid #d1dad4; border-radius: 8px; }
 .creative-add-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.creative-add-actions button, .creative-symbols button, .creative-format-actions button { min-height: 40px; color: #263b30; background: #f3f7f4; border: 1px solid #c8d4cc; border-radius: 5px; font-weight: 800; cursor: pointer; }
+.creative-add-actions button, .creative-symbols button, .creative-format-actions button, .creative-position-actions button { min-height: 40px; color: #263b30; background: #f3f7f4; border: 1px solid #c8d4cc; border-radius: 5px; font-weight: 800; cursor: pointer; }
 .creative-add-actions button { display: flex; align-items: center; justify-content: center; gap: 7px; }
 .creative-add-actions span { font-size: 18px; }
 .creative-symbols p, .creative-properties > p { margin: 0 0 8px; color: #405247; font-size: 12px; font-weight: 900; text-transform: uppercase; }
@@ -1011,15 +1183,24 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .creative-properties input[type="range"] { width: 100%; accent-color: #176a43; }
 .creative-format-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .creative-format-actions button.active { color: #fff; background: #176a43; border-color: #176a43; }
+.creative-position-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.creative-position-actions button { padding: 0; font-size: 20px; }
 .creative-selection-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .creative-selection-actions button { min-height: 40px; padding: 0 8px; }
 .danger-button, .clear-canvas-button { color: #8b2720; background: #fff3f1; border: 1px solid #e1aaa5; border-radius: 5px; font-weight: 800; cursor: pointer; }
 .creative-help { padding: 11px; color: #526259; background: #f2f7f4; border-left: 3px solid #6b9d80; font-size: 12px; line-height: 1.45; }
 .clear-canvas-button { min-height: 40px; }
 .creative-stage { min-width: 0; display: grid; justify-items: center; }
-.creative-canvas { position: relative; width: min(100%, 550px); aspect-ratio: 55 / 50; overflow: hidden; touch-action: none; background: #fff; border: 1px solid #9ca9a1; box-shadow: 0 14px 34px rgba(26, 49, 36, .16); }
+.creative-canvas { position: relative; container-type: inline-size; width: min(100%, 550px); aspect-ratio: 55 / 50; overflow: hidden; touch-action: none; background: #fff; border: 1px solid #9ca9a1; box-shadow: 0 14px 34px rgba(26, 49, 36, .16); }
 .creative-element { position: absolute; z-index: 1; box-sizing: border-box; transform: translate(-50%, -50%); cursor: move; user-select: none; touch-action: none; }
 .creative-element.selected { outline: 2px solid #19895a; outline-offset: 3px; }
+.creative-resize-handle { position: absolute; z-index: 3; width: 14px; height: 14px; padding: 0; background: #fff; border: 2px solid #19895a; border-radius: 50%; touch-action: none; }
+.creative-resize-handle.nw { top: -10px; left: -10px; cursor: nwse-resize; }
+.creative-resize-handle.ne { top: -10px; right: -10px; cursor: nesw-resize; }
+.creative-resize-handle.sw { bottom: -10px; left: -10px; cursor: nesw-resize; }
+.creative-resize-handle.se { right: -10px; bottom: -10px; cursor: nwse-resize; }
+.creative-resize-handle.w { top: 50%; left: -10px; transform: translateY(-50%); cursor: ew-resize; }
+.creative-resize-handle.e { top: 50%; right: -10px; transform: translateY(-50%); cursor: ew-resize; }
 .creative-text { min-height: 1em; line-height: 1.05; white-space: pre-wrap; overflow-wrap: anywhere; }
 .creative-image img { display: block; width: 100%; height: auto; pointer-events: none; }
 .creative-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: #9ba69f; font-size: 14px; pointer-events: none; }
@@ -1031,18 +1212,22 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .category-tabs { margin-top: 12px; display: flex; gap: 7px; overflow-x: auto; }
 .category-tabs button { padding: 9px 13px; white-space: nowrap; color: #445149; background: transparent; border: 1px solid #c5cfc8; border-radius: 5px; cursor: pointer; }
 .category-tabs button.active { color: white; background: #244d3b; border-color: #244d3b; }
-.product-list { overflow: hidden; border: 1px solid #d5ddd7; border-radius: 7px; background: white; }
-.product-row { width: 100%; min-height: 62px; padding: 0 12px 0 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; color: inherit; background: white; border-bottom: 1px solid #e7ebe8; }
-.product-row:hover { background: #f7faf8; }
+.filter-section { margin-top: 14px; padding-top: 12px; border-top: 1px solid #dce3de; }
+.filter-section > span { color: #526158; font-size: 12px; font-weight: 900; text-transform: uppercase; }
+.work-area-tabs { margin-top: 7px; }
+.work-area-tabs button.active { background: #315f7a; border-color: #315f7a; }
+.product-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(285px, 1fr)); gap: 12px; }
+.product-row { min-width: 0; min-height: 190px; padding: 14px; display: grid; grid-template-columns: 1fr auto; align-content: start; gap: 12px; color: inherit; background: white; border: 1px solid #d5ddd7; border-radius: 8px; }
+.product-row:hover { border-color: #9fb8a8; box-shadow: 0 5px 16px rgba(31, 70, 47, .08); }
 .product-row.inactive { background: #f0f2f0; }
 .product-row.pending { box-shadow: inset 4px 0 #d39a16; }
 .product-row.inactive .product-main { opacity: .56; }
-.product-main { min-width: 0; min-height: 62px; padding: 10px 16px; display: grid; grid-template-columns: minmax(0, 1fr) 120px 20px; gap: 12px; align-items: center; text-align: left; color: inherit; background: transparent; border: 0; cursor: pointer; }
-.active-button { min-width: 92px; padding: 9px 11px; color: #8b2f27; background: #fff7f5; border: 1px solid #e2b5b0; border-radius: 5px; font-weight: 800; cursor: pointer; }
+.product-main { grid-column: 1 / -1; min-width: 0; min-height: 58px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto 18px; gap: 10px; align-items: start; text-align: left; color: inherit; background: transparent; border: 0; cursor: pointer; }
+.product-main strong { line-height: 1.2; }
+.active-button { align-self: end; min-width: 88px; min-height: 40px; padding: 8px 10px; color: #8b2f27; background: #fff7f5; border: 1px solid #e2b5b0; border-radius: 5px; font-weight: 800; cursor: pointer; }
 .active-button.restore { color: #17603e; background: #eff9f3; border-color: #a8cfb7; }
 .life { color: #3e5949; font-weight: 700; }
-.flags { display: flex; gap: 5px; }
-.flags { flex-wrap: wrap; max-width: 145px; }
+.flags { display: flex; flex-wrap: wrap; gap: 5px; }
 .flags button { width: 32px; height: 29px; padding: 0; display: grid; place-items: center; color: #667169; background: #edf0ee; border: 1px solid #d5dcd7; border-radius: 4px; font-size: 11px; font-weight: 900; cursor: pointer; }
 .flags button.on { color: white; background: #347252; border-color: #347252; }
 .flags button:disabled { color: #a8b0aa; background: #ecefed; border-color: transparent; }
@@ -1051,9 +1236,18 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .edit-view label { display: grid; gap: 7px; color: #47564d; font-size: 13px; font-weight: 800; }
 .edit-view input, .edit-view select { min-width: 0; box-sizing: border-box; padding: 12px; border: 1px solid #bdc8c0; border-radius: 5px; font: inherit; }
 .form-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.toggles { margin-top: 24px; display: grid; gap: 12px; }
-.toggles label { grid-template-columns: 20px 1fr; align-items: center; }
-.toggles input { width: 18px; height: 18px; accent-color: #176a43; }
+.assignment-groups { margin-top: 24px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.assignment-groups fieldset { margin: 0; padding: 9px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border: 1px solid #ced8d1; border-radius: 8px; }
+.assignment-groups legend { padding: 0 5px; color: #3e5246; font-size: 12px; font-weight: 900; text-transform: uppercase; }
+.assignment-option { box-sizing: border-box; min-height: 62px; padding: 10px; display: grid !important; grid-template-columns: 20px 1fr; align-items: center; gap: 9px !important; background: #f6f8f7; border: 1px solid #d7dfda; border-radius: 7px; cursor: pointer; }
+.assignment-option:has(input:checked) { background: #edf7f1; border-color: #78aa8c; }
+.assignment-option input { width: 18px; height: 18px; accent-color: #176a43; }
+.assignment-option strong, .assignment-option small { display: block; }
+.assignment-option small { margin-top: 3px; color: #718078; font-size: 11px; font-weight: 500; }
+.assignment-option.book-option:has(input:checked) { background: #f2eef8; border-color: #9581b4; }
+.book-settings { margin-top: 14px; padding: 16px; display: grid; grid-template-columns: minmax(180px, 1fr) 1fr 1fr; align-items: end; gap: 14px; background: #f4f1f8; border: 1px solid #cfc4df; border-radius: 8px; }
+.book-settings p { margin: 0 0 5px; }
+.book-settings > div > strong { font-size: 13px; }
 .form-actions { margin-top: 28px; display: flex; justify-content: flex-end; gap: 10px; }
 button:disabled { opacity: .55; cursor: default; }
 
@@ -1074,21 +1268,22 @@ button:disabled { opacity: .55; cursor: default; }
   .search-queue-heading { align-items: stretch; flex-direction: column; }
   .spec-strip { gap: 12px; justify-content: space-between; font-size: 12px; }
   .preview-heading, .manage-heading { align-items: stretch; flex-direction: column; }
-  .queue-row { grid-template-columns: 24px 1fr 76px; gap: 8px; }
-  .queue-row.book-queue-row { grid-template-columns: 24px 1fr 76px; }
-  .queue-name { grid-column: 2 / 4; }
-  .queue-row label { grid-row: 2; }
-  .queue-row label:nth-of-type(1) { grid-column: 2; }
-  .queue-row label:nth-of-type(2) { grid-column: 3; }
-  .queue-row label:nth-of-type(3) { grid-column: 3; grid-row: 3; }
-  .book-queue-row label:nth-of-type(3) { grid-column: 2; grid-row: 3; }
-  .book-queue-row label:nth-of-type(4) { grid-column: 3; grid-row: 3; }
+  .global-results { grid-template-columns: 1fr; }
+  .queue-table { grid-template-columns: 1fr; }
+  .queue-row, .queue-row.book-queue-row { grid-template-columns: 24px repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .queue-name { grid-column: 2 / -1; }
+  .queue-row label:nth-of-type(1), .book-queue-row label:nth-of-type(1) { grid-column: 1 / -1; }
+  .queue-row label:nth-of-type(2), .book-queue-row label:nth-of-type(2) { grid-column: 1 / 3; }
+  .queue-row label:nth-of-type(3), .book-queue-row label:nth-of-type(3) { grid-column: 3; }
+  .book-queue-row label:nth-of-type(4) { grid-column: 1 / -1; }
   .queue-quick-edit { grid-column: 1 / -1; align-items: stretch; flex-direction: column; }
-  .product-row { padding: 0 8px 9px; grid-template-columns: minmax(0, 1fr) auto; }
-  .product-main { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) 75px 16px; padding: 9px 4px 4px; }
-  .flags { max-width: none; }
+  .product-list { grid-template-columns: 1fr; }
+  .product-row { padding: 13px; grid-template-columns: minmax(0, 1fr) auto; }
+  .product-main { grid-template-columns: minmax(0, 1fr) 75px 16px; }
   .active-button { min-width: 78px; padding: 8px 7px; font-size: 12px; }
   .form-grid { grid-template-columns: 1fr; }
+  .assignment-groups { grid-template-columns: 1fr; }
+  .book-settings { grid-template-columns: 1fr; }
   .creative-heading { align-items: stretch; flex-direction: column; }
   .creative-workspace { grid-template-columns: 1fr; }
   .creative-stage { grid-row: 1; }
@@ -1109,7 +1304,7 @@ button:disabled { opacity: .55; cursor: default; }
   .preview-view { width: auto; margin: 0; padding: 0; }
   .print-sheet { display: block; }
   .creative-view { width: 55mm; margin: 0; padding: 0; }
-  .creative-print-sheet { position: relative; display: block; width: 55mm; height: 50mm; overflow: hidden; color: #000; background: #fff; font-family: Arial, Helvetica, sans-serif; }
+  .creative-print-sheet { position: relative; container-type: inline-size; display: block; width: 55mm; height: 50mm; overflow: hidden; color: #000; background: #fff; font-family: Arial, Helvetica, sans-serif; }
   .creative-print-sheet .creative-element { outline: 0; }
   .thermal-label { width: 55mm; height: 50mm; box-sizing: border-box; padding: 2.1mm 2.2mm 1.7mm; overflow: hidden; color: #000; background: #fff; font-family: Arial, Helvetica, sans-serif; break-after: page; page-break-after: always; }
   .thermal-label:last-child { break-after: auto; page-break-after: auto; }
