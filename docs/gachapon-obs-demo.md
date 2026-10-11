@@ -1,14 +1,13 @@
-# OBS: configuracion sencilla de demostracion
+# Gachapon: espejo OBS de solo visualizacion
 
-No requiere variables ni funciones Netlify. Puede retirarse GACHAPON_OBS_KEY de Netlify; no se utiliza.
+1. En tu perfil administrador, abrir el gachapon y Configuracion OBS.
+2. Crear espejo OBS. Reutiliza el documento de escena si ya existe; crea uno nuevo en overlays/{uid}/items solamente si falta. Se mantiene el gestor original.
+3. Copiar enlace OBS y pegarlo como Fuente de navegador, 580 x 530. No hay contrasena ni inicio de sesion en OBS.
+4. Con el perfil abierto, probar una apertura. Se publica solo el resultado visual (nombre, saga, rareza, imagen y color de borde), sin saldo ni datos de cuenta.
+5. OBS escucha la escena con onSnapshot, reproduce la apertura y oculta el resultado a los 10 segundos. Ignora eventos antiguos de mas de 20 segundos. Queda transparente cuando esta inactivo.
 
-1. En el gachapon de tu perfil administrador, Configuracion OBS.
-2. Escribir una clave temporal de 4 a 128 caracteres y pulsar Enter o Configurar clave.
-3. Aparece Clave configurada y el enlace. Copiar enlace o seleccionar y copiar manualmente.
-4. Pegar en Fuente de navegador de OBS (580 x 530). Interactuar: escribir la misma clave y Conectar.
-5. Cada recarga pide la clave; no se guarda la contrasena ni el acceso en almacenamiento del navegador. El enlace conserva un verificador derivado con PBKDF2 y sal aleatoria, no la contrasena literal.
-6. Restablecer limpia el formulario y permite generar otro enlace; no revoca enlaces copiados anteriormente. Caducan a las 12 horas.
+OBS no permite iniciar canjes ni modificar datos. El emisor exige perfil propio administrador en la interfaz; esto no sustituye las reglas de seguridad Firestore. Las reglas publicadas abiertas siguen pendientes de asegurar. No se publicaron reglas nuevas.
 
-IMPORTANTE: comprobacion local, solo puerta visual para una demostracion publica. Puede ser evitada manipulando el navegador o enlace; no es autenticacion ni protege datos. No autoriza canjes, estrellas, inventario ni acciones administrativas. No sincroniza con el perfil. Los canjes reales requieren validacion en servidor en otra etapa.
+El gachapon del perfil sigue siendo demo: no entrega iconos reales ni descuenta estrellas. El espejo refleja esas pruebas; no activa canjes reales. La imagen y el resultado visual del overlay son publicos como en los overlays actuales. No compartir el enlace si no deseas que otras personas vean la presentacion.
 
-Se conserva sonido en el modal del perfil con interruptor. La prueba OBS es silenciosa.
+No se usa Netlify Functions, claves ni PBKDF2. Los enlaces antiguos con connection ya no funcionan; generar el nuevo enlace con owner y scene. La pantalla OBS es silenciosa.

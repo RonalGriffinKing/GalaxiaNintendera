@@ -1,26 +1,19 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { DEMO_MODES, demoCandidates } from './demoCatalog'
-import { createObsDemoConnection } from './obsDemoConnection'
 import { createRewardSound } from './rewardSound'
 import StarsRewardStage from './StarsRewardStage.vue'
 
-const props = defineProps({ admin: Boolean, initialSaga: { type: String, default: 'all' }, stars: { type: Number, default: 0 }, icons: { type: Array, default: () => [] }, owned: { type: Array, default: () => [] } })
-const emit = defineEmits(['close', 'collection'])
+const props = defineProps({ admin: Boolean, prepareMirror: Function, initialSaga: { type: String, default: 'all' }, stars: { type: Number, default: 0 }, icons: { type: Array, default: () => [] }, owned: { type: Array, default: () => [] } })
+const emit = defineEmits(['close', 'collection', 'preview'])
 const sound = createRewardSound()
 const soundEnabled = ref(true)
 const obsSettings = ref(false)
-const obsKey = ref('')
-const obsMessage = ref('')
-const obsLink = ref('')
-const obsCreating = ref(false)
-async function createObsLink() {
- if(obsCreating.value)return
- obsCreating.value=true;obsMessage.value=''
- try{const token=await createObsDemoConnection(obsKey.value);const url=new URL('/overlay/gachapon-demo',window.location.origin);url.hash=new URLSearchParams({connection:token}).toString();obsLink.value=url.toString();obsKey.value='';obsMessage.value='Clave configurada. Enlace listo; valido durante 12 horas.'}catch(error){obsMessage.value=error.message}finally{obsCreating.value=false}
-}
-async function copyObsLink(){try{await navigator.clipboard.writeText(obsLink.value);obsMessage.value='Enlace copiado. Pegalo en OBS e introduce tu clave.'}catch{obsMessage.value='Selecciona el enlace y copialo manualmente.'}}
-function resetObs(){obsLink.value='';obsKey.value='';obsMessage.value='Escribe una nueva clave para crear otro enlace.'}
+const obsMessage=ref('')
+const obsLink=ref('')
+const obsCreating=ref(false)
+async function createObsLink(){if(obsCreating.value)return;obsCreating.value=true;try{obsLink.value=await props.prepareMirror();obsMessage.value='Enlace listo. OBS mostrara las aperturas iniciadas aqui.'}catch(error){obsMessage.value=error.message}finally{obsCreating.value=false}}
+async function copyObsLink(){try{await navigator.clipboard.writeText(obsLink.value);obsMessage.value='Enlace copiado.'}catch{obsMessage.value='Selecciona el enlace para copiarlo manualmente.'}}
 const dialog = ref(null)
 const closeButton = ref(null)
 const pendingReward = ref(null)
@@ -52,6 +45,7 @@ function preview(item) {
   reward.value = null
   // A deterministic catalogue preview, never a real draw or reward entitlement.
   const candidate = item.candidates[0]
+  emit('preview', { mode:item.rarity, icon:candidate })
   pendingReward.value = candidate
   busy.value = true
   if (reducedMotion.value) reveal()
@@ -84,7 +78,6 @@ onMounted(async () => {
 onUnmounted(() => {
   cancelPreview()
   sound.dispose()
-  obsKey.value = ''
   motionQuery?.removeEventListener('change', onMotion)
   document.removeEventListener('visibilitychange', onVisibility)
   document.body.style.overflow = previousOverflow ?? ''
@@ -107,9 +100,9 @@ onUnmounted(() => {
         </div>
         <div class="gacha-tools"><button v-if="admin" type="button" :disabled="busy" @click="adminPreview">Probar animación (admin)</button><button type="button" :aria-pressed="soundEnabled" @click="soundEnabled = !soundEnabled; !soundEnabled && sound.stop()">{{ soundEnabled ? 'Sonido activado' : 'Sonido apagado' }}</button><button v-if="admin" type="button" :aria-expanded="obsSettings" @click="obsSettings = !obsSettings">Configuración OBS</button></div>
         <div v-if="admin && obsSettings" class="gacha-obs-settings">
-          <form v-if="!obsLink" @submit.prevent="createObsLink"><label>Clave temporal OBS<input v-model="obsKey" type="password" autocomplete="off" minlength="4" maxlength="128" required placeholder="Escribe una clave y pulsa Enter" /></label><button type="submit" :disabled="obsCreating">{{ obsCreating ? 'Preparando...' : 'Configurar clave' }}</button></form>
-          <template v-else><strong>Clave configurada</strong><label>Enlace OBS<input :value="obsLink" readonly aria-label="Enlace OBS" @focus="$event.target.select()" /></label><button type="button" @click="copyObsLink">Copiar enlace</button><button type="button" @click="resetObs">Restablecer</button></template>
-          <p role="status">{{ obsMessage || 'OBS pedira la clave cada vez que abras o recargues la pantalla. Solo demostracion.' }}</p>
+          <button v-if="!obsLink" type="button" :disabled="obsCreating" @click="createObsLink">{{ obsCreating ? 'Preparando...' : 'Crear espejo OBS' }}</button>
+          <template v-else><label>Enlace de solo visualizacion<input :value="obsLink" readonly @focus="$event.target.select()" /></label><button type="button" @click="copyObsLink">Copiar enlace OBS</button></template>
+          <p role="status">{{ obsMessage || 'Sin claves. El enlace solo muestra la animacion; no permite canjear.' }}</p>
         </div>
         <div class="gacha-wallet"><span>Tu saldo actual</span><strong><span aria-hidden="true">★</span> {{ balance }} <small>estrellas</small></strong></div>
         <p id="gacha-disclaimer" class="gacha-disclaimer">Demostración · No se han gastado estrellas ni añadido iconos.</p>

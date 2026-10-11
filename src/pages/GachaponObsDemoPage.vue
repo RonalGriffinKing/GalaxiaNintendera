@@ -1,19 +1,24 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
-import { verifyObsDemoConnection } from '@/components/profile/gachapon/obsDemoConnection'
+import { onMounted,onUnmounted,ref } from 'vue'
+import { doc,onSnapshot } from 'firebase/firestore'
+import { db } from '@/firebase'
 import StarsRewardStage from '@/components/profile/gachapon/StarsRewardStage.vue'
-import artwork from '@/iconos/iconosZelda/01.png'
-const authorized=ref(false),busy=ref(false),reward=ref(null),message=ref('Introduce tu clave temporal.'),password=ref(''),checking=ref(false)
-const demo={id:'obs-demo',name:'Demostración',saga:'Zelda',rarity:'normal',src:artwork}
-let alive=true
-function preview(){reward.value=null;busy.value=true;if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) reveal()}
-function reveal(){if(!busy.value)return;busy.value=false;reward.value=demo}
-async function connect(){
- checking.value=true
- try{const token=new URLSearchParams(window.location.hash.slice(1)).get('connection')||'';await verifyObsDemoConnection(token,password.value);if(alive){authorized.value=true;password.value=''}}catch(error){if(alive)message.value=error.message}finally{if(alive)checking.value=false}
-}
-onMounted(()=>{document.documentElement.classList.add('gachapon-obs-mode')})
-onUnmounted(()=>{alive=false;document.documentElement.classList.remove('gachapon-obs-mode')})
+const busy=ref(false),reward=ref(null),pending=ref(null),mode=ref('normal'),visible=ref(false),error=ref('')
+let unsubscribe,timer,lastId=''
+function reveal(){if(!busy.value)return;busy.value=false;reward.value=pending.value;clearTimeout(timer);timer=setTimeout(()=>{visible.value=false;reward.value=null},10000)}
+onMounted(()=>{
+ document.documentElement.classList.add('gachapon-obs-mode')
+ const params=new URLSearchParams(location.search),owner=params.get('owner'),scene=params.get('scene')
+ if(!owner||!scene||owner.includes('/')||scene.includes('/')){error.value='Genera el enlace desde Configuracion OBS de tu perfil.';return}
+ unsubscribe=onSnapshot(doc(db,'overlays',owner,'items',scene),snapshot=>{
+ const data=snapshot.data();if(data?.kind!=='gachapon-mirror')return
+ const event=data.gachaponEvent;if(!event||event.id===lastId||!event.icon?.src)return
+ lastId=event.id;if(Date.now()-event.createdAt>20000)return
+ clearTimeout(timer);mode.value=event.mode==='epic'?'epic':'normal';pending.value=event.icon;reward.value=null;visible.value=true;busy.value=true
+ if(matchMedia('(prefers-reduced-motion: reduce)').matches)reveal()
+ },()=>{error.value='No se pudo conectar al espejo OBS.'})
+})
+onUnmounted(()=>{unsubscribe?.();clearTimeout(timer);document.documentElement.classList.remove('gachapon-obs-mode')})
 </script>
-<template><main class="obs-demo"><template v-if="authorized"><div class="obs-scene"><StarsRewardStage :busy="busy" :reward="reward" @complete="reveal" @hidden="busy=false" /></div><button type="button" :disabled="busy" @click="preview">Probar animación</button><p>Demostración OBS · Sin canjes ni premios reales</p></template><form v-else @submit.prevent="connect"><label>Clave temporal OBS<input v-model="password" type="password" autocomplete="off" minlength="4" maxlength="128" required /></label><button type="submit" :disabled="checking">{{ checking ? 'Comprobando...' : 'Conectar' }}</button><p role="status">{{ message }}</p></form></main></template>
-<style>.obs-demo form{padding:24px;background:#17112c;border-radius:16px}.obs-demo label{display:grid;gap:12px;margin-bottom:12px}.obs-demo input{padding:12px;border-radius:8px;background:#291f3e;color:white;border:1px solid #a879ff}.gachapon-obs-mode,.gachapon-obs-mode body,.gachapon-obs-mode #app{background:transparent!important;min-height:0!important;}.gachapon-obs-mode #app{min-height:100dvh!important;display:grid;place-items:center;padding:16px;box-sizing:border-box}.obs-demo{color:white;width:min(100%,580px);margin:0;font-family:system-ui;text-align:center}.obs-scene{height:clamp(350px,65dvh,430px);border-radius:18px;overflow:hidden}.obs-demo button{padding:12px 20px;border:0;border-radius:12px;background:#7734bc;color:white;cursor:pointer}.obs-demo p{font-size:12px;background:#17112c;padding:8px}</style>
+<template><main class="obs-mirror"><div v-if="visible" :key="pending?.src + lastId" class="obs-scene"><StarsRewardStage :busy="busy" :reward="reward" :mode="mode" @complete="reveal" /></div><p v-if="error" role="status">{{ error }}</p></main></template>
+<style>.gachapon-obs-mode,.gachapon-obs-mode body,.gachapon-obs-mode #app{background:transparent!important;min-height:100dvh!important;margin:0}.gachapon-obs-mode #app{display:grid;place-items:center}.obs-mirror{width:min(100%,580px);color:white;font-family:system-ui}.obs-scene{height:430px;border-radius:18px;overflow:hidden}.obs-mirror p{background:#17112c;padding:16px}</style>
