@@ -30,6 +30,7 @@ const modes = computed(() => DEMO_MODES.map(item => ({ ...item, candidates: demo
 let previousFocus
 let previousOverflow
 let motionQuery
+let soundSequence=0
 
 function adminPreview() {
  if (!props.admin || busy.value) return
@@ -37,7 +38,7 @@ function adminPreview() {
  // Admin may preview already owned artwork; this never grants entitlement.
  preview({ ...item, candidates: demoCandidates(categoryIcons.value, [], item.rarity) })
 }
-function cancelPreview() { busy.value = false; pendingReward.value = null; sound.stop() }
+function cancelPreview() { soundSequence++; busy.value = false; pendingReward.value = null; sound.stop() }
 function preview(item) {
   if (busy.value || !item.candidates.length) return
   mode.value = item.rarity
@@ -47,10 +48,12 @@ function preview(item) {
   emit('preview', { mode:item.rarity, icon:candidate })
   pendingReward.value = candidate
   busy.value = true
-  if (soundEnabled.value) void sound.prime().then(ready => { if (!ready || !soundEnabled.value) return; if (busy.value && pendingReward.value === candidate) sound.spin(item.rarity === 'epic'); else if (reward.value === candidate) sound.play(item.rarity === 'epic') })
+  const sequence=++soundSequence
+  sound.stop()
+  if (soundEnabled.value) void sound.prime().then(ready => { if (ready && soundEnabled.value && sequence===soundSequence && busy.value && !document.hidden) sound.spin(item.rarity === 'epic') })
   if (reducedMotion.value) reveal()
 }
-function reveal() { if (!busy.value) return; reward.value = pendingReward.value; cancelPreview(); if (soundEnabled.value) sound.play(mode.value === 'epic') }
+function reveal() { if (!busy.value) return; reward.value = pendingReward.value; cancelPreview(); const sequence=soundSequence;const epic=mode.value==='epic';if(soundEnabled.value)void sound.prime().then(ready=>{if(ready && soundEnabled.value && sequence===soundSequence && !document.hidden)sound.play(epic)}) }
 function onKeydown(event) {
   if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); emit('close'); return }
   if (event.key !== 'Tab') return

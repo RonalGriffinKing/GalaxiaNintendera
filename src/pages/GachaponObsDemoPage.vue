@@ -7,9 +7,9 @@ import StarsRewardStage from '@/components/profile/gachapon/StarsRewardStage.vue
 const busy=ref(false),reward=ref(null),pending=ref(null),mode=ref('normal'),visible=ref(false),error=ref('')
 const sound=createRewardSound(),audioReady=ref(false)
 async function enableSound(){audioReady.value=await sound.prime()}
-function onHidden(){if(document.hidden)sound.stop()}
-let unsubscribe,timer,lastId=''
-function reveal(){if(!busy.value)return;busy.value=false;reward.value=pending.value;sound.play(mode.value==='epic');clearTimeout(timer);timer=setTimeout(()=>{visible.value=false;reward.value=null},10000)}
+function onHidden(){if(document.hidden){soundSequence++;sound.stop()}}
+let unsubscribe,timer,lastId='',soundSequence=0
+function reveal(){if(!busy.value)return;busy.value=false;reward.value=pending.value;const sequence=++soundSequence;const epic=mode.value==='epic';void sound.prime().then(ready=>{audioReady.value=ready;if(ready&&sequence===soundSequence&&!document.hidden)sound.play(epic)});clearTimeout(timer);timer=setTimeout(()=>{visible.value=false;reward.value=null},10000)}
 onMounted(()=>{
  document.documentElement.classList.add('gachapon-obs-mode')
  document.addEventListener('visibilitychange',onHidden)
@@ -21,12 +21,14 @@ onMounted(()=>{
  const event=data.gachaponEvent;if(!event||event.id===lastId||!event.icon?.src)return
  lastId=event.id;if(Date.now()-event.createdAt>20000)return
  clearTimeout(timer);mode.value=event.mode==='epic'?'epic':'normal';pending.value=event.icon;reward.value=null;visible.value=true;busy.value=true
+ sound.stop()
+ const sequence=++soundSequence
  const activeId=event.id
- void sound.prime().then(ready=>{audioReady.value=ready;if(ready&&!document.hidden&&activeId===lastId){if(busy.value)sound.spin(mode.value==='epic');else if(reward.value)sound.play(mode.value==='epic')}})
+ void sound.prime().then(ready=>{audioReady.value=ready;if(ready&&!document.hidden&&activeId===lastId&&sequence===soundSequence&&busy.value)sound.spin(mode.value==='epic')})
  if(matchMedia('(prefers-reduced-motion: reduce)').matches)reveal()
  },()=>{error.value='No se pudo conectar al espejo OBS.'})
 })
-onUnmounted(()=>{unsubscribe?.();clearTimeout(timer);sound.dispose();document.removeEventListener('visibilitychange',onHidden);document.documentElement.classList.remove('gachapon-obs-mode')})
+onUnmounted(()=>{soundSequence++;unsubscribe?.();clearTimeout(timer);sound.dispose();document.removeEventListener('visibilitychange',onHidden);document.documentElement.classList.remove('gachapon-obs-mode')})
 </script>
 <template>
  <main class="obs-mirror">

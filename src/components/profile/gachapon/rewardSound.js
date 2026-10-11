@@ -11,7 +11,7 @@ export function createRewardSound() {
  }
  function stop(){for(const node of nodes){try{node.stop()}catch{}}nodes.clear()}
  return {
-  async prime(){try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return false;context ||= new Audio();await context.resume();return context.state==='running'}catch{return false}},
+  async prime(){try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return false;if(!context || context.state==='closed')context=new Audio();const active=context;if(active.state!=='running')await active.resume();return context===active && active.state==='running'}catch{return false}},
   spin(epic=false){stop();if(context?.state!=='running')return;const now=context.currentTime;for(let n=0;n<12;n++)tone((epic?440:330)*Math.pow(2,n/24),now+n*.3,.32,.012+n*.0025);tone(epic?180:150,now,3.8,epic?.065:.055,'triangle',epic?850:650,true)},
   play(epic=false){stop();if(context?.state!=='running')return;const now=context.currentTime;const notes=epic?[523.25,659.25,783.99,1046.5]:[523.25,659.25,783.99];notes.forEach((f,n)=>tone(f,now+n*.1,.7,.04));if(epic)tone(1318.5,now+.45,.8,.018)},
   stop,
