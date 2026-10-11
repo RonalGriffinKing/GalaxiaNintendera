@@ -5241,4 +5241,5 @@ onUnmounted(() => {
     width: 100%;
   }
 }
+@media(min-width:761px) { .community-panel { width:var(--public-content-width); max-width:100%; margin-inline:auto; box-sizing:border-box; } }
 </style>

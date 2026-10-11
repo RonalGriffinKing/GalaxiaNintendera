@@ -3177,4 +3177,5 @@ watch(() => route.fullPath, () => {
  .purple-card { padding:16px; }
 }
 
+@media(min-width:761px) { .listing-shell { width:var(--public-content-width); max-width:100%; margin-inline:auto; } }
 </style>

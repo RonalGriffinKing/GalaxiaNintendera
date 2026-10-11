@@ -2283,4 +2283,5 @@ onUnmounted(() => {
  .recent-post-card { min-height:220px; }
 }
 
+@media(min-width:761px) { .profile-page { width:var(--public-content-width); max-width:100%; margin-inline:auto; padding-inline:0; } }
 </style>

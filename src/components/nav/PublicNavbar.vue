@@ -3040,4 +3040,5 @@ onUnmounted(() => {
 @media (min-width: 860px) and (max-width: 960px) {
   .public-brand span { display: none; }
 }
+@media(min-width:860px) { .public-nav-inner { width:var(--public-content-width); max-width:100%; margin-inline:auto; grid-template-columns:minmax(140px,1fr) auto minmax(140px,1fr); gap:12px; } }
 </style>

@@ -1589,4 +1589,5 @@ onUnmounted(() => {
  .home2-community-card { min-height:52px; }
 }
 
+@media(min-width:761px) { .home2-shell { width:var(--public-content-width); max-width:100%; margin-inline:auto; } }
 </style>
