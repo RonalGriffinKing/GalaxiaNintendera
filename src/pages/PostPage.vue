@@ -1250,4 +1250,19 @@ onUnmounted(() => {
   .read-reward-toast,
   .read-reward-toast i { animation: none; }
 }
+
+/* Articles use the same centered margins as the public listings. */
+@media(min-width:761px){
+ .post-layout,.post-loading-shell { width:var(--public-content-width); max-width:1200px; }
+ .post-layout { padding-top:calc(var(--public-nav-offset, 72px) + 24px); }
+}
+@media(min-width:1024px) and (max-width:1440px){
+ .post-layout { grid-template-columns:minmax(0,1fr) 260px; gap:22px; }
+}
+
+
+@media(max-width:760px){
+ .post-layout { padding-top:calc(var(--public-nav-offset, 64px) + 16px); }
+}
+.post-content-section { scroll-margin-top:calc(var(--public-nav-offset, 72px) + 20px); }
 </style>

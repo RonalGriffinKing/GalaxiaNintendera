@@ -834,27 +834,23 @@ async function downloadCarousel() {
 async function exportFontCSS(target) {
   const text = [...new Set(cardRefs.value.map(card => card?.textContent || '').join(''))].join('')
   if (exportFontCache?.text === text) return exportFontCache.css
-  const inherited = await getFontEmbedCSS(target)
-  const query = 'family=Roboto:wght@400..900&family=Inter:wght@400..900&family=Space+Grotesk:wght@500..700&text=' + encodeURIComponent(text)
-  const response = await fetch('https://fonts.googleapis.com/css2?' + query, { signal: AbortSignal.timeout(15000) })
-  if (!response.ok) throw new Error('No se pudieron preparar las fuentes para exportar.')
-  let css = await response.text()
-  const urls = [...new Set([...css.matchAll(/url\((https:\/\/[^)]+)\)/g)].map(match => match[1]))]
-  for (const url of urls) {
-    const fontResponse = await fetch(url, { signal: AbortSignal.timeout(15000) })
-    if (!fontResponse.ok) throw new Error('No se pudo cargar una fuente de exportacion.')
-    const blob = await fontResponse.blob()
-    const data = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob) })
-    css = css.replaceAll(url, data)
-  }
-  exportFontCache = { text, css: inherited + '\n' + css }
+  // Embed the exact faces used by the preview, including its icon font.
+  // Fetching another weight range here changes text metrics only in the PNG.
+  const css = await getFontEmbedCSS(target)
+  exportFontCache = { text, css }
   return exportFontCache.css
 }
 
 async function renderSlidePng(target) {
   await waitForImages(target)
   return toPng(target, {
-    filter: node => !node.hasAttribute?.('data-editor-ui'),
+    // Hidden template controls must not reappear in the serialized SVG/PNG.
+    filter: node => {
+      if (node.hasAttribute?.('data-editor-ui')) return false
+      if (node.nodeType !== 1) return true
+      const style = getComputedStyle(node)
+      return style.display !== 'none' && style.visibility !== 'hidden'
+    },
     style: { '--selection-outline': 'none' },
     fontEmbedCSS: await exportFontCSS(target),
     cacheBust: true,
@@ -1036,7 +1032,7 @@ function slugify(value) {
         <div
           v-for="(slide, index) in carouselSlides"
           :key="`${post?.id || 'post'}-${selectedStyle}-${selectedFormat}-${slide.id}-${slide.image}`"
-          class="share-slide-shell" v-show="!editorOpen || selectedSlideIndex === index"
+          class="share-slide-shell" v-show="isDownloading || !editorOpen || selectedSlideIndex === index"
           :class="{ active: selectedSlideIndex === index }"
         >
           <div class="share-card-viewport" :style="previewStyle">
@@ -1087,7 +1083,7 @@ function slugify(value) {
                 <div class="social-card-copy" :class="{ 'has-points': slide.points?.length }">
                   <span v-if="settingsForSlide(index).part.visible" class="social-category" data-edit="part" :style="visualElementStyle(index, 'part')">
                     <i class="fas fa-gamepad"></i>
-                    {{ labelForPart(slide, index) }}
+                    <span class="social-category-label">{{ labelForPart(slide, index) }}</span>
                   </span>
                   <h2 data-edit="title" :style="visualElementStyle(index, 'title')">{{ displaySlideTitle(slide) }}</h2>
                   <small v-if="settingsForSlide(index).subtitle.visible" class="social-subtitle">{{ slide.subtitle }}</small>
@@ -1877,7 +1873,8 @@ function slugify(value) {
   gap: 14px;
   margin-bottom: 32px;
   max-width: 760px;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  flex-wrap: nowrap;
   padding: 18px 28px;
   text-transform: uppercase;
 }

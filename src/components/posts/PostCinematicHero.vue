@@ -797,4 +797,18 @@ const scoreTone = computed(() => {
     transform: none;
   }
 }
+
+/* Keep long article headlines readable without a full-screen tablet cover. */
+@media(min-width:761px) and (max-width:1440px){
+ .post-cinematic-hero:not(.is-preview) { min-height:400px; }
+ .post-cinematic-hero:not(.is-preview) .hero-content { padding:22px 24px; gap:14px; }
+ .post-cinematic-hero:not(.is-preview) .hero-copy h1 { font-size:clamp(28px,2.65vw,36px); line-height:1.15; overflow-wrap:break-word; }
+ .post-cinematic-hero:not(.is-preview) .hero-copy p { font-size:15px; line-height:1.55; margin-top:14px; }
+ .post-cinematic-hero:not(.is-preview) .hero-footer { flex-wrap:wrap; gap:14px; }
+}
+
+@media(min-width:1441px){
+ .post-cinematic-hero:not(.is-preview) { min-height:480px; }
+ .post-cinematic-hero:not(.is-preview) .hero-copy h1 { font-size:46px; line-height:1.15; }
+}
 </style>

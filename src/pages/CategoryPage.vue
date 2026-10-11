@@ -3178,4 +3178,17 @@ watch(() => route.fullPath, () => {
 }
 
 @media(min-width:761px) { .listing-shell { width:var(--public-content-width); max-width:100%; margin-inline:auto; } }
+
+@media(min-width:1441px) {
+ .listing-layout { grid-template-columns:minmax(0,1fr) 300px; gap:24px; }
+ .news-row.featured-latest { grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr); min-height:340px; gap:24px; padding:20px; }
+ .news-row.featured-latest .post-copy { min-width:0; padding-top:46px; padding-bottom:42px; }
+ .news-row.featured-latest .post-copy h2 { display:block; -webkit-line-clamp:unset; max-height:none; overflow:visible; font-size:34px; line-height:1.16; overflow-wrap:break-word; }
+ .news-row.featured-latest .post-copy p { font-size:16px; line-height:1.5; -webkit-line-clamp:3; }
+ .news-row.grid-card,.news-row.grid-card.analysis { min-height:330px; height:auto; }
+ .news-row.grid-card .post-copy h2 { display:block; -webkit-line-clamp:unset; max-height:none; overflow:visible; font-size:22px; line-height:1.25; }
+ .news-row.grid-card .post-copy p { font-size:14px; line-height:1.5; }
+ .popular-post strong { font-size:14px; line-height:1.4; }
+}
+
 </style>

@@ -1590,4 +1590,5 @@ onUnmounted(() => {
 }
 
 @media(min-width:761px) { .home2-shell { width:var(--public-content-width); max-width:100%; margin-inline:auto; } }
+@media(min-width:1441px) { .home2-main-hero { height:380px; padding:28px; }.home2-main-hero h1 { font-size:38px; line-height:1.15; }.home2-community-band h2 { font-size:30px; } }
 </style>

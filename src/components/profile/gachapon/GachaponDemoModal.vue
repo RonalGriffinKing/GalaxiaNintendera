@@ -156,7 +156,7 @@ onUnmounted(() => {
 button:focus-visible,a:focus-visible { outline:3px solid #f6d889; outline-offset:3px; }
 @media(max-width:480px) { .gacha-header { flex-wrap:wrap; }.gacha-header-actions { margin-left:auto; } .gacha-backdrop { padding:10px; }.gacha-dialog { padding:18px; border-radius:18px; max-height:calc(100dvh - 20px); }.gacha-options { grid-template-columns:1fr; gap:10px; }.gacha-stage { height:380px; }.gacha-option button { min-height:48px; } }
 
-@media(min-width:641px) {
+@media(min-width:641px) and (max-width:1440px),(min-width:641px) and (max-height:850px) {
  .gacha-dialog { width:min(100%,560px); padding:18px; }
  .gacha-header h2 { font-size:24px; }
  .gacha-categories { margin-top:10px; padding-bottom:4px; }

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { defaultRuzafaProducts } from '@/data/ruzafaProducts'
 import { getRuzafaProducts, saveRuzafaPrintHistory, saveRuzafaProduct, saveRuzafaProducts } from '@/services/ruzafaProducts'
 
@@ -10,6 +10,7 @@ const message = ref('')
 const mode = ref('home')
 const printTitle = ref('')
 const printType = ref('standard')
+const printTimeOffset = ref(0)
 const queue = ref([])
 const search = ref('')
 const homeSearch = ref('')
@@ -225,6 +226,7 @@ const addShelfLife = (date, shelfLife) => {
 }
 
 const prepareQueue = (source, title, type = 'standard') => {
+  printTimeOffset.value = 0
   const now = new Date()
   queue.value = source.map((product, index) => {
     const productUsesPrimary = Boolean(product.primaryExpiry) || String(product.shelfLife).toLowerCase().includes('primaria')
@@ -274,6 +276,12 @@ const selectGlobalProduct = product => {
   if (!product) return
   selectedProduct.value = product
   homeSearch.value = product.name
+}
+
+const setPrintTimeOffset = offset => {
+  printTimeOffset.value = offset
+  const printedAt = new Date(Date.now() + offset * 60 * 1000)
+  queue.value.forEach(item => { item.printedAt = new Date(printedAt) })
 }
 
 const addSelectedToQueue = () => {
@@ -482,12 +490,15 @@ const printLabels = async () => {
     queueSaveTimers.delete(item.id)
   })
   if (pendingItems.length) await Promise.all(pendingItems.map(saveQueueProduct))
+  const printedAt = new Date(Date.now() + printTimeOffset.value * 60 * 1000)
+  queue.value.forEach(item => { item.printedAt = new Date(printedAt) })
+  await nextTick()
   const labels = printableLabels.value.map(item => ({
     productId: item.id,
     productName: item.name,
     lot: item.lot,
     expiry: item.manualExpiry || toDateInputValue(item.expiry),
-    printedAt: new Date().toISOString(),
+    printedAt: printedAt.toISOString(),
   }))
   try {
     await saveRuzafaPrintHistory(labels)
@@ -886,7 +897,14 @@ const goHome = () => {
           <h2>{{ printTitle }}</h2>
           <p>{{ printableLabels.length }} etiquetas preparadas</p>
         </div>
-        <button class="print-button" type="button" @click="printLabels">Imprimir etiquetas</button>
+        <div class="print-heading-actions">
+          <div class="print-time-choice" aria-label="Hora que aparecerá en las etiquetas">
+            <button type="button" :class="{ active: printTimeOffset === 0 }" @click="setPrintTimeOffset(0)">Hora actual</button>
+            <button type="button" :class="{ active: printTimeOffset === -60 }" @click="setPrintTimeOffset(-60)">1 hora antes</button>
+          </div>
+          <small>Hora en etiqueta: {{ formatTime(queue[0]?.printedAt || new Date()) }}</small>
+          <button class="print-button" type="button" @click="printLabels">Imprimir etiquetas</button>
+        </div>
       </div>
 
       <div class="queue-table no-print">
@@ -1138,6 +1156,12 @@ h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; }
 .spec-strip { margin-top: 30px; padding-top: 22px; display: flex; gap: 34px; color: #5d6b62; border-top: 1px solid #d7ddd9; font-size: 14px; }
 .spec-strip strong { color: #1d2d23; }
 .preview-heading, .manage-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 28px; }
+.print-heading-actions { display: grid; grid-template-columns: auto auto; justify-items: end; align-items: center; gap: 7px 12px; }
+.print-heading-actions > small { grid-column: 1; color: #65736a; font-size: 12px; font-weight: 700; }
+.print-heading-actions > .print-button { grid-column: 2; grid-row: 1 / 3; }
+.print-time-choice { padding: 3px; display: inline-grid; grid-template-columns: 1fr 1fr; gap: 3px; background: #e4eae6; border-radius: 7px; }
+.print-time-choice button { min-height: 38px; padding: 0 13px; color: #44564b; background: transparent; border: 0; border-radius: 5px; font-weight: 800; cursor: pointer; }
+.print-time-choice button.active { color: white; background: #176a43; box-shadow: 0 2px 7px rgba(23, 106, 67, .2); }
 .print-button, .secondary-button { min-height: 46px; padding: 0 20px; border-radius: 6px; font-weight: 800; cursor: pointer; }
 .print-button { color: white; background: #176a43; border: 1px solid #176a43; }
 .secondary-button { color: #274234; background: white; border: 1px solid #bdc9c1; }
@@ -1268,6 +1292,9 @@ button:disabled { opacity: .55; cursor: default; }
   .search-queue-heading { align-items: stretch; flex-direction: column; }
   .spec-strip { gap: 12px; justify-content: space-between; font-size: 12px; }
   .preview-heading, .manage-heading { align-items: stretch; flex-direction: column; }
+  .print-heading-actions { grid-template-columns: 1fr; justify-items: stretch; }
+  .print-heading-actions > small, .print-heading-actions > .print-button { grid-column: 1; grid-row: auto; }
+  .print-heading-actions > small { text-align: center; }
   .global-results { grid-template-columns: 1fr; }
   .queue-table { grid-template-columns: 1fr; }
   .queue-row, .queue-row.book-queue-row { grid-template-columns: 24px repeat(2, minmax(0, 1fr)); gap: 9px; }

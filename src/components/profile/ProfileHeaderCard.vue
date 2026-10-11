@@ -261,4 +261,5 @@ button:focus-visible,a:focus-visible { outline:2px solid #c084fc; outline-offset
  .profile-main-copy h1 { font-size:clamp(24px,2.2vw,30px); }
 }
 
+@media(min-width:1441px) { .profile-hero { grid-template-columns:145px minmax(0,1fr) 400px; padding:24px; gap:12px 24px; }.profile-avatar-circle { --avatar-size:138px; }.profile-main-copy h1 { font-size:38px; }.profile-username { font-size:16px; } }
 </style>

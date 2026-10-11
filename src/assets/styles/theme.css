@@ -355,3 +355,6 @@ select:focus-visible {
   color: var(--color-muted-text);
   font-size: 12px;
 }
+
+/* Keep tablet margins, but give large desktop screens room for readable cards. */
+@media(min-width:1441px){:root{--public-content-max:1400px;--public-side-space:clamp(96px,8vw,220px);}}
