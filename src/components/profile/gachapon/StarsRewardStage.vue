@@ -81,16 +81,20 @@ function finish(event) { if (event.target === event.currentTarget && event.anima
   75% { transform:translate(-50%,calc(-50% - 13px)) rotate(-2deg) scale(1.03); }
  }
  @keyframes star-idle { 50% { opacity:.65; scale:.85; } }
- .charging .stellar-orbit { animation:stellar-orbit 2.2s cubic-bezier(.2,.65,.3,1) both; }
- .charging .gift-anchor { animation:gift-charge 2.2s ease both; }
- .charging .gift-box,.charging .gift-lid { animation:holo-flow 1.1s linear 2; }
- .charging .stellar-particle { animation:particle-charge 1.1s ease-out 2; animation-delay:var(--delay); }
+ .charging .stellar-halo { animation:charge-aura 3.8s ease-in both; }
+ .discovered .stellar-halo { animation:reveal-aura 1.2s ease-out both; }
+ @keyframes charge-aura { 75% { opacity:1; scale:1.1; } 95% { opacity:.9; scale:1.3; } }
+ @keyframes reveal-aura { from { opacity:1; scale:1.3; } to { opacity:.6; scale:1; } }
+ .charging .stellar-orbit { animation:stellar-orbit 3.8s cubic-bezier(.2,.65,.3,1) both; }
+ .charging .gift-anchor { animation:gift-charge 3.8s ease both; }
+ .charging .gift-box,.charging .gift-lid { animation:holo-flow 1.9s linear 2; }
+ .charging .stellar-particle { animation:particle-charge 1.9s ease-out 2; animation-delay:var(--delay); }
  .discovered .gift-lid { animation:gift-open .75s ease-out both; }
  .discovered .gift-box { animation:gift-fade .75s ease-out both; }
  .discovered .reward-portrait { animation:icon-emerge .85s cubic-bezier(.2,.8,.2,1) .14s both; }
  .discovered .stellar-particle { animation:particle-burst .9s ease-out both; animation-delay:var(--delay); }
  .discovered .stellar-caption { animation:caption-reveal .45s ease-out .55s both; }
- @keyframes stellar-orbit { to { transform:rotate(1080deg); } }
+ @keyframes stellar-orbit { to { transform:rotate(1800deg); } }
  @keyframes gift-charge { 30%,70% { transform:translate(-50%,-50%) rotate(5deg) scale(1.05); } 50%,90% { transform:translate(-50%,-50%) rotate(-7deg) scale(1.1); } }
  @keyframes holo-flow { to { background-position:100% 100%; } }
  @keyframes gift-open { to { transform:translate(-35px,-100px) rotate(-30deg); opacity:0; } }

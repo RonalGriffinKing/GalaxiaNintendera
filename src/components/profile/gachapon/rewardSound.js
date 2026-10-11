@@ -1,10 +1,20 @@
-// Small synthesized chime: no audio downloads or dependencies.
+// Synthesized audio, loaded only with the gachapon. No external assets.
 export function createRewardSound() {
  let context
+ const nodes=new Set()
+ function tone(frequency,start,duration,volume=.025,type='sine',target=frequency){
+  const oscillator=context.createOscillator(),gain=context.createGain();nodes.add(oscillator)
+  oscillator.type=type;oscillator.frequency.setValueAtTime(frequency,start);oscillator.frequency.exponentialRampToValueAtTime(target,start+duration)
+  gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(volume,start+.025);gain.gain.exponentialRampToValueAtTime(.001,start+duration)
+  oscillator.connect(gain);gain.connect(context.destination);oscillator.start(start);oscillator.stop(start+duration+.03)
+  oscillator.onended=()=>{nodes.delete(oscillator);oscillator.disconnect();gain.disconnect()}
+ }
+ function stop(){for(const node of nodes){try{node.stop()}catch{}}nodes.clear()}
  return {
-  async prime() { try { const Audio = window.AudioContext || window.webkitAudioContext; if (!Audio) return; context ||= new Audio(); await context.resume() } catch {} },
-  play(epic = false) { if (!context || context.state !== 'running') return; const now=context.currentTime; [523.25,659.25,epic?1046.5:783.99].forEach((frequency,index)=>{const oscillator=context.createOscillator(),gain=context.createGain();oscillator.type='sine';oscillator.frequency.value=frequency;const start=now+index*.09;gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(.045,start+.015);gain.gain.exponentialRampToValueAtTime(.001,start+.38);oscillator.connect(gain);gain.connect(context.destination);oscillator.start(start);oscillator.stop(start+.4);oscillator.onended=()=>{oscillator.disconnect();gain.disconnect()}}) },
-  stop() { if(context?.state==='running') void context.suspend().catch(()=>{}) },
-  dispose() { void context?.close().catch(()=>{});context=null }
+  async prime(){try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return false;context ||= new Audio();await context.resume();return context.state==='running'}catch{return false}},
+  spin(epic=false){stop();if(context?.state!=='running')return;const now=context.currentTime;for(let n=0;n<12;n++)tone((epic?440:330)*Math.pow(2,n/24),now+n*.28,.22,.018);tone(epic?130:110,now,3.5,.018,'sine',epic?260:220)},
+  play(epic=false){stop();if(context?.state!=='running')return;const now=context.currentTime;const notes=epic?[523.25,659.25,783.99,1046.5]:[523.25,659.25,783.99];notes.forEach((f,n)=>tone(f,now+n*.1,.7,.04));if(epic)tone(1318.5,now+.45,.8,.018)},
+  stop,
+  dispose(){stop();void context?.close().catch(()=>{});context=null}
  }
 }

@@ -37,10 +37,9 @@ function adminPreview() {
  // Admin may preview already owned artwork; this never grants entitlement.
  preview({ ...item, candidates: demoCandidates(categoryIcons.value, [], item.rarity) })
 }
-function cancelPreview() { busy.value = false; pendingReward.value = null }
+function cancelPreview() { busy.value = false; pendingReward.value = null; sound.stop() }
 function preview(item) {
   if (busy.value || !item.candidates.length) return
-  if (soundEnabled.value) void sound.prime()
   mode.value = item.rarity
   reward.value = null
   // A deterministic catalogue preview, never a real draw or reward entitlement.
@@ -48,9 +47,10 @@ function preview(item) {
   emit('preview', { mode:item.rarity, icon:candidate })
   pendingReward.value = candidate
   busy.value = true
+  if (soundEnabled.value) void sound.prime().then(ready => { if (!ready || !soundEnabled.value) return; if (busy.value && pendingReward.value === candidate) sound.spin(item.rarity === 'epic'); else if (reward.value === candidate) sound.play(item.rarity === 'epic') })
   if (reducedMotion.value) reveal()
 }
-function reveal() { if (!busy.value) return; reward.value = pendingReward.value; if (soundEnabled.value) sound.play(mode.value === 'epic'); cancelPreview() }
+function reveal() { if (!busy.value) return; reward.value = pendingReward.value; cancelPreview(); if (soundEnabled.value) sound.play(mode.value === 'epic') }
 function onKeydown(event) {
   if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); emit('close'); return }
   if (event.key !== 'Tab') return
