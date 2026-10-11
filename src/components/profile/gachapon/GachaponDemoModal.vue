@@ -1,14 +1,19 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { DEFAULT_GACHAPON_PRICES, validateGachaponPrices } from './prices'
 import { DEMO_MODES, demoCandidates } from './demoCatalog'
 import { createRewardSound } from './rewardSound'
 import StarsRewardStage from './StarsRewardStage.vue'
 
-const props = defineProps({ admin: Boolean, prepareMirror: Function, initialSaga: { type: String, default: 'all' }, stars: { type: Number, default: 0 }, icons: { type: Array, default: () => [] }, owned: { type: Array, default: () => [] } })
+const props = defineProps({ prices: { type:Object, default:()=>({...DEFAULT_GACHAPON_PRICES}) }, savePrices:Function, admin: Boolean, prepareMirror: Function, initialSaga: { type: String, default: 'all' }, stars: { type: Number, default: 0 }, icons: { type: Array, default: () => [] }, owned: { type: Array, default: () => [] } })
 const emit = defineEmits(['close', 'collection', 'preview'])
 const sound = createRewardSound()
 const soundEnabled = ref(true)
 const obsSettings = ref(false)
+const priceSettings=ref(false),priceDraft=ref({...props.prices}),priceMessage=ref(''),savingPrices=ref(false)
+watch(()=>props.prices,value=>{priceDraft.value={...value}},{deep:true})
+async function persistPrices(){if(!props.admin||savingPrices.value)return;savingPrices.value=true;try{await props.savePrices(validateGachaponPrices(priceDraft.value));priceMessage.value='Precios guardados para todos.'}catch(error){priceMessage.value=error.message}finally{savingPrices.value=false}}
+
 const obsMessage=ref('')
 const obsLink=ref('')
 const obsCreating=ref(false)
@@ -26,7 +31,7 @@ const iconSaga = icon => icon.saga || 'Especiales'
 const categories = computed(() => [...new Set(props.icons.map(iconSaga))].sort((a, b) => a.localeCompare(b, 'es')))
 const categoryIcons = computed(() => props.icons.filter(icon => category.value === 'all' || iconSaga(icon) === category.value))
 const balance = computed(() => Number.isFinite(props.stars) ? props.stars : 0)
-const modes = computed(() => DEMO_MODES.map(item => ({ ...item, candidates: demoCandidates(categoryIcons.value, props.owned, item.rarity) })))
+const modes = computed(() => DEMO_MODES.map(item => ({ ...item, price:props.prices[item.rarity], candidates: demoCandidates(categoryIcons.value, props.owned, item.rarity) })))
 let previousFocus
 let previousOverflow
 let motionQuery
@@ -101,12 +106,13 @@ onUnmounted(() => {
           <button type="button" :disabled="busy" :aria-pressed="category === 'all'" @click="category = 'all'">Todas</button>
           <button v-for="saga in categories" :key="saga" type="button" :disabled="busy" :aria-pressed="category === saga" @click="category = saga; $event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })">{{ saga }}</button>
         </div>
-        <div class="gacha-tools"><button v-if="admin" type="button" :disabled="busy" @click="adminPreview">Probar animación (admin)</button><button type="button" :aria-pressed="soundEnabled" @click="soundEnabled = !soundEnabled; !soundEnabled && sound.stop()">{{ soundEnabled ? 'Sonido activado' : 'Sonido apagado' }}</button><button v-if="admin" type="button" :aria-expanded="obsSettings" @click="obsSettings = !obsSettings">Configuración OBS</button></div>
+        <div class="gacha-tools"><button v-if="admin" type="button" :aria-expanded="priceSettings" @click="priceSettings=!priceSettings">Precios</button><button v-if="admin" type="button" :disabled="busy" @click="adminPreview">Probar animación (admin)</button><button type="button" :aria-pressed="soundEnabled" @click="soundEnabled = !soundEnabled; !soundEnabled && sound.stop()">{{ soundEnabled ? 'Sonido activado' : 'Sonido apagado' }}</button><button v-if="admin" type="button" :aria-expanded="obsSettings" @click="obsSettings = !obsSettings">Configuración OBS</button></div>
         <div v-if="admin && obsSettings" class="gacha-obs-settings">
           <button v-if="!obsLink" type="button" :disabled="obsCreating" @click="createObsLink">{{ obsCreating ? 'Preparando...' : 'Crear espejo OBS' }}</button>
           <template v-else><label>Enlace de solo visualizacion<input :value="obsLink" readonly @focus="$event.target.select()" /></label><button type="button" @click="copyObsLink">Copiar enlace OBS</button></template>
           <p role="status">{{ obsMessage || 'Sin claves. El enlace solo muestra la animacion; no permite canjear.' }}</p>
         </div>
+        <form v-if="admin && priceSettings" class="gacha-obs-settings" @submit.prevent="persistPrices"><label>Normal (estrellas)<input v-model.number="priceDraft.normal" type="number" min="1" max="1000000" step="1" required /></label><label>Épico (estrellas)<input v-model.number="priceDraft.epic" type="number" min="1" max="1000000" step="1" required /></label><button type="submit" :disabled="savingPrices">{{ savingPrices ? 'Guardando...' : 'Guardar precios' }}</button><p role="status">{{ priceMessage }}</p></form>
         <div class="gacha-wallet"><span>Tu saldo actual</span><strong><span aria-hidden="true">★</span> {{ balance }} <small>estrellas</small></strong></div>
         <p id="gacha-disclaimer" class="gacha-disclaimer">Demostración · No se han gastado estrellas ni añadido iconos.</p>
         <div class="gacha-stage">

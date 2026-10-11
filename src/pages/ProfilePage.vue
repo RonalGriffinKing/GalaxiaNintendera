@@ -2,7 +2,8 @@
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { onAuthStateChanged, updateProfile } from 'firebase/auth'
-import { collection, deleteDoc, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc, where, onSnapshot } from 'firebase/firestore'
+import { DEFAULT_GACHAPON_PRICES, validateGachaponPrices } from '@/components/profile/gachapon/prices'
 import { auth, db } from '@/firebase'
 import ProfileRewardsHub from '@/components/profile/ProfileRewardsHub.vue'
 import AppNotice from '@/components/shared/AppNotice.vue'
@@ -31,6 +32,16 @@ import { ACHIEVEMENT_TYPES, PROFILE_ICON_FILTERS } from '@/constants/profile'
 const route = useRoute()
 const router = useRouter()
 const profile = ref(null)
+const gachaponPrices=ref({...DEFAULT_GACHAPON_PRICES})
+let unsubscribeGachaponPrices
+onMounted(()=>{unsubscribeGachaponPrices=onSnapshot(doc(db,'siteSettings','gachaponPrices'),snapshot=>{if(snapshot.exists()){try{gachaponPrices.value=validateGachaponPrices(snapshot.data())}catch{}}},()=>{})})
+onUnmounted(()=>unsubscribeGachaponPrices?.())
+async function saveGachaponPrices(value){
+ if(!isAdminOwnProfile.value || !auth.currentUser)throw Error('Solo administradores.')
+ const prices=validateGachaponPrices(value)
+ await setDoc(doc(db,'siteSettings','gachaponPrices'),{...prices,updatedAt:Date.now()})
+ gachaponPrices.value=prices
+}
 const gachaponOpen = ref(false)
 const gachaponSaga = ref('all')
 const openGachapon = (saga = 'all') => { if (!isOwnProfile.value) return; gachaponSaga.value = saga; gachaponOpen.value = true }
@@ -52,7 +63,7 @@ async function prepareGachaponMirror() {
 async function publishGachaponMirror(event) {
  if(!isAdminOwnProfile.value || !auth.currentUser || !mirrorSceneId.value)return
  const icon=event.icon
- try{await updateDoc(doc(db,'overlays',auth.currentUser.uid,'items',mirrorSceneId.value),{gachaponEvent:{id:crypto.randomUUID(),createdAt:Date.now(),mode:event.mode,icon:{name:icon.name||'Icono',saga:icon.saga||'Especiales',rarity:icon.rarity||event.mode,src:new URL(icon.src,window.location.origin).toString(),special:Boolean(icon.special),effectColor:icon.effectColor||'#a855f7'}}})}catch{message.value='No se pudo enviar la animacion a OBS.'}
+ try{await updateDoc(doc(db,'overlays',auth.currentUser.uid,'items',mirrorSceneId.value),{gachaponEvent:{id:crypto.randomUUID(),createdAt:Date.now(),mode:event.mode,prices:gachaponPrices.value,icon:{name:icon.name||'Icono',saga:icon.saga||'Especiales',rarity:icon.rarity||event.mode,src:new URL(icon.src,window.location.origin).toString(),special:Boolean(icon.special),effectColor:icon.effectColor||'#a855f7'}}})}catch{message.value='No se pudo enviar la animacion a OBS.'}
 }
 const GachaponDemoModal = defineAsyncComponent(() => import('@/components/profile/gachapon/GachaponDemoModal.vue'))
 const favorites = ref([])
@@ -1317,7 +1328,7 @@ onUnmounted(() => {
 
       </template>
       <AppNotice :message="message" :type="message.startsWith('No se') ? 'error' : 'success'" />
-      <GachaponDemoModal v-if="gachaponOpen && isOwnProfile" :stars="stars" :icons="allProfileIcons" :owned="unlockedIcons" :admin="isAdminOwnProfile" :prepare-mirror="prepareGachaponMirror" @preview="publishGachaponMirror" :initial-saga="gachaponSaga" @collection="viewGachaponCollection" @close="gachaponOpen = false" />
+      <GachaponDemoModal v-if="gachaponOpen && isOwnProfile" :stars="stars" :icons="allProfileIcons" :owned="unlockedIcons" :prices="gachaponPrices" :save-prices="saveGachaponPrices" :admin="isAdminOwnProfile" :prepare-mirror="prepareGachaponMirror" @preview="publishGachaponMirror" :initial-saga="gachaponSaga" @collection="viewGachaponCollection" @close="gachaponOpen = false" />
       <ProfileIconEditor v-if="iconPanelOpen || iconUploadOpen" v-model:profile-draft="profileDraft" v-model:upload-icon-draft="uploadIconDraft" :profile="profile" :profile-icon="profileIcon" :profile-icon-meta="profileIconMeta" :panel-open="iconPanelOpen" :upload-open="iconUploadOpen" :edit-message="editMessage" :is-saving-profile="isSavingProfile" :is-uploading-icon="isUploadingIcon" :editing-icon-id="editingIconId" :upload-icon-preview="uploadIconPreview" :upload-icon-message="uploadIconMessage" :icon-filters="iconFilters" @close-panel="closeIconPanel" @close-upload="closeIconUpload" @save-profile="saveProfile" @open-rewards="openRewards('collection')" @save-uploaded-icon="saveUploadedIcon" />
 
       <section v-if="!isRewardsPage && posts.length && !isCreatorProfile" class="profile-section">

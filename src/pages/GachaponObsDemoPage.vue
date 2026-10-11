@@ -3,8 +3,10 @@ import { onMounted,onUnmounted,ref } from 'vue'
 import { doc,onSnapshot } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { createRewardSound } from '@/components/profile/gachapon/rewardSound'
+import {DEFAULT_GACHAPON_PRICES,validateGachaponPrices} from '@/components/profile/gachapon/prices'
 import StarsRewardStage from '@/components/profile/gachapon/StarsRewardStage.vue'
 const busy=ref(false),reward=ref(null),pending=ref(null),mode=ref('normal'),visible=ref(false),error=ref('')
+const prices=ref({...DEFAULT_GACHAPON_PRICES})
 const sound=createRewardSound(),audioReady=ref(false)
 async function enableSound(){audioReady.value=await sound.prime()}
 function onHidden(){if(document.hidden){soundSequence++;sound.stop()}}
@@ -20,6 +22,7 @@ onMounted(()=>{
  const data=snapshot.data();if(data?.kind!=='gachapon-mirror')return
  const event=data.gachaponEvent;if(!event||event.id===lastId||!event.icon?.src)return
  lastId=event.id;if(Date.now()-event.createdAt>20000)return
+ try{prices.value=validateGachaponPrices(event.prices||DEFAULT_GACHAPON_PRICES)}catch{prices.value={...DEFAULT_GACHAPON_PRICES}}
  clearTimeout(timer);mode.value=event.mode==='epic'?'epic':'normal';pending.value=event.icon;reward.value=null;visible.value=true;busy.value=true
  sound.stop()
  const sequence=++soundSequence
@@ -37,8 +40,8 @@ onUnmounted(()=>{soundSequence++;unsubscribe?.();clearTimeout(timer);sound.dispo
    <header><span>Entre las estrellas</span><h1>Gachapon Estelar</h1></header>
    <div :key="pending?.src + lastId" class="obs-scene"><StarsRewardStage :busy="busy" :reward="reward" :mode="mode" @complete="reveal" /></div>
    <div class="obs-options" role="group" aria-label="Opcion elegida desde la web">
-    <button type="button" disabled :aria-pressed="mode === 'normal'" :class="{ selected:mode === 'normal' }">Normal · 20 ⭐</button>
-    <button type="button" disabled class="epic-option" :aria-pressed="mode === 'epic'" :class="{ selected:mode === 'epic' }">Épico · 50 ⭐</button>
+    <button type="button" disabled :aria-pressed="mode === 'normal'" :class="{ selected:mode === 'normal' }">Normal · {{ prices.normal }} ⭐</button>
+    <button type="button" disabled class="epic-option" :aria-pressed="mode === 'epic'" :class="{ selected:mode === 'epic' }">Épico · {{ prices.epic }} ⭐</button>
    </div>
   </section>
   <p v-if="error" class="obs-error" role="status">{{ error }}</p>
