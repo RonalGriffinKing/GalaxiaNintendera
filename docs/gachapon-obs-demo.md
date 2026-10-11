@@ -1,11 +1,14 @@
-# OBS: conexion temporal de demostracion
+# OBS: configuracion sencilla de demostracion
 
-1. Una sola vez, configurar GACHAPON_OBS_KEY en Netlify (Functions), secreto aleatorio de al menos 32 caracteres. Es la firma interna del servidor, no la clave que escribes en OBS. No usar VITE_ ni compartirla.
-2. Desplegar esta version. Desde el gachapon del administrador, Configuracion OBS: escribir una clave temporal de 4 a 128 caracteres y Crear y copiar enlace OBS.
-3. Pegar el enlace en Fuente de navegador de OBS (580 x 530). Mediante Interactuar, escribir la misma clave temporal y Conectar.
-4. Cada recarga pide la clave de nuevo. No se guardan contrasenas en almacenamiento del navegador ni se incluyen en el enlace. Conservar el fragmento connection del enlace para poder volver a validar.
-5. El enlace caduca a las 12 horas. Generar otro para otra sesion. Los enlaces anteriores siguen vigentes hasta caducar; cambiar la firma interna revoca todos.
+No requiere variables ni funciones Netlify. Puede retirarse GACHAPON_OBS_KEY de Netlify; no se utiliza.
 
-La pantalla sigue siendo una demostracion independiente sin premios, escrituras, saldo, inventario ni sincronizacion con el perfil. Las imagenes son publicas; este enlace no proporciona permisos administrativos. La creacion de enlaces solo da acceso a esta demo sin datos privados. Las claves cortas son mas faciles de adivinar: usar una frase temporal no obvia.
+1. En el gachapon de tu perfil administrador, Configuracion OBS.
+2. Escribir una clave temporal de 4 a 128 caracteres y pulsar Enter o Configurar clave.
+3. Aparece Clave configurada y el enlace. Copiar enlace o seleccionar y copiar manualmente.
+4. Pegar en Fuente de navegador de OBS (580 x 530). Interactuar: escribir la misma clave y Conectar.
+5. Cada recarga pide la clave; no se guarda la contrasena ni el acceso en almacenamiento del navegador. El enlace conserva un verificador derivado con PBKDF2 y sal aleatoria, no la contrasena literal.
+6. Restablecer limpia el formulario y permite generar otro enlace; no revoca enlaces copiados anteriormente. Caducan a las 12 horas.
 
-Sonido disponible en el gachapon del perfil, con interruptor. La demo OBS es silenciosa.
+IMPORTANTE: comprobacion local, solo puerta visual para una demostracion publica. Puede ser evitada manipulando el navegador o enlace; no es autenticacion ni protege datos. No autoriza canjes, estrellas, inventario ni acciones administrativas. No sincroniza con el perfil. Los canjes reales requieren validacion en servidor en otra etapa.
+
+Se conserva sonido en el modal del perfil con interruptor. La prueba OBS es silenciosa.

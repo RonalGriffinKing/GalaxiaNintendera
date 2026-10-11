@@ -1,15 +1,16 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
+import { verifyObsDemoConnection } from '@/components/profile/gachapon/obsDemoConnection'
 import StarsRewardStage from '@/components/profile/gachapon/StarsRewardStage.vue'
 import artwork from '@/iconos/iconosZelda/01.png'
-const authorized=ref(false),busy=ref(false),reward=ref(null),message=ref('Validando conexión…')
+const authorized=ref(false),busy=ref(false),reward=ref(null),message=ref('Introduce tu clave temporal.'),password=ref(''),checking=ref(false)
 const demo={id:'obs-demo',name:'Demostración',saga:'Zelda',rarity:'normal',src:artwork}
 let alive=true
 function preview(){reward.value=null;busy.value=true;if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) reveal()}
 function reveal(){if(!busy.value)return;busy.value=false;reward.value=demo}
 async function connect(){
  checking.value=true
- try{const token=new URLSearchParams(window.location.hash.slice(1)).get('connection')||'';const result=await fetch('/.netlify/functions/gachapon-obs-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'verify',token,password:password.value})});const data=await result.json();if(!result.ok)throw Error(data.error==='expired-link'?'El enlace ha caducado. Genera otro.':data.error==='not-configured'?'Configura la función en Netlify.':'Clave incorrecta o enlace no válido.');if(alive){authorized.value=true;password.value=''}}catch(error){if(alive)message.value=error.message}finally{if(alive)checking.value=false}
+ try{const token=new URLSearchParams(window.location.hash.slice(1)).get('connection')||'';await verifyObsDemoConnection(token,password.value);if(alive){authorized.value=true;password.value=''}}catch(error){if(alive)message.value=error.message}finally{if(alive)checking.value=false}
 }
 onMounted(()=>{document.documentElement.classList.add('gachapon-obs-mode')})
 onUnmounted(()=>{alive=false;document.documentElement.classList.remove('gachapon-obs-mode')})
