@@ -14,10 +14,11 @@ const obsMessage = ref('')
 async function copyObsLink() {
  obsMessage.value = ''
  try {
- const response = await fetch('/.netlify/functions/gachapon-obs-auth', { method:'POST', headers:{ Authorization:'Bearer '+obsKey.value } })
- if (!response.ok) throw new Error(response.status === 503 ? 'Configura GACHAPON_OBS_KEY en Netlify primero.' : 'La clave no coincide o no pudo validarse.')
- const url = new URL('/overlay/gachapon-demo', window.location.origin); url.hash = new URLSearchParams({ key:obsKey.value }).toString()
- await navigator.clipboard.writeText(url.toString()); obsMessage.value = 'Enlace copiado. Prueba visual: no realiza canjes.'
+ const response = await fetch('/.netlify/functions/gachapon-obs-auth', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ action:'create', password:obsKey.value }) })
+ if (!response.ok) throw new Error(response.status === 503 ? 'Configura GACHAPON_OBS_KEY en Netlify primero.' : 'Usa una clave temporal de 4 a 128 caracteres.')
+ const data = await response.json()
+ const url = new URL('/overlay/gachapon-demo', window.location.origin); url.hash = new URLSearchParams({ connection:data.token }).toString()
+ await navigator.clipboard.writeText(url.toString()); obsMessage.value = 'Enlace copiado. Caduca en 12 horas; OBS pedir? tu clave al abrir o recargar.'
  } catch(error) { obsMessage.value = error.message }
 }
 const dialog = ref(null)
@@ -105,7 +106,7 @@ onUnmounted(() => {
           <button v-for="saga in categories" :key="saga" type="button" :disabled="busy" :aria-pressed="category === saga" @click="category = saga; $event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })">{{ saga }}</button>
         </div>
         <div class="gacha-tools"><button v-if="admin" type="button" :disabled="busy" @click="adminPreview">Probar animación (admin)</button><button type="button" :aria-pressed="soundEnabled" @click="soundEnabled = !soundEnabled; !soundEnabled && sound.stop()">{{ soundEnabled ? 'Sonido activado' : 'Sonido apagado' }}</button><button v-if="admin" type="button" :aria-expanded="obsSettings" @click="obsSettings = !obsSettings">Configuración OBS</button></div>
-        <div v-if="admin && obsSettings" class="gacha-obs-settings"><label>Clave privada de conexión<input v-model="obsKey" type="password" autocomplete="off" placeholder="Clave configurada en Netlify" /></label><button type="button" @click="copyObsLink">Validar y copiar enlace OBS</button><p role="status">{{ obsMessage || 'Solo demostración. No guardamos la clave en el navegador.' }}</p></div>
+        <div v-if="admin && obsSettings" class="gacha-obs-settings"><label>Clave privada de conexión<input v-model="obsKey" type="password" autocomplete="off" placeholder="Elige una clave de al menos 4 caracteres" /></label><button type="button" @click="copyObsLink">Crear y copiar enlace OBS</button><p role="status">{{ obsMessage || 'Solo demostración. No guardamos la clave en el navegador.' }}</p></div>
         <div class="gacha-wallet"><span>Tu saldo actual</span><strong><span aria-hidden="true">★</span> {{ balance }} <small>estrellas</small></strong></div>
         <p id="gacha-disclaimer" class="gacha-disclaimer">Demostración · No se han gastado estrellas ni añadido iconos.</p>
         <div class="gacha-stage">

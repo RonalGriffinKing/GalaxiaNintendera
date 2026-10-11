@@ -1,18 +1,11 @@
-# OBS: prueba visual con clave privada
+# OBS: conexion temporal de demostracion
 
-Estado: demostracion independiente, sin canjes, saldo, inventario ni sincronizacion con aperturas del perfil. El boton Probar animacion de esta pagina se puede utilizar mediante Interactuar en OBS. No esta conectado al premio real ni al catalogo remoto. Las imagenes siguen siendo recursos publicos; la clave limita la validacion de la pantalla, no convierte los recursos publicos en privados.
+1. Una sola vez, configurar GACHAPON_OBS_KEY en Netlify (Functions), secreto aleatorio de al menos 32 caracteres. Es la firma interna del servidor, no la clave que escribes en OBS. No usar VITE_ ni compartirla.
+2. Desplegar esta version. Desde el gachapon del administrador, Configuracion OBS: escribir una clave temporal de 4 a 128 caracteres y Crear y copiar enlace OBS.
+3. Pegar el enlace en Fuente de navegador de OBS (580 x 530). Mediante Interactuar, escribir la misma clave temporal y Conectar.
+4. Cada recarga pide la clave de nuevo. No se guardan contrasenas en almacenamiento del navegador ni se incluyen en el enlace. Conservar el fragmento connection del enlace para poder volver a validar.
+5. El enlace caduca a las 12 horas. Generar otro para otra sesion. Los enlaces anteriores siguen vigentes hasta caducar; cambiar la firma interna revoca todos.
 
-## Configuracion
+La pantalla sigue siendo una demostracion independiente sin premios, escrituras, saldo, inventario ni sincronizacion con el perfil. Las imagenes son publicas; este enlace no proporciona permisos administrativos. La creacion de enlaces solo da acceso a esta demo sin datos privados. Las claves cortas son mas faciles de adivinar: usar una frase temporal no obvia.
 
-1. En Netlify, configuracion del sitio, variables de entorno, crear GACHAPON_OBS_KEY con una clave aleatoria de al menos 32 caracteres (hasta 512). Asignar al entorno de produccion y al ambito Functions. No usar prefijo VITE_, no subirla a Git ni pegarla en el chat.
-2. Desplegar esta version en Netlify para que la funcion este disponible. No se ha desplegado automaticamente.
-3. Desde tu perfil de administrador, abrir el gachapon y Configuracion OBS. Introducir la misma clave, Validar y copiar enlace OBS.
-4. En OBS, crear Fuente de navegador, pegar el enlace, ancho 580 y alto 530. Usar Interactuar para Probar animacion. No necesita iniciar sesion en OBS.
-5. La clave se incluye en el fragmento del enlace; se envia a la funcion mediante Authorization y se retira de la barra de la pantalla al abrir. No se guarda en localStorage. OBS conserva la URL configurada: tratarla como una credencial y no compartirla.
-6. Para revocar, cambiar la variable en Netlify y actualizar el enlace. Una pantalla ya validada solo conserva una demo local; no tiene permisos sobre datos.
-
-La funcion valida un secreto privado con comparacion de hashes de tiempo constante; no lee ni escribe Firestore y no da acceso de administrador. No protege las reglas abiertas existentes. Los canjes reales y la sincronizacion requieren otra etapa segura.
-
-Audio: el modal del perfil reproduce un acorde corto sintetizado al revelar, con interruptor de sonido. No descarga audio ni instala dependencias. La pantalla OBS es silenciosa por ahora; no promete sonido automatico porque requiere interaccion y configuracion de audio de la fuente.
-
-La antigua simulacion de estrellas se retira. El boton Probar animacion (admin), dentro del gachapon, prueba la rareza actual con iconos locales incluso ya obtenidos sin escrituras ni saldo artificial. No sincroniza la pantalla OBS con el perfil.
+Sonido disponible en el gachapon del perfil, con interruptor. La demo OBS es silenciosa.
