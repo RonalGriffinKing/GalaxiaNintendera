@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { onAuthStateChanged, updateProfile } from 'firebase/auth'
 import { collection, deleteDoc, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
-import ProfileRewardDialog from '@/components/profile/ProfileRewardDialog.vue'
 import ProfileRewardsHub from '@/components/profile/ProfileRewardsHub.vue'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import ProfileAchievementsPanel from '@/components/profile/ProfileAchievementsPanel.vue'
@@ -23,7 +22,6 @@ import {
   fallbackProfileIcon,
   kirbyIcons,
   loadUploadedProfileIcons,
-  redeemIcon,
   resolveProfileIcon,
   resolveProfileIconMeta,
   updateProfileIcon
@@ -33,6 +31,11 @@ import { ACHIEVEMENT_TYPES, PROFILE_ICON_FILTERS } from '@/constants/profile'
 const route = useRoute()
 const router = useRouter()
 const profile = ref(null)
+const gachaponOpen = ref(false)
+const gachaponSaga = ref('all')
+const openGachapon = (saga = 'all') => { if (!isOwnProfile.value) return; gachaponSaga.value = saga; gachaponOpen.value = true }
+const viewGachaponCollection = () => { gachaponOpen.value = false; openRewards('collection') }
+const GachaponDemoModal = defineAsyncComponent(() => import('@/components/profile/gachapon/GachaponDemoModal.vue'))
 const favorites = ref([])
 const threads = ref([])
 const posts = ref([])
@@ -54,17 +57,10 @@ const followBusy = ref(false)
 const followersTotal = ref(0)
 const followingTotal = ref(0)
 const isLoading = ref(true)
-const isRedeeming = ref(false)
 const isSavingProfile = ref(false)
 const isSavingIcon = ref(false)
 const message = ref('')
-const redemptionResult = ref(null)
-const redemptionError = ref('')
 const selectionReset = ref(0)
-const confirmRedeem = ref(null)
-const iconTestMode = ref(false)
-const testStars = ref(100)
-const testUnlockedIcons = ref([])
 const iconPanelOpen = ref(false)
 const iconUploadOpen = ref(false)
 const achievementEditorOpen = ref(false)
@@ -105,7 +101,8 @@ const pendingSelectedIcon = ref('')
 
 const isRewardsPage = computed(() => route.name === 'profile-rewards')
 const rewardsTab = computed(() => {
-  const allowed = ['achievements', 'collection', ...(isOwnProfile.value ? ['redeem'] : []), ...(isAdminOwnProfile.value ? ['manage'] : [])]
+  const allowed = ['achievements', 'collection', ...(isAdminOwnProfile.value ? ['manage'] : [])]
+  if (route.query.tab === 'redeem') return 'collection'
   return allowed.includes(route.query.tab) ? route.query.tab : 'achievements'
 })
 const openRewards = (tab = 'achievements') => {
@@ -119,12 +116,9 @@ const readCount = computed(() => Number(profile.value?.readPostsCount || 0))
 const stars = computed(() => Number(profile.value?.stars || 0))
 const unlockedIcons = computed(() => profile.value?.unlockedIcons?.length ? profile.value.unlockedIcons : ['kirby-01'])
 const isAdminOwnProfile = computed(() => isOwnProfile.value && profile.value?.role === 'admin')
-const displayStars = computed(() => iconTestMode.value ? testStars.value : stars.value)
+const displayStars = computed(() => stars.value)
 const managedAchievements = ref([...achievements])
-const effectiveUnlockedIcons = computed(() => {
-  if (!iconTestMode.value) return unlockedIcons.value
-  return [...new Set([...unlockedIcons.value, ...testUnlockedIcons.value])]
-})
+const effectiveUnlockedIcons = computed(() => unlockedIcons.value)
 const profileIcon = computed(() => {
   if (!profile.value) return fallbackProfileIcon
   const selectedId = isOwnProfile.value ? pendingSelectedIcon.value || profile.value.selectedIcon : profile.value.selectedIcon
@@ -401,8 +395,6 @@ const applyProfileData = (userData = {}) => {
 }
 
 const loadProfile = async () => {
-  if (iconTestMode.value) { iconTestMode.value = false; testUnlockedIcons.value = []; testStars.value = 100 }
-  closeRedeemConfirm()
   const requestId = ++profileLoadRequestId
   isLoading.value = true
   message.value = ''
@@ -638,43 +630,9 @@ const normalizeSocialUrl = (value) => {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`
 }
 
-const canUnlock = (icon) => {
-  return isOwnProfile.value && !effectiveUnlockedIcons.value.includes(icon.id) && displayStars.value >= iconCost(icon)
-}
 
-const toggleIconTestMode = () => {
-  if (!isAdminOwnProfile.value) return
 
-  iconTestMode.value = !iconTestMode.value
-  redemptionResult.value = null
-  selectionReset.value++
-  confirmRedeem.value = null
-  message.value = ''
 
-  if (iconTestMode.value) {
-    testStars.value = 100
-    testUnlockedIcons.value = []
-    pendingSelectedIcon.value = profile.value?.selectedIcon || 'kirby-01'
-    return
-  }
-
-  testStars.value = 100
-  testUnlockedIcons.value = []
-  pendingSelectedIcon.value = profile.value?.selectedIcon || 'kirby-01'
-}
-
-const requestRedeemIcon = (icon) => {
-  if (!isOwnProfile.value || effectiveUnlockedIcons.value.includes(icon.id) || isRedeeming.value) return
-  redemptionError.value = ''
-  confirmRedeem.value = { icon }
-}
-
-const closeRedeemConfirm = () => {
-  if (isRedeeming.value || isSavingIcon.value) return
-  confirmRedeem.value = null
-  redemptionResult.value = null
-  redemptionError.value = ''
-}
 
 const toggleIconPanel = async () => {
   iconPanelOpen.value = !iconPanelOpen.value
@@ -797,38 +755,6 @@ const saveUploadedIcon = async () => {
   }
 }
 
-const confirmUnlockIcon = async () => {
-  const icon = confirmRedeem.value?.icon
-  if (!icon || !canUnlock(icon) || isRedeeming.value) return
-  isRedeeming.value = true
-  redemptionError.value = ''
-  try {
-    if (iconTestMode.value) {
-      testStars.value -= iconCost(icon)
-      testUnlockedIcons.value = [...new Set([...testUnlockedIcons.value, icon.id])]
-    } else {
-      const result = await redeemIcon({ userId: profileId.value, iconId: icon.id, expectedCost: iconCost(icon) })
-      profile.value = { ...profile.value, stars: result.stars, unlockedIcons: result.unlockedIcons, updatedAt: Date.now() }
-      window.dispatchEvent(new CustomEvent('galaxy-profile-updated', { detail: { uid: profileId.value, profile: profile.value } }))
-    }
-    redemptionResult.value = { icon }
-    confirmRedeem.value = null
-  } catch (error) {
-    redemptionError.value = error.message === 'not-enough-stars' ? 'No tienes suficientes estrellas. Actualiza el saldo e intenta de nuevo.' : 'No se pudo canjear. Actualiza el catálogo e intenta de nuevo.'
-  } finally {
-    isRedeeming.value = false
-  }
-}
-const useRedeemedIcon = async (id) => {
-  if (await selectIcon(id)) closeRedeemConfirm()
-  else redemptionError.value = 'No se pudo guardar el icono. Sigue en tu colección; puedes volver a intentarlo.'
-}
-const redeemAnother = () => {
-  closeRedeemConfirm()
-  selectionReset.value++
-  changeRewardsTab('redeem')
-}
-
 const saveProfile = async () => {
   const user = auth.currentUser
   if (!isOwnProfile.value || !user || isSavingProfile.value) return
@@ -871,11 +797,6 @@ const saveProfile = async () => {
 const selectIcon = async (iconId) => {
   if (!isOwnProfile.value || !effectiveUnlockedIcons.value.includes(iconId) || isSavingIcon.value) return
 
-  if (iconTestMode.value) {
-    pendingSelectedIcon.value = iconId
-    message.value = 'Icono usado en simulación. Tu perfil real no ha cambiado.'
-    return true
-  }
 
   isSavingIcon.value = true
   message.value = ''
@@ -1103,14 +1024,16 @@ watch(message, (value) => {
   if (value) noticeTimer = setTimeout(() => { message.value = '' }, 5000)
 })
 watch(() => route.params.uid, loadProfile)
-watch(() => route.fullPath, () => { closeIconPanel(); closeRedeemConfirm(); achievementEditorOpen.value = false; message.value = ''; if (!isRewardsPage.value && iconTestMode.value) toggleIconTestMode() })
+watch(() => route.fullPath, () => { gachaponOpen.value = false })
+watch(isOwnProfile, own => { if (!own) gachaponOpen.value = false })
+watch(() => route.fullPath, () => { closeIconPanel(); achievementEditorOpen.value = false; message.value = '' })
 watch(postActivityItems, (items) => {
   if (recentPostIndex.value >= items.length) recentPostIndex.value = 0
 })
 watch(activityTab, () => {
   showAllRecentPosts.value = false
 })
-watch([iconPanelOpen, iconUploadOpen, relationModal, confirmRedeem, redemptionResult], values => {
+watch([iconPanelOpen, iconUploadOpen, relationModal], values => {
   document.body.style.overflow = values.some(Boolean) ? 'hidden' : ''
 })
 onMounted(() => {
@@ -1150,8 +1073,8 @@ onUnmounted(() => {
     </div>
 
     <template v-if="!isLoading && profile">
-      <ProfileRewardsHub v-if="isRewardsPage" :tab="rewardsTab" :profile="{ ...profile, selectedIcon: pendingSelectedIcon || profile.selectedIcon }" :icons="allProfileIcons" :unlocked="effectiveUnlockedIcons" :stars="displayStars" :simulated="iconTestMode" :selection-reset="selectionReset" :own="isOwnProfile" :admin="isAdminOwnProfile" :busy="isRedeeming || isSavingIcon" :cost="iconCost" :saga="iconSaga"
-        @tab="changeRewardsTab" @back="router.push({ name: 'profile', params: { uid: profileId } })" @equip="selectIcon" @redeem="requestRedeemIcon" @manage-icon="openIconUpload" @toggle-simulation="toggleIconTestMode" @add-stars="testStars += 100" @reset-simulation="testStars = 100; testUnlockedIcons = []; pendingSelectedIcon = profile.selectedIcon; selectionReset++">
+      <ProfileRewardsHub v-if="isRewardsPage" :tab="rewardsTab" :profile="{ ...profile, selectedIcon: pendingSelectedIcon || profile.selectedIcon }" :icons="allProfileIcons" :unlocked="effectiveUnlockedIcons" :stars="displayStars" :selection-reset="selectionReset" :own="isOwnProfile" :admin="isAdminOwnProfile" :busy="isSavingIcon" :cost="iconCost" :saga="iconSaga"
+        @tab="changeRewardsTab" @back="router.push({ name: 'profile', params: { uid: profileId } })" @equip="selectIcon" @gachapon="openGachapon" @manage-icon="openIconUpload">
         <template #achievements>      <ProfileAchievementsPanel
         v-model:draft="achievementDraft"
         :open="true" inline
@@ -1206,6 +1129,7 @@ onUnmounted(() => {
         :is-following="isFollowing"
         :can-use-direct-chat="canUseDirectChat"
         @toggle-rewards="openRewards()"
+        @open-gachapon="openGachapon()"
         @toggle-icon-panel="toggleIconPanel"
         @open-icon-collection="openRewards('collection')"
         @toggle-follow="toggleFollow"
@@ -1373,7 +1297,7 @@ onUnmounted(() => {
 
       </template>
       <AppNotice :message="message" :type="message.startsWith('No se') ? 'error' : 'success'" />
-      <ProfileRewardDialog v-if="confirmRedeem || redemptionResult" :pending="confirmRedeem" :result="redemptionResult" :busy="isRedeeming" :saving="isSavingIcon" :stars="displayStars" :cost="iconCost" :simulated="iconTestMode" :error="redemptionError" @close="closeRedeemConfirm" @confirm="confirmUnlockIcon" @use="useRedeemedIcon" @another="redeemAnother" />
+      <GachaponDemoModal v-if="gachaponOpen && isOwnProfile" :stars="stars" :icons="allProfileIcons" :owned="unlockedIcons" :admin="isAdminOwnProfile" :initial-saga="gachaponSaga" @collection="viewGachaponCollection" @close="gachaponOpen = false" />
       <ProfileIconEditor v-if="iconPanelOpen || iconUploadOpen" v-model:profile-draft="profileDraft" v-model:upload-icon-draft="uploadIconDraft" :profile="profile" :profile-icon="profileIcon" :profile-icon-meta="profileIconMeta" :panel-open="iconPanelOpen" :upload-open="iconUploadOpen" :edit-message="editMessage" :is-saving-profile="isSavingProfile" :is-uploading-icon="isUploadingIcon" :editing-icon-id="editingIconId" :upload-icon-preview="uploadIconPreview" :upload-icon-message="uploadIconMessage" :icon-filters="iconFilters" @close-panel="closeIconPanel" @close-upload="closeIconUpload" @save-profile="saveProfile" @open-rewards="openRewards('collection')" @save-uploaded-icon="saveUploadedIcon" />
 
       <section v-if="!isRewardsPage && posts.length && !isCreatorProfile" class="profile-section">

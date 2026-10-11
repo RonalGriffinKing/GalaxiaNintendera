@@ -132,6 +132,7 @@ const routes = [
 
   { path: '/dashboard', redirect: '/admin/dashboard', meta: { publisherOnly: true } },
   { path: '/editor', component: Editor, meta: { adminOnly: true } },
+  { path: '/overlay/gachapon-demo', component: () => import('@/pages/GachaponObsDemoPage.vue') },
   { path: '/overlay/:id', component: OverlayView },
   { path: '/login', component: Login },
 ]

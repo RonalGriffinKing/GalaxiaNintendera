@@ -66,6 +66,7 @@ defineProps({
 })
 
 const emit = defineEmits([
+  'open-gachapon',
   'toggle-rewards',
   'toggle-icon-panel',
   'open-icon-collection',
@@ -200,6 +201,7 @@ const emit = defineEmits([
         <i class="fas fa-share-nodes"></i>
         Compartir perfil
       </button>
+      <button v-if="isOwnProfile" type="button" class="profile-gachapon-action" @click="emit('open-gachapon')">⭐ Obtener iconos</button>
     </div></aside>
   </section>
 </template>
@@ -232,6 +234,7 @@ button:focus-visible,a:focus-visible { outline:2px solid #c084fc; outline-offset
 .hero-side .profile-actions > .ghost:first-child { display: none; }
 .profile-actions > button i { flex-shrink: 0; font-size: 13px; }
 .profile-actions-three .profile-share-action { grid-column: 1 / -1; }
+.hero-side .profile-actions > .profile-gachapon-action { grid-column:1 / -1; border-color:#c084fc80; background:linear-gradient(120deg,#6427a4,#993d91); }
 .hero-rewards-panel > button { display: flex; align-items: center; gap: 6px; font-weight: 500; }
 @media(max-width:1100px) and (min-width:761px) { .profile-hero { grid-template-columns: 120px minmax(0,1fr) 260px; } }
 @media(prefers-reduced-motion:no-preference) { .profile-actions > button { transition: background-color 160ms ease, border-color 160ms ease; } }

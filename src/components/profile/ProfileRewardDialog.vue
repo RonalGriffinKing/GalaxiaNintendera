@@ -1,8 +1,8 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import ProfileAvatar from './ProfileAvatar.vue'
-const props = defineProps({ pending: Object, result: Object, busy: Boolean, saving: Boolean, stars: Number, cost: Function, simulated: Boolean, error: String, inspect: Boolean, own: Boolean, equipped: Boolean })
-const emit = defineEmits(['close', 'confirm', 'use', 'another'])
+const props = defineProps({ pending: Object, result: Object, busy: Boolean, saving: Boolean, stars: Number, cost: Function, simulated: Boolean, error: String, inspect: Boolean, own: Boolean, equipped: Boolean, obtained: Boolean, saga: String })
+const emit = defineEmits(['close', 'use', 'gachapon'])
 const card = ref(null)
 const icon = computed(() => props.result?.icon || props.pending?.icon)
 const previousFocus = document.activeElement
@@ -32,27 +32,12 @@ onUnmounted(() => { document.body.style.overflow = ''; document.removeEventListe
           <ProfileAvatar :src="icon.src" :alt="icon.name" :effect="icon" />
         </div>
         <p v-if="simulated" class="simulation">Simulación · saldo de prueba</p>
-        <template v-if="inspect">
-          <h2 id="reward-title">{{ icon.name }}</h2>
-          <p>{{ equipped ? 'Este es tu icono actual.' : 'Icono conseguido · Disponible en la colección' }}</p>
-          <button v-if="own && !equipped" class="primary" type="button" :disabled="saving" @click="emit('use', icon.id)">{{ saving ? 'Guardando…' : 'Usar icono' }}</button>
-          <button type="button" :disabled="saving" @click="emit('close')">Volver a la colección</button>
-        </template>
-        <template v-else-if="result">
-          <h2 id="reward-title">¡Icono canjeado!</h2>
-          <p><strong>{{ icon.name }}</strong> ya está en tu colección.</p>
-          <p>Te quedan {{ stars }} estrellas. ¿Quieres usarlo como icono?</p>
-          <button class="primary" type="button" :disabled="saving" @click="emit('use', icon.id)">{{ saving ? 'Guardando…' : 'Usar icono' }}</button>
-          <button type="button" :disabled="saving" @click="emit('another')">Canjear otro</button>
-        </template>
-        <template v-else>
-          <h2 id="reward-title">Canjear {{ icon.name }}</h2>
-          <p>Cuesta {{ cost(icon) }} estrellas. Te quedarán {{ Math.max(0, stars - cost(icon)) }}.</p>
-          <p>Se añadirá a tu colección y después podrás elegir si usarlo.</p>
-          <p v-if="stars < cost(icon)" class="error">Te faltan {{ cost(icon) - stars }} estrellas.</p>
-          <button class="primary" type="button" :disabled="busy || stars < cost(icon)" @click="emit('confirm')">{{ busy ? 'Canjeando…' : `Canjear por ${cost(icon)} estrellas` }}</button>
-          <button type="button" :disabled="busy" @click="emit('close')">Cancelar</button>
-        </template>
+        <h2 id="reward-title">{{ icon.name }}</h2>
+        <p>{{ saga }} · {{ { normal: 'Normal', rare: 'Raro', epic: 'Épico', legendary: 'Legendario' }[icon.rarity] || (icon.special ? 'Épico' : 'Normal') }}</p>
+        <p>{{ equipped ? 'Este es tu icono actual.' : obtained ? 'Obtenido · Disponible en tu colección' : 'Pendiente · Puedes buscarlo en el gachapon de su saga. El resultado no está garantizado.' }}</p>
+        <button v-if="own && obtained && !equipped" class="primary" type="button" :disabled="saving" @click="emit('use', icon.id)">{{ saving ? 'Guardando…' : 'Usar icono' }}</button>
+        <button v-if="own && !obtained" class="primary" type="button" @click="emit('gachapon')">Buscar en el gachapon</button>
+        <button type="button" :disabled="saving" @click="emit('close')">Volver a la colección</button>
         <p v-if="error" role="alert" class="error">{{ error }}</p>
       </section>
     </div>

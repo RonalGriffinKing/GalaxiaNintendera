@@ -12,12 +12,11 @@ const props = defineProps({
   own: Boolean,
   admin: Boolean,
   busy: Boolean,
-  simulated: Boolean,
   selectionReset: Number,
   cost: { type: Function, required: true },
   saga: { type: Function, required: true }
 })
-const emit = defineEmits(['tab', 'back', 'equip', 'redeem', 'manage-icon', 'toggle-simulation', 'add-stars', 'reset-simulation'])
+const emit = defineEmits(['tab', 'back', 'equip', 'gachapon', 'manage-icon'])
 const category = ref('all')
 const rarity = ref('all')
 const ownership = ref('all')
@@ -52,10 +51,9 @@ const selected = computed(() => props.icons.find(icon => icon.id === selectedId.
 const selectIcon = icon => {
   if (props.busy) return
   if (props.tab === 'manage') { emit('manage-icon', icon); return }
-  if (props.own && !props.unlocked.includes(icon.id)) { emit('redeem', icon); return }
   selectedId.value = icon.id
 }
-const equipSelected = () => { emit('equip', selected.value.id); selectedId.value = '' }
+const equipSelected = () => { if (!props.own || !selected.value || !props.unlocked.includes(selected.value.id)) return; emit('equip', selected.value.id); selectedId.value = '' }
 const catalog = computed(() => props.icons.filter(icon => (!icon.archived && icon.visible !== false) || props.unlocked.includes(icon.id)))
 const collectionCount = computed(() => catalog.value.filter(icon => props.unlocked.includes(icon.id)).length)
 const collectionPercent = computed(() => catalog.value.length ? Math.round(collectionCount.value / catalog.value.length * 100) : 0)
@@ -69,10 +67,9 @@ const pagedIcons = computed(() => filtered.value.slice((page.value - 1) * pageSi
 const tabs = computed(() => [
   { id: 'achievements', label: 'Logros', icon: 'fas fa-trophy' },
   { id: 'collection', label: 'Colección', icon: 'fas fa-layer-group' },
-  ...(props.own ? [{ id: 'redeem', label: 'Tienda', icon: 'fas fa-star' }] : []),
   ...(props.admin ? [{ id: 'manage', label: 'Administrar', icon: 'fas fa-gear' }] : [])
 ])
-const resetFilters = () => { selectedId.value = ''; category.value = 'all'; rarity.value = 'all'; ownership.value = props.tab === 'collection' ? 'owned' : 'all'; page.value = 1; showSagaProgress.value = false }
+const resetFilters = () => { selectedId.value = ''; category.value = 'all'; rarity.value = 'all'; ownership.value = 'all'; page.value = 1; showSagaProgress.value = false }
 watch(() => props.tab, resetFilters, { immediate: true })
 watch([category, rarity, ownership], () => { selectedId.value = ''; page.value = 1 })
 watch(pageCount, count => { page.value = Math.min(page.value, count) })
@@ -90,15 +87,10 @@ watch(() => props.selectionReset, resetFilters)
     <nav class="hub-tabs" aria-label="Secciones de logros y recompensas">
       <button v-for="item in tabs" :key="item.id" type="button" :aria-current="tab === item.id ? 'page' : undefined" :class="{ active: tab === item.id }" @click="emit('tab', item.id)"><i :class="item.icon" aria-hidden="true"></i><span>{{ item.label }}</span></button>
     </nav>
-    <aside v-if="simulated" class="hub-help simulation" role="status">
-      <strong>Simulación activa · {{ stars }} estrellas de prueba</strong>
-      
-      <button type="button" @click="emit('add-stars')">+100 estrellas</button>
-      <button type="button" @click="emit('toggle-simulation')">Salir de simulación</button>
-    </aside>
     <slot v-if="tab === 'achievements'" name="achievements" />
     <template v-else>
       <template v-if="tab === 'collection'">
+        <button v-if="own" class="back-link" type="button" @click="emit('gachapon', category)">⭐ Volver al gachapon</button>
         <section class="collection-summary">
           <i class="fas fa-layer-group" aria-hidden="true"></i>
           <div><h2>{{ own ? 'Tu colección de iconos' : 'Colección de iconos' }}</h2><p>{{ collectionCount }} de {{ catalog.length }} iconos conseguidos</p><progress :value="collectionCount" :max="catalog.length || 1" aria-label="Progreso de la colección"></progress></div><strong>{{ collectionPercent }}%</strong>
@@ -112,36 +104,30 @@ watch(() => props.selectionReset, resetFilters)
         </div>
       </template>
       <template v-if="tab === 'manage'">
-        <aside class="hub-help simulation">
-          
-          
-          <button type="button" @click="emit('toggle-simulation')">{{ simulated ? 'Desactivar simulación' : 'Simular canjes' }}</button>
-          <button v-if="simulated" type="button" @click="emit('reset-simulation')">Reiniciar prueba</button>
-        </aside>
         <h2>Gestión de logros</h2><slot name="management" /><h2>Gestión de iconos</h2>
         
       </template>
       <header ref="catalogHeading" class="catalog-head" tabindex="-1">
-        <div><h2>{{ tab === 'collection' ? 'Colección de iconos' : tab === 'manage' ? 'Catálogo administrable' : 'Canjear estrellas' }}</h2></div>
+        <div><h2>{{ tab === 'manage' ? 'Catálogo administrable' : 'Colección de iconos' }}</h2></div>
         <span>{{ filtered.length }} iconos · Página {{ page }} de {{ pageCount }}</span>
       </header>
-      <div v-if="tab !== 'collection'" class="catalog-controls">
+      <div class="catalog-controls">
         <div class="filter-row" role="group" aria-label="Filtrar por saga"><button type="button" :aria-pressed="category === 'all'" @click="category = 'all'">Todas las sagas</button><button v-for="item in categories" :key="item" type="button" :aria-pressed="category === item" @click="category = item">{{ item }}</button></div>
         <div class="filter-row rarity-filters" role="group" aria-label="Filtrar por rareza"><button type="button" :aria-pressed="rarity === 'all'" @click="rarity = 'all'">Todas las rarezas</button><button v-for="[id, label] in rarityOptions" :key="id" type="button" :class="`filter-${id}`" :aria-pressed="rarity === id" @click="rarity = id">{{ label }}</button></div>
-        <div class="filter-row" role="group" aria-label="Filtrar por disponibilidad"><button type="button" :aria-pressed="ownership === 'all'" @click="ownership = 'all'">Todos</button><button type="button" :aria-pressed="ownership === 'missing'" @click="ownership = 'missing'">Por conseguir</button><button v-if="own" type="button" :aria-pressed="ownership === 'available'" @click="ownership = 'available'">Puedo canjear</button></div>
+        <div class="filter-row" role="group" aria-label="Filtrar por disponibilidad"><button type="button" :aria-pressed="ownership === 'all'" @click="ownership = 'all'">Todos</button><button type="button" :aria-pressed="ownership === 'missing'" @click="ownership = 'missing'">Por conseguir</button><button type="button" :aria-pressed="ownership === 'owned'" @click="ownership = 'owned'">Obtenidos</button></div>
       </div>
       <div class="catalog-layout" >
         <div>
           <div v-if="filtered.length" class="rewards-icons">
-            <button v-for="icon in pagedIcons" :key="icon.id" type="button" :class="[`rarity-${iconRarity(icon)}`, { owned: unlocked.includes(icon.id) }]" :aria-pressed="selectedId === icon.id" @click="selectIcon(icon)">
+            <button v-for="icon in pagedIcons" :key="icon.id" type="button" :class="[`rarity-${iconRarity(icon)}`, { owned: unlocked.includes(icon.id), missing: !unlocked.includes(icon.id) }]" :aria-pressed="selectedId === icon.id" @click="selectIcon(icon)">
               <span class="rarity-label">{{ rarityLabels[iconRarity(icon)] }}</span>
               <ProfileAvatar :src="icon.src" :alt="icon.name" :effect="icon" />
               <strong>{{ icon.name }}</strong><small>{{ saga(icon) }}</small>
-              <span>{{ profile.selectedIcon === icon.id ? 'En uso' : unlocked.includes(icon.id) ? 'Obtenido' : `${cost(icon)} estrellas` }}</span>
+              <span>{{ profile.selectedIcon === icon.id ? 'En uso' : unlocked.includes(icon.id) ? 'Obtenido' : 'Pendiente · 🔒' }}</span>
               <small v-if="tab === 'manage' && (icon.archived || icon.visible === false)">Oculto en el catálogo</small>
             </button>
           </div>
-          <div v-else class="catalog-empty"><h3>{{ category !== 'all' ? 'No hay coincidencias' : tab === 'collection' ? 'Tu colección empieza aquí' : 'No hay iconos disponibles con estos filtros' }}</h3><p v-if="tab !== 'collection'">Prueba otra saga o rareza.</p><button v-if="own && tab === 'collection'" type="button" @click="emit('tab', 'redeem')">Explorar iconos para canjear</button></div>
+          <div v-else class="catalog-empty"><h3>{{ category !== 'all' ? 'No hay coincidencias' : tab === 'collection' ? 'Tu colección empieza aquí' : 'No hay iconos disponibles con estos filtros' }}</h3><p v-if="tab !== 'collection'">Prueba otra saga o rareza.</p><button v-if="own && tab === 'collection'" type="button" @click="emit('gachapon', category === 'all' ? 'all' : category)">Ir al gachapon</button></div>
           <nav v-if="pageCount > 1" class="catalog-pagination" aria-label="Páginas de iconos">
             <button type="button" :disabled="page === 1" @click="changePage(-1)">← Anterior</button><span aria-live="polite">Página {{ page }} de {{ pageCount }}</span><button type="button" :disabled="page === pageCount" @click="changePage(1)">Siguiente →</button>
           </nav>
@@ -149,11 +135,12 @@ watch(() => props.selectionReset, resetFilters)
 
       </div>
     </template>
-    <ProfileRewardDialog v-if="selected" :result="{ icon: selected }" inspect :own="own" :equipped="profile.selectedIcon === selected.id" :saving="busy" :stars="stars" :cost="cost" :simulated="simulated" @close="selectedId = ''" @use="equipSelected" @another="selectedId = ''" />
+    <ProfileRewardDialog v-if="selected" :result="{ icon: selected }" inspect :own="own" :equipped="profile.selectedIcon === selected.id" :obtained="unlocked.includes(selected.id)" :saga="saga(selected)" :saving="busy" :stars="stars" :cost="cost" @close="selectedId = ''" @use="equipSelected" @gachapon="emit('gachapon', saga(selected)); selectedId = ''" />
   </section>
 </template>
 
 <style scoped>
+.rewards-icons button.missing :deep(.profile-avatar-ui) { opacity:.65; }
 .rewards-hub { max-width: var(--content-max, 1280px); margin: 0 auto; color: var(--text-primary); }
 .back-link, .wallet button { color: var(--accent-hover); min-height: 44px; text-align: left; }
 .hub-head, .catalog-head { display: flex; gap: 24px; align-items: start; justify-content: space-between; margin: 18px 0; }
