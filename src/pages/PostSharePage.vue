@@ -28,7 +28,6 @@ const exportProgress = ref({ current: 0, total: 0, label: '' })
 const editorViewport = ref({ width: window.innerWidth, height: window.innerHeight })
 const updateEditorViewport = () => { editorViewport.value = { width: window.innerWidth, height: window.innerHeight } }
 const editorOpen = ref(false)
-const advancedOpen = ref(false)
 const selectedElement = ref('title')
 const selectionHandle = ref(null)
 const textOverflow = ref(false)
@@ -49,6 +48,8 @@ const globalImageOverride = ref('')
 const slideImageOverrides = ref({})
 const slideTextOverrides = ref({})
 const slideDescriptionOverrides = ref({})
+const slidePointsOverrides = ref({})
+const fitNotice = ref('')
 const sourceType = computed(() => route.query.type === 'event' ? 'event' : 'post')
 
 const fontOptions = [
@@ -72,8 +73,9 @@ const defaultTemplateSettings = {
   author: { visible: true, avatar: true, name: true, date: true, size: 100, x: 82, y: 86, opacity: 1 },
   arrow: { visible: true, icon: 'fa-arrow-right', size: 96, color: '#9333ea', x: 34, y: 56, opacity: 1 },
   part: { visible: true, color: '#8b5cf6', text: '', size: 25, radius: 16 },
-  title: { size: 82, weight: 950, color: '#ffffff', width: 820, line: 1.04, spacing: 34 },
+  title: { visible: true, size: 82, weight: 950, color: '#ffffff', width: 820, line: 1.04, spacing: 34 },
   subtitle: { visible: false, size: 25, color: '#ffffff', lines: 1 },
+  points: { visible: true, size: 30, gap: 18 },
   description: { visible: true, size: 40, color: '#f8fafc', lines: 3 },
   button: { visible: true, text: 'Leela en la web', color: '#f97316', radius: 999, y: 126 },
   number: { visible: true, color: '#ffffff', size: 30 },
@@ -91,7 +93,7 @@ const impactTemplateSettings = mergeSettings(defaultTemplateSettings, {
   part: { visible: false },
   title: { size: 76, weight: 950, color: '#ffffff', width: 900, line: 1.12, spacing: 0 },
   subtitle: { visible: false },
-  description: { visible: false, size: 34, color: '#ffffff', lines: 2 },
+  description: { visible: true, size: 34, color: '#ffffff', lines: 2 },
   button: { visible: false },
   number: { visible: false },
   overlay: { color: '#080604', intensity: 0.52, height: 100, gradient: false },
@@ -196,8 +198,8 @@ const author = computed(() => post.value?.author || post.value?.authorName || 'R
 const authorIcon = computed(() => authorProfile.value ? resolveProfileIcon(authorProfile.value) : '')
 const title = computed(() => post.value?.title || 'Post sin titulo')
 const description = computed(() => {
-  const source = post.value?.subtitle || post.value?.description || post.value?.excerpt || post.value?.content || ''
-  return trimText(stripHtml(source), 145)
+  const source = post.value?.subtitle || post.value?.summary || post.value?.description || post.value?.excerpt || post.value?.content || ''
+  return stripHtml(source)
 })
 const socialContent = computed(() => post.value?.social || post.value?.shortVersion || post.value?.versionCorta || post.value?.version_corta || {})
 const score = computed(() => post.value?.score ?? post.value?.analysis?.score ?? null)
@@ -227,7 +229,8 @@ const selectedSlide = computed(() => carouselSlides.value[selectedSlideIndex.val
 const editingScale = computed(() => {
  if (!editorOpen.value) return activeFormat.value.scale
  const mobile = editorViewport.value.width <= 800
- const width = Math.max(200, editorViewport.value.width - (mobile ? 50 : 420))
+ const desktop = editorViewport.value.width >= 1100
+ const width = Math.max(200, editorViewport.value.width - (mobile ? 50 : desktop ? 720 : 420))
  const height = Math.max(120, editorViewport.value.height - (mobile ? Math.min(350, editorViewport.value.height * .45) + 200 : 430))
  return Math.min(.5, width / exportSize.value.width, height / exportSize.value.height)
 })
@@ -256,9 +259,9 @@ const carouselSlides = computed(() => {
   const baseSlide = {
     id: 'resumen',
     eyebrow: 'Parte 1',
-    title: trimText(stripHtml(social.title || social.titulo || title.value), 90),
+    title: stripHtml(social.title || social.titulo || title.value),
     subtitle: social.subtitle || social.subtitulo || post.value?.subtitle || category.value,
-    description: trimText(stripHtml(social.summary || social.resumen || social.content || social.contenido || social.description || description.value), 210),
+    description: stripHtml(social.summary || social.resumen || social.content || social.contenido || social.description || description.value),
     image: social.image || social.imagen || coverImage.value,
     score: score.value,
     showScore: hasScore.value
@@ -279,13 +282,12 @@ const carouselSlides = computed(() => {
         return {
           id: `social-${index + 1}`,
           eyebrow: `Parte ${index + 2}`,
-          title: trimText(stripHtml(socialSlide.title || socialSlide.titulo || primarySection.title || title.value), 90),
+          title: stripHtml(socialSlide.title || socialSlide.titulo || primarySection.title || title.value),
           subtitle: socialSlide.subtitle || socialSlide.subtitulo || primarySection.subtitle || primarySection.label || category.value,
-          description: trimText(stripHtml(socialSlide.content || socialSlide.contenido || socialSlide.summary || socialSlide.resumen || socialSlide.description || primarySection.content || description.value), 210),
+          description: stripHtml(socialSlide.content || socialSlide.contenido || socialSlide.summary || socialSlide.resumen || socialSlide.description || primarySection.content || description.value),
           points: (Array.isArray(socialSlide.points) ? socialSlide.points : (Array.isArray(socialSlide.puntos) ? socialSlide.puntos : (Array.isArray(socialSlide.highlights) ? socialSlide.highlights : [])))
-            .map(point => trimText(stripHtml(point), 110))
-            .filter(Boolean)
-            .slice(0, 4),
+            .map(point => stripHtml(point))
+            .filter(Boolean),
           image: socialSlide.image || socialSlide.imagen || inheritedImage,
           score: null,
           showScore: false
@@ -296,9 +298,9 @@ const carouselSlides = computed(() => {
         .map((section, index) => ({
           id: `seccion-${index + 1}`,
           eyebrow: `Parte ${index + 2}`,
-          title: trimText(stripHtml(section.title || title.value), 90),
+          title: stripHtml(section.title || title.value),
           subtitle: section.subtitle || section.label || category.value,
-          description: trimText(stripHtml(section.content || description.value), 210),
+          description: stripHtml(section.content || description.value),
           points: [],
           image: section.image || coverImage.value,
           score: null,
@@ -330,23 +332,27 @@ onBeforeUpdate(() => {
 })
 
 
-function designSnapshot() { return cloneSettings({ global: globalTemplateSettings.value, overrides: slideTemplateOverrides.value, texts: slideTextOverrides.value, descriptions: slideDescriptionOverrides.value, format: selectedFormat.value }) }
+function designSnapshot() { return cloneSettings({ global: globalTemplateSettings.value, overrides: slideTemplateOverrides.value, texts: slideTextOverrides.value, descriptions: slideDescriptionOverrides.value, points: slidePointsOverrides.value, images: slideImageOverrides.value, globalImage: globalImageOverride.value, format: selectedFormat.value }) }
 function rememberDesign() { undoStack.value = [...undoStack.value.slice(-49), designSnapshot()]; redoStack.value = [] }
 function restoreHistory(redo) {
  const from = redo ? redoStack : undoStack; const to = redo ? undoStack : redoStack
  if (!from.value.length) return
  to.value.push(designSnapshot()); const state = from.value.pop()
- globalTemplateSettings.value = state.global; slideTemplateOverrides.value = state.overrides; slideTextOverrides.value = state.texts; slideDescriptionOverrides.value = state.descriptions || {}; selectedFormat.value = state.format || selectedFormat.value
+ globalTemplateSettings.value = state.global; slideTemplateOverrides.value = state.overrides; slideTextOverrides.value = state.texts; slideDescriptionOverrides.value = state.descriptions || {}; slidePointsOverrides.value = state.points || {}; slideImageOverrides.value = state.images || {}; globalImageOverride.value = state.globalImage || ''; selectedFormat.value = state.format || selectedFormat.value
 }
 function resetSingleDesign() { rememberDesign(); const next = { ...slideTemplateOverrides.value }; delete next[selectedSlideIndex.value]; slideTemplateOverrides.value = next }
 function visualElementStyle(index, key) {
  const settings = settingsForSlide(index); const layout = settings['visual_' + key] || {}; const typography = settings[key] || {}
- return { translate: ((layout.x || 0) * exportSize.value.width / 100) + 'px ' + ((layout.y || 0) * exportSize.value.height / 100) + 'px', textAlign: typography.align || undefined, maxWidth: key === 'title' && typography.customWidth ? typography.width + 'px' : undefined, scale: key === 'button' && typography.size ? typography.size / 100 : undefined, fontWeight: typography.weight || undefined, fontFamily: typography.family || undefined, lineHeight: typography.line || undefined, outline: editorOpen.value && !isDownloading.value && selectedSlideIndex.value === index && selectedElement.value === key ? 'var(--selection-outline, 4px solid #c084fc)' : undefined, outlineOffset: '6px', position: key === 'title' ? 'relative' : undefined }
+ return { translate: ((layout.x || 0) * exportSize.value.width / 100) + 'px ' + ((layout.y || 0) * exportSize.value.height / 100) + 'px', textAlign: typography.align || undefined, maxWidth: key === 'title' && typography.customWidth ? typography.width + 'px' : undefined, scale: key === 'button' && typography.size ? typography.size / 100 : undefined, fontWeight: typography.weight || undefined, fontFamily: typography.family || undefined, lineHeight: typography.line || undefined, WebkitLineClamp: key === 'title' && typography.lines > 0 ? String(typography.lines) : undefined, display: key === 'title' && typography.lines > 0 ? '-webkit-box' : undefined, WebkitBoxOrient: key === 'title' && typography.lines > 0 ? 'vertical' : undefined, overflow: key === 'title' && typography.lines > 0 ? 'hidden' : undefined, color: ['title','description','points','number'].includes(key) ? typography.color || undefined : undefined, outline: editorOpen.value && !isDownloading.value && selectedSlideIndex.value === index && selectedElement.value === key ? 'var(--selection-outline, 4px solid #c084fc)' : undefined, outlineOffset: '6px', position: key === 'title' ? 'relative' : undefined }
 }
 function startVisualDrag(event, index, resize = false) {
- if (!editorOpen.value || isDownloading.value || event.button !== 0) return
+ if (isDownloading.value || event.button !== 0) return
+ selectedSlideIndex.value = index
+ editorOpen.value = true
  const cardElement = cardRefs.value[index]
- const element = resize ? cardElement?.querySelector('[data-edit="' + selectedElement.value + '"]') : event.target.closest('[data-edit]') || cardElement?.querySelector('.social-card-bg'); if (!element) return
+ let element = resize ? cardElement?.querySelector('[data-edit="' + selectedElement.value + '"]') : event.target.closest('[data-edit]')
+ if (!element || element.dataset.edit === 'image') element = cardElement?.querySelector('.social-card-bg')
+ if (!element) { selectedSlideIndex.value = index; selectedElement.value = 'overlay'; return }
  event.preventDefault(); selectedSlideIndex.value = index; selectedElement.value = element.dataset.edit || 'image'; rememberDesign()
  const card = cardElement.getBoundingClientRect(); const box = element.getBoundingClientRect(); const layout = selectedElement.value === 'image' ? settingsForSlide(index).image : settingsForSlide(index)['visual_' + selectedElement.value] || {}
  visualDrag = { key: selectedElement.value, startX: event.clientX, startY: event.clientY, x: layout.x || 0, y: layout.y || 0, card, box, resize, size: selectedElement.value === 'gameLogo' && selectedStyle.value === 'impact' && index === 0 ? settingsForSlide(index).coverGameLogo.size : settingsForSlide(index)[selectedElement.value]?.size || 100, width: settingsForSlide(index).title.width }
@@ -367,10 +373,14 @@ function moveVisualDrag(event) {
  setSetting('visual_' + d.key + '.x', d.x + x / d.card.width * 100); setSetting('visual_' + d.key + '.y', d.y + y / d.card.height * 100)
 }
 function stopVisualDrag() { visualDrag = null; centerGuide.value = false }
-watch([globalTemplateSettings, slideTemplateOverrides, selectedSlideIndex, selectedElement, selectedFormat, editorOpen, editorViewport], async () => {
+watch([globalTemplateSettings, slideTemplateOverrides, slideTextOverrides, slideDescriptionOverrides, slidePointsOverrides, selectedSlideIndex, selectedElement, selectedFormat, editorOpen, editorViewport], async () => {
  await nextTick()
  const card = cardRefs.value[selectedSlideIndex.value]; const element = card?.querySelector('[data-edit="' + selectedElement.value + '"]'); const viewport = card?.closest('.share-card-viewport')
- textOverflow.value = Boolean(element && ['title', 'description'].includes(selectedElement.value) && element.scrollHeight > element.clientHeight + 2)
+ const copy = card?.querySelector('.social-card-copy')
+ const author = card?.querySelector('.social-card-top')
+ const copyTooHigh = Boolean(copy && copy.offsetTop < (author ? author.offsetTop + author.offsetHeight + 24 : 40))
+ const textClipped = [...(copy?.querySelectorAll('h2,p,.social-subtitle') || [])].some(node => node.scrollHeight > node.clientHeight + 2)
+ textOverflow.value = copyTooHigh || textClipped
  if (!element || !viewport || selectedElement.value === 'image') { selectionHandle.value = null; return }
  const box = element.getBoundingClientRect(); const area = viewport.getBoundingClientRect()
  selectionHandle.value = { left: Math.max(0, Math.min(area.width - 24, box.right - area.left - 12)) + 'px', top: Math.max(0, Math.min(area.height - 24, box.bottom - area.top - 12)) + 'px' }
@@ -517,6 +527,48 @@ function displaySlideTitle(slide) {
   return slideTextOverrides.value[slide.id] ?? slide.title
 }
 
+function displaySlidePoints(slide) { return slidePointsOverrides.value[slide.id] ?? slide.points ?? [] }
+function setSlidePoints(value) {
+ const slide = selectedSlide.value
+ if (!slide) return
+ slidePointsOverrides.value = { ...slidePointsOverrides.value, [slide.id]: value.split(/\r?\n/) }
+}
+function updateTextContent(key, value) {
+ rememberDesign()
+ if (key === 'title') setSlideTitle(value)
+ else if (key === 'points') setSlidePoints(value)
+ else setSlideDescription(value)
+ fitNotice.value = ''
+}
+async function fitSlideText() {
+ rememberDesign()
+ const index = selectedSlideIndex.value
+ const update = (path, value) => {
+  const next = updateSocialSetting(globalTemplateSettings.value, slideTemplateOverrides.value, index, 'single', path, value)
+  slideTemplateOverrides.value = next.overrides
+ }
+ update('description.lines', 30)
+ await nextTick()
+ const card = cardRefs.value[index]
+ const copy = card?.querySelector('.social-card-copy')
+ if (!card || !copy) return
+ // Reserve space below the author and above the footer/logos.
+ const author = card.querySelector('.social-card-top')
+ const top = author ? author.offsetTop + author.offsetHeight + 36 : 90
+ let attempts = 0
+ while (copy.offsetTop < top && attempts++ < 80) {
+  const settings = settingsForSlide(index)
+  const sizes = [['title',22], ['description',14], ['points',12]]
+  let changed = false
+  for (const [key,min] of sizes) {
+   const size = settings[key]?.size || 30
+   if (size > min) { update(key + '.size', Math.max(min, size - 2)); changed = true }
+  }
+  if (!changed) break
+  await nextTick()
+ }
+ fitNotice.value = copy.offsetTop < top ? 'Hay demasiado texto para este formato. Acorta el contenido o elige un formato mas alto.' : 'Tamano ajustado solo en esta imagen. No se ha eliminado texto.'
+}
 function displaySlideDescription(slide) { return slideDescriptionOverrides.value[slide.id] ?? slide.description }
 function setSlideDescription(value) { const slide = selectedSlide.value; if (slide) slideDescriptionOverrides.value = { ...slideDescriptionOverrides.value, [slide.id]: value } }
 function setSlideTitle(value) {
@@ -529,6 +581,7 @@ function setSlideTitle(value) {
 }
 
 function setTemporaryImage(value) {
+  rememberDesign()
   if (applyScope.value === 'all') {
     globalImageOverride.value = value
     return
@@ -545,11 +598,21 @@ function selectedTemporaryImage() {
   return slideImageOverrides.value[selectedSlideIndex.value] || globalImageOverride.value || ''
 }
 
-function handleTemporaryImageUpload(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  setTemporaryImage(URL.createObjectURL(file))
-  event.target.value = ''
+async function handleTemporaryImageUpload(event) {
+ const file = event.target.files?.[0]
+ if (!file) return
+ if (!file.type.startsWith('image/')) { error.value = 'Selecciona un archivo de imagen.'; return }
+ try {
+  const value = await new Promise((resolve,reject) => {
+   const reader = new FileReader()
+   reader.onload = () => resolve(reader.result)
+   reader.onerror = reject
+   reader.readAsDataURL(file)
+  })
+  setTemporaryImage(value)
+  error.value = ''
+ } catch { error.value = 'No se pudo cargar la imagen temporal.' }
+ event.target.value = ''
 }
 
 function handleTemporaryImageUrl(event) {
@@ -557,6 +620,7 @@ function handleTemporaryImageUrl(event) {
 }
 
 function clearTemporaryImage() {
+  rememberDesign()
   if (applyScope.value === 'all') {
     globalImageOverride.value = ''
     slideImageOverrides.value = {}
@@ -606,6 +670,11 @@ function cardStyleFor(index) {
     '--copy-text-color': settings.description.color,
     '--copy-text-lines': settings.description.lines,
     '--copy-text-margin': `${settings.title.spacing}px`,
+    '--points-size': `${settings.points?.size || 30}px`,
+    '--points-gap': `${settings.points?.gap ?? 18}px`,
+    '--points-color': settings.points?.color || settings.description.color,
+    '--points-weight': settings.points?.weight || 850,
+    '--points-line': settings.points?.line || 1.18,
     '--button-color': settings.button.color,
     '--button-radius': `${settings.button.radius}px`,
     '--safe-bottom': `${settings.button.y}px`,
@@ -906,12 +975,6 @@ function stripHtml(value) {
   return String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-function trimText(value, maxLength) {
-  if (!value) return 'Toda la actualidad Nintendo, reviews y comunidad en un solo lugar.'
-  if (value.length <= maxLength) return value
-  return `${value.slice(0, maxLength).trim()}...`
-}
-
 function formatDate(value) {
   const time = getTime(value)
   if (!time) return 'Reciente'
@@ -966,11 +1029,7 @@ function slugify(value) {
         </button>
         <button type="button" class="share-secondary" :disabled="!post" @click="editorOpen = true">
           <i class="fas fa-sliders"></i>
-          Editar plantilla
-        </button>
-        <button type="button" class="share-secondary style-change-button" :disabled="!post" @click="stylePickerOpen = !stylePickerOpen">
-          <i class="fas fa-swatchbook"></i>
-          Cambiar estilo
+          Editar imagen
         </button>
         <button type="button" class="share-primary" :disabled="!post || isDownloading" @click="downloadCarousel">
           <i :class="isDownloading ? 'fas fa-circle-notch fa-spin' : 'fas fa-download'"></i>
@@ -992,28 +1051,6 @@ function slugify(value) {
     <section v-else class="share-workbench">
       <p v-if="error" class="share-error">{{ error }}</p>
       <p v-if="imageIssueMessage" class="share-warning">{{ imageIssueMessage }}</p>
-
-      <div v-if="stylePickerOpen" class="style-picker" aria-label="Seleccionar estilo visual">
-        <button
-          v-for="(style, key) in styleDefinitions"
-          :key="key"
-          type="button"
-          :class="{ active: selectedStyle === key }"
-          @click="switchStyle(key)"
-        >
-          <i :class="['fas', style.icon]"></i>
-          <span>
-            <strong>{{ style.label }}</strong>
-            <small>{{ style.description }}</small>
-          </span>
-          <i v-if="selectedStyle === key" class="fas fa-check style-selected-icon"></i>
-        </button>
-      </div>
-
-      <div class="active-style-bar">
-        <span><i :class="['fas', activeStyle.icon]"></i> {{ activeStyle.label }}</span>
-        <button type="button" @click="stylePickerOpen = !stylePickerOpen">Cambiar</button>
-      </div>
 
       <div class="format-switcher" aria-label="Formato de exportacion">
         <button
@@ -1050,14 +1087,14 @@ function slugify(value) {
                 <img
                   v-if="settingsForSlide(index).image.visible"
                   :key="`${slide.id}-${slideImage(slide)}`"
-                  class="social-card-bg"
+                  class="social-card-bg" data-edit="image" :style="visualElementStyle(index, 'image')"
                   :src="slideImage(slide)"
                   crossorigin="anonymous"
                   alt=""
                   @error="markImageBroken(slide)"
                 />
-                <div class="social-card-scrim"></div>
-                <div class="social-card-glow"></div>
+                <div class="social-card-scrim" data-edit="image"></div>
+                <div class="social-card-glow" data-edit="image"></div>
                 <div v-if="isAnalysisPost" class="analysis-gold-pattern" aria-hidden="true">
                   <span v-for="tile in 24" :key="tile">GOLD</span>
                 </div>
@@ -1074,22 +1111,20 @@ function slugify(value) {
                     </div>
                   </div>
 
-                  <div v-if="slide.showScore" class="social-score">
-                    <strong>{{ slide.score }}</strong>
-                    <span>Nota</span>
-                  </div>
+
                 </div>
 
-                <div class="social-card-copy" :class="{ 'has-points': slide.points?.length }">
+                <div v-if="slide.showScore" class="social-score social-score-independent"><strong>{{ slide.score }}</strong><span>Nota</span></div>
+
+                <div class="social-card-copy" :class="{ 'has-points': displaySlidePoints(slide).filter(point => point.trim()).length }">
                   <span v-if="settingsForSlide(index).part.visible" class="social-category" data-edit="part" :style="visualElementStyle(index, 'part')">
                     <i class="fas fa-gamepad"></i>
                     <span class="social-category-label">{{ labelForPart(slide, index) }}</span>
                   </span>
-                  <h2 data-edit="title" :style="visualElementStyle(index, 'title')">{{ displaySlideTitle(slide) }}</h2>
-                  <small v-if="settingsForSlide(index).subtitle.visible" class="social-subtitle">{{ slide.subtitle }}</small>
-                  <p data-edit="description" :style="visualElementStyle(index, 'description')" v-if="settingsForSlide(index).description.visible || (selectedStyle === 'impact' && index > 0)">{{ displaySlideDescription(slide) }}</p>
-                  <ul v-if="slide.points?.length && (selectedStyle !== 'impact' || index > 0)" class="social-points">
-                    <li v-for="(point, pointIndex) in slide.points" :key="`${slide.id}-point-${pointIndex}`">
+                  <h2 v-if="settingsForSlide(index).title.visible !== false" data-edit="title" :style="visualElementStyle(index, 'title')">{{ displaySlideTitle(slide) }}</h2>
+                  <p data-edit="description" :style="visualElementStyle(index, 'description')" v-if="settingsForSlide(index).description.visible">{{ displaySlideDescription(slide) }}</p>
+                  <ul v-if="displaySlidePoints(slide).filter(point => point.trim()).length && settingsForSlide(index).points?.visible !== false" class="social-points" data-edit="points" :style="visualElementStyle(index, 'points')">
+                    <li v-for="(point, pointIndex) in displaySlidePoints(slide).filter(point => point.trim())" :key="`${slide.id}-point-${pointIndex}`">
                       <span>{{ pointIndex + 1 }}</span>
                       <strong>{{ point }}</strong>
                     </li>
@@ -1136,214 +1171,7 @@ function slugify(value) {
       </div>
     </section>
 
-    <SocialVisualInspector v-if="editorOpen && !advancedOpen" :element="selectedElement" :scope="applyScope" :cover-logo="selectedStyle === 'impact' && selectedSlideIndex === 0" :inert="isDownloading" :overflow="textOverflow" :has-exceptions="Object.keys(slideTemplateOverrides[selectedSlideIndex] || {}).length > 0" :settings="applyScope === 'all' ? globalTemplateSettings : settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :fonts="fontOptions" :templates="savedTemplates" :notice="templateNotice" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectedElement = $event" @scope="applyScope = $event" @setting="setVisualInspectorSetting" @title="rememberDesign(); setSlideTitle($event)" @description="rememberDesign(); setSlideDescription($event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @download="downloadCarousel" @center="centerVisualElement" @reset="resetSingleDesign" @save="saveNamedTemplate" @load="loadNamedTemplate" @advanced="advancedOpen = true" @close="editorOpen = false" />
-    <aside v-if="editorOpen && advancedOpen" class="template-drawer" aria-label="Editor de plantilla">
-      <div class="drawer-head">
-        <div>
-          <span>Editor visual</span>
-          <h2>Editar plantilla</h2>
-        </div>
-        <button type="button" @click="editorOpen = false">
-          <i class="fas fa-xmark"></i>
-        </button>
-      </div>
-
-      <div class="drawer-panel">
-        <label class="drawer-label">Estilo</label>
-        <div class="drawer-style-switch">
-          <button
-            v-for="(style, key) in styleDefinitions"
-            :key="key"
-            type="button"
-            :class="{ active: selectedStyle === key }"
-            @click="switchStyle(key)"
-          >
-            <i :class="['fas', style.icon]"></i>
-            {{ style.label }}
-          </button>
-        </div>
-        <template v-if="selectedStyle === 'editorial'">
-          <label class="drawer-label">Variacion editorial</label>
-          <select :value="selectedTemplate" @change="applyPreset($event.target.value)">
-            <option v-for="(preset, key) in templatePresets" :key="key" :value="key">{{ preset.label }}</option>
-            <option value="custom">Personalizada</option>
-          </select>
-        </template>
-        <small v-else>Personaliza este estilo con los controles y guarda tus valores para reutilizarlos.</small>
-        <div class="drawer-actions">
-          <button type="button" @click="saveCustomTemplate">Guardar personalizada</button>
-          <button type="button" @click="resetTemplate">Restablecer</button>
-          <button type="button" class="drawer-reset-positions" @click="resetPositions">
-            <i class="fas fa-arrows-to-dot"></i>
-            Restablecer posiciones
-          </button>
-        </div>
-      </div>
-
-      <div class="drawer-panel drawer-scope">
-        <span class="drawer-label">Aplicar cambios a</span>
-        <div class="scope-switch">
-          <button type="button" :class="{ active: applyScope === 'all' }" @click="applyScope = 'all'">
-            <i class="fas fa-layer-group"></i>
-            Todas
-            <small>{{ carouselSlides.length }} imagenes</small>
-          </button>
-          <button type="button" :class="{ active: applyScope === 'single' }" @click="applyScope = 'single'">
-            <i class="fas fa-image"></i>
-            Solo esta
-            <small>Slide {{ selectedSlide?.number || 1 }}</small>
-          </button>
-        </div>
-        <div class="editing-target" :class="{ single: applyScope === 'single' }">
-          <img v-if="selectedSlide" :src="slideImage(selectedSlide)" alt="" />
-          <div>
-            <strong>{{ applyScope === 'all' ? 'Editando todo el carrusel' : `Editando slide ${selectedSlide?.number || 1}` }}</strong>
-            <small>{{ applyScope === 'all' ? 'Los cambios afectan a todas las imagenes.' : 'Los cambios afectan solo a la miniatura seleccionada.' }}</small>
-          </div>
-        </div>
-      </div>
-
-      <div class="drawer-sections">
-        <details :open="activeDrawerSection === 'image'">
-          <summary @click.prevent="toggleDrawerSection('image')">Imagen de fondo</summary>
-          <div class="image-override-preview">
-            <img :src="selectedTemporaryImage() || (selectedSlide ? slideImage(selectedSlide) : fallbackCover)" alt="" />
-            <div>
-              <strong>{{ selectedTemporaryImage() ? 'Imagen temporal activa' : 'Usando imagen del post' }}</strong>
-              <small>{{ applyScope === 'all' ? 'Se aplicara al carrusel completo.' : `Se aplicara solo al slide ${selectedSlide?.number || 1}.` }}</small>
-            </div>
-          </div>
-          <label><input type="checkbox" :checked="settingValue('image.visible')" @change="setSetting('image.visible', $event.target.checked)" /> Mostrar imagen de fondo</label>
-          <label class="file-control">
-            Subir imagen temporal
-            <input type="file" accept="image/*" @change="handleTemporaryImageUpload" />
-          </label>
-          <label>URL de imagen <input :value="selectedTemporaryImage()" placeholder="https://..." @input="handleTemporaryImageUrl" /></label>
-          <button type="button" class="drawer-ghost-action" @click="clearTemporaryImage">
-            <i class="fas fa-rotate-left"></i>
-            Volver a imagen original
-          </button>
-        </details>
-
-        <details :open="activeDrawerSection === 'filters'">
-          <summary @click.prevent="toggleDrawerSection('filters')">Filtros de imagen</summary>
-          <label>Brillo <input type="range" min="40" max="160" :value="settingValue('image.brightness')" @input="setSetting('image.brightness', Number($event.target.value))" /></label>
-          <label>Contraste <input type="range" min="40" max="180" :value="settingValue('image.contrast')" @input="setSetting('image.contrast', Number($event.target.value))" /></label>
-          <label>Saturacion <input type="range" min="0" max="220" :value="settingValue('image.saturation')" @input="setSetting('image.saturation', Number($event.target.value))" /></label>
-          <label>Desenfoque <input type="range" min="0" max="14" step="0.5" :value="settingValue('image.blur')" @input="setSetting('image.blur', Number($event.target.value))" /></label>
-          <label>Zoom <input type="range" min="100" max="170" :value="settingValue('image.scale')" @input="setSetting('image.scale', Number($event.target.value))" /></label>
-          <label>Posicion horizontal <input type="range" min="0" max="100" :value="settingValue('image.x')" @input="setSetting('image.x', Number($event.target.value))" /></label>
-          <label>Posicion vertical <input type="range" min="0" max="100" :value="settingValue('image.y')" @input="setSetting('image.y', Number($event.target.value))" /></label>
-          <button type="button" class="drawer-ghost-action" @click="resetImageFilters">
-            <i class="fas fa-rotate-left"></i>
-            Restablecer filtros
-          </button>
-        </details>
-
-        <details :open="activeDrawerSection === 'logo'">
-          <summary @click.prevent="toggleDrawerSection('logo')">Logo Galaxia Nintendera</summary>
-          <label><input type="checkbox" :checked="settingValue('logo.visible')" @change="setSetting('logo.visible', $event.target.checked)" /> Mostrar mi logo</label>
-          <label>Tamano <input type="range" min="60" max="220" :value="settingValue('logo.size')" @input="setSetting('logo.size', Number($event.target.value))" /></label>
-          <label>Posicion X <input type="range" min="5" max="95" :value="settingValue('logo.x')" @input="setSetting('logo.x', Number($event.target.value))" /></label>
-          <label>Margen inferior <input type="range" min="0" max="180" :value="settingValue('logo.y')" @input="setSetting('logo.y', Number($event.target.value))" /></label>
-          <label>Opacidad <input type="range" min="0" max="1" step="0.05" :value="settingValue('logo.opacity')" @input="setSetting('logo.opacity', Number($event.target.value))" /></label>
-          <button type="button" class="drawer-ghost-action" @click="resetLogoLayout('logo')">
-            <i class="fas fa-rotate-left"></i>
-            Restablecer mi logo
-          </button>
-        </details>
-
-        <details :open="activeDrawerSection === 'gameLogo'">
-          <summary @click.prevent="toggleDrawerSection('gameLogo')">Logo del juego</summary>
-          <label><input type="checkbox" :checked="settingValue('gameLogo.visible')" @change="setSetting('gameLogo.visible', $event.target.checked)" /> Mostrar logo del juego</label>
-          <label>URL PNG <input type="url" :value="settingValue('gameLogo.url')" placeholder="https://.../logo.png" @input="setSetting('gameLogo.url', $event.target.value.trim())" /></label>
-          <span class="drawer-subtitle">Portada</span>
-          <label>Tamano portada <input type="range" min="100" max="760" :value="coverLogoValue('size')" @input="setCoverLogoSetting('size', Number($event.target.value))" /></label>
-          <label>Posicion X portada <input type="range" min="5" max="95" :value="coverLogoValue('x')" @input="setCoverLogoSetting('x', Number($event.target.value))" /></label>
-          <label>Distancia desde arriba <input type="range" min="20" max="720" :value="coverLogoValue('y')" @input="setCoverLogoSetting('y', Number($event.target.value))" /></label>
-          <button type="button" class="drawer-ghost-action" @click="resetCoverLogoLayout">
-            <i class="fas fa-rotate-left"></i>
-            Restablecer logo de portada
-          </button>
-          <span class="drawer-subtitle">Diapositivas interiores</span>
-          <label>Tamano interiores <input type="range" min="60" max="480" :value="settingValue('gameLogo.size')" @input="setSetting('gameLogo.size', Number($event.target.value))" /></label>
-          <label>Posicion X interiores <input type="range" min="5" max="95" :value="settingValue('gameLogo.x')" @input="setSetting('gameLogo.x', Number($event.target.value))" /></label>
-          <label>Margen inferior interiores <input type="range" min="0" max="420" :value="settingValue('gameLogo.y')" @input="setSetting('gameLogo.y', Number($event.target.value))" /></label>
-          <label>Opacidad <input type="range" min="0" max="1" step="0.05" :value="settingValue('gameLogo.opacity')" @input="setSetting('gameLogo.opacity', Number($event.target.value))" /></label>
-          <button type="button" class="drawer-ghost-action" @click="resetLogoLayout('gameLogo')">
-            <i class="fas fa-rotate-left"></i>
-            Restablecer logos interiores
-          </button>
-        </details>
-
-        <details :open="activeDrawerSection === 'author'">
-          <summary @click.prevent="toggleDrawerSection('author')">Autor</summary>
-          <label><input type="checkbox" :checked="settingValue('author.visible')" @change="setSetting('author.visible', $event.target.checked)" /> Mostrar autor</label>
-          <label><input type="checkbox" :checked="settingValue('author.avatar')" @change="setSetting('author.avatar', $event.target.checked)" /> Avatar</label>
-          <label><input type="checkbox" :checked="settingValue('author.name')" @change="setSetting('author.name', $event.target.checked)" /> Nombre</label>
-          <label><input type="checkbox" :checked="settingValue('author.date')" @change="setSetting('author.date', $event.target.checked)" /> Fecha</label>
-          <label>Tamano <input type="range" min="60" max="140" :value="settingValue('author.size')" @input="setSetting('author.size', Number($event.target.value))" /></label>
-          <label>Posicion X <input type="range" min="20" max="240" :value="settingValue('author.x')" @input="setSetting('author.x', Number($event.target.value))" /></label>
-          <label>Posicion Y <input type="range" min="20" max="220" :value="settingValue('author.y')" @input="setSetting('author.y', Number($event.target.value))" /></label>
-        </details>
-
-        <details :open="activeDrawerSection === 'arrow'">
-          <summary @click.prevent="toggleDrawerSection('arrow')">Flecha</summary>
-          <label><input type="checkbox" :checked="settingValue('arrow.visible')" @change="setSetting('arrow.visible', $event.target.checked)" /> Mostrar flecha</label>
-          <label>Icono <select :value="settingValue('arrow.icon')" @change="setSetting('arrow.icon', $event.target.value)"><option v-for="icon in arrowIcons" :key="icon.value" :value="icon.value">{{ icon.label }}</option></select></label>
-          <label>Color <input type="color" :value="settingValue('arrow.color')" @input="setSetting('arrow.color', $event.target.value)" /></label>
-          <label>Tamano <input type="range" min="56" max="150" :value="settingValue('arrow.size')" @input="setSetting('arrow.size', Number($event.target.value))" /></label>
-          <label>Posicion <input type="range" min="25" max="75" :value="settingValue('arrow.y')" @input="setSetting('arrow.y', Number($event.target.value))" /></label>
-        </details>
-
-        <details :open="activeDrawerSection === 'part'">
-          <summary @click.prevent="toggleDrawerSection('part')">Etiqueta Parte</summary>
-          <label><input type="checkbox" :checked="settingValue('part.visible')" @change="setSetting('part.visible', $event.target.checked)" /> Mostrar etiqueta</label>
-          <label>Texto <input :value="settingValue('part.text')" placeholder="{n}/{total}" @input="setSetting('part.text', $event.target.value)" /></label>
-          <label>Color <input type="color" :value="settingValue('part.color')" @input="setSetting('part.color', $event.target.value)" /></label>
-          <label>Tamano <input type="range" min="16" max="44" :value="settingValue('part.size')" @input="setSetting('part.size', Number($event.target.value))" /></label>
-          <label>Bordes <input type="range" min="0" max="999" :value="settingValue('part.radius')" @input="setSetting('part.radius', Number($event.target.value))" /></label>
-        </details>
-
-        <details :open="activeDrawerSection === 'text'">
-          <summary @click.prevent="toggleDrawerSection('text')">Texto</summary>
-          <label>Texto de este slide <textarea :value="selectedSlide ? displaySlideTitle(selectedSlide) : ''" rows="4" @input="setSlideTitle($event.target.value)"></textarea></label>
-          <label>Fuente <select :value="settingValue('typography.family')" @change="setSetting('typography.family', $event.target.value)"><option v-for="font in fontOptions" :key="font.value" :value="font.value">{{ font.label }}</option></select></label>
-          <label>Titulo tamano <input type="range" min="42" max="110" :value="settingValue('title.size')" @input="setSetting('title.size', Number($event.target.value))" /></label>
-          <label>Titulo peso <input type="range" min="500" max="950" step="50" :value="settingValue('title.weight')" @input="setSetting('title.weight', Number($event.target.value))" /></label>
-          <label>Titulo color <input type="color" :value="settingValue('title.color')" @input="setSetting('title.color', $event.target.value)" /></label>
-          <label>Ancho maximo <input type="range" min="480" max="920" :value="settingValue('title.width')" @input="setSetting('title.width', Number($event.target.value))" /></label>
-          <label>Interlineado <input type="range" min="0.9" max="1.35" step="0.01" :value="settingValue('title.line')" @input="setSetting('title.line', Number($event.target.value))" /></label>
-          <label><input type="checkbox" :checked="settingValue('subtitle.visible')" @change="setSetting('subtitle.visible', $event.target.checked)" /> Mostrar subtitulo</label>
-          <label>Subtitulo tamano <input type="range" min="16" max="44" :value="settingValue('subtitle.size')" @input="setSetting('subtitle.size', Number($event.target.value))" /></label>
-          <label>Subtitulo color <input type="color" :value="settingValue('subtitle.color')" @input="setSetting('subtitle.color', $event.target.value)" /></label>
-          <label>Subtitulo lineas <input type="range" min="1" max="3" :value="settingValue('subtitle.lines')" @input="setSetting('subtitle.lines', Number($event.target.value))" /></label>
-          <label>Descripcion tamano <input type="range" min="22" max="54" :value="settingValue('description.size')" @input="setSetting('description.size', Number($event.target.value))" /></label>
-          <label>Descripcion color <input type="color" :value="settingValue('description.color')" @input="setSetting('description.color', $event.target.value)" /></label>
-          <label>Maximo lineas <input type="range" min="1" max="6" :value="settingValue('description.lines')" @input="setSetting('description.lines', Number($event.target.value))" /></label>
-        </details>
-
-        <details :open="activeDrawerSection === 'button'">
-          <summary @click.prevent="toggleDrawerSection('button')">Boton y numeracion</summary>
-          <label><input type="checkbox" :checked="settingValue('button.visible')" @change="setSetting('button.visible', $event.target.checked)" /> Mostrar boton</label>
-          <label>Texto <input :value="settingValue('button.text')" @input="setSetting('button.text', $event.target.value)" /></label>
-          <label>Color <input type="color" :value="settingValue('button.color')" @input="setSetting('button.color', $event.target.value)" /></label>
-          <label>Radio <input type="range" min="0" max="999" :value="settingValue('button.radius')" @input="setSetting('button.radius', Number($event.target.value))" /></label>
-          <label>Posicion inferior <input type="range" min="70" max="220" :value="settingValue('button.y')" @input="setSetting('button.y', Number($event.target.value))" /></label>
-          <label><input type="checkbox" :checked="settingValue('number.visible')" @change="setSetting('number.visible', $event.target.checked)" /> Mostrar numeracion</label>
-          <label>Color numeracion <input type="color" :value="settingValue('number.color')" @input="setSetting('number.color', $event.target.value)" /></label>
-          <label>Tamano numeracion <input type="range" min="18" max="44" :value="settingValue('number.size')" @input="setSetting('number.size', Number($event.target.value))" /></label>
-        </details>
-
-        <details :open="activeDrawerSection === 'overlay'">
-          <summary @click.prevent="toggleDrawerSection('overlay')">Overlay</summary>
-          <label>Color <input type="color" :value="settingValue('overlay.color')" @input="setSetting('overlay.color', $event.target.value)" /></label>
-          <label>Intensidad <input type="range" min="0" max="1" step="0.05" :value="settingValue('overlay.intensity')" @input="setSetting('overlay.intensity', Number($event.target.value))" /></label>
-          <label>Altura <input type="range" min="35" max="100" :value="settingValue('overlay.height')" @input="setSetting('overlay.height', Number($event.target.value))" /></label>
-          <label><input type="checkbox" :checked="settingValue('overlay.gradient')" @change="setSetting('overlay.gradient', $event.target.checked)" /> Degradado</label>
-        </details>
-      </div>
-    </aside>
+    <SocialVisualInspector v-if="editorOpen" :element="selectedElement" :scope="applyScope" :number="selectedSlide?.number || 1" :settings="settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :points="selectedSlide ? displaySlidePoints(selectedSlide) : []" :image="selectedSlide ? slideImage(selectedSlide) : fallbackCover" :image-url="selectedTemporaryImage()" :fonts="fontOptions" :overflow="textOverflow" :notice="fitNotice" :inert="isDownloading" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectedElement = $event" @scope="applyScope = $event" @setting="setVisualInspectorSetting" @title="updateTextContent('title', $event)" @description="updateTextContent('subtitle', $event)" @points="updateTextContent('points', $event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @fit="fitSlideText" @download="downloadCarousel" @center="centerVisualElement" @image-url="handleTemporaryImageUrl" @upload="handleTemporaryImageUpload" @original="clearTemporaryImage" @close="editorOpen = false" />
   </main>
 </template>
 
@@ -1706,9 +1534,7 @@ function slugify(value) {
 }
 
 .social-card.analysis .social-card-scrim {
-  background:
-    linear-gradient(180deg, rgba(22, 14, 3, 0.38) 0%, rgba(22, 14, 3, 0.06) 32%, rgba(43, 25, 5, 0.56) 58%, rgba(15, 10, 2, 0.94) 100%),
-    linear-gradient(90deg, rgba(120, 72, 8, 0.34), rgba(250, 204, 21, 0.1), rgba(22, 14, 3, 0.32));
+  background: var(--overlay-gradient);
 }
 
 .social-card-glow {
@@ -1761,7 +1587,9 @@ function slugify(value) {
   opacity: var(--author-opacity);
   padding: 0;
   position: absolute;
-  right: 82px;
+  right: auto;
+  width: max-content;
+  max-width: calc(100% - var(--author-x) - 32px);
   top: var(--author-y);
   transform: scale(var(--author-scale));
   transform-origin: top left;
@@ -1893,7 +1721,7 @@ function slugify(value) {
   line-height: var(--copy-title-line);
   margin: 0;
   max-width: var(--copy-title-width);
-  max-height: var(--copy-title-max);
+  max-height: none;
   overflow: hidden;
   text-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
 }
@@ -1927,13 +1755,13 @@ function slugify(value) {
 }
 
 .social-card-copy.has-points p {
-  font-size: calc(var(--copy-text-size) * 0.82);
-  -webkit-line-clamp: 2;
+  font-size: var(--copy-text-size);
+  -webkit-line-clamp: var(--copy-text-lines);
 }
 
 .social-points {
   display: grid;
-  gap: 18px;
+  gap: var(--points-gap);
   list-style: none;
   margin: 26px 0 0;
   max-width: 840px;
@@ -1963,10 +1791,10 @@ function slugify(value) {
 }
 
 .social-points li > strong {
-  color: var(--copy-text-color);
-  font-size: calc(var(--copy-text-size) * 0.76);
-  font-weight: 850;
-  line-height: 1.18;
+  color: var(--points-color);
+  font-size: var(--points-size);
+  font-weight: var(--points-weight);
+  line-height: var(--points-line);
   text-shadow: 0 8px 28px rgba(0, 0, 0, 0.56);
 }
 
@@ -2122,7 +1950,7 @@ function slugify(value) {
 .social-card.style-impact.impact-detail .social-card-copy h2 {
   font-size: calc(var(--copy-title-size) * 0.78);
   line-height: 1.08;
-  max-height: 260px;
+  max-height: none;
 }
 
 .social-card.style-impact.impact-detail .social-card-copy p {
@@ -2133,11 +1961,11 @@ function slugify(value) {
   max-width: 780px;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: var(--copy-text-lines);
 }
 
 .social-card.style-impact.impact-detail .social-points {
-  gap: 14px;
+  gap: var(--points-gap);
   margin-top: 24px;
   max-width: 780px;
 }
@@ -2158,14 +1986,14 @@ function slugify(value) {
 }
 
 .social-card.style-impact.impact-detail .social-points li > strong {
-  font-size: calc(var(--copy-text-size) * 0.66);
+  font-size: var(--points-size);
   line-height: 1.2;
 }
 
 .social-card.style-impact .social-card-copy h2 {
   font-size: var(--copy-title-size);
   letter-spacing: 0;
-  max-height: 850px;
+  max-height: none;
   max-width: var(--copy-title-width);
   overflow-wrap: anywhere;
   text-shadow: 0 5px 2px rgba(0, 0, 0, 0.72), 0 14px 34px rgba(0, 0, 0, 0.62);
@@ -2602,5 +2430,15 @@ function slugify(value) {
  .visual-editing .share-filmstrip { flex: 0 0 auto; padding: 4px; margin: 0; }
  .visual-editing .share-filmstrip button { width: 38px; height: 46px; }
  :global(body:has(.visual-editing) .public-bottom-nav) { display: none; }
+}
+
+.social-card-copy h2,.social-card-copy p { white-space:pre-wrap; }
+
+.social-author{max-width:100%;box-sizing:border-box}.social-author>div{min-width:0}.social-author strong{overflow-wrap:anywhere}
+.social-score-independent{position:absolute;top:var(--author-y);right:82px;z-index:2}
+@media(min-width:1100px){
+ .visual-editing{padding-left:264px;padding-right:364px;box-sizing:border-box}
+ .visual-editing .share-toolbar,.visual-editing .share-workbench{width:100%;max-width:none}
+ .visual-editing .share-toolbar{flex-wrap:wrap}
 }
 </style>
