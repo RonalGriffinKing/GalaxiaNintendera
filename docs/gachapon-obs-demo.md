@@ -11,3 +11,5 @@ OBS no permite iniciar canjes ni modificar datos. El emisor exige perfil propio 
 El gachapon del perfil sigue siendo demo: no entrega iconos reales ni descuenta estrellas. El espejo refleja esas pruebas; no activa canjes reales. La imagen y el resultado visual del overlay son publicos como en los overlays actuales. No compartir el enlace si no deseas que otras personas vean la presentacion.
 
 No se usa Netlify Functions, claves ni PBKDF2. Los enlaces antiguos con connection ya no funcionan; generar el nuevo enlace con owner y scene. La pantalla OBS es silenciosa.
+
+El espejo muestra un panel galactico y botones visuales Normal/Epico; resalta la opcion elegida en la web. Los botones estan desactivados y no ejecutan canjes. Se corrigio el estilo global de parrafos que agregaba un fondo oscuro a la saga del icono. Dimensiones recomendadas: 580 x 560.
