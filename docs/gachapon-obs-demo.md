@@ -15,3 +15,5 @@ No se usa Netlify Functions, claves ni PBKDF2. Los enlaces antiguos con connecti
 El espejo muestra un panel galactico y botones visuales Normal/Epico; resalta la opcion elegida en la web. Los botones estan desactivados y no ejecutan canjes. Se corrigio el estilo global de parrafos que agregaba un fondo oscuro a la saga del icono. Dimensiones recomendadas: 580 x 560.
 
 La apertura dura 3,8 segundos, con aura creciente, sonido de giro y acorde de revelacion (mas rico en epico). El espejo usa el mismo audio sintetizado. Si OBS bloquea autoplay, Interactuar > Activar sonido y configurar la salida de audio de la fuente en OBS. El audio se detiene al ocultar la pagina y se libera al desmontar; no requiere archivos externos.
+
+El sonido de giro incluye un crescendo continuo de tono e intensidad durante 3,8 segundos, con destellos musicales progresivos; se corta al omitir o revelar para dar paso al acorde final. Comparte el mismo motor en perfil y OBS.
