@@ -249,4 +249,16 @@ button:focus-visible,a:focus-visible { outline:2px solid #c084fc; outline-offset
  .hero-side .profile-actions > button { min-height:40px; padding:7px; font-size:11px; }
 }
 
+
+@media(min-width:1000px) {
+ .profile-hero { grid-template-columns:100px minmax(0,1fr) 400px; gap:8px 16px; padding:16px; }
+ .hero-side { display:grid; grid-template-columns:minmax(0,230px) minmax(0,1fr); gap:0 12px; align-items:start; }
+ .hero-side .star-wallet { grid-column:1; grid-row:1; }
+ .hero-side .hero-rewards-panel { grid-column:1; grid-row:2; }
+ .hero-side .profile-actions { grid-column:2; grid-row:1/span 2; display:flex; flex-direction:column; gap:8px; margin:0; align-self:center; }
+ .hero-side .profile-actions > button { width:100%; min-height:40px; padding:8px; font-size:11px; }
+ .profile-avatar-circle { --avatar-size:96px; }
+ .profile-main-copy h1 { font-size:clamp(24px,2.2vw,30px); }
+}
+
 </style>

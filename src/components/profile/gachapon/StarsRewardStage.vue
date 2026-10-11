@@ -131,4 +131,14 @@ function finish(event) { if (event.target === event.currentTarget && event.anima
  @keyframes reward-float { 50% { transform:translateY(-7px); } }
  @keyframes reward-colors { to { transform:rotate(360deg); } }
 }
+
+@media(min-width:641px) {
+ .stars-stage { --radius:65px; --scene-center:calc((100% - 76px)/2); }
+ .gift-anchor { width:100px; height:100px; }.gift-box { height:72px; }.gift-lid { width:112px; top:20px; height:23px; }.gift-bow { width:70px; left:20px; top:-30px; }
+ .reward-portrait { width:100px; height:100px; }
+ .stellar-halo { width:210px; height:210px; }
+ .stellar-caption { height:60px; bottom:8px; }.stellar-caption h3 { font-size:17px; margin-top:4px; }.stellar-caption p { margin-top:4px; font-size:11px; }
+ .stellar-satellite > span { font-size:22px; }.stellar-satellite:nth-child(even) > span { font-size:16px; }
+}
+
 </style>

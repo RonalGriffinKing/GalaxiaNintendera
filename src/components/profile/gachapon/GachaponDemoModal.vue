@@ -155,4 +155,18 @@ onUnmounted(() => {
 .gacha-reveal { min-height:44px; padding:10px 16px; margin-top:8px; border:1px solid #c084fc80; border-radius:10px; background:#7433b8; color:white; cursor:pointer; }
 button:focus-visible,a:focus-visible { outline:3px solid #f6d889; outline-offset:3px; }
 @media(max-width:480px) { .gacha-header { flex-wrap:wrap; }.gacha-header-actions { margin-left:auto; } .gacha-backdrop { padding:10px; }.gacha-dialog { padding:18px; border-radius:18px; max-height:calc(100dvh - 20px); }.gacha-options { grid-template-columns:1fr; gap:10px; }.gacha-stage { height:380px; }.gacha-option button { min-height:48px; } }
+
+@media(min-width:641px) {
+ .gacha-dialog { width:min(100%,560px); padding:18px; }
+ .gacha-header h2 { font-size:24px; }
+ .gacha-categories { margin-top:10px; padding-bottom:4px; }
+ .gacha-tools { gap:8px; margin-top:4px; }.gacha-tools button { font-size:11px; min-height:32px; }
+ .gacha-wallet { margin-top:8px; }.gacha-disclaimer { margin-top:8px; padding:8px 10px; font-size:11px; }
+ .gacha-stage { height:clamp(230px,32dvh,300px); margin:10px 0; }
+ .gacha-option button { min-height:44px; }
+ .gacha-result-slot { height:72px; gap:4px; margin-top:6px; }
+ .gacha-hint { min-height:28px; font-size:11px; }
+ .gacha-reveal { min-height:36px; padding:6px 12px; margin-top:0; }
+}
+
 </style>
