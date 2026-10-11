@@ -3166,4 +3166,15 @@ watch(() => route.fullPath, () => {
   .purple-card p { max-width: 440px; margin-left: auto; margin-right: auto; }
   .purple-card button { min-height: 44px; }
 }
+
+@media(min-width:900px) and (max-width:1440px),(min-width:900px) and (max-height:900px) {
+ .listing-layout { grid-template-columns:minmax(0,1fr) 240px; gap:16px; }
+ .news-row.featured-latest { min-height:230px; gap:12px; }
+ .news-row.featured-latest > img,.news-row.featured-latest > .post-placeholder { min-height:200px; }
+ .news-row.featured-latest .post-copy h2 { font-size:clamp(22px,2.1vw,28px); }
+ .news-row.grid-card,.news-row.grid-card.analysis { min-height:220px; }
+ .news-row.grid-card .post-copy h2 { font-size:18px; }
+ .purple-card { padding:16px; }
+}
+
 </style>

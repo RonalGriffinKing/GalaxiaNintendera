@@ -1579,4 +1579,14 @@ onUnmounted(() => {
   .home2-main-hero p { font-size: 14px; line-height: 1.45; }
   .home2-meta { gap: 6px; }
 }
+
+@media(min-width:761px) and (max-width:1440px),(min-width:761px) and (max-height:900px) {
+ .home2-main-hero { height:270px; padding:18px; }
+ .home2-main-hero h1 { font-size:clamp(24px,2.2vw,32px); }
+ .home2-community-band { padding:14px 18px; gap:16px; grid-template-columns:minmax(0,1fr) minmax(300px,.9fr); }
+ .home2-community-band h2 { font-size:24px; }
+ .home2-community-band p { font-size:12px; margin:6px 0 8px; }
+ .home2-community-card { min-height:52px; }
+}
+
 </style>

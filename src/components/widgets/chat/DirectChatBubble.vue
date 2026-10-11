@@ -1778,4 +1778,10 @@ onUnmounted(() => {
 .direct-chat-panel .direct-chat-composer { min-height: 66px; padding-bottom: max(12px,env(safe-area-inset-bottom)); }
 .direct-chat-panel .direct-chat-composer input { min-width: 0; min-height: 42px; font-size: 16px; }
 .direct-chat-body { min-height: 0; overflow: hidden; }
+
+@media(min-width:641px) {
+ .direct-chat-panel,.direct-chat-panel.raised { width:min(420px,calc(100vw - 32px)); right:16px; left:auto; top:auto; bottom:16px; height:auto; max-height:calc(100dvh - 96px); box-sizing:border-box; border-radius:16px; }
+ .direct-chat-panel .direct-chat-body { height:min(400px,calc(100dvh - 160px)); }
+}
+
 </style>

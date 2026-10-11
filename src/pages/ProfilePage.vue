@@ -2273,4 +2273,14 @@ onUnmounted(() => {
 @media(max-width:900px) { .rewards-loading-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media(max-width:600px) { .rewards-loading-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }.loading-achievements .rewards-loading-grid { grid-template-columns: minmax(0,1fr); } }
 @media(prefers-reduced-motion:reduce) { .rewards-loading * { animation: none !important; } }
+
+@media(min-width:761px) and (max-width:1440px),(min-width:761px) and (max-height:900px) {
+ .profile-page { max-width:1280px; padding-left:18px; padding-right:18px; }
+ .profile-dashboard { grid-template-columns:minmax(0,1.65fr) minmax(0,1fr) minmax(0,1fr); gap:12px; }
+ .profile-dashboard > .profile-activity { grid-column:1; grid-row:1; min-height:430px; }
+ .profile-middle { grid-column:2; grid-row:1; }.profile-dashboard > .profile-communities,.profile-right { grid-column:3; grid-row:1; min-height:0; }
+ .profile-dashboard .profile-section { padding:12px; }
+ .recent-post-card { min-height:220px; }
+}
+
 </style>

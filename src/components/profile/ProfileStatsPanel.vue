@@ -90,4 +90,9 @@ defineProps({
 
 .profile-hero-stats { height:82px; }.profile-hero-stats > :is(div,button) { min-height:0; height:80px; padding:8px; }.profile-hero-stats span { font-size:11px; font-weight:500; text-transform:none; }
 @media(max-width:680px) { .profile-hero-stats { height:76px; }.profile-hero-stats > :is(div,button) { height:74px; padding:6px 3px; }.profile-hero-stats span { font-size:9px; } }
+
+@media(min-width:761px) and (max-width:1440px),(min-width:761px) and (max-height:900px) {
+ .profile-hero-stats { height:64px; }.profile-hero-stats > :is(div,button) { height:62px; min-height:0; }.profile-hero-stats strong { font-size:21px; }
+}
+
 </style>

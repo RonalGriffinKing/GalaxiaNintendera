@@ -238,4 +238,15 @@ button:focus-visible,a:focus-visible { outline:2px solid #c084fc; outline-offset
 .hero-rewards-panel > button { display: flex; align-items: center; gap: 6px; font-weight: 500; }
 @media(max-width:1100px) and (min-width:761px) { .profile-hero { grid-template-columns: 120px minmax(0,1fr) 260px; } }
 @media(prefers-reduced-motion:no-preference) { .profile-actions > button { transition: background-color 160ms ease, border-color 160ms ease; } }
+
+@media(min-width:761px) and (max-width:1440px),(min-width:761px) and (max-height:900px) {
+ .profile-hero { grid-template-columns:100px minmax(0,1fr) 230px; gap:8px 16px; padding:16px; box-sizing:border-box; }
+ .profile-avatar-circle { --avatar-size:96px; }
+ .profile-main-copy h1 { font-size:clamp(24px,2.2vw,30px); margin-bottom:4px; }
+ .profile-username { font-size:13px; }
+ .profile-level-pill { min-height:30px; font-size:10px; }
+ .profile-social-links :is(a,span) { width:30px; height:30px; }
+ .hero-side .profile-actions > button { min-height:40px; padding:7px; font-size:11px; }
+}
+
 </style>

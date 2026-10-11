@@ -2861,4 +2861,14 @@ onUnmounted(() => {
 .chat-room .hub-chat-messages { flex: 1 1 0; min-height: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; }
 .chat-room .hub-chat-composer { min-height: 52px; padding-bottom: max(8px,env(safe-area-inset-bottom)); }
 .chat-room .hub-chat-composer textarea { min-width: 0; font-size: 16px; }
+
+/* A floating chat should leave the page visible on tablets and laptops. */
+@media(min-width:641px) {
+ .galaxia-hub-panel.chat-active { width:min(420px,calc(100vw - 32px)); height:min(560px,calc(100dvh - 96px)); max-height:calc(100dvh - 96px); right:16px; left:auto; bottom:16px; top:auto; padding:12px; gap:10px; box-sizing:border-box; border-radius:18px; }
+ .chat-active .hub-chat-messages article.has-gif { width:auto; max-width:min(80%,260px); }
+ .chat-active .hub-message-media { height:140px; max-height:22dvh; }
+ .chat-active .hub-head { min-height:44px; padding:0; }
+ .chat-active .hub-chat-composer { min-height:52px; }
+}
+
 </style>
