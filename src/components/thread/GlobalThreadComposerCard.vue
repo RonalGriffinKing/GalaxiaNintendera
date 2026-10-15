@@ -1,7 +1,15 @@
 <script setup>
+import {isEditorialOwner} from '@/services/editorial'
+
+
+import {communitySnapshot,communityWrite} from '@/services/community'
+
+import {getProfileSnapshot} from '@/services/profiles'
+
+import { publicName } from '@/utils/publicIdentity'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { addDoc, collection, doc, getDoc, getDocs, increment, setDoc, updateDoc } from 'firebase/firestore'
+import { collection, getDocs } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { DEFAULT_THREAD_TOPICS, CONTENT_TAB_ICONS, OFFICIAL_COMMUNITY_ID } from '@/constants/community'
 import { defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
@@ -49,10 +57,10 @@ const officialFallback = {
 }
 
 const user = computed(() => auth.currentUser)
-const canManageOfficial = computed(() => ['admin', 'publisher'].includes(props.userRole))
+const canManageOfficial = computed(() => isEditorialOwner(auth.currentUser))
 const isCurrentUserBlocked = computed(() => Boolean(currentProfile.value?.isBlocked))
 const displayName = computed(() => currentProfile.value?.name || user.value?.displayName || user.value?.email || 'Usuario')
-const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
+const userInitial = computed(() => publicName(currentProfile.value?.name, user.value?.displayName, currentProfile.value?.username).slice(0, 1).toUpperCase())
 const currentProfileIcon = computed(() => resolveProfileIcon({
   ...currentProfile.value,
   imageUrl: currentProfile.value.imageUrl || user.value?.photoURL || ''
@@ -185,9 +193,9 @@ const loadContext = async () => {
   isLoading.value = true
   try {
     const [communitySnap, joinedSnap, userSnap] = await Promise.all([
-      getDocs(collection(db, 'communities')).catch(() => ({ docs: [] })),
+      communitySnapshot('communities',{}).catch(() => ({ docs: [] })),
       getDocs(collection(db, 'users', activeUser.uid, 'communities')).catch(() => ({ docs: [] })),
-      getDoc(doc(db, 'users', activeUser.uid)).catch(() => null)
+      getProfileSnapshot(activeUser.uid).catch(() => null)
     ])
     const savedCommunities = communitySnap.docs.map(item => ({ id: item.id, ...item.data() }))
     const official = savedCommunities.find(item => item.id === officialFallback.id)
@@ -250,41 +258,7 @@ const isJoinedCommunity = (community) => {
   return joinedCommunityIds.value.includes(community.id)
 }
 
-const joinCommunity = async (community) => {
-  const activeUser = user.value
-  if (!activeUser || !community?.id || isJoinedCommunity(community) || isPublishing.value) return
-  isPublishing.value = true
-  try {
-    const now = Date.now()
-    await Promise.all([
-      setDoc(doc(db, 'users', activeUser.uid, 'communities', community.id), {
-        communityId: community.id,
-        name: community.name || '',
-        description: community.description || '',
-        bannerUrl: community.bannerUrl || '',
-        iconUrl: community.iconUrl || '',
-        role: 'Miembro',
-        joinedAt: now,
-        updatedAt: now
-      }, { merge: true }),
-      setDoc(doc(db, 'communities', community.id, 'members', activeUser.uid), {
-        uid: activeUser.uid,
-        name: displayName.value,
-        imageUrl: currentProfileIcon.value || '',
-        joinedAt: now,
-        updatedAt: now
-      }, { merge: true }),
-      updateDoc(doc(db, 'communities', community.id), {
-        membersCount: increment(1),
-        updatedAt: now
-      }).catch(() => {})
-    ])
-    joinedCommunityIds.value = [...new Set([...joinedCommunityIds.value, community.id])]
-    selectCommunity(community)
-  } finally {
-    isPublishing.value = false
-  }
-}
+const joinCommunity = async community=>{const activeUser=user.value;if(!activeUser||!community?.id||isPublishing.value)return;isPublishing.value=true;try{await communityWrite('membership',community.id,{joined:true});joinedCommunityIds.value=[...new Set([...joinedCommunityIds.value,community.id])];selectCommunity(community)}finally{isPublishing.value=false}}
 
 const insertTextAtCaret = (text) => {
   const start = Number(textAreaRef.value?.selectionStart ?? body.value.length)
@@ -360,7 +334,7 @@ const publish = async () => {
   isPublishing.value = true
   try {
     const now = Date.now()
-    await addDoc(collection(db, 'communityThreads'), {
+    await communityWrite('thread-create',undefined,{
       communityId: community.id,
       communityName: community.name || '',
       authorId: activeUser.uid,

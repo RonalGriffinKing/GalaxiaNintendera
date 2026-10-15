@@ -1,9 +1,14 @@
-<script setup>
+<script setup>import {communityWrite} from '@/services/community'
+
+import {watchCommunity} from '@/services/community'
+
+import {getProfileSnapshot} from '@/services/profiles'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore'
+import { query } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
-import { auth, db } from '@/firebase'
+import { auth } from '@/firebase'
 import EventEditorModal from '@/components/modals/EventEditorModal.vue'
 import EventDetailModal from '@/components/events/EventDetailModal.vue'
 import EventPremiumCard from '@/components/events/EventPremiumCard.vue'
@@ -86,29 +91,11 @@ const closeDetails = () => {
   if (route.query.id) router.replace({ path: route.path, query: { ...route.query, id: undefined } })
 }
 
-const toggleNotify = async (event) => {
-  if (!currentUser.value) {
-    router.push('/login?mode=login')
-    return
-  }
-  await updateDoc(doc(db, 'galaxyEvents', event.id), {
-    notifyBy: isNotified(event) ? arrayRemove(currentUser.value.uid) : arrayUnion(currentUser.value.uid)
-  })
-}
+const toggleNotify = async event=>{if(!currentUser.value){router.push('/login?mode=login');return}await communityWrite('event-notify',event.id,{notified:!isNotified(event)})}
 
-const toggleFeatured = async (event) => {
-  if (!isAdmin.value) return
-  await updateDoc(doc(db, 'galaxyEvents', event.id), {
-    featured: !event.featured,
-    updatedAt: Date.now()
-  })
-}
+const toggleFeatured = async event=>{if(!isAdmin.value)return;await communityWrite('site-save',event.id,{kind:'events',value:{featured:!event.featured}})}
 
-const deleteEvent = async (event) => {
-  if (!isAdmin.value || !event?.id) return
-  await deleteDoc(doc(db, 'galaxyEvents', event.id))
-  if (detailEvent.value?.id === event.id) closeDetails()
-}
+const deleteEvent = async event=>{if(!isAdmin.value||!event?.id)return;await communityWrite('site-delete',event.id,{kind:'events'});if(detailEvent.value?.id===event.id)closeDetails()}
 
 const openCalendar = (event) => {
   window.open(googleCalendarUrl(event), '_blank', 'noreferrer')
@@ -145,12 +132,12 @@ onMounted(() => {
     currentUser.value = user
     currentRole.value = 'user'
     if (user) {
-      const snap = await getDoc(doc(db, 'users', user.uid)).catch(() => null)
+      const snap = await getProfileSnapshot(user.uid).catch(() => null)
       currentRole.value = snap?.data()?.role || 'user'
     }
   })
 
-  unsubscribeEvents = onSnapshot(query(collection(db, 'galaxyEvents'), orderBy('startsAt', 'asc')), (snap) => {
+  unsubscribeEvents = watchCommunity('events',{},(snap) => {
     events.value = snap.docs.map(item => ({ id: item.id, notifyBy: [], ...item.data(), startsAt: getMillis(item.data().startsAt) }))
     if (route.query.id) {
       const found = events.value.find(event => event.id === route.query.id)
@@ -158,7 +145,7 @@ onMounted(() => {
     }
   })
 
-  unsubscribeCommunities = onSnapshot(query(collection(db, 'communities'), orderBy('createdAt', 'asc')), (snap) => {
+  unsubscribeCommunities = watchCommunity('communities',{},(snap) => {
     communities.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
   })
 })

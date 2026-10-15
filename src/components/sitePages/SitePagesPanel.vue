@@ -1,5 +1,9 @@
 <script setup>
+import AdminNavGroup from '../shared/AdminNavGroup.vue'
 import AppNotice from '@/components/shared/AppNotice.vue'
+import AdminBadge from '@/components/shared/AdminBadge.vue'
+import AdminSurface from '@/components/shared/AdminSurface.vue'
+import AdminConfirmDialog from '@/components/shared/AdminConfirmDialog.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { deleteSitePage, listSitePages, pageTemplate, saveSitePage, seedMissingLegalPages, seedMissingStarterPages } from '@/services/sitePages'
@@ -191,19 +195,19 @@ onMounted(() => loadPages({ signal: true }))
   <section class="site-pages-panel">
     <header v-if="!embedded" class="site-pages-head">
       <div>
-        <span>CMS Galaxia</span>
-        <h1>Paginas del sitio</h1>
-        <p>Footer, guias, paginas legales, landings y secciones dinamicas.</p>
+        <span class="admin-list-kicker">CMS Galaxia</span>
+        <h1 class="admin-list-title admin-list-title--page">Paginas del sitio</h1>
+        <p class="admin-list-subtitle">Footer, guias, paginas legales, landings y secciones dinamicas.</p>
       </div>
-      <button type="button" @click="openCreate()"><i class="fas fa-plus"></i> Crear pagina</button>
+      <button class="admin-action admin-action--primary" type="button" @click="openCreate()"><i class="fas fa-plus"></i> Crear pagina</button>
     </header>
 
     <div class="site-pages-toolbar">
-      <div class="page-tabs">
-        <button v-for="item in ['all','draft','published','footer','legal','guide','landing','home-section']" :key="item" :class="{ active: filter === item }" type="button" @click="filter = item">
+      <AdminNavGroup class="page-tabs" role="group" aria-label="Filtrar páginas">
+        <button class="admin-action admin-action--ghost admin-action--sm" v-for="item in ['all','draft','published','footer','legal','guide','landing','home-section']" :key="item" :aria-pressed="filter === item" :class="{ active: filter === item, 'is-selected': filter === item }" type="button" @click="filter = item">
           {{ item === 'all' ? 'Todas' : item === 'draft' ? 'Borradores' : item === 'published' ? 'Publicadas' : item }}
         </button>
-      </div>
+      </AdminNavGroup>
       <ListControls
         v-model:search="searchQuery"
         v-model:sort="sortMode"
@@ -212,53 +216,53 @@ onMounted(() => loadPages({ signal: true }))
         :sort-options="pageSortOptions"
       />
       <div v-if="canManage" class="site-pages-actions">
-        <button class="create-page-btn" type="button" @click="openCreate()">
+        <button class="create-page-btn admin-action admin-action--primary" type="button" @click="openCreate()">
           <i class="fas fa-file-circle-plus"></i>
           Crear pagina
         </button>
-        <button class="legal-seed-btn" type="button" :disabled="seedingLegal" @click="createLegalTemplates">
+        <button class="legal-seed-btn admin-action admin-action--primary" type="button" :disabled="seedingLegal" :aria-busy="seedingLegal" @click="createLegalTemplates">
           <i class="fas fa-scale-balanced"></i>
           {{ seedingLegal ? 'Creando...' : 'Crear legales' }}
         </button>
-        <button class="starter-seed-btn" type="button" :disabled="seedingStarter" @click="createStarterTemplates">
+        <button class="starter-seed-btn admin-action admin-action--featured" type="button" :disabled="seedingStarter" :aria-busy="seedingStarter" @click="createStarterTemplates">
           <i class="fas fa-star"></i>
           {{ seedingStarter ? 'Creando...' : 'Crear base' }}
         </button>
       </div>
     </div>
 
-    <div v-if="loading" class="pages-empty">Cargando paginas...</div>
-    <div v-else-if="loadError" class="pages-empty">
+    <div v-if="loading" class="pages-empty admin-list-state">Cargando paginas...</div>
+    <div v-else-if="loadError" class="pages-empty admin-list-state">
       <i class="fas fa-triangle-exclamation"></i>
       <strong>No se pudieron cargar las paginas</strong>
       <span>{{ loadError }}</span>
     </div>
-    <div v-else-if="!filteredPages.length" class="pages-empty">
+    <div v-else-if="!filteredPages.length" class="pages-empty admin-list-state">
       <i class="fas fa-file-lines"></i>
       <strong>No hay páginas con esos criterios</strong>
-      <button v-if="canManage" type="button" @click="openCreate()">Crear una página</button>
+      <button class="admin-action admin-action--primary" v-if="canManage" type="button" @click="openCreate()">Crear una página</button>
     </div>
 
     <div v-else class="pages-grid">
-      <article v-for="page in paginatedPages" :key="page.id" class="site-page-card">
+      <AdminSurface as="article" v-for="page in paginatedPages" :key="page.id" class="site-page-card">
         <div class="page-card-icon" :style="{ '--page-accent': page.theme?.accent || '#a855f7' }">
           <i :class="page.icon || 'fas fa-book-open'"></i>
         </div>
         <div>
-          <span>{{ page.type }} - <em :class="{ published: page.status === 'published' }">{{ page.status === 'published' ? 'Publicado' : 'Borrador' }}</em></span>
-          <strong>{{ page.title }}</strong>
-          <p>{{ page.description || `/${page.slug}` }}</p>
-          <small v-if="page.showInFooter"><i class="fas fa-link"></i> Footer: {{ page.footerColumn }} - orden {{ page.footerOrder }}</small>
+          <span class="admin-meta">{{ page.type }} - <AdminBadge :variant="page.status === 'published' ? 'success' : 'warning'">{{ page.status === 'published' ? 'Publicado' : 'Borrador' }}</AdminBadge></span>
+          <strong class="admin-card-title">{{ page.title }}</strong>
+          <p class="admin-description">{{ page.description || `/${page.slug}` }}</p>
+          <small class="admin-meta" v-if="page.showInFooter"><i class="fas fa-link"></i> Footer: {{ page.footerColumn }} - orden {{ page.footerOrder }}</small>
           <small v-if="page.showInHome"><i class="fas fa-house"></i> Home: {{ page.homeSection || 'custom' }}</small>
         </div>
         <nav>
-          <RouterLink v-if="page.slug" :to="pageRoute(page)" target="_blank" title="Previsualizar"><i class="far fa-eye"></i></RouterLink>
-          <button type="button" title="Editar" @click="editPage(page)"><i class="fas fa-pen"></i></button>
-          <button type="button" title="Duplicar" @click="duplicatePage(page)"><i class="far fa-copy"></i></button>
-          <button type="button" :title="page.status === 'published' ? 'Despublicar' : 'Publicar'" @click="togglePublish(page)"><i :class="page.status === 'published' ? 'fas fa-eye-slash' : 'fas fa-upload'"></i></button>
-          <button type="button" class="danger" title="Eliminar" @click="confirmDelete = page"><i class="fas fa-trash"></i></button>
+          <RouterLink class="admin-action admin-action--sm admin-action--icon" v-if="page.slug" :to="pageRoute(page)" target="_blank" title="Previsualizar"><i class="far fa-eye"></i></RouterLink>
+          <button class="admin-action admin-action--sm admin-action--icon admin-action--edit" type="button" title="Editar" @click="editPage(page)"><i class="fas fa-pen"></i></button>
+          <button class="admin-action admin-action--sm admin-action--icon" type="button" title="Duplicar" @click="duplicatePage(page)"><i class="far fa-copy"></i></button>
+          <button class="admin-action admin-action--sm admin-action--icon" type="button" :title="page.status === 'published' ? 'Despublicar' : 'Publicar'" @click="togglePublish(page)"><i :class="page.status === 'published' ? 'fas fa-eye-slash' : 'fas fa-upload'"></i></button>
+          <button type="button" class="admin-action admin-action--sm admin-action--icon admin-action--danger" title="Eliminar" @click="confirmDelete = page"><i class="fas fa-trash"></i></button>
         </nav>
-      </article>
+      </AdminSurface>
     </div>
 
     <PaginationNav
@@ -276,18 +280,7 @@ onMounted(() => loadPages({ signal: true }))
     <SitePageEditor v-if="showEditor" :edit-data="editingPage" @close="closeEditor" @saved="loadPages" />
 
     <Teleport to="body">
-      <div v-if="confirmDelete" class="delete-modal">
-        <button type="button" class="delete-backdrop" @click="confirmDelete = null"></button>
-        <section>
-          <i class="fas fa-trash"></i>
-          <h2>Eliminar pagina?</h2>
-          <p>Esta accion no se puede deshacer. La pagina dejara de verse en el sitio.</p>
-          <div>
-            <button type="button" @click="confirmDelete = null">Cancelar</button>
-            <button type="button" class="danger" @click="executeDelete">Eliminar</button>
-          </div>
-        </section>
-      </div>
+      <AdminConfirmDialog :open="Boolean(confirmDelete)" title="Eliminar pagina?" description="Esta accion no se puede deshacer. La pagina dejara de verse en el sitio." confirm-label="Eliminar pagina" pending-label="Eliminando..." :confirm-action="executeDelete" @close="confirmDelete = null" />
       <AppNotice :message="toast" />
     </Teleport>
   </section>
@@ -296,42 +289,13 @@ onMounted(() => loadPages({ signal: true }))
 <style scoped>
 .site-pages-panel { display: grid; gap: 18px; }
 .site-pages-head { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
-.site-pages-toolbar { align-items: start; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(300px, auto) auto; }
-.site-pages-head span { color: var(--accent-hover); font-size: 11px; font-weight: 950; text-transform: uppercase; }
-.site-pages-head h1 { color: var(--text-primary); font-size: 28px; font-weight: 950; }
-.site-pages-head p { color: var(--text-muted); font-size: 13px; font-weight: 750; }
-.site-pages-head button, .create-page-btn, .legal-seed-btn, .starter-seed-btn, .pages-empty button { background: linear-gradient(135deg, #7c3aed, #ec4899); border-radius: 12px; color: #fff; font-size: 12px; font-weight: 950; min-height: 42px; padding: 0 16px; }
-.site-pages-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
-.legal-seed-btn, .starter-seed-btn, .create-page-btn { align-items: center; display: inline-flex; gap: 8px; justify-content: center; }
-.starter-seed-btn { background: linear-gradient(135deg, #facc15, #ec4899); }
-.legal-seed-btn:disabled, .starter-seed-btn:disabled { opacity: 0.62; }
-.page-tabs { background: var(--admin-bg); border: 1px solid var(--border); border-radius: 14px; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; }
-.page-tabs button { border-radius: 10px; color: var(--text-muted); font-size: 12px; font-weight: 900; min-height: 34px; padding: 0 12px; }
-.page-tabs button.active { background: linear-gradient(135deg, #7c3aed, #ec4899); color: #fff; }
-.pages-grid { display: grid; gap: 12px; }
-.site-page-card { align-items: center; background: var(--admin-surface); border: 1px solid var(--border); border-radius: 16px; display: grid; gap: 14px; grid-template-columns: 58px minmax(0, 1fr) auto; padding: 14px; }
+.site-pages-toolbar { align-items: start; display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr) minmax(300px, auto) auto; }
+.site-pages-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }
+
+.pages-grid { display: grid; gap: var(--space-3); }
+.site-page-card { align-items: center; display: grid; gap: var(--space-3); grid-template-columns: 58px minmax(0, 1fr) auto; }
 .page-card-icon { align-items: center; background: color-mix(in srgb, var(--page-accent) 14%, var(--admin-bg)); border-radius: 14px; color: var(--page-accent); display: flex; font-size: 22px; height: 54px; justify-content: center; width: 54px; }
-.site-page-card span { color: #94a3b8; display: block; font-size: 10px; font-weight: 950; text-transform: uppercase; }
-.site-page-card em { color: #f59e0b; font-style: normal; }
-.site-page-card em.published { color: #16a34a; }
-.site-page-card strong { color: var(--text-primary); display: block; font-size: 15px; font-weight: 950; }
-.site-page-card p { color: var(--text-muted); font-size: 12px; font-weight: 750; margin-top: 4px; }
-.site-page-card small { color: var(--accent-hover); display: inline-flex; font-size: 11px; font-weight: 900; gap: 5px; margin-right: 10px; margin-top: 8px; }
 .site-page-card nav { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
-.site-page-card nav a, .site-page-card nav button { align-items: center; background: var(--admin-bg); border: 1px solid var(--border); border-radius: 10px; color: var(--accent-hover); display: flex; height: 34px; justify-content: center; width: 34px; }
-.site-page-card nav .danger { color: #ef4444; }
-.pages-empty { align-items: center; background: var(--admin-surface); border: 1px dashed #d8b4fe; border-radius: 18px; color: var(--text-muted); display: grid; gap: 10px; justify-items: center; min-height: 220px; padding: 28px; text-align: center; }
-.pages-empty i { color: #a855f7; font-size: 32px; }
-.pages-empty strong { color: var(--text-primary); font-size: 18px; font-weight: 950; }
-.delete-modal { align-items: center; display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 5100; }
-.delete-backdrop { background: rgba(0,0,0,0.48); inset: 0; position: absolute; }
-.delete-modal section { background: var(--admin-surface); border-radius: 20px; box-shadow: 0 30px 90px rgba(0,0,0,0.3); max-width: 360px; padding: 24px; position: relative; text-align: center; }
-.delete-modal i { color: #ef4444; font-size: 28px; }
-.delete-modal h2 { color: var(--text-primary); font-size: 20px; font-weight: 950; margin-top: 10px; }
-.delete-modal p { color: var(--text-muted); font-size: 13px; font-weight: 750; line-height: 1.5; margin-top: 8px; }
-.delete-modal div { display: flex; gap: 10px; margin-top: 18px; }
-.delete-modal div button { background: var(--admin-surface-raised); border-radius: 12px; color: var(--text-secondary); flex: 1; font-size: 12px; font-weight: 950; min-height: 40px; }
-.delete-modal div .danger { background: #ef4444; color: #fff; }
 .site-page-toast { background: #111827; border-radius: 999px; bottom: 24px; color: #fff; font-size: 13px; font-weight: 950; left: 50%; padding: 12px 18px; position: fixed; transform: translateX(-50%); z-index: 5200; }
 @media (max-width: 1100px) {
   .site-pages-toolbar { grid-template-columns: minmax(0, 1fr); }
@@ -344,4 +308,8 @@ onMounted(() => loadPages({ signal: true }))
   .site-page-card { grid-template-columns: 46px minmax(0,1fr); }
   .site-page-card nav { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+.site-page-card > div { min-width: 0; }
+.site-page-card .admin-description { margin-top: var(--space-1); }
+.site-page-card small { display: inline-flex; gap: var(--space-1); margin-right: var(--space-3); margin-top: var(--space-2); }
 </style>

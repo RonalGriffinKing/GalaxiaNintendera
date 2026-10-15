@@ -1,7 +1,11 @@
 <script setup>
+import {getProfileSnapshot} from '@/services/profiles'
+
+import {editorialQueries} from "@/services/editorial";
+
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter } from "firebase/firestore"
+import { collection, getDocs, limit, orderBy } from 'firebase/firestore'
 import { auth, db } from "@/firebase"
 import { resolveAssetUrl } from '@/constants/assets'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
@@ -168,9 +172,9 @@ const loadMorePosts = async ({ requestId = loadRequestId, fillPage = false } = {
         orderBy('createdAt', direction),
         limit(FETCH_BATCH_SIZE)
       ]
-      if (lastPostDoc.value) constraints.splice(1, 0, startAfter(lastPostDoc.value))
+      
 
-      const snap = await getDocs(query(collection(db, 'posts'), ...constraints))
+      const snap = await (editorialQueries.page({direction,size:FETCH_BATCH_SIZE,after:lastPostDoc.value||undefined}))
       if (requestId !== loadRequestId) return
 
       lastPostDoc.value = snap.docs.at(-1) || lastPostDoc.value
@@ -297,7 +301,7 @@ const loadAuthorProfiles = async (sourcePosts = posts.value, requestId = loadReq
     .filter(id => !authorProfiles.value[id])
   if (!ids.length) return
 
-  const snaps = await Promise.all(ids.map(id => getDoc(doc(db, 'users', id)).catch(() => null)))
+  const snaps = await Promise.all(ids.map(id => getProfileSnapshot(id).catch(() => null)))
   if (requestId !== loadRequestId) return
   authorProfiles.value = {
     ...authorProfiles.value,
@@ -336,7 +340,7 @@ watch(() => route.fullPath, () => {
 </script>
 
 <template>
-  <div class="listing-page" @click="sortOpen = false">
+  <div class="listing-page editorial-page" @click="sortOpen = false">
     <main v-if="!isLoading" class="listing-shell">
       <header class="listing-header">
         <div>

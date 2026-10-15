@@ -23,6 +23,7 @@
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.4",
     "firebase": "^12.12.1",
+    "firebase-admin": "13.6.0",
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
     "socket.io-client": "^4.8.3",
@@ -32,9 +33,6 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
-    "@chromatic-com/storybook": "^5.2.1",
-    "@storybook/addon-a11y": "^10.4.0",
-    "@storybook/vue3-vite": "^10.4.0",
     "@tailwindcss/postcss": "^4.2.4",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vitest/coverage-v8": "^4.1.6",

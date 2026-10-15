@@ -1,9 +1,14 @@
 <script setup>
+import {manageEditorial} from '@/services/editorial'
+import {communitySnapshot} from '@/services/community'
+
+import {getProfileSnapshot} from '@/services/profiles'
+
 import { computed, nextTick, onBeforeUpdate, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getFontEmbedCSS, toPng } from 'html-to-image'
 import JSZip from 'jszip'
-import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
+import { collection, doc, getDocs, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { mergeSocialSettings, updateSocialSetting } from '@/services/socialTemplateState'
 import SocialVisualInspector from '@/components/posts/SocialVisualInspector.vue'
@@ -753,7 +758,8 @@ async function loadPost() {
   error.value = ''
 
   try {
-    const snap = await getDoc(doc(db, sourceType.value === 'event' ? 'galaxyEvents' : 'posts', route.params.id))
+    const source=sourceType.value==='event'?(await communitySnapshot('events',{id:String(route.params.id)})).data():(await manageEditorial(auth.currentUser,{action:'get',id:String(route.params.id)})).item
+    const snap={id:source?.id||'',exists:()=>!!source,data:()=>source}
     if (!snap.exists()) {
       error.value = sourceType.value === 'event' ? 'No se encontro el evento.' : 'No se encontro el post.'
       return
@@ -797,7 +803,7 @@ function normalizeShareSource(data) {
 async function loadAuthorProfile() {
   if (!post.value?.authorId) return
 
-  const snap = await getDoc(doc(db, 'users', post.value.authorId)).catch(() => null)
+  const snap = await getProfileSnapshot(post.value.authorId).catch(() => null)
   if (snap?.exists()) {
     authorProfile.value = { id: snap.id, ...snap.data() }
   }

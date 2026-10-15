@@ -1,0 +1,108 @@
+/* Consumer opt-ins only. Never normalize avatar effects, reward panels or private chat. */
+.social-page .social-profile-header.profile-hero,
+.social-page .social-profile-stats.profile-hero-stats,
+.social-page .social-feed.community-feed .thread-card,
+.social-page.communities-page .community-card {
+  border-radius: var(--social-radius);
+  border-color: var(--social-border);
+}
+.social-page .social-profile-header.profile-hero { gap: var(--space-4); }
+.social-page .social-profile-header.profile-hero .profile-main-copy { min-width: 0; }
+.social-page .social-profile-header.profile-hero .profile-main-copy h1,
+.social-page .social-community-hero.galaxy-hero .galaxy-copy h1 {
+  font-size: var(--font-h1); font-weight: var(--weight-heading); line-height: var(--line-heading);
+  overflow-wrap: anywhere;
+}
+.social-page .social-profile-header.profile-hero .profile-main-copy p,
+.social-page .social-community-hero.galaxy-hero .galaxy-copy p,
+.social-page .social-feed.community-feed .thread-card p {
+  font-size: var(--font-body); font-weight: var(--weight-body); line-height: var(--line-body);
+  overflow-wrap: anywhere; white-space: pre-line;
+}
+.social-page .social-profile-header.profile-hero .profile-main-copy p { max-width: 65ch; }
+.social-page .social-profile-header.profile-hero :is(.profile-username,.profile-meta-row),
+.social-page .social-feed.community-feed :is(.thread-meta,.comment-meta,.thread-topic-pill),
+.social-page.communities-page .community-card footer {
+  font-size: var(--font-caption); font-weight: var(--weight-body); line-height: var(--line-body);
+  overflow-wrap: anywhere;
+}
+.social-page .social-profile-header.profile-hero .profile-avatar-circle { --avatar-size: var(--social-avatar-main); }
+.social-page .social-profile-stats.profile-hero-stats { height: auto; align-items: stretch; }
+.social-page .social-profile-stats.profile-hero-stats > :is(div,button) { height: auto; min-height: calc(var(--public-control-height) + 2 * var(--space-4)); padding: var(--space-2); }
+.social-page .social-profile-stats.profile-hero-stats span { font-size: var(--font-caption); line-height: var(--line-body); overflow-wrap: anywhere; }
+.social-page .social-profile-stats.profile-hero-stats strong { font-size: var(--font-h2); font-weight: var(--weight-heading); line-height: var(--line-heading); overflow-wrap: anywhere; }
+.social-page.profile-page .profile-dashboard .profile-section:is(.profile-activity,.profile-communities,.profile-directory,.profile-about) { border-radius:var(--social-radius); min-width:0; }
+.social-page.profile-page .profile-dashboard :is(.profile-activity,.profile-communities,.profile-directory,.profile-about) .section-head h2 {
+  font-size:var(--font-h3); font-weight:var(--weight-label); line-height:var(--line-heading); overflow-wrap:anywhere;
+}
+.social-page.profile-page .profile-dashboard .profile-about p { font-size:var(--font-body); line-height:var(--line-body); overflow-wrap:anywhere; }
+.social-page.profile-page .profile-dashboard .profile-directory-grid button strong,
+.social-page.communities-page .community-card h2,
+.social-page .social-feed.community-feed .thread-card h2 {
+  font-size:var(--font-h3); font-weight:var(--weight-label); line-height:var(--line-heading); overflow-wrap:anywhere;
+}
+.social-page.profile-page .profile-directory-grid small { font-size:var(--font-caption); line-height:var(--line-body); }
+.social-page.communities-page .community-card-body { padding:var(--social-padding); gap:var(--space-3); min-width:0; }
+.social-page.communities-page .community-card-body p { font-size:var(--font-body); line-height:var(--line-body); overflow-wrap:anywhere; }
+.social-page .social-feed.community-feed .thread-card { padding: var(--social-padding); background:var(--social-surface); }
+.social-page .social-feed.community-feed .thread-avatar { width:var(--social-avatar-thread); height:var(--social-avatar-thread); }
+.social-page .social-feed.community-feed .thread-avatar .profile-avatar-ui { --avatar-size:var(--social-avatar-thread); }
+.social-page .social-feed.community-feed .comment-row { grid-template-columns:var(--social-avatar-comment) minmax(0,1fr) var(--public-control-height); gap:var(--space-2); padding-block:var(--space-3); }
+.social-page .social-feed.community-feed .comment-avatar { width:var(--social-avatar-comment); height:var(--social-avatar-comment); }
+.social-page .social-feed.community-feed .comment-avatar .profile-avatar-ui { --avatar-size:var(--social-avatar-comment); }
+.social-page .social-feed.community-feed .comment-meta strong { font-size:var(--font-caption); font-weight:var(--weight-label); overflow-wrap:anywhere; }
+.social-page .social-feed.community-feed :is(.comment-body,.comment-meta,.thread-meta) { min-width:0; }
+.social-page .social-feed.community-feed .reply-box { grid-template-columns:minmax(0,1fr) var(--public-control-height); gap:var(--space-2); border-radius:var(--radius-control); }
+.social-page .social-feed.community-feed :is(.reply-box button,.context-menu-trigger,.thread-more-button) { min-width:var(--public-control-height); min-height:var(--public-control-height); }
+.social-page .social-feed.community-feed :is(.reply-box input,.thread-interactions button,.topic-tabs button,.load-older-comments,.thread-more-menu button,.context-menu-panel button),
+.social-page .social-profile-header.profile-hero .profile-actions button:not(.profile-gachapon-action),
+.social-page .social-profile-header.profile-hero .avatar-edit-shortcut,
+.social-page .social-composer.thread-composer :is(.community-select,.composer-actions button),
+.social-page .social-editor.post-edit-card button {
+  min-height:var(--public-control-height); font-size:var(--font-button); font-weight:var(--weight-label); line-height:var(--line-body);
+}
+.social-page .social-feed.community-feed :is(.danger,.context-menu-panel .danger) { color:var(--notice-error-icon); }
+.social-page .social-feed.community-feed .reply-box input { font-size:var(--font-body); font-weight:var(--weight-body); }
+.social-page .social-editor.post-edit-card { background:var(--social-surface); color:var(--text-primary); border-color:var(--social-border); border-radius:var(--radius-control); gap:var(--space-3); }
+.social-page .social-editor.post-edit-card textarea,
+.social-page .social-composer.thread-composer textarea {
+  font-size:var(--font-body); font-weight:var(--weight-body); line-height:var(--line-body); min-width:0; max-width:100%;
+}
+.social-page .social-editor.post-edit-card textarea { background:var(--surface-elevated); color:var(--text-primary); border-color:var(--social-border); }
+.social-page .social-composer.thread-composer { border-radius:var(--social-radius); }
+.social-page .social-empty.community-empty { font-size:var(--font-body); line-height:var(--line-body); }
+.social-page .social-live.official-media-hub :is(.video-chat-list b,.video-comment-replies b) { font-size:var(--font-body); font-weight:var(--weight-body); line-height:var(--line-body); overflow-wrap:anywhere; white-space:pre-line; }
+.social-page .social-live.official-media-hub .video-comment-replies { padding-left:var(--social-reply-indent); }
+.social-page .social-live.official-media-hub .video-comment-replies article > :is(img,span),
+.social-theater.media-theater .video-comment-replies article > :is(img,span) { width:var(--social-avatar-reply); height:var(--social-avatar-reply); }
+.social-page .social-live.official-media-hub :is(.video-chat-form input,.video-reply-form input,.video-chat-form button,.video-reply-form button) { min-height:var(--public-control-height); font-size:var(--font-body); min-width:0; }
+.social-relations.profile-relation-modal .relation-card,
+.social-theater.media-theater .video-chat-panel { border-radius:var(--social-radius); }
+.social-relations.profile-relation-modal .relation-list article { gap:var(--space-3); min-width:0; }
+.social-relations.profile-relation-modal .relation-profile :is(strong,small) { overflow-wrap:anywhere; white-space:normal; }
+.social-relations.profile-relation-modal .relation-profile strong { font-size:var(--font-body); font-weight:var(--weight-label); }
+.social-relations.profile-relation-modal .relation-profile small { font-size:var(--font-caption); }
+.social-relations.profile-relation-modal .relation-talk { min-height:var(--public-control-height); }
+.social-theater.media-theater .video-chat-list b { font-size:var(--font-body); line-height:var(--line-body); overflow-wrap:anywhere; }
+.social-page :is(.social-profile-header,.social-profile-stats,.social-feed,.social-composer,.social-editor,.social-live,.social-community-hero) :is(button,a,input,textarea):focus-visible,
+.social-relations.profile-relation-modal :is(button,a):focus-visible,
+.social-theater.media-theater :is(button,a,input):focus-visible,
+.social-page.communities-page :is(a,input,button):focus-visible { outline:var(--focus-ring); outline-offset:3px; }
+@media(max-width:760px) {
+  .social-page .social-profile-stats.profile-hero-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .social-page .social-profile-header.profile-hero .profile-main-copy h1 { font-size:var(--font-h1); }
+  .social-page .social-live.official-media-hub .video-comment-replies { padding-left:var(--social-reply-indent); }
+}
+/* At the smallest widths, identity copy uses a full row rather than the
+   remaining sliver beside the avatar. No content is truncated or hidden. */
+@media(max-width:420px) {
+  .social-page .social-profile-header.profile-hero {
+    grid-template-columns:var(--social-avatar-main) minmax(0,1fr);
+    grid-template-areas:'avatar level' 'info info' 'socials socials' 'side side';
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  .social-page .social-feed.community-feed .thread-card,
+  .social-page .social-profile-header.profile-hero .profile-actions button:not(.profile-gachapon-action),
+  .social-page.communities-page .community-card { transition:none; }
+}

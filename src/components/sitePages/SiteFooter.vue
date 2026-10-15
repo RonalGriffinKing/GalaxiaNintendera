@@ -58,10 +58,10 @@ onUnmounted(() => {
         <strong>Galaxia Nintendera</strong>
         <p>Comunidad, noticias, directos y experiencias para fans de Nintendo y videojuegos.</p>
       </section>
-      <nav v-for="group in groupedPages" :key="group.value">
+      <nav v-for="group in groupedPages" :key="group.value" :aria-label="group.label">
         <h3>{{ group.label }}</h3>
         <RouterLink v-for="page in group.pages" :key="page.id" :to="pageTo(page)">
-          <i :class="page.icon || 'fas fa-link'"></i>
+          <i aria-hidden="true" :class="page.icon || 'fas fa-link'"></i>
           {{ page.footerLabel || page.title }}
         </RouterLink>
       </nav>
@@ -79,31 +79,32 @@ onUnmounted(() => {
   box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.28);
   color: #fff;
   isolation: isolate;
-  overflow: hidden;
-  padding: 34px 18px calc(34px + env(safe-area-inset-bottom));
+  padding: var(--public-footer-padding) var(--space-4) calc(var(--public-footer-padding) + env(safe-area-inset-bottom));
   position: relative;
   z-index: 3;
 }
 
 .site-footer-inner {
   display: grid;
-  gap: 24px;
+  gap: var(--space-6);
   grid-template-columns: minmax(220px, 1.2fr) repeat(auto-fit, minmax(150px, 1fr));
   margin: 0 auto;
-  max-width: 1180px;
+  max-width: var(--public-content-max);
 }
 
+.footer-brand { min-width: 0; overflow-wrap: anywhere; }
+.site-footer nav { min-width: 0; }
 .footer-brand strong {
   display: block;
-  font-size: 20px;
-  font-weight: 950;
+  font-size: var(--font-h2);
+  font-weight: var(--weight-heading);
 }
 
 .footer-brand p {
   color: #aeb8d3;
-  font-size: 13px;
-  font-weight: 750;
-  line-height: 1.55;
+  font-size: var(--font-body);
+  font-weight: var(--weight-body);
+  line-height: var(--line-body);
   margin-top: 8px;
 }
 
@@ -115,21 +116,24 @@ nav {
 
 nav h3 {
   color: #c084fc;
-  font-size: 12px;
-  font-weight: 950;
+  font-size: var(--font-label);
+  font-weight: var(--weight-label);
   text-transform: uppercase;
 }
 
 nav a {
+  text-decoration: none;
   align-items: center;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   color: #dbe4f0;
   display: inline-flex;
-  font-size: 13px;
-  font-weight: 850;
-  gap: 8px;
+  font-size: var(--font-body);
+  font-weight: var(--weight-label);
+  gap: var(--space-2);
   min-width: 0;
-  padding: 7px 8px;
+  min-height: var(--public-control-height);
+  padding: var(--space-2);
+  overflow-wrap: anywhere;
   transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
@@ -141,7 +145,8 @@ nav a:hover {
 
 nav i {
   color: #a855f7;
-  width: 16px;
+  font-size: var(--public-icon-size);
+  width: var(--public-icon-size);
 }
 
 @media (max-width: 720px) {
@@ -149,11 +154,12 @@ nav i {
     padding-bottom: calc(112px + env(safe-area-inset-bottom));
   }
   .site-footer-inner {
-    gap: 18px;
-    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .footer-brand {
     grid-column: 1 / -1;
   }
 }
+@media (prefers-reduced-motion: reduce) { nav a { transition: none; transform: none; } }
 </style>

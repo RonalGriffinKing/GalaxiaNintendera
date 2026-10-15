@@ -1,11 +1,15 @@
 <script setup>
+import {getProfileSnapshot} from '@/services/profiles'
+
+import {editorialQueries} from "@/services/editorial";
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from "firebase/firestore"
+import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db } from "@/firebase"
 import { resolveAssetUrl } from '@/constants/assets'
 import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
-import { READ_REWARD_STARS, awardPostRead, getReadRewardDelayMs, resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
+import { READ_REWARD_STARS, beginPostRead, awardPostRead, getReadRewardDelayMs, resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { renderRichText } from '@/services/richText'
 import PostCinematicHero from '@/components/posts/PostCinematicHero.vue'
 import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
@@ -122,15 +126,9 @@ const loadPost = async () => {
   post.value = { sections: [] }
 
   try {
-    let snap = await getDoc(doc(db, "posts", route.params.id))
+    let snap = await (editorialQueries.article(route.params.id))
 
-    if (!snap.exists()) {
-      const postsSnap = await getDocs(collection(db, "posts"))
-      const slugMatch = postsSnap.docs.find(item => String(item.data()?.slug || '') === String(route.params.id || ''))
-      if (slugMatch) {
-        snap = slugMatch
-      }
-    }
+    
 
     if (snap.exists()) {
       const loadedPost = { id: snap.id, sections: [], ...snap.data() }
@@ -182,7 +180,7 @@ const loadAuthorProfile = async (requestId = loadRequestId) => {
   authorProfile.value = null
   if (!post.value.authorId) return
 
-  const snap = await getDoc(doc(db, 'users', post.value.authorId))
+  const snap = await getProfileSnapshot(post.value.authorId)
   if (requestId !== loadRequestId) return
   if (snap.exists()) {
     authorProfile.value = { id: snap.id, ...snap.data() }
@@ -200,7 +198,7 @@ const loadFavorite = async (requestId = loadRequestId) => {
 }
 
 const loadRelatedPosts = async (requestId = loadRequestId) => {
-  const snap = await getDocs(collection(db, "posts"))
+  const snap = await (editorialQueries.related(post.value.category))
   if (requestId !== loadRequestId) return
   const category = post.value.category || ''
 
@@ -317,17 +315,14 @@ const loadReadStatus = async (requestId = loadRequestId) => {
 
   const snap = await getDoc(doc(db, 'users', user.uid, 'readPosts', post.value.id))
   if (requestId !== loadRequestId) return
-  readStatus.value = { viewed: viewed || snap.exists(), awarded: snap.exists() }
+  readStatus.value = { viewed: viewed || snap.exists(), awarded: snap.exists()&&(snap.data().awarded===true||snap.data().startedAt===undefined) }
 }
 
-const startReadRewardTimer = () => {
-  const user = auth.currentUser
-  if (!user || !post.value.id) return
-
-  readTimer = setTimeout(() => {
-    readDelayPassed.value = true
-    tryAwardRead()
-  }, getReadRewardDelayMs())
+const startReadRewardTimer = async () => {
+ const user=auth.currentUser,id=post.value.id;if(!user||!id)return
+ try{const ticket=await beginPostRead(id);if(post.value.id!==id||auth.currentUser?.uid!==user.uid)return;if(ticket.alreadyAwarded){readStatus.value={viewed:true,awarded:true};return}
+ readTimer=setTimeout(()=>{readDelayPassed.value=true;tryAwardRead()},Math.max(getReadRewardDelayMs(),ticket.readyAt-Date.now()))}
+ catch(error){console.error('No se inicio la recompensa de lectura',error)}
 }
 
 const checkEndReached = () => {
@@ -576,7 +571,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="isLoading" class="post-loading-page">
+  <div v-if="isLoading" class="post-loading-page editorial-page">
     <main class="post-loading-shell" aria-label="Cargando publicacion">
       <div class="post-loading-hero">
         <span></span>
@@ -595,7 +590,7 @@ onUnmounted(() => {
 
   <div
     v-else
-    class="post-page"
+    class="post-page editorial-page"
     :class="[{ 'analysis-page': isAnalysisPost }, isAnalysisPost ? `analysis-tier-${analysisTier.key}` : '']"
     :style="isAnalysisPost ? { '--analysis-pattern': `'${analysisTier.pattern}'` } : null"
   >
@@ -802,6 +797,7 @@ onUnmounted(() => {
                 v-if="item.image"
                 :src="resolveAssetUrl(item.image)"
                 class="related-image"
+                alt=""
               />
               <div v-else class="related-image related-placeholder"></div>
 

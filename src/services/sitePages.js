@@ -1,5 +1,5 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, query, setDoc, where } from 'firebase/firestore'
-import { db } from '@/firebase'
+import { auth } from '@/firebase'
+import {manageEditorial,isEditorialOwner,publicPages,editorialOperation} from './editorial'
 
 export const SITE_PAGE_TYPES = [
   { value: 'footer', label: 'Pagina del footer', icon: 'fas fa-link' },
@@ -428,17 +428,9 @@ export const normalizeSitePage = (data = {}) => ({
   blocks: Array.isArray(data.blocks) ? data.blocks : []
 })
 
-export const listSitePages = async () => {
-  const snap = await getDocs(collection(db, 'sitePages'))
-  return snap.docs.map(item => ({ id: item.id, ...normalizeSitePage(item.data()) }))
-}
+export const listSitePages = async () => isEditorialOwner(auth.currentUser) ? (await manageEditorial(auth.currentUser,{action:'pages-list'})).items : publicPages()
 
-export const getSitePageBySlug = async (slug) => {
-  const pageQuery = query(collection(db, 'sitePages'), where('slug', '==', slug), limit(1))
-  const snap = await getDocs(pageQuery)
-  const first = snap.docs[0]
-  return first ? { id: first.id, ...normalizeSitePage(first.data()) } : null
-}
+export const getSitePageBySlug = async slug => (await publicPages({slug}))[0]??null
 
 export const getDefaultLegalPageBySlug = (slug) => {
   const template = LEGAL_PAGE_TEMPLATES.find(page => page.slug === slug)
@@ -450,27 +442,19 @@ export const getDefaultSitePageBySlug = (slug) => {
   return template ? normalizeSitePage({ ...template, id: `template-${slug}`, status: 'published' }) : null
 }
 
-export const getSitePage = async (pageId) => {
-  const snap = await getDoc(doc(db, 'sitePages', pageId))
-  return snap.exists() ? { id: snap.id, ...normalizeSitePage(snap.data()) } : null
+export const getSitePage = async pageId => (await manageEditorial(auth.currentUser,{action:'page-get',id:pageId})).item
+
+export const saveSitePage = async page => {
+ const payload=normalizeSitePage(page)
+ const {id,...data}=payload
+ return manageEditorial(auth.currentUser,editorialOperation('page-save',id?payload:{...payload,id:undefined},data))
 }
 
-export const saveSitePage = async (page) => {
-  const payload = normalizeSitePage({
-    ...page,
-    slug: slugifyPage(page.slug || page.title),
-    updatedAt: Date.now()
-  })
-  const { id: pageId, ...data } = payload
-  if (pageId) {
-    await setDoc(doc(db, 'sitePages', pageId), data, { merge: true })
-    return { id: pageId, ...data }
-  }
-  const created = await addDoc(collection(db, 'sitePages'), { ...data, createdAt: Date.now() })
-  return { id: created.id, ...data }
+export const deleteSitePage = async pageId => {
+ const page=await getSitePage(pageId)
+ if(!page)throw Error('Pagina no encontrada')
+ return manageEditorial(auth.currentUser,editorialOperation('page-delete',page))
 }
-
-export const deleteSitePage = (pageId) => deleteDoc(doc(db, 'sitePages', pageId))
 
 export const seedMissingLegalPages = async ({ publish = false } = {}) => {
   const existing = await listSitePages()
@@ -510,11 +494,4 @@ export const seedMissingStarterPages = async ({ publish = false } = {}) => {
   return created
 }
 
-export const listFooterPages = async () => {
-  const footerQuery = query(collection(db, 'sitePages'), where('showInFooter', '==', true))
-  const snap = await getDocs(footerQuery)
-  return snap.docs
-    .map(item => ({ id: item.id, ...normalizeSitePage(item.data()) }))
-    .filter(page => page.status === 'published')
-    .sort((a, b) => Number(a.footerOrder || 0) - Number(b.footerOrder || 0))
-}
+export const listFooterPages = async () => (await publicPages()).filter(page=>page.showInFooter&&page.status==='published').sort((a,b)=>Number(a.footerOrder||0)-Number(b.footerOrder||0))

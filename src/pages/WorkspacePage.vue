@@ -1,8 +1,9 @@
 <script setup>
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { doc, getDoc } from 'firebase/firestore'
-import { auth, db } from '@/firebase'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+
+import { auth } from '@/firebase'
+import {isEditorialOwner,editorialRole} from "@/services/editorial";
 
 const props = defineProps({
   panel: {
@@ -130,32 +131,34 @@ const loadRole = async () => {
   const user = auth.currentUser
   if (!user) return
 
-  const snap = await getDoc(doc(db, 'users', user.uid))
-  currentRole.value = snap.data()?.role || 'user'
+  currentRole.value = await editorialRole(user)
 }
 
 onMounted(loadRole)
 </script>
 
 <template>
-  <main class="workspace-page">
+  <main class="workspace-page" :class="{ 'admin-surfaces': panel === 'posts' || panel === 'users' }">
     <header class="workspace-head">
       <div>
-        <span>Galaxia Nintendera</span>
-        <h1>{{ page.title }}</h1>
-        <p>{{ page.subtitle }}</p>
+        <span class="admin-list-kicker">Galaxia Nintendera</span>
+        <h1 class="admin-list-title admin-list-title--page">{{ page.title }}</h1>
+        <p class="admin-list-subtitle">{{ page.subtitle }}</p>
       </div>
 
       <div v-if="headerActions.length" class="workspace-actions">
-        <button
+        <component
+          :is="action.to && (panel === 'posts' || panel === 'users') ? RouterLink : 'button'"
+          :to="action.to && (panel === 'posts' || panel === 'users') ? action.to : undefined"
           v-for="action in headerActions"
           :key="action.create || action.to"
+          class="admin-action admin-action--primary"
           type="button"
-          @click="runHeaderAction(action)"
+          @click="action.to && (panel === 'posts' || panel === 'users') ? undefined : runHeaderAction(action)"
         >
           <i :class="action.icon"></i>
           {{ action.label }}
-        </button>
+        </component>
       </div>
     </header>
 
@@ -179,6 +182,7 @@ onMounted(loadRole)
 </template>
 
 <style scoped>
+.workspace-page.admin-surfaces .workspace-actions { gap: var(--space-2); }
 .workspace-page {
   background: var(--admin-bg);
   min-height: 100vh;
@@ -202,22 +206,9 @@ onMounted(loadRole)
   justify-content: flex-end;
 }
 
-.workspace-actions button {
-  align-items: center;
-  background: linear-gradient(to right, #9333ea, #ec4899);
-  border-radius: 12px;
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 950;
-  gap: 8px;
-  min-height: 42px;
-  padding: 0 16px;
-}
-
 .workspace-guide {
   background: linear-gradient(135deg, #111827, #581c87);
-  border-radius: 14px;
+  border-radius: var(--radius-control);
   box-shadow: 0 18px 42px rgba(88, 28, 135, 0.16);
   color: #ffffff;
   margin: 0 auto 18px;
@@ -228,8 +219,8 @@ onMounted(loadRole)
 .guide-title {
   align-items: center;
   display: flex;
-  font-size: 13px;
-  font-weight: 900;
+  font-size: var(--font-body);
+  font-weight: var(--weight-heading);
   gap: 9px;
   margin-bottom: 10px;
   text-transform: uppercase;
@@ -247,32 +238,17 @@ onMounted(loadRole)
 
 .workspace-guide li {
   color: #e9d5ff;
-  font-size: 12px;
-  font-weight: 750;
+  font-size: var(--font-caption);
+  font-weight: var(--weight-label);
   line-height: 1.45;
   list-style-position: inside;
 }
 
-.workspace-head span {
-  color: var(--accent-hover);
-  display: block;
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
 .workspace-head h1 {
-  color: var(--text-primary);
-  font-size: 28px;
-  font-weight: 900;
-  line-height: 1.1;
   margin-top: 4px;
 }
 
 .workspace-head p {
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 700;
   margin-top: 5px;
 }
 
@@ -302,14 +278,6 @@ onMounted(loadRole)
     width: 100%;
   }
 
-  .workspace-actions button {
-    justify-content: center;
-  }
-
-  .workspace-head h1 {
-    font-size: 23px;
-  }
-
   .workspace-guide {
     padding: 14px;
   }
@@ -318,4 +286,13 @@ onMounted(loadRole)
     grid-template-columns: 1fr;
   }
 }
+.workspace-page.admin-surfaces { padding: calc(var(--public-nav-offset, 0px) + var(--space-6)) var(--page-gutter) var(--space-6); }
+.admin-surfaces .workspace-head, .admin-surfaces .workspace-guide { margin-bottom: var(--section-gap); max-width: var(--content-max); }
+.admin-surfaces .workspace-head { gap: var(--space-4); }
+.admin-surfaces .workspace-head h1 { margin-top: var(--space-1); }
+.admin-surfaces .workspace-head p { margin-top: var(--space-2); }
+.admin-surfaces .workspace-surface { max-width: var(--content-max); }
+.admin-surfaces .workspace-guide { padding: var(--space-4); }
+.admin-surfaces .workspace-guide li { line-height: var(--line-body); }
+@media(max-width:760px) { .workspace-page.admin-surfaces { padding: calc(var(--public-nav-offset, 0px) + var(--space-4)) var(--space-3) var(--space-6); } }
 </style>

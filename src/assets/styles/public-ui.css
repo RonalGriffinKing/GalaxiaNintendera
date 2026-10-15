@@ -1,0 +1,32 @@
+/* Only shared public structure opts in; editor/admin dialogs remain independent. */
+.public-brand, .public-nav-link, .public-mobile-join-top,
+.public-bottom-nav a { text-decoration: none; }
+.public-brand { color: var(--text-primary); min-height: var(--public-control-height); min-width: var(--public-control-height); }
+.public-nav-link { color: var(--text-primary); display: inline-flex; align-items: center; justify-content: center; }
+.public-nav-search { background: transparent; border: 0; }
+.public-search-panel :is(button, input, a):focus-visible,
+.public-search-panel .public-search-box input:focus-visible,
+.public-logout-dialog :is(button, a):focus-visible,
+.notification-dropdown-card :is(button, a):focus-visible {
+  outline: 2px solid var(--action-message-text);
+  outline-offset: 3px;
+}
+.public-nav :is(.public-brand, .public-nav-link, .public-mobile-join-top):focus-visible,
+.public-bottom-nav :is(button, a):focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 3px;
+}
+.public-account-list :is(button, a) > span { min-width: 0; overflow-wrap: anywhere; }
+.public-account-list a { text-decoration: none; }
+.public-account-card { scrollbar-gutter: stable; }
+@media (max-width: 859px) {
+  .public-nav .public-account-panel .public-account-close { display: flex; }
+  .public-nav .public-account-panel .public-account-card { max-height: 100dvh; border-radius: 0 var(--radius-dialog) var(--radius-dialog) 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-nav .public-account-panel .public-account-card { animation: none; }
+  .public-search-panel, .notification-dropdown-enter-active, .notification-dropdown-leave-active {
+    animation: none;
+    transition: none;
+  }
+}

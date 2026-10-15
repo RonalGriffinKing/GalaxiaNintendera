@@ -18,6 +18,7 @@ const emit = defineEmits(['update:search', 'update:sort', 'update:pageSize'])
       <input
         :value="search"
         type="search"
+        :aria-label="searchPlaceholder"
         :placeholder="searchPlaceholder"
         @input="emit('update:search', $event.target.value)"
       />
@@ -25,13 +26,13 @@ const emit = defineEmits(['update:search', 'update:sort', 'update:pageSize'])
 
     <slot name="filters"></slot>
 
-    <select v-if="sortOptions.length" :value="sort" @change="emit('update:sort', $event.target.value)">
+    <select v-if="sortOptions.length" aria-label="Ordenar resultados" :value="sort" @change="emit('update:sort', $event.target.value)">
       <option v-for="option in sortOptions" :key="option.value" :value="option.value">
         {{ option.label }}
       </option>
     </select>
 
-    <select :value="pageSize" @change="emit('update:pageSize', Number($event.target.value))">
+    <select aria-label="Resultados por página" :value="pageSize" @change="emit('update:pageSize', Number($event.target.value))">
       <option v-for="option in pageSizeOptions" :key="option" :value="option">
         {{ option }} por página
       </option>
@@ -44,69 +45,83 @@ const emit = defineEmits(['update:search', 'update:sort', 'update:pageSize'])
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--space-3);
+  min-width: 0;
   justify-content: flex-end;
 }
 
 .list-search {
   align-items: center;
   background: var(--control-surface, #ffffff);
-  border: 1px solid var(--control-border, #e5e7eb);
-  border-radius: 12px;
-  color: #94a3b8;
+  border: var(--control-border-width) solid var(--control-border, #e5e7eb);
+  border-radius: var(--radius-control);
+  color: var(--control-muted, #64748b);
   display: flex;
-  gap: 9px;
-  min-height: 42px;
-  min-width: min(300px, 100%);
-  padding: 0 12px;
+  gap: var(--control-gap);
+  min-height: var(--button-height-md);
+  min-width: 0;
+  flex: 1 1 240px;
+  padding: 0 var(--control-padding-inline);
+  transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
 }
+
+.list-search:focus-within { border-color: var(--accent-hover); box-shadow: var(--control-focus-shadow); }
 
 .list-search input {
   background: transparent;
   border: 0;
   color: var(--control-text, #334155);
   flex: 1;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--font-caption);
+  font-weight: var(--weight-label);
+  line-height: var(--line-body);
   min-width: 0;
   outline: none;
 }
 
 .list-search input::placeholder {
-  color: #94a3b8;
+  color: var(--control-muted, #64748b);
 }
 
-.list-controls select {
+.list-controls :deep(select) {
   background-color: var(--control-surface, #ffffff);
-  border: 1px solid var(--control-border, #e5e7eb);
-  border-radius: 12px;
+  border: var(--control-border-width) solid var(--control-border, #e5e7eb);
+  border-radius: var(--radius-control);
   color: var(--control-text, #334155);
-  font-size: 12px;
-  font-weight: 800;
-  height: 42px;
-  padding: 0 36px 0 14px;
+  font-size: var(--font-caption);
+  font-weight: var(--weight-label);
+  line-height: var(--line-body);
+  min-height: var(--button-height-md);
+  height: auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--space-2) 36px var(--space-2) var(--control-padding-inline);
 }
+
+.list-controls :deep(select:focus-visible) { outline: var(--focus-ring); outline-offset: 3px; }
+.list-controls :deep(select:disabled) { cursor: not-allowed; opacity: var(--control-disabled-opacity); }
 
 @media (max-width: 760px) {
   .list-controls {
     align-items: stretch;
     display: grid;
-    gap: 14px;
+    gap: var(--space-3);
     grid-template-columns: 1fr;
     justify-content: stretch;
   }
 
   .list-search {
-    min-height: 50px;
+    min-height: var(--control-height-touch);
     min-width: 0;
-    padding: 0 16px;
+    padding: 0 var(--control-padding-inline);
     width: 100%;
   }
 
-  .list-controls select {
-    height: 50px;
-    padding-left: 16px;
+  .list-controls :deep(select) {
+    min-height: var(--control-height-touch);
     width: 100%;
   }
 }
+
+@media (prefers-reduced-motion: reduce) { .list-search { transition: none; } }
 </style>

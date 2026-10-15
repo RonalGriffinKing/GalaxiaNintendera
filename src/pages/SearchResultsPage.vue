@@ -1,8 +1,10 @@
 <script setup>
+import {editorialQueries} from "@/services/editorial";
+
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, getDocs } from 'firebase/firestore'
-import { db } from '@/firebase'
+
+
 import { resolveAssetUrl } from '@/constants/assets'
 import { postCategoryLabels } from '@/services/postCategories'
 
@@ -77,7 +79,7 @@ const submit = () => {
 const loadPosts = async () => {
   loading.value = true
   try {
-    const snap = await getDocs(collection(db, 'posts'))
+    const snap = await (editorialQueries.search())
     posts.value = snap.docs
       .map(item => ({ id: item.id, ...item.data() }))
       .filter(post => post.status === 'approved' && post.visibility !== 'private' && post.visibility !== 'unlisted' && post.placement !== 'hero' && !post.isMainEntry)

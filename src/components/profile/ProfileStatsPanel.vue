@@ -9,7 +9,7 @@ defineProps({
 </script>
 
 <template>
-  <div class="profile-hero-stats" aria-label="Resumen rapido del perfil">
+  <div class="profile-hero-stats social-profile-stats" aria-label="Resumen rapido del perfil">
     <component :is="['icons', 'achievements'].includes(item.id) ? 'button' : 'div'" v-for="item in stats" :key="item.id" :type="['icons', 'achievements'].includes(item.id) ? 'button' : undefined" @click="['icons', 'achievements'].includes(item.id) && emit('open', item.id)">
       <i :class="item.icon"></i>
       <strong>{{ item.value }}</strong>

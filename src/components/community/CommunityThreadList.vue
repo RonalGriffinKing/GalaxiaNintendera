@@ -1,4 +1,5 @@
 <script setup>
+import { publicName, publicText } from '@/utils/publicIdentity'
 import { ref } from 'vue'
 import CommunityEmptyState from '@/components/community/CommunityEmptyState.vue'
 import PostEditCard from '@/components/community/PostEditCard.vue'
@@ -164,9 +165,9 @@ const visibleThreadTitle = (thread) => {
 
 const displayAuthorName = (item = {}) => {
   if (item.authorId && currentUserId && item.authorId === currentUserId) return 'Yo'
-  const savedHandle = String(item.handle || '').trim()
+  const savedHandle = publicText(item.handle).trim()
   if (savedHandle && savedHandle !== '@tu_usuario') return savedHandle.startsWith('@') ? savedHandle : `@${savedHandle}`
-  const cleanName = String(item.author || item.name || 'usuario')
+  const cleanName = publicName(item.author, item.name, item.username, 'usuario')
     .trim()
     .replace(/^@+/, '')
     .replace(/\s+/g, '')
@@ -216,7 +217,7 @@ const deleteComment = (thread, comment) => {
 </script>
 
 <template>
-  <main class="community-feed" :style="backgroundStyle">
+  <main class="community-feed social-feed" :style="backgroundStyle">
     <ThreadComposer
       v-if="canCreate"
       class="community-thread-composer"
@@ -265,8 +266,8 @@ const deleteComment = (thread, comment) => {
         >
           <ProfileAvatar
             :src="thread.authorImage"
-            :alt="thread.author"
-            :label="thread.author"
+            :alt="publicName(thread.author, thread.name, thread.username)"
+            :label="publicName(thread.author, thread.name, thread.username)"
             :effect="thread.authorIconEffect"
           />
         </button>
@@ -374,8 +375,8 @@ const deleteComment = (thread, comment) => {
               >
                 <ProfileAvatar
                   :src="comment.authorImage"
-                  :alt="comment.author"
-                  :label="comment.author"
+                  :alt="publicName(comment.author, comment.name, comment.username)"
+                  :label="publicName(comment.author, comment.name, comment.username)"
                   :effect="comment.authorIconEffect"
                 />
               </button>
@@ -416,11 +417,12 @@ const deleteComment = (thread, comment) => {
           <div class="reply-box">
             <input
               v-model="replyDraft"
+              aria-label="Respuesta al hilo"
               maxlength="180"
               placeholder="Responder dentro del hilo..."
               @keyup.enter="emit('comment-thread', thread)"
             />
-            <button @click="emit('comment-thread', thread)" :disabled="!replyDraft.trim()">
+            <button aria-label="Enviar respuesta al hilo" @click="emit('comment-thread', thread)" :disabled="!replyDraft.trim()">
               <i class="fas fa-paper-plane"></i>
             </button>
           </div>

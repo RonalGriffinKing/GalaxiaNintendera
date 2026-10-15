@@ -2,6 +2,10 @@
 @import './assets/styles/theme.css';
 @import './assets/styles/animations.css';
 @import './assets/styles/native-app.css';
+@import './assets/styles/admin-ui.css';
+@import './assets/styles/public-ui.css';
+@import './assets/styles/editorial-ui.css';
+@import './assets/styles/social-ui.css';
 
 :root {
   --app-bg: #070816;
@@ -36,6 +40,7 @@ button, a, input, textarea, select { touch-action: manipulation; }
   --control-text: var(--text-secondary);
   --control-muted: var(--text-muted);
   --control-border: var(--border);
+  --control-hover-surface: var(--admin-surface-raised);
   --color-panel-text: var(--text-primary);
   --color-muted-text: var(--text-muted);
   --color-soft-border: var(--border);

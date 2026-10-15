@@ -7,6 +7,7 @@ import OverlayView from '@/pages/OverlayViewPage.vue'
 import Login from '@/pages/LoginPage.vue'
 import Dashboard from '@/pages/DashboardPage.vue'
 import { auth, db } from '@/firebase'
+import {isEditorialOwner,editorialRole} from "@/services/editorial";
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
 
@@ -205,11 +206,13 @@ router.beforeEach(async (to) => {
     return '/login'
   }
 
+  if(to.meta.adminOnly||to.meta.publisherOnly){const role=await editorialRole(user);return (to.meta.adminOnly?role==='admin':['admin','publisher'].includes(role))?true:'/'}
+
   if (to.meta.adminOnly) {
     const snap = await getDoc(doc(db, 'users', user.uid))
     const role = snap.data()?.role || 'user'
 
-    if (role !== 'admin') {
+    if (!isEditorialOwner(user)) {
       return '/'
     }
   }
@@ -218,7 +221,7 @@ router.beforeEach(async (to) => {
     const snap = await getDoc(doc(db, 'users', user.uid))
     const role = snap.data()?.role || 'user'
 
-    if (!['admin', 'publisher'].includes(role)) {
+    if (!isEditorialOwner(user) && !(snap.data()?.editorialPublisher === true && snap.data()?.isBlocked === false)) {
       return '/'
     }
   }

@@ -1,4 +1,5 @@
 <script setup>
+import { publicName } from '@/utils/publicIdentity'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = defineProps({
@@ -203,7 +204,7 @@ const returnToCommunityPlayer = () => {
 </script>
 
 <template>
-  <section class="official-media-hub">
+  <section class="official-media-hub social-live">
     <Teleport to="body" :disabled="viewMode === 'default'">
       <article
         ref="liveStageEl"
@@ -327,7 +328,7 @@ const returnToCommunityPlayer = () => {
               {{ mobileChatLabel }}
             </span>
             <small v-if="latestMobileMessage">
-              {{ latestMobileMessage.author }}: {{ latestMobileMessage.body }}
+              {{ publicName(latestMobileMessage.author) }}: {{ latestMobileMessage.body }}
             </small>
             <small v-else-if="!featuredYoutubeVideo">
               El chat se activara cuando el live este en vivo.
@@ -362,9 +363,9 @@ const returnToCommunityPlayer = () => {
           <div ref="videoChatListRef" class="video-chat-list">
             <article v-for="message in visibleVideoChatMessages" :key="message.id">
               <img v-if="message.authorImage" :src="message.authorImage" alt="" />
-              <span v-else>{{ avatarInitial(message.author) }}</span>
+              <span v-else>{{ avatarInitial(publicName(message.author)) }}</span>
               <div>
-                <p><strong>{{ message.author }}</strong> <em>{{ formatVideoChatTime(message.videoSecond) }}</em></p>
+                <p><strong>{{ publicName(message.author) }}</strong> <em>{{ formatVideoChatTime(message.videoSecond) }}</em></p>
                 <b>{{ message.body }}</b>
                 <img
                   v-if="message.gif?.url"
@@ -389,9 +390,9 @@ const returnToCommunityPlayer = () => {
                 <div v-if="!featuredVideoIsLive && message.replies?.length" class="video-comment-replies">
                   <article v-for="reply in message.replies" :key="reply.id">
                     <img v-if="reply.authorImage" :src="reply.authorImage" alt="" />
-                    <span v-else>{{ avatarInitial(reply.author) }}</span>
+                    <span v-else>{{ avatarInitial(publicName(reply.author)) }}</span>
                     <div>
-                      <p><strong>{{ reply.author }}</strong></p>
+                      <p><strong>{{ publicName(reply.author) }}</strong></p>
                       <b>{{ reply.body }}</b>
                     </div>
                   </article>

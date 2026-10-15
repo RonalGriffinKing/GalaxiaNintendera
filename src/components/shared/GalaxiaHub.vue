@@ -1,8 +1,13 @@
 <script setup>
+import {watchCommunity,communityWrite} from '@/services/community'
+
+import {getProfileSnapshot,subscribeProfileDirectory} from '@/services/profiles'
+
+import { publicName } from '@/utils/publicIdentity'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { onAuthStateChanged } from 'firebase/auth'
-import { addDoc, collection, doc, getDoc, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
+import { collection, doc, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import GiphyPicker from '@/components/shared/GiphyPicker.vue'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
@@ -439,45 +444,7 @@ const subscribeHubMessages = () => {
   })
 }
 
-const sendHubMessage = async () => {
-  const body = chatDraft.value.trim()
-  const gif = selectedChatGif.value
-  const user = currentUser.value
-  const other = activeChatUser.value
-  const chatId = chatIdForUser(other)
-  if ((!body && !gif) || !user || !other || !chatId || !canMessageUser(other)) return
-  chatDraft.value = ''
-  selectedChatGif.value = null
-  chatGiphyOpen.value = false
-  resizeChatInput()
-  const now = serverTimestamp()
-  const messageRef = await addDoc(collection(db, 'directChats', chatId, 'messages'), {
-    body,
-    gif: gifPayload(gif),
-    authorId: user.uid,
-    authorName: currentProfile.value.name || user.displayName || user.email || 'Usuario',
-    createdAt: now
-  })
-  await setDoc(doc(db, 'directChats', chatId), {
-    participants: [user.uid, other.id],
-    lastMessage: body || 'GIF',
-    lastMessageId: messageRef.id,
-    lastMessageAuthorId: user.uid,
-    updatedAt: now,
-    deletedFor: {
-      [user.uid]: false,
-      [other.id]: false
-    },
-    lastReadBy: {
-      [user.uid]: messageRef.id
-    }
-  }, { merge: true })
-  scrollHubChatToBottom()
-  nextTick(() => {
-    chatInputRef.value?.focus?.({ preventScroll: true })
-    updateKeyboardOffset()
-  })
-}
+const sendHubMessage = async()=>{const body=chatDraft.value.trim(),gif=selectedChatGif.value,user=currentUser.value,other=activeChatUser.value;if((!body&&!gif)||!user||!other||!canMessageUser(other))return;await communityWrite('direct-send',undefined,{targetUid:other.id,body,gif:gifPayload(gif)});chatDraft.value='';selectedChatGif.value=null;chatGiphyOpen.value=false;resizeChatInput();scrollHubChatToBottom();nextTick(()=>{chatInputRef.value?.focus?.({preventScroll:true});updateKeyboardOffset()})}
 
 const togglePinActiveChat = async () => {
   const user = currentUser.value
@@ -742,9 +709,7 @@ const subscribeLiveMessages = (videoId) => {
   liveUnreadCount.value = 0
   liveChatPinnedToBottom.value = true
   if (!videoId) return
-  unsubscribeLiveMessages = onSnapshot(
-    query(collection(db, 'videoChats', videoId, 'messages'), orderBy('createdAt', 'asc')),
-    (snap) => {
+  unsubscribeLiveMessages = watchCommunity('video',{id:videoId},(snap) => {
       const wasPinned = liveChatPinnedToBottom.value || isLiveChatAtBottom()
       const previousCount = liveMessages.value.length
       const nextMessages = snap.docs.map(item => ({ id: item.id, ...item.data() }))
@@ -757,45 +722,13 @@ const subscribeLiveMessages = (videoId) => {
         const addedMessages = Math.max(0, nextMessages.length - previousCount)
         if (addedMessages > 0) liveUnreadCount.value += addedMessages
       })
-    },
-    (error) => {
+    },(error) => {
       console.error('Hub live chat:', error)
       liveMessages.value = []
-    }
-  )
+    })
 }
 
-const sendLiveMessage = async () => {
-  const body = liveChatDraft.value.trim()
-  const gif = selectedLiveGif.value
-  const video = playerState.currentVideo
-  const user = currentUser.value
-  if ((!body && !gif) || !video?.id || !user) return
-
-  liveChatDraft.value = ''
-  selectedLiveGif.value = null
-  liveGiphyOpen.value = false
-  liveChatPinnedToBottom.value = true
-  liveUnreadCount.value = 0
-  await addDoc(collection(db, 'videoChats', video.id, 'messages'), {
-    videoId: video.id,
-    videoTitle: video.title || 'Video de Galaxia Nintendera',
-    videoSecond: Math.max(0, Math.floor(Number(playerState.currentTime || 0))),
-    body: body.slice(0, 280),
-    gif: gifPayload(gif),
-    authorId: user.uid,
-    author: currentProfile.value.name || user.displayName || user.email || 'Usuario',
-    authorImage: currentProfile.value.imageUrl || user.photoURL || '',
-    likedBy: [],
-    likes: 0,
-    replies: [],
-    kind: 'live-message',
-    createdAt: Date.now()
-  })
-  await nextTick()
-  liveChatInputRef.value?.focus({ preventScroll: true })
-  updateKeyboardOffset()
-}
+const sendLiveMessage = async()=>{const body=liveChatDraft.value.trim(),gif=selectedLiveGif.value,video=playerState.currentVideo,user=currentUser.value;if((!body&&!gif)||!video?.id||!user)return;await communityWrite('video-create',undefined,{videoId:video.id,videoTitle:video.title||'Video',videoSecond:Math.max(0,Math.floor(Number(playerState.currentTime||0))),body:body.slice(0,280),gif:gifPayload(gif),kind:'live-message'});liveChatDraft.value='';selectedLiveGif.value=null;liveUnreadCount.value=0;await nextTick();liveChatInputRef.value?.focus({preventScroll:true});updateKeyboardOffset()}
 
 const handleOpenLiveHub = () => {
   if (!hasLivePlayer.value) return
@@ -828,7 +761,7 @@ const handleYoutubePlayerMessage = (event) => {
 const loadProfile = async (user) => {
   currentProfile.value = { role: 'user', canChat: false }
   if (!user) return
-  const snap = await getDoc(doc(db, 'users', user.uid)).catch(() => null)
+  const snap = await getProfileSnapshot(user.uid).catch(() => null)
   const saved = snap?.exists?.() ? snap.data() : {}
   currentProfile.value = {
     ...saved,
@@ -842,7 +775,7 @@ const subscribeUsers = () => {
   unsubscribeUsers?.()
   users.value = []
   if (!currentUser.value || !canUseChat.value) return
-  unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
+  unsubscribeUsers = subscribeProfileDirectory((snap) => {
     users.value = snap.docs
       .map(item => ({ id: item.id, ...item.data() }))
       .filter(user => !user.isBlocked)
@@ -1306,9 +1239,9 @@ onUnmounted(() => {
                 <div ref="liveChatMessagesRef" class="hub-live-chat-list" @scroll="handleLiveChatScroll">
                   <article v-for="message in liveMessages" :key="message.id">
                     <img v-if="message.authorImage" :src="message.authorImage" alt="" @error="fallbackImage" />
-                    <b v-else>{{ String(message.author || 'GN').slice(0, 2).toUpperCase() }}</b>
+                    <b v-else>{{ publicName(message.author, 'GN').slice(0, 2).toUpperCase() }}</b>
                     <span>
-                      <small><strong>{{ message.author }}</strong> {{ formatLiveTime(message.videoSecond) }}</small>
+                      <small><strong>{{ publicName(message.author) }}</strong> {{ formatLiveTime(message.videoSecond) }}</small>
                       <p v-if="message.body">{{ message.body }}</p>
                       <div v-if="message.gif?.url" class="hub-message-media live">
                         <img
@@ -2581,6 +2514,11 @@ onUnmounted(() => {
 }
 
 @media (max-width: 859px) {
+  /* A closed full-width panel must not translate beyond the viewport. */
+  .galaxia-hub-panel.hub-hidden {
+    transform: scale(0.98);
+  }
+
   .galaxia-hub-root {
     --hub-orb-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     --hub-orb-right: max(14px, env(safe-area-inset-right, 0px));

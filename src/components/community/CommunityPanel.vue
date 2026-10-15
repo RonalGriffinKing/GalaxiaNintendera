@@ -1,23 +1,17 @@
 <script setup>
+import {isEditorialOwner} from '@/services/editorial'
+
+
+import {communityWrite,communitySnapshot,watchCommunity} from '@/services/community'
+
+import {editorialQueries} from '@/services/editorial'
+
+import {getProfileSnapshot} from '@/services/profiles'
+
+import { publicName } from '@/utils/publicIdentity'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
-import {
-  addDoc,
-  arrayRemove,
-  arrayUnion,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  increment,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  setDoc,
-  updateDoc
-} from 'firebase/firestore'
+import { collection, doc, getDocs, limit, orderBy, query } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { notifyThreadLike, notifyThreadReply } from '@/services/notifications'
 import {
@@ -422,7 +416,7 @@ const currentUserIconEffect = computed(() => {
 })
 const currentUserBlocked = computed(() => Boolean(currentUserProfile.value?.isBlocked))
 const isAdmin = computed(() => !currentUserBlocked.value && props.userRole === 'admin')
-const canManageOfficialContent = computed(() => !currentUserBlocked.value && ['admin', 'publisher'].includes(props.userRole))
+const canManageOfficialContent = computed(() => !currentUserBlocked.value && isEditorialOwner(auth.currentUser))
 const communityRef = collection(db, 'communityThreads')
 const communitiesRef = collection(db, 'communities')
 const eventsRef = collection(db, 'galaxyEvents')
@@ -532,17 +526,7 @@ const isEventNotified = (event) => {
   const uid = auth.currentUser?.uid
   return Boolean(uid && Array.isArray(event?.notifyBy) && event.notifyBy.includes(uid))
 }
-const toggleEventNotify = async (event) => {
-  const uid = auth.currentUser?.uid
-  if (!uid || !event?.id) {
-    router.push('/login?mode=login')
-    return
-  }
-
-  await updateDoc(doc(db, 'galaxyEvents', event.id), {
-    notifyBy: isEventNotified(event) ? arrayRemove(uid) : arrayUnion(uid)
-  })
-}
+const toggleEventNotify = async event=>{if(!auth.currentUser){router.push('/login?mode=login');return}await communityWrite('event-notify',event.id,{notified:!isEventNotified(event)})}
 const liveGoalCards = computed(() => liveGoals.value.map(goal => {
   const isMission = goal.type === 'mission'
   const target = Math.max(1, Number(goal.target || 1))
@@ -727,7 +711,7 @@ const loadThreadAuthorProfiles = async (ids = []) => {
     }
 
     try {
-      const snap = await getDoc(doc(db, 'users', uid))
+      const snap = await getProfileSnapshot(uid)
       if (!snap.exists()) return
       const profile = { uid, id: uid, ...snap.data() }
       authorProfileCache.set(uid, profile)
@@ -769,7 +753,7 @@ const loadCurrentUserProfile = async () => {
   if (!user) return
 
   try {
-    const snap = await getDoc(doc(db, 'users', user.uid))
+    const snap = await getProfileSnapshot(user.uid)
     const saved = snap.data() || {}
     currentUserProfile.value = {
       ...saved,
@@ -811,9 +795,9 @@ const openUserProfile = async (source) => {
 
   try {
     const [userSnap, favoritesSnap, postsSnap] = await Promise.all([
-      getDoc(doc(db, 'users', seed.uid)),
-      getDocs(query(collection(db, 'users', seed.uid, 'favorites'), limit(4))).catch(() => ({ docs: [] })),
-      getDocs(query(collection(db, 'posts'), limit(80))).catch(() => ({ docs: [] }))
+      getProfileSnapshot(seed.uid),
+      auth.currentUser?.uid===seed.uid?getDocs(query(collection(db, 'users', seed.uid, 'favorites'), limit(4))):Promise.resolve({docs:[]}),
+      editorialQueries.search().catch(() => ({ docs: [] }))
     ])
 
     const saved = userSnap.exists() ? userSnap.data() : {}
@@ -886,7 +870,7 @@ const publishThread = async () => {
 
   const now = Date.now()
 
-  await addDoc(communityRef, {
+  await communityWrite('thread-create',undefined,{
     communityId: selectedCommunity.value.id,
     communityName: selectedCommunity.value.name,
     authorId: currentUserId.value,
@@ -1072,12 +1056,12 @@ const saveCommunity = async () => {
         communityPayload.createdAt = selectedCommunity.value?.createdAt || 0
       }
 
-      await setDoc(doc(db, 'communities', editingCommunityId.value), communityPayload, { merge: true })
+      await communityWrite('site-save',editingCommunityId.value,{kind:'communities',value:communityPayload})
       finishCommunityEditor()
       return
     }
 
-    const created = await addDoc(communitiesRef, {
+    const created = await communityWrite('site-save',undefined,{kind:'communities',value:{
       name,
       description,
       bannerUrl: communityDraft.value.bannerUrl.trim(),
@@ -1090,7 +1074,7 @@ const saveCommunity = async () => {
       createdBy: currentUserId.value,
       createdAt: now,
       updatedAt: now
-    })
+    }})
     selectedCommunityId.value = created.id
     finishCommunityEditor()
   } finally {
@@ -1110,86 +1094,9 @@ const triggerDeleteCommunity = (community) => {
   }
 }
 
-const deleteCommunity = async (community) => {
-  if (!isAdmin.value || !community) return
+const deleteCommunity = async community=>{if(!isAdmin.value||community.id===OFFICIAL_COMMUNITY_ID)return;isDeleting.value=true;try{await communityWrite('community-delete',community.id);confirmDialog.value.show=false;if(selectedCommunityId.value===community.id)selectedCommunityId.value=''}finally{isDeleting.value=false}}
 
-  isDeleting.value = true
-
-  try {
-    const membersSnap = await getDocs(collection(db, 'communities', community.id, 'members')).catch(() => ({ docs: [] }))
-    const relatedThreads = threads.value.filter(thread => thread.communityId === community.id)
-
-    await Promise.all([
-      ...membersSnap.docs.map(member => deleteDoc(doc(db, 'communities', community.id, 'members', member.id))),
-      ...membersSnap.docs.map(member => deleteDoc(doc(db, 'users', member.id, 'communities', community.id)).catch(() => {})),
-      ...relatedThreads.map(thread => deleteDoc(threadRef(thread.id))),
-      deleteDoc(doc(db, 'communities', community.id))
-    ])
-
-    if (selectedCommunityId.value === community.id) {
-      selectedCommunityId.value = communities.value.find(item => item.id !== community.id)?.id || ''
-    }
-    if (editingCommunityId.value === community.id) resetCommunityDraft()
-    confirmDialog.value.show = false
-  } finally {
-    isDeleting.value = false
-  }
-}
-
-const joinSelectedCommunity = async () => {
-  const user = auth.currentUser
-  const community = selectedCommunity.value
-  if (!user || !community || isTogglingMembership.value) return
-  if (community.id === OFFICIAL_COMMUNITY_ID || community.lockedMembership) {
-    joinedCommunityIds.value = [...new Set([OFFICIAL_COMMUNITY_ID, ...joinedCommunityIds.value])]
-    return
-  }
-
-  const now = Date.now()
-  isTogglingMembership.value = true
-
-  try {
-    if (isJoinedSelectedCommunity.value) {
-      await Promise.all([
-        deleteDoc(doc(db, 'users', user.uid, 'communities', community.id)),
-        deleteDoc(doc(db, 'communities', community.id, 'members', user.uid)),
-        updateDoc(doc(db, 'communities', community.id), {
-          membersCount: increment(-1),
-          updatedAt: now
-        }).catch(() => {})
-      ])
-      joinedCommunityIds.value = joinedCommunityIds.value.filter(id => id !== community.id)
-      return
-    }
-
-    await Promise.all([
-      setDoc(doc(db, 'users', user.uid, 'communities', community.id), {
-        communityId: community.id,
-        name: community.name,
-        description: community.description || '',
-        bannerUrl: community.bannerUrl || '',
-        iconUrl: community.iconUrl || '',
-        role: 'Miembro',
-        joinedAt: now,
-        updatedAt: now
-      }),
-      setDoc(doc(db, 'communities', community.id, 'members', user.uid), {
-        userId: user.uid,
-        name: displayName.value,
-        imageUrl: currentUserImage.value,
-        joinedAt: now
-      }),
-      updateDoc(doc(db, 'communities', community.id), {
-        membersCount: increment(1),
-        updatedAt: now
-      })
-    ])
-
-    joinedCommunityIds.value = [...new Set([...joinedCommunityIds.value, community.id])]
-  } finally {
-    isTogglingMembership.value = false
-  }
-}
+const joinSelectedCommunity = async()=>{const user=auth.currentUser,c=selectedCommunity.value;if(!user||!c||isTogglingMembership.value)return;isTogglingMembership.value=true;try{const result=await communityWrite('membership',c.id,{joined:!joinedCommunityIds.value.includes(c.id)});joinedCommunityIds.value=result.joined?[...new Set([...joinedCommunityIds.value,c.id])]:joinedCommunityIds.value.filter(id=>id!==c.id)}finally{isTogglingMembership.value=false}}
 
 const toggleThread = (thread) => {
   openThreadId.value = openThreadId.value === thread.id ? null : thread.id
@@ -1211,57 +1118,11 @@ const hasLiked = (thread) => {
   return thread.likedBy?.includes(currentUserId.value)
 }
 
-const toggleLike = async (thread) => {
-  const userId = currentUserId.value
-  if (!userId) {
-    router.push('/login?mode=login')
-    return
-  }
+const toggleLike = async thread=>{if(!currentUserId.value){router.push('/login?mode=login');return}const liked=!hasLiked(thread);await communityWrite('thread-like',thread.id,{liked});if(liked)try{await notifyThreadLike({thread,actor:actor.value})}catch{window.dispatchEvent(new CustomEvent('editorial-error',{detail:'Me gusta guardado; no se pudo enviar el aviso.'}))}}
 
-  const likedBy = thread.likedBy || []
+const togglePinnedThread = async thread=>{if(!canPinThread(thread))return;await communityWrite('thread-pin',thread.id,{pinnedCommunity:!thread.pinnedCommunity})}
 
-  if (likedBy.includes(userId)) {
-    await updateDoc(threadRef(thread.id), {
-      likedBy: arrayRemove(userId),
-      likes: increment(-1),
-      updatedAt: Date.now()
-    })
-    return
-  }
-
-  await updateDoc(threadRef(thread.id), {
-    likedBy: arrayUnion(userId),
-    likes: increment(1),
-    updatedAt: Date.now()
-  })
-
-  await notifyThreadLike({ thread, actor: actor.value })
-}
-
-const togglePinnedThread = async (thread) => {
-  if (!canPinThread(thread)) return
-  const now = Date.now()
-  await updateDoc(threadRef(thread.id), {
-    pinnedCommunity: !thread.pinnedCommunity,
-    pinnedAt: !thread.pinnedCommunity ? now : 0,
-    pinnedBy: !thread.pinnedCommunity ? currentUserId.value : '',
-    pinnedHome: false,
-    updatedAt: now
-  })
-}
-
-const toggleThreadHomeFeature = async (thread) => {
-  if (!canPinThread(thread)) return
-  const now = Date.now()
-  const isShowing = Boolean(thread.showOnHome || thread.pinnedHome)
-  await updateDoc(threadRef(thread.id), {
-    showOnHome: !isShowing,
-    homePinnedAt: !isShowing ? now : 0,
-    homePinnedBy: !isShowing ? currentUserId.value : '',
-    pinnedHome: false,
-    updatedAt: now
-  })
-}
+const toggleThreadHomeFeature = async thread=>{if(!canPinThread(thread))return;await communityWrite('thread-pin',thread.id,{showOnHome:!Boolean(thread.showOnHome||thread.pinnedHome)})}
 
 const formatEventDate = (value) => {
   const time = getMillis(value)
@@ -1444,32 +1305,7 @@ const formatVideoChatTime = (seconds) => {
   return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`
 }
 
-const sendVideoChatMessage = async () => {
-  const body = videoChatDraft.value.trim()
-  const video = featuredYoutubeVideo.value
-  const userId = currentUserId.value
-  if (currentUserBlocked.value || !body || !video?.id || !userId) return
-
-  const videoSecond = activeVideoSecond.value
-  const message = {
-    videoId: video.id,
-    videoTitle: video.title || 'Video de Galaxia Nintendera',
-    videoSecond,
-    body: body.slice(0, 280),
-    authorId: userId,
-    author: displayName.value,
-    authorImage: currentUserImage.value,
-    authorIconEffect: currentUserIconEffect.value,
-    likedBy: [],
-    likes: 0,
-    replies: [],
-    kind: featuredVideoIsLive.value ? 'live-message' : 'video-comment',
-    createdAt: Date.now()
-  }
-
-  videoChatDraft.value = ''
-  await addDoc(collection(db, 'videoChats', video.id, 'messages'), message)
-}
+const sendVideoChatMessage = async()=>{const video=featuredYoutubeVideo.value,body=videoChatDraft.value.trim();if(!body||!video?.id||!currentUserId.value||currentUserBlocked.value)return;await communityWrite('video-create',undefined,{videoId:video.id,videoTitle:video.title||'Video',videoSecond:activeVideoSecond.value,body:body.slice(0,280),kind:featuredVideoIsLive.value?'live-message':'video-comment'});videoChatDraft.value=''}
 
 const canDeleteVideoMessage = (message) => {
   return isAdmin.value || Boolean(message?.authorId && message.authorId === currentUserId.value)
@@ -1479,46 +1315,11 @@ const hasLikedVideoMessage = (message) => {
   return Array.isArray(message?.likedBy) && message.likedBy.includes(currentUserId.value)
 }
 
-const toggleVideoMessageLike = async (message) => {
-  const videoId = activeVideoChatId.value
-  const userId = currentUserId.value
-  if (!videoId || !message?.id || !userId) return
+const toggleVideoMessageLike = async message=>{if(!activeVideoChatId.value||!currentUserId.value)return;await communityWrite('video-like',message.id,{videoId:activeVideoChatId.value,liked:!hasLikedVideoMessage(message)})}
 
-  const likedBy = Array.isArray(message.likedBy) ? [...message.likedBy] : []
-  const hasLiked = likedBy.includes(userId)
-  const nextLikedBy = hasLiked ? likedBy.filter(id => id !== userId) : [...likedBy, userId]
-  await updateDoc(doc(db, 'videoChats', videoId, 'messages', message.id), {
-    likedBy: nextLikedBy,
-    likes: nextLikedBy.length
-  })
-}
+const sendVideoReply = async message=>{const body=String(videoReplyDrafts.value[message.id]||'').trim();if(!body||!activeVideoChatId.value||!currentUserId.value)return;await communityWrite('video-reply',message.id,{videoId:activeVideoChatId.value,commentId:String(Date.now())+'-'+currentUserId.value,body:body.slice(0,220)});videoReplyDrafts.value={...videoReplyDrafts.value,[message.id]:''}}
 
-const sendVideoReply = async (message) => {
-  const videoId = activeVideoChatId.value
-  const body = String(videoReplyDrafts.value[message.id] || '').trim()
-  if (!videoId || !message?.id || !body || !currentUserId.value) return
-
-  const reply = {
-    id: `${Date.now()}-${currentUserId.value}`,
-    body: body.slice(0, 220),
-    authorId: currentUserId.value,
-    author: displayName.value,
-    authorImage: currentUserImage.value,
-    authorIconEffect: currentUserIconEffect.value,
-    createdAt: Date.now()
-  }
-
-  videoReplyDrafts.value = { ...videoReplyDrafts.value, [message.id]: '' }
-  await updateDoc(doc(db, 'videoChats', videoId, 'messages', message.id), {
-    replies: arrayUnion(reply)
-  })
-}
-
-const deleteVideoMessage = async (message) => {
-  const videoId = activeVideoChatId.value
-  if (!videoId || !message?.id || !canDeleteVideoMessage(message)) return
-  await deleteDoc(doc(db, 'videoChats', videoId, 'messages', message.id))
-}
+const deleteVideoMessage = async message=>{if(!activeVideoChatId.value||!canDeleteVideoMessage(message))return;await communityWrite('video-delete',message.id,{videoId:activeVideoChatId.value})}
 
 const openVideoTheater = () => {
   if (!featuredYoutubeVideo.value?.id) return
@@ -1575,7 +1376,7 @@ const subscribeVideoChat = (videoId) => {
     limit(160)
   )
 
-  unsubscribeVideoChat = onSnapshot(messagesQuery, (snap) => {
+  unsubscribeVideoChat = watchCommunity('video',{id:videoId,limit:160},(snap) => {
     videoChatMessages.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
   })
 }
@@ -1743,13 +1544,13 @@ const saveGalaxyEvent = async () => {
   }
 
   if (editingEventId.value) {
-    await updateDoc(doc(db, 'galaxyEvents', editingEventId.value), payload)
+    await communityWrite('site-save',editingEventId.value,{kind:'events',value:payload})
   } else {
-    await addDoc(eventsRef, {
+    await communityWrite('site-save',undefined,{kind:'events',value:{
       ...payload,
       createdBy: currentUserId.value,
       createdAt: now
-    })
+    }})
   }
 
   resetGalaxyEventDraft()
@@ -1799,7 +1600,7 @@ const editGalaxyEvent = (event) => {
 
 const deleteGalaxyEvent = async (event) => {
   if (!canManageOfficialContent.value || !event?.id) return
-  await deleteDoc(doc(db, 'galaxyEvents', event.id))
+  await communityWrite('site-delete',event.id,{kind:'events'})
   if (editingEventId.value === event.id) resetGalaxyEventDraft()
 }
 
@@ -1841,7 +1642,7 @@ const saveLiveGoal = async () => {
 
   isSavingLiveGoal.value = true
   try {
-    await addDoc(liveGoalsRef, {
+    await communityWrite('site-save',undefined,{kind:'goals',value:{
       title,
       description,
       type: liveGoalDraft.value.type,
@@ -1855,7 +1656,7 @@ const saveLiveGoal = async () => {
       createdBy: currentUserId.value,
       createdAt: now,
       updatedAt: now
-    })
+    }})
     resetLiveGoalDraft()
   } finally {
     isSavingLiveGoal.value = false
@@ -1864,7 +1665,7 @@ const saveLiveGoal = async () => {
 
 const deleteLiveGoal = async (goal) => {
   if (!canManageOfficialContent.value || !goal?.id) return
-  await deleteDoc(doc(db, 'liveGoals', goal.id))
+  await communityWrite('site-delete',goal.id,{kind:'goals'})
 }
 
 const toggleLiveMissionItem = async (goal, item) => {
@@ -1872,69 +1673,20 @@ const toggleLiveMissionItem = async (goal, item) => {
   const checklist = (goal.checklist || []).map(entry => (
     entry.id === item.id ? { ...entry, done: !entry.done } : entry
   ))
-  await updateDoc(doc(db, 'liveGoals', goal.id), {
+  await communityWrite('site-save',goal.id,{kind:'goals',value:{
     checklist,
     target: Math.max(1, checklist.length),
     updatedAt: Date.now()
-  })
+  }})
 }
 
-const addLiveGoalLike = async (goal) => {
-  const userId = currentUserId.value
-  if (currentUserBlocked.value || !userId || !goal?.id || goal.type === 'mission') return
-
-  const likesBy = {
-    ...(goal.likesBy || {}),
-    [userId]: Number(goal.likesBy?.[userId] || 0) + 1
-  }
-  const likerProfiles = {
-    ...(goal.likerProfiles || {}),
-    [userId]: {
-      name: displayName.value,
-      imageUrl: currentUserImage.value
-    }
-  }
-
-  await setDoc(doc(db, 'liveGoals', goal.id), {
-    likesBy,
-    likerProfiles,
-    updatedAt: Date.now()
-  }, { merge: true })
-}
+const addLiveGoalLike = async goal=>{if(!currentUserId.value||!goal?.id)return;await communityWrite('goal-like',goal.id)}
 
 const toggleLiveGoalExpanded = (goal) => {
   expandedLiveGoalId.value = expandedLiveGoalId.value === goal.id ? '' : goal.id
 }
 
-const publishReply = async (thread) => {
-  const body = replyDraft.value.trim()
-  if (currentUserBlocked.value || !body) return
-  if (!currentUserId.value) {
-    router.push('/login?mode=login')
-    return
-  }
-
-  const now = Date.now()
-  const comment = {
-    id: `${now}-${currentUserId.value}`,
-    authorId: currentUserId.value,
-    author: displayName.value,
-    authorImage: currentUserImage.value,
-    authorIconEffect: currentUserIconEffect.value,
-    handle: '@tu_usuario',
-    body,
-    createdAt: now
-  }
-
-  await updateDoc(threadRef(thread.id), {
-    comments: arrayUnion(comment),
-    replies: increment(1),
-    updatedAt: now
-  })
-
-  await notifyThreadReply({ thread, actor: actor.value, comment })
-  replyDraft.value = ''
-}
+const publishReply = async thread=>{const body=replyDraft.value.trim();if(!body||currentUserBlocked.value)return;if(!currentUserId.value){router.push('/login?mode=login');return}const comment={id:String(Date.now())+'-'+currentUserId.value};await communityWrite('comment-add',thread.id,{commentId:comment.id,body});replyDraft.value='';try{await notifyThreadReply({thread,actor:actor.value,comment})}catch{window.dispatchEvent(new CustomEvent('editorial-error',{detail:'Respuesta guardada; no se pudo enviar el aviso.'}))}}
 
 const triggerDeleteThread = (thread) => {
   if (!canDeleteThread(thread)) return
@@ -1958,66 +1710,21 @@ const triggerDeleteComment = (thread, comment) => {
   }
 }
 
-const editComment = async (thread, comment, body) => {
-  if (!canEditComment(comment)) return
-  const nextBody = String(body || '').trim()
-  if (!nextBody || nextBody === comment.body) return
-
-  const comments = (thread.comments || []).map(item => {
-    if (item.id !== comment.id) return item
-    return {
-      ...item,
-      body: nextBody,
-      editedAt: Date.now()
-    }
-  })
-
-  await updateDoc(threadRef(thread.id), {
-    comments,
-    updatedAt: Date.now()
-  })
-}
+const editComment = async(thread,comment,body)=>{const next=String(body||'').trim();if(!canEditComment(comment)||!next||next===comment.body)return;await communityWrite('comment-edit',thread.id,{commentId:comment.id,body:next})}
 
 const closeConfirm = () => {
   if (isDeleting.value) return
   confirmDialog.value.show = false
 }
 
-const deleteThread = async (thread) => {
-  if (!canDeleteThread(thread)) return
+const deleteThread = async thread=>{if(!canDeleteThread(thread))return;isDeleting.value=true;try{await communityWrite('thread-delete',thread.id);if(openThreadId.value===thread.id)openThreadId.value=null;confirmDialog.value.show=false}finally{isDeleting.value=false}}
 
-  isDeleting.value = true
-
-  try {
-    await deleteDoc(threadRef(thread.id))
-    if (openThreadId.value === thread.id) openThreadId.value = null
-    confirmDialog.value.show = false
-  } finally {
-    isDeleting.value = false
-  }
-}
-
-const deleteComment = async (thread, comment) => {
-  if (!canDeleteComment(comment)) return
-
-  isDeleting.value = true
-
-  try {
-    await updateDoc(threadRef(thread.id), {
-      comments: arrayRemove(comment),
-      replies: increment(-1),
-      updatedAt: Date.now()
-    })
-    confirmDialog.value.show = false
-  } finally {
-    isDeleting.value = false
-  }
-}
+const deleteComment = async(thread,comment)=>{if(!canDeleteComment(comment))return;isDeleting.value=true;try{await communityWrite('comment-delete',thread.id,{commentId:comment.id});confirmDialog.value.show=false}finally{isDeleting.value=false}}
 
 const subscribeThreads = () => {
   const threadsQuery = query(communityRef, orderBy('updatedAt', 'desc'), limit(40))
 
-  unsubscribeThreads = onSnapshot(threadsQuery, async (snap) => {
+  unsubscribeThreads = watchCommunity('threads',{limit:40},async (snap) => {
     const loadVersion = ++threadsLoadVersion
     const rawThreads = snap.docs.map(item => ({
       id: item.id,
@@ -2031,7 +1738,7 @@ const subscribeThreads = () => {
     if (loadVersion !== threadsLoadVersion) return
     threads.value = rawThreads.map(thread => enrichThreadAuthorProfiles(thread, profiles))
     isLoading.value = false
-  }, (error) => {
+  },(error) => {
     console.error(error)
     isLoading.value = false
   })
@@ -2039,7 +1746,7 @@ const subscribeThreads = () => {
 
 const subscribeCommunities = () => {
   const communitiesQuery = query(communitiesRef, orderBy('createdAt', 'asc'), limit(30))
-  unsubscribeCommunities = onSnapshot(communitiesQuery, (snap) => {
+  unsubscribeCommunities = watchCommunity('communities',{limit:30},(snap) => {
     const savedCommunities = snap.docs.map(item => ({ id: item.id, membersCount: 0, ...item.data() }))
     const savedOfficial = savedCommunities.find(item => item.id === OFFICIAL_COMMUNITY_ID)
     const customCommunities = savedCommunities.filter(item => item.id !== OFFICIAL_COMMUNITY_ID)
@@ -2057,7 +1764,7 @@ const subscribeCommunities = () => {
       }
     }
     isCommunitiesLoading.value = false
-  }, (error) => {
+  },(error) => {
     console.error(error)
     isCommunitiesLoading.value = false
   })
@@ -2065,16 +1772,16 @@ const subscribeCommunities = () => {
 
 const subscribeEvents = () => {
   const eventsQuery = query(eventsRef, orderBy('startsAt', 'asc'), limit(30))
-  unsubscribeEvents = onSnapshot(eventsQuery, (snap) => {
+  unsubscribeEvents = watchCommunity('events',{limit:30},(snap) => {
     galaxyEvents.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
-  }, (error) => {
+  },(error) => {
     console.error(error)
   })
 }
 
 const subscribeLiveGoals = () => {
   const goalsQuery = query(liveGoalsRef, orderBy('createdAt', 'desc'), limit(12))
-  unsubscribeLiveGoals = onSnapshot(goalsQuery, (snap) => {
+  unsubscribeLiveGoals = watchCommunity('goals',{limit:12},(snap) => {
     liveGoals.value = snap.docs.map(item => ({
       id: item.id,
       type: 'likes',
@@ -2084,27 +1791,12 @@ const subscribeLiveGoals = () => {
       likerProfiles: {},
       ...item.data()
     }))
-  }, (error) => {
+  },(error) => {
     console.error(error)
   })
 }
 
-const syncOfficialLiveChatState = async (isActive) => {
-  if (!canManageOfficialContent.value) return
-
-  await setDoc(doc(db, 'liveChats', OFFICIAL_COMMUNITY_ID), {
-    active: Boolean(isActive),
-    title: 'Chat en live',
-    updatedAt: Date.now()
-  }, { merge: true }).catch(console.error)
-
-  if (isActive) return
-
-  const messagesSnap = await getDocs(collection(db, 'liveChats', OFFICIAL_COMMUNITY_ID, 'messages')).catch(() => ({ docs: [] }))
-  await Promise.all(messagesSnap.docs.map(item => (
-    deleteDoc(doc(db, 'liveChats', OFFICIAL_COMMUNITY_ID, 'messages', item.id)).catch(() => {})
-  )))
-}
+const syncOfficialLiveChatState = async active=>{if(!canManageOfficialContent.value)return;await communityWrite('site-save',OFFICIAL_COMMUNITY_ID,{kind:'live',value:{active:!!active,title:'Chat en live'}});if(!active)await communityWrite('clear-live',OFFICIAL_COMMUNITY_ID)}
 
 const syncLiveSessionClock = (video) => {
   if (!featuredVideoIsLive.value || !video?.id) {
@@ -2325,7 +2017,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="community-panel">
+  <div class="community-panel social-page">
     <div v-if="isCommunitiesLoading" class="community-empty">
       Cargando comunidades...
     </div>
@@ -2815,11 +2507,11 @@ onUnmounted(() => {
           <div class="profile-view-head">
             <div class="profile-view-avatar">
               <img v-if="selectedProfile.imageUrl" :src="selectedProfile.imageUrl" alt="" />
-              <span v-else>{{ avatarInitial(selectedProfile.name) }}</span>
+              <span v-else>{{ avatarInitial(publicName(selectedProfile.name)) }}</span>
             </div>
 
             <div>
-              <h2>{{ selectedProfile.name }}</h2>
+              <h2>{{ publicName(selectedProfile.name) }}</h2>
               <p>{{ selectedProfile.description || 'Miembro de la comunidad' }}</p>
             </div>
           </div>

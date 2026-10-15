@@ -1,5 +1,6 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { db } from '@/firebase'
+import { doc } from 'firebase/firestore'
+import { auth, db } from '@/firebase'
+import {editorialQueries,manageEditorial} from "@/services/editorial";
 
 export const DEFAULT_POST_CATEGORIES = [
   'Nintendo Switch',
@@ -66,22 +67,12 @@ export const postMatchesCategory = (post = {}, wanted) => {
 }
 
 export const loadPostCategories = async () => {
-  try {
-    const snap = await getDoc(SETTINGS_REF)
-    const saved = snap.exists() ? snap.data()?.items : []
-    const categories = uniqueCategories(saved)
-    return categories.length ? categories : DEFAULT_POST_CATEGORIES
-  } catch (error) {
-    console.error(error)
-    return DEFAULT_POST_CATEGORIES
-  }
+  {const snap=await editorialQueries.categories();return snap.exists()?snap.data().items:DEFAULT_POST_CATEGORIES}
+  
 }
 
 export const savePostCategories = async (items = []) => {
   const categories = uniqueCategories(items)
-  await setDoc(SETTINGS_REF, {
-    items: categories,
-    updatedAt: Date.now()
-  }, { merge: true })
-  return categories
+  {await manageEditorial(auth.currentUser,{action:'categories',requestId:crypto.randomUUID(),data:{items:categories}});return categories}
+  
 }

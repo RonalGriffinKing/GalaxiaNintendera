@@ -25,7 +25,7 @@ const emit = defineEmits(['create'])
 
 <template>
   <div
-    class="community-empty community-empty-threads"
+    class="community-empty community-empty-threads social-empty"
     :class="{ 'with-background': hasBackground }"
   >
     <div class="empty-thread-visual">

@@ -1,4 +1,5 @@
 <script setup>
+import { publicName } from '@/utils/publicIdentity'
 import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
 
 defineProps({
@@ -160,11 +161,11 @@ const emit = defineEmits([
                 v-for="user in goal.ranking.slice(0, 4)"
                 :key="user.uid"
                 type="button"
-                :title="`${user.name}: ${user.count}`"
+                :title="`${publicName(user.name, user.username)}: ${user.count}`"
                 @click="emit('toggle-live-goal', goal)"
               >
                 <img v-if="user.imageUrl" :src="user.imageUrl" alt="" />
-                <span v-else>{{ avatarInitial(user.name) }}</span>
+                <span v-else>{{ avatarInitial(publicName(user.name, user.username)) }}</span>
               </button>
             </div>
           </div>
@@ -193,8 +194,8 @@ const emit = defineEmits([
                 @click="emit('open-profile', { uid: user.uid, name: user.name, imageUrl: user.imageUrl })"
               >
                 <img v-if="user.imageUrl" :src="user.imageUrl" alt="" />
-                <span v-else>{{ avatarInitial(user.name) }}</span>
-                <em>{{ user.name }}</em>
+                <span v-else>{{ avatarInitial(publicName(user.name, user.username)) }}</span>
+                <em>{{ publicName(user.name, user.username) }}</em>
                 <small>{{ user.count }}</small>
               </button>
               <p v-if="!goal.ranking.length">Todavia nadie ha dado like.</p>
@@ -218,11 +219,11 @@ const emit = defineEmits([
         <div v-for="user in activeUsers" :key="user.id || user.name" class="user-row">
           <button class="user-row-avatar profile-trigger" type="button" @click="emit('open-profile', user)">
             <img v-if="user.imageUrl" :src="user.imageUrl" alt="" />
-            <span v-else>{{ user.name.slice(0, 2).toUpperCase() }}</span>
+            <span v-else>{{ publicName(user.name, user.username).slice(0, 2).toUpperCase() }}</span>
           </button>
           <div>
             <button type="button" @click="emit('open-profile', user)">
-              <strong>{{ user.name }}</strong>
+              <strong>{{ publicName(user.name, user.username) }}</strong>
             </button>
             <p>{{ user.action }}</p>
           </div>

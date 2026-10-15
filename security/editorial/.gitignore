@@ -1,0 +1,4 @@
+*.log
+runtime/
+firebase-debug.log
+firestore-debug.log

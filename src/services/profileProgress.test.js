@@ -2,6 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const store = vi.hoisted(() => ({ documents: {}, writes: [] }))
 vi.mock('@/firebase', () => ({ db: {} }))
+// Exercise the same purchase service used by Netlify with fictitious data; no Firebase SDK/network.
+vi.mock('./profiles', async () => {
+  const {createIconPurchaseService}=await import('../../security/icon-purchase.mjs')
+  const db={doc:path=>({path}),runTransaction:async action=>action({
+    getAll:async(...refs)=>refs.map(ref=>({exists:ref.path in store.documents,data:()=>store.documents[ref.path]})),
+    set:(ref,value)=>{store.writes.push({path:ref.path,value});store.documents[ref.path]=value}
+  })}
+  const service=createIconPurchaseService({db,auth:{verifyIdToken:async()=>({uid:'u'}),getUser:async()=>({uid:'u',disabled:false,emailVerified:true})}})
+  return {ensureProfile:vi.fn(),profileRequest:async(action,data)=>{if(action!=='redeem-icon')throw Error('unexpected-action');return service.execute('fictional-token',data)}}
+})
 vi.mock('firebase/firestore', () => ({
   doc: (_db, ...path) => path.join('/'),
   collection: vi.fn(), getDoc: vi.fn(), getDocs: vi.fn(), orderBy: vi.fn(), query: vi.fn(), setDoc: vi.fn(), updateDoc: vi.fn(),
@@ -15,7 +25,7 @@ import { earnedAchievements } from './achievementProgress'
 
 beforeEach(() => {
   store.documents = {
-    'users/u': { stars: 70, unlockedIcons: ['kirby-01'], selectedIcon: 'kirby-01' },
+    'users/u': { isBlocked:false, stars: 70, unlockedIcons: ['kirby-01'], selectedIcon: 'kirby-01' },
     'profileIcons/reward': { cost: 25, visible: true }
   }
   store.writes = []

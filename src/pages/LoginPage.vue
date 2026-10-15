@@ -97,8 +97,10 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createUserWithEmailAndPassword, GoogleAuthProvider, sendEmailVerification, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from 'firebase/auth'
 import { Capacitor } from '@capacitor/core'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { auth, db } from '@/firebase'
+
+import { auth } from '@/firebase'
+
+import {ensureProfile} from '@/services/profiles'
 import { defaultLogoUrl } from '@/constants/assets'
 
 const route = useRoute()
@@ -162,44 +164,14 @@ const loginWithGoogle = async () => {
     }
 
     const user = credential.user
-    const userRef = doc(db, 'users', user.uid)
-    const userSnap = await getDoc(userRef)
-
-    const profile = {
-      name: user.displayName || user.email || 'Usuario',
-      email: user.email || '',
-      description: 'lector',
-      imageUrl: user.photoURL || '',
-      provider: 'google',
-      emailVerified: user.emailVerified,
-      emailOptIn: true,
-      updatedAt: Date.now()
+    {
+      await ensureProfile(isRegister.value?{legalAccepted:acceptLegal.value,parentalConsentConfirmed:acceptAge.value,legalVersion,emailOptIn:true}:undefined)
+      redirectAfterLogin();return
     }
-
-    if (isRegister.value) {
-      Object.assign(profile, {
-        legalAccepted: true,
-        legalAcceptedAt: Date.now(),
-        legalVersion,
-        parentalConsentConfirmed: true
-      })
-    }
-
-    if (!userSnap.exists()) {
-      profile.role = 'user'
-      profile.stars = 0
-      profile.readPostsCount = 0
-      profile.unlockedIcons = ['kirby-01']
-      profile.selectedIcon = 'kirby-01'
-      profile.createdAt = Date.now()
-    }
-
-    await setDoc(userRef, profile, { merge: true })
-
-    redirectAfterLogin()
+    
   } catch (e) {
     console.error('Google login error:', e)
-    error.value = getAuthErrorMessage(e, 'No se pudo iniciar sesion con Google')
+    error.value = e.message||'No se pudo completar el acceso al perfil'
   } finally {
     loading.value = false
   }
@@ -253,28 +225,7 @@ const submit = async () => {
         displayName: name.value.trim()
       })
 
-      await setDoc(doc(db, 'users', credential.user.uid), {
-        name: name.value.trim(),
-        email: email.value.trim(),
-        description: 'lector',
-        imageUrl: '',
-        provider: 'password',
-        emailVerified: credential.user.emailVerified,
-        emailVerificationRequired: true,
-        emailOptIn: true,
-        legalAccepted: true,
-        legalAcceptedAt: Date.now(),
-        legalVersion,
-        parentalConsentConfirmed: true,
-        role: 'user',
-        stars: 0,
-        readPostsCount: 0,
-        unlockedIcons: ['kirby-01'],
-        selectedIcon: 'kirby-01',
-        selectedIconUrl: '',
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      })
+      await ensureProfile({name:name.value.trim(),legalAccepted:acceptLegal.value,parentalConsentConfirmed:acceptAge.value,legalVersion,emailOptIn:true})
 
       await sendEmailVerification(credential.user)
       await signOut(auth)
@@ -282,28 +233,16 @@ const submit = async () => {
       return
     } else {
       const credential = await signInWithEmailAndPassword(auth, email.value, password.value)
-      const userSnap = await getDoc(doc(db, 'users', credential.user.uid))
-      const profile = userSnap.data() || {}
-      const requiresVerification = profile.emailVerificationRequired !== false && profile.emailVerified !== true && profile.provider !== 'google'
-
-      if (requiresVerification && !credential.user.emailVerified) {
-        await sendEmailVerification(credential.user).catch(() => {})
-        await signOut(auth)
-        notice.value = 'Tu correo aun no esta verificado. Te enviamos otro correo de verificacion.'
-        return
+      {
+        if(!credential.user.emailVerified){await signOut(auth);notice.value='Verifica tu correo antes de iniciar sesion.';return}
+        await ensureProfile();redirectAfterLogin();return
       }
-
-      if (credential.user.emailVerified && profile.emailVerified !== true) {
-        await setDoc(doc(db, 'users', credential.user.uid), {
-          emailVerified: true,
-          updatedAt: Date.now()
-        }, { merge: true })
-      }
+      
     }
 
     redirectAfterLogin()
   } catch (e) {
-    error.value = isRegister.value ? 'No se pudo crear la cuenta' : 'Email o contrasena incorrectos'
+    error.value = e.code?.startsWith('auth/')?'No se pudo autenticar la cuenta.':e.message||'No se pudo completar el perfil.'
   } finally {
     loading.value = false
   }

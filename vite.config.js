@@ -1,9 +1,13 @@
 import { defineConfig } from 'vite'
+import {configDefaults} from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 import { handler as igdbHandler } from './netlify/functions/igdb.js'
 import { handler as imageProxyHandler } from './netlify/functions/image-proxy.js'
 import { handler as youtubeFeedHandler } from './netlify/functions/youtube-feed.js'
+import { handler as editorialHandler } from './netlify/functions/editorial.js'
+import { handler as profileHandler } from './netlify/functions/profile.js'
+import { handler as seoHandler } from './netlify/functions/seo-files.js'
 
 const readRequestBody = req => {
   return new Promise((resolve, reject) => {
@@ -60,6 +64,9 @@ const netlifyFunctionsDev = () => ({
       }
     })
 
+    server.middlewares.use('/.netlify/functions/editorial',async(req,res)=>runFunction(editorialHandler,req,res))
+    server.middlewares.use('/.netlify/functions/profile',async(req,res)=>runFunction(profileHandler,req,res))
+
     server.middlewares.use('/.netlify/functions/image-proxy', async (req, res) => {
       try {
         await runFunction(imageProxyHandler, req, res)
@@ -89,6 +96,7 @@ const netlifyFunctionsDev = () => ({
 })
 
 export default defineConfig({
+  test:{exclude:[...configDefaults.exclude,'**/.restore-backups/**']},
   plugins: [
     netlifyFunctionsDev(),
     vue()
