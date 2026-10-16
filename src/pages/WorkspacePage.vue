@@ -102,6 +102,10 @@ const headerActions = computed(() => {
 })
 
 const openCreate = (target) => {
+  if (['post', 'post-json', 'hero'].includes(target)) {
+    router.push({ name:'post-create', query:target==='post-json' ? {json:'1'} : target==='hero' ? {mode:'hero'} : {} })
+    return
+  }
   if (target === 'posts-section') {
     router.replace({ path: route.path, query: { ...route.query, section: undefined, create: undefined } })
     return

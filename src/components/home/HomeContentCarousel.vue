@@ -4,10 +4,11 @@ const props = defineProps({ items: { type:Array, default:()=>[] }, pageSize: { t
 const viewport = ref(null)
 const dotTrack = ref(null)
 const active = ref(0)
-const mobile = ref(false)
+const mobile = ref(typeof window !== 'undefined' && window.matchMedia('(max-width:760px)').matches)
 const size = computed(() => mobile.value ? 1 : Math.max(1,props.pageSize))
 const pages = computed(() => Array.from({length:Math.ceil(props.items.length/size.value)},(_,index)=>props.items.slice(index*size.value,(index+1)*size.value)))
 let observer
+let observedWidth = -1
 let media
 const updateMobile = () => { mobile.value = media.matches }
 const pageLeft = index => viewport.value?.children[index]?.offsetLeft || 0
@@ -26,7 +27,14 @@ watch([active,pages],async()=>{
  const track=dotTrack.value, dot=track?.querySelector('[aria-current="page"]')
  if(track && dot) track.scrollTo({left:dot.offsetLeft-track.clientWidth/2+dot.clientWidth/2,behavior:'instant'})
 })
-onMounted(()=>{media=window.matchMedia('(max-width:760px)');updateMobile();media.addEventListener('change',updateMobile);observer=new ResizeObserver(()=>select(active.value,'instant'));if(viewport.value)observer.observe(viewport.value)})
+onMounted(()=>{media=window.matchMedia('(max-width:760px)');updateMobile();media.addEventListener('change',updateMobile);observer=new ResizeObserver(([entry])=>{
+ const width=entry.contentRect.width
+ // Browser chrome can resize the visible height without changing card widths.
+ // Only real width changes require repositioning the horizontal carousel.
+ if(Math.abs(width-observedWidth)<.5) return
+ observedWidth=width
+ select(active.value,'instant')
+});if(viewport.value)observer.observe(viewport.value)})
 onUnmounted(()=>{observer?.disconnect();media?.removeEventListener('change',updateMobile)})
 </script>
 

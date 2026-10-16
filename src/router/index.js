@@ -12,6 +12,18 @@ import { doc, getDoc } from 'firebase/firestore'
 
 const routes = [
   {
+    path: '/admin/posts/new',
+    name: 'post-create',
+    component: () => import('@/pages/PostEditorPage.vue'),
+    meta: { publisherOnly: true, workspace: true }
+  },
+  {
+    path: '/admin/posts/:id/edit',
+    name: 'post-edit',
+    component: () => import('@/pages/PostEditorPage.vue'),
+    meta: { publisherOnly: true, workspace: true }
+  },
+  {
     path: '/ruzafa-impresora',
     name: 'ruzafa-printer',
     component: () => import('@/pages/RuzafaPrinterPage.vue')
@@ -223,6 +235,9 @@ router.beforeEach(async (to) => {
     }
   }
 
+  if (to.path === '/admin/posts' && ['post', 'post-json', 'hero'].includes(to.query.create)) {
+    return { name:'post-create', query:to.query.create==='post-json' ? {json:'1'} : to.query.create==='hero' ? {mode:'hero'} : {} }
+  }
   return true
 })
 

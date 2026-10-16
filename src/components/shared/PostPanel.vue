@@ -36,7 +36,8 @@
       <ListControls
         v-model:search="searchQuery"
         v-model:sort="sortMode"
-        v-model:page-size="postPageSize"
+        :page-size="POST_PAGE_SIZE"
+        :page-size-options="[POST_PAGE_SIZE]"
         search-placeholder="Buscar publicaciones..."
         :sort-options="postSortOptions"
       >
@@ -92,6 +93,7 @@
 
     <div v-else-if="filteredPosts.length" class="post-table-wrap">
       <table class="post-table">
+        <colgroup><col class="title-col" /><col class="category-col" /><col class="status-col" /><col class="author-col" /><col class="updated-col" /><col class="actions-col" /></colgroup>
         <thead>
           <tr>
             <th>Titulo</th>
@@ -108,31 +110,32 @@
               <div class="post-title-cell">
                 <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
                 <span v-else><i class="far fa-image"></i></span>
-                <strong>{{ post.title || 'Sin titulo' }}</strong>
+                <strong :title="post.title || 'Sin titulo'">{{ post.title || 'Sin titulo' }}</strong>
               </div>
             </td>
             <td>
-              <div class="category-list">
+              <div class="category-list" :title="postCategories(post).join(', ')">
                 <span v-for="category in postCategories(post)" :key="category" class="category-pill">{{ category }}</span>
               </div>
             </td>
             <td><span :class="['state-pill', post.status]">{{ statusLabel(post.status) }}</span></td>
-            <td>{{ post.authorName || 'Redactor' }}</td>
+            <td><span class="post-author" :title="post.authorName || 'Redactor'">{{ post.authorName || 'Redactor' }}</span></td>
             <td>{{ formatUpdated(post.updatedAt || post.createdAt) }}</td>
             <td>
-              <div class="post-actions">
-                <button v-if="isAdmin && post.status === 'approved'" class="post-share-btn" type="button" :aria-pressed="isPinned(post)" :disabled="pinSaving" @click="togglePin(post)"><i class="fas fa-thumbtack"></i>{{ isPinned(post) ? 'Quitar pin' : 'Pinear' }}</button>
-                <button v-if="isAdmin && post.status === 'pending'" class="mini-btn-xs btn-success" title="Aprobar" @click="triggerApprove(post)">
+              <div class="post-actions" :class="{ 'admin-actions':isAdmin }">
+                <button v-if="isAdmin && post.status === 'approved'" class="post-share-btn post-pin-btn" type="button" :aria-pressed="isPinned(post)" :disabled="pinSaving" @click="togglePin(post)"><i class="fas fa-thumbtack"></i>{{ isPinned(post) ? 'Quitar pin' : 'Pinear' }}</button>
+                <button v-if="isAdmin && post.status === 'pending'" class="mini-btn-xs btn-success post-approve-btn" title="Aprobar" @click="triggerApprove(post)">
                   <i class="fas fa-check"></i>
+                  <span>Aprobar</span>
                 </button>
-                <button v-if="canEditPost(post)" class="mini-btn-xs btn-edit" title="Editar" @click="editPost(post)">
+                <button v-if="canEditPost(post)" class="mini-btn-xs btn-edit post-edit-btn" title="Editar" @click="editPost(post)">
                   <i class="fas fa-pen"></i>
                 </button>
-                <button class="post-share-btn" type="button" title="Generar imagen social" @click="openSocialShare(post.id)">
+                <button class="post-share-btn post-social-btn" type="button" title="Generar imagen social" @click="openSocialShare(post.id)">
                   <i class="fas fa-wand-magic-sparkles"></i>
-                  <span>Generar imagen social</span>
+                  <span>Imagen social</span>
                 </button>
-                <button v-if="canDeletePost(post)" class="mini-btn-xs btn-danger" title="Eliminar" @click="triggerDelete(post.id)">
+                <button v-if="canDeletePost(post)" class="mini-btn-xs btn-danger post-delete-btn" title="Eliminar" @click="triggerDelete(post.id)">
                   <i class="fas fa-trash"></i>
                 </button>
               </div>
@@ -153,7 +156,7 @@
         <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
         <span v-else><i class="far fa-image"></i></span>
         <div>
-          <strong>{{ post.title || 'Sin titulo' }}</strong>
+          <strong :title="post.title || 'Sin titulo'">{{ post.title || 'Sin titulo' }}</strong>
           <p><span :class="['state-pill', post.status]">{{ statusLabel(post.status) }}</span> {{ formatUpdated(post.updatedAt || post.createdAt) }}</p>
         </div>
         <div class="post-mobile-actions">
@@ -250,15 +253,7 @@
       <AppNotice :visible="toast.show" :message="toast.message" :type="toast.type" />
     </Teleport>
 
-    <PostEditor
-      v-if="showEditor"
-      :edit-data="editingPost"
-      :mode="editorMode"
-      :paste-json-on-open="pasteJsonOnOpen"
-      :category-options="managedCategories"
-      @close="closeEditor"
-      @created="loadPosts"
-    />
+
     </template>
   </div>
 </template>
@@ -270,7 +265,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, deleteField, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { resolveAssetUrl } from '@/constants/assets'
-import PostEditor from '@/components/posts/PostEditor.vue'
 import ListControls from '@/components/shared/ListControls.vue'
 import PaginationNav from '@/components/shared/PaginationNav.vue'
 import SitePagesPanel from '@/components/sitePages/SitePagesPanel.vue'
@@ -320,12 +314,8 @@ const filter = ref('all')
 const categoryFilter = ref('all')
 const sortMode = ref('recent')
 const searchQuery = ref('')
-const showEditor = ref(false)
 const showCategoryManager = ref(false)
 const showToolsMenu = ref(false)
-const editingPost = ref(null)
-const editorMode = ref('post')
-const pasteJsonOnOpen = ref(false)
 const managedCategories = ref(DEFAULT_POST_CATEGORIES)
 const categoryDraft = ref('')
 const savingCategories = ref(false)
@@ -419,14 +409,9 @@ const filteredPosts = computed(() => {
   })
 })
 
-const postPager = useListNavigation(filteredPosts, { initialPageSize: 20 })
+const POST_PAGE_SIZE = 7
+const postPager = useListNavigation(filteredPosts, { initialPageSize: POST_PAGE_SIZE })
 const paginatedPosts = computed(() => postPager.pageItems.value)
-const postPageSize = computed({
-  get: () => postPager.pageSize.value,
-  set: (value) => {
-    postPager.pageSize.value = Number(value) || 20
-  }
-})
 const postPagination = computed(() => ({
   currentPage: postPager.currentPage.value,
   totalPages: postPager.totalPages.value,
@@ -485,49 +470,21 @@ watch(() => route.query.create, (createTarget) => {
   }
 })
 
-watch([showEditor, () => confirmDialog.value.show, showCategoryManager], ([isEditorOpen, isConfirmOpen, isCategoryOpen]) => {
-  document.body.style.overflow = isEditorOpen || isConfirmOpen || isCategoryOpen ? 'hidden' : ''
+watch([() => confirmDialog.value.show, showCategoryManager], ([isConfirmOpen, isCategoryOpen]) => {
+  document.body.style.overflow = isConfirmOpen || isCategoryOpen ? 'hidden' : ''
 })
 
-const openCreate = () => {
+function openPostPage(query = {}) {
   if (!canPublish.value) return
-  editingPost.value = null
-  editorMode.value = 'post'
-  pasteJsonOnOpen.value = false
-  showEditor.value = true
-  if (route.query.create === 'post') {
-    router.replace({ path: route.path, query: { ...route.query, create: undefined } })
-  }
+  const destination = { name:'post-create', query }
+  return route.query.create ? router.replace(destination) : router.push(destination)
 }
-
-const openJsonCreate = () => {
-  if (!canPublish.value) return
-  editingPost.value = null
-  editorMode.value = 'post'
-  pasteJsonOnOpen.value = true
-  showEditor.value = true
-  if (route.query.create === 'post-json') {
-    router.replace({ path: route.path, query: { ...route.query, create: undefined } })
-  }
-}
-
-const openHeroCreate = () => {
-  if (!canPublish.value) return
-  editingPost.value = null
-  editorMode.value = 'hero'
-  pasteJsonOnOpen.value = false
-  showEditor.value = true
-  if (route.query.create === 'hero') {
-    router.replace({ path: route.path, query: { ...route.query, create: undefined } })
-  }
-}
-
-const editPost = (post) => {
+const openCreate = () => openPostPage()
+const openJsonCreate = () => openPostPage({ json:'1' })
+const openHeroCreate = () => openPostPage({ mode:'hero' })
+const editPost = post => {
   if (!canEditPost(post)) return
-  editingPost.value = { ...post, ...(post.status === 'approved' ? { homePinned: isPinned(post) } : {}) }
-  editorMode.value = post.placement === 'hero' ? 'hero' : 'post'
-  pasteJsonOnOpen.value = false
-  showEditor.value = true
+  router.push({ name:'post-edit', params:{id:post.id} })
 }
 
 const openSocialShare = (id) => {
@@ -551,13 +508,6 @@ const runToolAction = (target) => {
   if (target === 'categories' && isAdmin.value) {
     showCategoryManager.value = true
   }
-}
-
-const closeEditor = () => {
-  showEditor.value = false
-  editingPost.value = null
-  editorMode.value = 'post'
-  pasteJsonOnOpen.value = false
 }
 
 const canEditPost = (post) => {
@@ -1264,4 +1214,33 @@ const executeDelete = async (id) => {
   }
 }
 
+</style>
+
+<style scoped>
+.post-table{table-layout:fixed}
+.category-col{width:160px}.status-col{width:90px}.author-col{width:92px}.updated-col{width:100px}.actions-col{width:312px}
+.post-table td,.post-table th{padding:10px 12px;vertical-align:middle}
+.post-table tbody tr{height:76px}
+.post-title-cell{grid-template-columns:64px minmax(0,1fr);gap:10px;min-width:0}
+.post-title-cell img,.post-title-cell>span{height:42px;width:64px;aspect-ratio:auto}
+.post-title-cell strong,.post-mobile-card strong{min-width:0;overflow-wrap:anywhere;-webkit-line-clamp:2}
+.post-author{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.post-table .category-list{min-width:0;max-height:52px;overflow:hidden}
+.post-table .category-pill{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.post-actions{display:grid;grid-template-columns:32px 112px 32px;gap:8px;align-items:center;justify-content:end}
+.post-actions.admin-actions{grid-template-columns:88px 32px 112px 32px}
+.post-actions button{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%;min-width:0;height:34px;min-height:34px;padding:0 8px;white-space:nowrap;border-radius:9px;box-sizing:border-box}
+.post-actions .post-edit-btn{grid-column:1}.post-actions .post-social-btn{grid-column:2}.post-actions .post-delete-btn{grid-column:3}
+.admin-actions .post-pin-btn,.admin-actions .post-approve-btn{grid-column:1;grid-row:1}
+.admin-actions .post-edit-btn{grid-column:2}.admin-actions .post-social-btn{grid-column:3}.admin-actions .post-delete-btn{grid-column:4}
+.post-actions .post-edit-btn,.post-actions .post-social-btn,.post-actions .post-delete-btn{grid-row:1}
+@media(max-width:1100px){
+ .post-mobile-card{grid-template-columns:64px minmax(0,1fr);gap:8px 12px;min-height:116px}
+ .post-mobile-card>img,.post-mobile-card>span{grid-column:1;grid-row:1 / 3;align-self:center;width:64px;height:48px;aspect-ratio:auto}
+ .post-mobile-card>div:not(.post-mobile-actions){min-width:0}
+ .post-mobile-card strong{min-height:2.6em}
+ .post-mobile-card p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .post-mobile-actions{grid-column:2;max-width:none;justify-content:flex-start;flex-wrap:nowrap;gap:8px}
+ .post-mobile-actions button{flex:0 0 34px;width:34px;height:34px}
+}
 </style>

@@ -395,6 +395,9 @@ onMounted(() => {
 
 <style scoped>
 .community-stories-panel {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   background:
     radial-gradient(circle at 12% 12%, rgba(236, 72, 153, 0.18), transparent 32%),
     radial-gradient(circle at 88% 0%, rgba(168, 85, 247, 0.2), transparent 30%),
@@ -853,6 +856,10 @@ onMounted(() => {
   font-style: normal;
   font-weight: 950;
   margin-bottom: 4px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-transform: uppercase;
 }
 
@@ -860,6 +867,7 @@ onMounted(() => {
   display: -webkit-box;
   font-size: 13px;
   line-height: 1.25;
+  min-height: 2.5em;
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -871,6 +879,9 @@ onMounted(() => {
   font-size: 11px;
   font-weight: 800;
   margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .media-feed-error {

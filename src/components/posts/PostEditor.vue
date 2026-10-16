@@ -1,6 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div class="post-editor-modal">
+    <div class="post-editor-page">
     <div class="post-editor-panel" :class="{ 'hero-editor-panel': isHeroMode, 'preview-collapsed': previewCollapsed, 'onboarding-locked': !isInitialFlowComplete }">
       <header class="editor-topbar">
         <button type="button" class="back-btn" @click="emit('close')">
@@ -26,9 +25,9 @@
             <i class="far fa-images"></i>
             Imagenes IGDB
           </button>
-          <button v-if="!isHeroMode" type="button" class="utility-btn" @click="previewCollapsed = !previewCollapsed">
+          <button v-if="!isHeroMode" type="button" class="utility-btn" @click="togglePreview">
             <i :class="previewCollapsed ? 'far fa-eye' : 'far fa-eye-slash'"></i>
-            {{ previewCollapsed ? 'Visualizar' : 'Esconder preview' }}
+            {{ previewCollapsed ? 'Mostrar vista previa' : 'Ocultar vista previa' }}
           </button>
           <button v-if="!isHeroMode" type="button" class="draft-btn" @click="savePost('draft')" :disabled="loading">
             <i class="far fa-clipboard"></i>
@@ -53,7 +52,7 @@
           <span>2</span>
           Secciones
         </button>
-        <button type="button" :class="{ active: mobileStep === 'preview' }" :disabled="!isInitialFlowComplete" @click="mobileStep = 'preview'">
+        <button type="button" :class="{ active: mobileStep === 'preview' }" :disabled="!isInitialFlowComplete" @click="showPreview">
           <span>3</span>
           Vista previa
         </button>
@@ -150,13 +149,13 @@
                     <i class="far fa-images"></i>
                     Buscar en IGDB
                   </button>
-                  <label>
-                    <input v-model="post.image" placeholder="Pegar URL de imagen o video" />
-                  </label>
+                  <div class="cover-url-control">
+                    <ClipboardUrlField v-model="post.image" label="Portada del post" />
+                  </div>
                 </div>
               </div>
               <label v-if="!isHeroMode" class="home-pin-option"><input type="checkbox" :checked="post.homePinned !== false" @change="post.homePinned = $event.target.checked; post.homePinnedAt = Date.now()" /> Pinear en el carrusel de Inicio al publicarse <small>Hasta seis publicaciones. Puedes quitar el pin desde el gestor.</small></label>
-              <details class="hero-media-settings"><summary>Hero de Inicio: imagen, logo y galería</summary><p>Opcional. Usa una imagen horizontal y un logo transparente. Si no añades imagen, se usará la portada del post.</p><label class="field-group"><span>Imagen del hero (URL)</span><input v-model="post.hero.image" type="url" placeholder="https://..." /></label><label class="field-group"><span>Logo del juego (URL)</span><input v-model="post.hero.logoUrl" type="url" placeholder="https://.../logo.png" /></label><label class="field-group"><span>Encuadre de la portada</span><select v-model="post.hero.position"><option value="center top">Arriba</option><option value="center center">Centro</option><option value="center bottom">Abajo</option><option value="left top">Izquierda, arriba</option><option value="right top">Derecha, arriba</option></select></label><label class="field-group"><span>Galería: una URL por línea</span><textarea :value="post.hero.images.map(item=>item.url).join('\n')" rows="4" @change="post.hero.images = $event.target.value.split('\n').map(url=>({url:url.trim(),alt:'',position:'center top'})).filter(item=>item.url)" /></label></details>
+              <details class="hero-media-settings"><summary>Hero de Inicio: imagen, logo y galería</summary><p>Opcional. Usa una imagen horizontal y un logo transparente. Si no añades imagen, se usará la portada del post.</p><div class="field-group"><span>Imagen del hero (URL)</span><ClipboardUrlField v-model="post.hero.image" label="Imagen del hero" /></div><div class="field-group"><span>Logo del juego (URL)</span><ClipboardUrlField v-model="post.hero.logoUrl" label="Logo del juego" /></div><label class="field-group"><span>Encuadre de la portada</span><select v-model="post.hero.position"><option value="center top">Arriba</option><option value="center center">Centro</option><option value="center bottom">Abajo</option><option value="left top">Izquierda, arriba</option><option value="right top">Derecha, arriba</option></select></label><div class="field-group"><span>Galería: una URL por línea</span><ClipboardUrlField :model-value="post.hero.images.map(item=>item.url).join('\n')" label="Galería del hero" multiple @update:model-value="value => post.hero.images = value.split('\n').filter(Boolean).map(url => post.hero.images.find(item=>item.url===url) || {url,alt:'',position:'center top'})" /></div></details>
 
             </div>
           </article>
@@ -271,7 +270,7 @@
             </button>
             <div v-show="isAccordionOpen('seo')" class="accordion-body">
               <label class="field-group">
-                <span>URL personalizada</span>
+                <span>Ruta personalizada (slug)</span>
                 <input v-model="post.slug" :placeholder="autoSlug" />
               </label>
               <label class="field-group">
@@ -288,10 +287,10 @@
                 <input v-model="post.keywordsText" :placeholder="autoKeywords" />
               </label>
               <div class="field-grid-2">
-                <label class="field-group">
+                <div class="field-group">
                   <span>Canonical URL</span>
-                  <input v-model="post.canonicalUrl" placeholder="Opcional" />
-                </label>
+                  <ClipboardUrlField v-model="post.canonicalUrl" label="URL canonical" />
+                </div>
                 <label class="field-group">
                   <span>Privacidad</span>
                   <select v-model="post.visibility">
@@ -369,10 +368,10 @@
                 <span>Nota del lanzamiento</span>
                 <input v-model="post.game.releaseNote" placeholder="Nintendo Switch 2 pendiente de anuncio oficial" />
               </label>
-              <label class="field-group">
+              <div class="field-group">
                 <span>Web oficial</span>
-                <input v-model="post.game.officialUrl" type="url" placeholder="https://web-oficial-del-juego.com/" />
-              </label>
+                <ClipboardUrlField v-model="post.game.officialUrl" label="Web oficial" />
+              </div>
             </div>
           </article>
 
@@ -487,31 +486,34 @@
                     <button type="button" title="Separador" @click.stop="applySectionFormat(index, 'divider')"><i class="fas fa-minus"></i></button>
                   </div>
                   <textarea v-model="section.content" placeholder="Contenido de esta seccion..."></textarea>
-                  <div class="section-image-row">
-                    <input v-model="section.image" placeholder="URL de imagen de la seccion" />
-                    <button type="button" @click.stop="openImagePicker(`section-${index}`)">
-                      <i class="far fa-image"></i>
-                    </button>
-                  </div>
+
                 </template>
 
                 <template v-else>
-                  <strong>{{ section.title || 'Sin subtitulo todavia' }}</strong>
-                  <p>{{ section.content || 'Sin contenido todavia' }}</p>
+                  <strong :title="section.title">{{ sectionExcerpt(section.title, 72) || 'Sin subtitulo todavia' }}</strong>
+                  <p>{{ sectionExcerpt(section.content, 110) || 'Sin contenido todavia' }}</p>
                 </template>
-              </div>
-
-              <div v-if="section.image" class="section-card-media">
-                <img
-                  v-if="mediaFor(section.image).type === 'youtube'"
-                  :src="mediaFor(section.image).thumbUrl"
-                  :alt="section.title || `Seccion ${index + 1}`"
-                />
-                <video v-else-if="mediaFor(section.image).type === 'video'" :src="mediaFor(section.image).url" muted playsinline></video>
-                <img v-else :src="mediaFor(section.image).url" :alt="section.title || `Seccion ${index + 1}`" />
-                <span v-if="isVideoMedia(mediaFor(section.image))" class="media-kind-badge">
-                  <i class="fas fa-play"></i>
-                </span>
+                <div v-if="section.image || activeSectionIndex === index" class="section-media-tools">
+                  <div class="section-image-row">
+                    <ClipboardUrlField v-if="activeSectionIndex === index" v-model="section.image" :label="`Imagen de la sección ${index+1}`" />
+                    <button type="button" class="section-media-picker" :aria-label="`Elegir imagen de la sección ${index+1}`" title="Elegir o cambiar imagen" @click.stop="openImagePicker(`section-${index}`)">
+                      <span v-if="section.image" class="section-card-media" :data-state="sectionMediaState[section.image] || 'loading'">
+                        <img @load="sectionMediaState[section.image]='loaded'" @error="sectionMediaState[section.image]='error'"
+                          v-if="mediaFor(section.image).type === 'youtube'"
+                          :src="mediaFor(section.image).thumbUrl"
+                          :alt="section.title || `Seccion ${index + 1}`"
+                        />
+                        <video @loadedmetadata="sectionMediaState[section.image]='loaded'" @error="sectionMediaState[section.image]='error'" preload="metadata" v-else-if="mediaFor(section.image).type === 'video'" :src="mediaFor(section.image).url" muted playsinline></video>
+                        <img @load="sectionMediaState[section.image]='loaded'" @error="sectionMediaState[section.image]='error'" v-else :src="mediaFor(section.image).url" :alt="section.title || `Seccion ${index + 1}`" />
+                        <small class="section-media-status">{{ sectionMediaState[section.image] === 'error' ? 'No carga' : sectionMediaState[section.image] === 'loaded' ? 'Disponible' : 'Comprobando' }}</small>
+                        <span v-if="isVideoMedia(mediaFor(section.image))" class="media-kind-badge">
+                          <i class="fas fa-play"></i>
+                        </span>
+                      </span>
+                      <i v-if="!section.image" class="far fa-image" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                </div>
               </div>
             </article>
           </div>
@@ -535,7 +537,7 @@
                 <i class="fas fa-mobile-screen"></i>
               </button>
             </div>
-            <button type="button" class="utility-btn" @click="previewCollapsed = true">
+            <button type="button" class="utility-btn" @click="hidePreview">
               <i class="far fa-eye-slash"></i>
               Esconder
             </button>
@@ -743,10 +745,10 @@
       </Transition>
     </div>
     </div>
-  </Teleport>
 </template>
 
 <script setup>
+import ClipboardUrlField from '@/components/posts/ClipboardUrlField.vue'
 import { normalizeSocialContent } from '@/services/socialContent'
 import { normalizeHomeHero } from '@/services/homeHero'
 import { homePinOverflow } from '@/services/homePins'
@@ -800,7 +802,14 @@ const savingLoaderText = computed(() => {
 const toast = ref({ show: false, message: '', type: 'success' })
 const activeSectionIndex = ref(0)
 const mobileStep = ref('info')
-const previewCollapsed = ref(false)
+const previewCollapsed = ref(true)
+function sectionExcerpt(value, limit) {
+  const text = String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  return text.length > limit ? text.slice(0, limit).trimEnd() + '…' : text
+}
+function showPreview() { previewCollapsed.value = false; mobileStep.value = 'preview' }
+function hidePreview() { previewCollapsed.value = true; if (mobileStep.value === 'preview') mobileStep.value = 'sections' }
+function togglePreview() { previewCollapsed.value ? showPreview() : hidePreview() }
 const jsonPasteError = ref('')
 const imagePickerOpen = ref(false)
 const imageTargetId = ref('cover')
@@ -831,6 +840,7 @@ const defaultAnalysisCriteria = [
 ]
 const fallbackCategoryOptions = ['Nintendo Switch', 'Super Mario', 'Zelda', 'Pokemon', 'Rumores', 'Analisis', 'Guias']
 
+const sectionMediaState = ref({})
 const post = ref({
   title: '',
   homePinned: props.editData ? props.editData.homePinned : true,
@@ -1616,20 +1626,11 @@ const savePost = async (targetStatus = 'pending') => {
 .home-pin-option{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:14px;border:1px solid #a855f755;border-radius:14px;background:#7c3aed12;font-weight:700;font-size:13px}
 .home-pin-option input{accent-color:#9333ea;width:18px;height:18px}
 .home-pin-option small{flex-basis:100%;font-weight:400;color:var(--text-secondary);line-height:1.5}
-.post-editor-modal {
-  align-items: center;
-  background:
-    radial-gradient(circle at 20% 10%, rgba(147, 51, 234, 0.24), transparent 30%),
-    rgba(2, 6, 23, 0.72);
-  backdrop-filter: blur(14px);
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 28px;
-  position: fixed;
-  z-index: 7000;
+.post-editor-page {
+  background: var(--admin-bg);
+  width: 100%;
+  min-height: 100svh;
+  position: relative;
 }
 
 .post-editor-panel {
@@ -3704,7 +3705,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 @media (min-width: 761px) and (max-width: 1440px) {
-  .post-editor-modal { padding: 12px; }
+  .post-editor-page { padding: 12px; }
   .post-editor-panel { width: 100%; max-width: 100%; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); }
   .editor-topbar { grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
   .editor-actions-top { grid-column: 1 / -1; flex-wrap: wrap; }
@@ -3725,7 +3726,7 @@ const savePost = async (targetStatus = 'pending') => {
 }
 
 @media (max-width: 760px) {
-  .post-editor-modal {
+  .post-editor-page {
     align-items: stretch;
     padding: 0;
   }
@@ -4051,5 +4052,60 @@ const savePost = async (targetStatus = 'pending') => {
 </style>
 
 <style scoped>
+/* The route owns the viewport; the editor no longer sits in an overlay. */
+.post-editor-page{display:block;position:relative;inset:auto;padding:0;width:100%;background:var(--admin-bg);backdrop-filter:none;z-index:auto}
+.post-editor-page .post-editor-panel{width:100%;max-width:none;height:100dvh;max-height:100dvh;border:0;border-radius:0;box-shadow:none;grid-template-rows:auto minmax(0,1fr)}
+.post-editor-page .editor-layout{height:100%;max-height:100%;box-sizing:border-box}
+.post-editor-page .hero-editor-panel{max-width:none}
+@media(min-width:761px) and (max-width:1440px){.post-editor-page .editor-layout{height:auto}}
+@media(max-width:760px){.post-editor-page .post-editor-panel{grid-template-rows:auto auto minmax(0,1fr)}.post-editor-page .hero-editor-panel{grid-template-rows:auto minmax(0,1fr)}}
+</style>
+
+<style scoped>
 .hero-media-settings{display:grid;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--admin-surface);color:var(--text-primary)}.hero-media-settings summary{font-weight:800;cursor:pointer}.hero-media-settings p{font-size:12px;color:var(--text-secondary);line-height:1.5;margin:12px 0}.hero-media-settings .field-group{margin-top:12px}
+</style>
+
+<style scoped>
+.editor-layout,.editor-column,.section-stack,.section-copy{min-width:0}
+.post-section-card,.post-section-card.has-media,.post-section-card.active,.post-section-card.active.has-media,.post-section-card:not(.active),.post-section-card:not(.active).has-media{grid-template-columns:38px minmax(0,1fr);gap:12px;min-width:0;min-height:0}
+.section-media-tools{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:center;min-width:0}
+
+.post-section-card .section-card-media,.post-section-card.active .section-card-media,.post-section-card:not(.active) .section-card-media{display:block;grid-column:auto;align-self:center;width:72px;height:56px;min-height:0;max-height:56px;flex-shrink:0;background:var(--admin-bg);border:1px solid var(--border)}
+.section-media-status{position:absolute;inset:auto 0 0;padding:3px 2px;background:#050816df;color:#e2e8f0;text-align:center;font-size:8px;line-height:1.2;white-space:nowrap}
+.section-card-media[data-state=error]{border-color:#fb7185}.section-card-media[data-state=error] .section-media-status{color:#fda4af}
+.post-section-card:not(.active).has-media .section-copy{grid-template-columns:minmax(0,1fr)72px}
+.post-section-card:not(.active).has-media .section-copy>.section-card-head,.post-section-card:not(.active).has-media .section-copy>strong,.post-section-card:not(.active).has-media .section-copy>p{grid-column:1}
+.post-section-card:not(.active).has-media .section-media-tools{display:block;grid-column:2;grid-row:1 / 4;align-self:center}
+.section-image-row{grid-template-columns:minmax(0,1fr)72px;min-width:0;align-items:start}
+.section-image-row>.section-media-picker{width:72px;height:56px;padding:0;margin:0;overflow:hidden;position:relative;border-radius:10px}
+.post-section-card:not(.active) .section-image-row{display:block}
+.post-section-card .section-image-row>.section-media-picker .section-card-media{position:absolute;inset:0;width:100%;height:100%;min-height:0;max-height:100%;max-width:100%;border:0;border-radius:inherit}
+.section-media-picker{min-width:0;max-width:100%;isolation:isolate}
+.section-media-tools,.section-image-row{max-width:100%;min-width:0}
+.post-section-card:not(.active){padding:12px;min-height:88px}
+.post-section-card:not(.active) .section-copy{overflow:hidden;gap:4px;min-width:0;max-width:100%;grid-template-columns:minmax(0,1fr)}
+.post-section-card:not(.active) .section-copy>strong,.post-section-card:not(.active) .section-copy>p{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}
+.post-section-card:not(.active) .section-copy>strong{max-width:min(100%,64ch)}
+.post-section-card:not(.active) .section-copy>p{max-width:min(100%,85ch)}
+.post-section-card:not(.active) .section-card-head{min-width:0;overflow:hidden}
+.post-section-card:not(.active) .section-card-head small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.post-section-card:not(.active) .section-visible-toggle{flex-shrink:0}
+.cover-preview-card{height:112px;min-height:0;max-height:112px}
+.cover-preview-card img,.cover-preview-card video,.cover-preview-card iframe{height:100%;max-height:112px;object-fit:cover}
+.cover-actions{grid-template-columns:minmax(0,1fr)}
+.cover-url-control{min-width:0}
+@media(min-width:761px) and (max-width:1440px){
+ .editor-layout{height:auto;max-height:100%;grid-auto-rows:max-content;align-content:start}
+ .editor-column{height:auto;max-height:none;grid-auto-rows:max-content;overflow:visible}
+ .section-stack{grid-auto-rows:max-content}
+}
+@media(max-width:760px){
+ .post-section-card,.post-section-card.active,.post-section-card.active.has-media{padding:10px;gap:8px;grid-template-columns:32px minmax(0,1fr)}
+
+ .post-section-card .section-card-media,.post-section-card.active .section-card-media,.post-section-card:not(.active) .section-card-media{width:56px;height:48px;max-height:48px}
+ .post-section-card:not(.active).has-media .section-copy{grid-template-columns:minmax(0,1fr)56px}
+ .section-image-row{grid-template-columns:minmax(0,1fr)56px;gap:6px}
+ .section-image-row>.section-media-picker{width:56px;height:48px}
+ .section-visible-toggle em{display:none}
+}
 </style>

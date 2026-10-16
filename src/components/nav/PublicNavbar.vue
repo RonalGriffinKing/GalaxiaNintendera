@@ -8,7 +8,6 @@ import { auth, db, firebaseConfig } from '@/firebase'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { resetPlayerSession } from '@/services/playerState'
 import { isNativeApp } from '@/services/appEnvironment'
-import PostEditor from '@/components/posts/PostEditor.vue'
 import PublicCreateSheet from '@/components/nav/PublicCreateSheet.vue'
 import NotificationDropdown from '@/components/nav/NotificationDropdown.vue'
 import PublicQuickAdminModals from '@/components/nav/PublicQuickAdminModals.vue'
@@ -17,7 +16,7 @@ import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import GlobalThreadComposerLauncher from '@/components/thread/GlobalThreadComposerLauncher.vue'
 import { defaultLogoUrl } from '@/constants/assets'
 import { createOfficialCommunity } from '@/constants/community'
-import { DEFAULT_POST_CATEGORIES, loadPostCategories, postCategoryLabels } from '@/services/postCategories'
+import { postCategoryLabels } from '@/services/postCategories'
 import {
   DEFAULT_QUICK_THREAD_TOPICS,
   PUBLIC_NAV_LINKS,
@@ -53,8 +52,6 @@ const isLoggingOut = ref(false)
 const currentProfile = ref({})
 const notificationButton = ref(null)
 const globalThreadLauncher = ref(null)
-const quickPostOpen = ref(false)
-const quickPostCategories = ref(DEFAULT_POST_CATEGORIES)
 const quickCommunityOpen = ref(false)
 const quickUserOpen = ref(false)
 const quickCreateSaving = ref(false)
@@ -133,7 +130,6 @@ const bottomNavClass = computed(() => ({
     || accountMenuOpen.value
     || searchOpen.value
     || notificationsOpen.value
-    || quickPostOpen.value
     || quickCommunityOpen.value
     || quickUserOpen.value
 }))
@@ -752,8 +748,7 @@ const openCreateOption = async (item) => {
   createMenuOpen.value = false
 
   if (item.action === 'post') {
-    quickPostCategories.value = await loadPostCategories()
-    quickPostOpen.value = true
+    await router.push({ name: 'post-create' })
     return
   }
 
@@ -944,8 +939,8 @@ onMounted(() => {
   updateScrollNavigation()
 })
 
-watch([menuOpen, createMenuOpen, accountMenuOpen, quickPostOpen, quickCommunityOpen, quickUserOpen], ([isMenuOpen, isCreateOpen, isAccountOpen, isQuickPostOpen, isQuickCommunityOpen, isQuickUserOpen]) => {
-  document.body.style.overflow = isMenuOpen || isCreateOpen || (isAccountOpen && isMobileNav()) || isQuickPostOpen || isQuickCommunityOpen || isQuickUserOpen ? 'hidden' : ''
+watch([menuOpen, createMenuOpen, accountMenuOpen, quickCommunityOpen, quickUserOpen], ([isMenuOpen, isCreateOpen, isAccountOpen, isQuickCommunityOpen, isQuickUserOpen]) => {
+  document.body.style.overflow = isMenuOpen || isCreateOpen || (isAccountOpen && isMobileNav()) || isQuickCommunityOpen || isQuickUserOpen ? 'hidden' : ''
 })
 
 watch(() => route.fullPath, () => {
@@ -1334,13 +1329,6 @@ onUnmounted(() => {
         </button>
       </div>
     </Teleport>
-
-    <PostEditor
-      v-if="quickPostOpen"
-      :category-options="quickPostCategories"
-      @close="quickPostOpen = false"
-      @created="quickPostOpen = false"
-    />
 
     <PublicQuickAdminModals
       v-model:community-draft="quickCommunityDraft"
