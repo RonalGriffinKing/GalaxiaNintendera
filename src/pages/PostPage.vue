@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { defineAsyncComponent, computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from "firebase/firestore"
 import { auth, db } from "@/firebase"
@@ -11,6 +11,8 @@ import PostCinematicHero from '@/components/posts/PostCinematicHero.vue'
 import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
 import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
 
+const PostSummaryViewer = defineAsyncComponent(() => import('@/components/posts/PostSummaryViewer.vue'))
+const summaryOpen = ref(false)
 const route = useRoute()
 const router = useRouter()
 const post = ref({ sections: [] })
@@ -611,8 +613,11 @@ onUnmounted(() => {
     <main class="post-layout">
       <FloatingBackButton fallback="/noticias" />
       <article class="post-article">
+        <PostSummaryViewer v-if="summaryOpen && !isUpcomingPost" :post="post" @close="summaryOpen=false" @read="summaryOpen=false" />
         <PostCinematicHero
           :post="post"
+          :allow-summary="!isUpcomingPost"
+          @summary="summaryOpen=true"
           :author-profile="authorProfile"
           :author-icon="authorIcon"
           :author-icon-meta="authorIconMeta"

@@ -1,11 +1,13 @@
 <script setup>
-import { computed } from 'vue'
-const props = defineProps({ element:String, scope:String, settings:Object, title:String, description:String, points:Array, fonts:Array, number:Number, image:String, imageUrl:String, overflow:Boolean, notice:String, canUndo:Boolean, canRedo:Boolean, inert:Boolean })
-const emit=defineEmits(['select','scope','setting','title','description','points','undo','redo','close','center','fit','download','image-url','upload','original'])
-const names={title:'Titulo',description:'Subtitulo',points:'Puntos',image:'Imagen de fondo',overlay:'Color del fondo',logo:'Logo Galaxia',gameLogo:'Logo del juego',author:'Autor',part:'Etiqueta Parte',arrow:'Flecha',button:'Boton',number:'Numeracion'}
+import { computed, ref } from 'vue'
+import SocialPaintControls from './SocialPaintControls.vue'
+const templateName = ref('')
+const props = defineProps({ templates:Array, templateNotice:String, element:String, cta:String, slideType:String, slideAccent:String, scope:String, settings:Object, title:String, titleHighlights:Array, description:String, points:Array, fonts:Array, number:Number, image:String, imageUrl:String, overflow:Boolean, notice:String, canUndo:Boolean, canRedo:Boolean, inert:Boolean })
+const emit=defineEmits(['save-template','load-template','reset','select','scope','setting','cta','title','title-highlights','description','points','undo','redo','close','center','fit','download','image-url','upload','original'])
+const names=computed(()=>({...(props.slideType==='closing'?{cta:'Invitacion a comentar'}:{}),brand:'Marca superior',progress:'Progreso del carrusel',title:'Titulo',description:'Subtitulo',points:'Puntos',image:'Imagen de fondo',overlay:'Color del fondo',logo:'Logo Galaxia',gameLogo:'Logo del juego',author:'Autor',part:'Etiqueta Parte',arrow:'Flecha',button:'Boton',number:'Numeracion'}))
 const current=computed(()=>props.settings[props.element] || {})
 const isText=computed(()=>['title','description','points'].includes(props.element))
-const hidden=computed(()=>Object.keys(names).filter(k=>k!=='overlay' && props.settings[k]?.visible===false))
+const hidden=computed(()=>Object.keys(names.value).filter(k=>k!=='overlay' && props.settings[k]?.visible===false))
 const text=computed(()=>props.element==='title'?props.title:props.element==='points'?(props.points||[]).join('\n'):props.description)
 function set(key,value){emit('setting',{path:props.element+'.'+key,value})}
 function content(value){emit(props.element,value)}
@@ -24,19 +26,24 @@ function setNumber(key,event,min,max){const value=Number(event.target.value);if(
   <small>Toca un elemento de la imagen para editarlo. Puedes arrastrarlo para moverlo.</small>
   <fieldset :disabled="inert">
    <div class="tools"><button :disabled="!canUndo" @click="emit('undo')">Deshacer</button><button :disabled="!canRedo" @click="emit('redo')">Rehacer</button></div>
-   <label class="scope">Aplicar apariencia a<select :value="scope" @change="emit('scope',$event.target.value)"><option value="single">Solo esta imagen</option><option value="all">Todo el carrusel</option></select></label>
+   <div class="scope-pill" role="group" aria-label="Aplicar apariencia a"><button :class="{active:scope==='single'}" :aria-pressed="scope==='single'" @click="emit('scope','single')">Esta imagen</button><button :class="{active:scope==='all'}" :aria-pressed="scope==='all'" @click="emit('scope','all')">Todo el carrusel</button></div>
    <small v-if="scope==='all'">Los ajustes individuales se conservan al cambiar el diseno general.</small>
    <section class="context" :key="element" :aria-label="names[element]">
     <template v-if="isText">
      <label>{{ names[element] }}<textarea :value="text" :rows="element==='points'?6:4" @input="content($event.target.value)" /></label>
+     <template v-if="element==='title'">
+      <label>Frases destacadas<textarea :value="(titleHighlights || []).join('\n')" rows="2" placeholder="Una frase exacta del titulo por linea" @input="emit('title-highlights',$event.target.value)" /></label>
+      <small v-if="(titleHighlights || []).some(phrase => !title.includes(phrase))" role="status">Alguna frase no coincide con el titulo. Copiala exactamente para destacarla.</small>
+      <label>Color del destacado<input type="color" :value="current.highlightColor || '#facc15'" @input="set('highlightColor',$event.target.value)" /></label>
+     </template>
      <small v-if="element==='points'">Un punto por linea. Enter agrega otro punto.</small>
-     <small>El contenido cambia solo en esta imagen.</small>
+     <small>El contenido cambia solo en esta imagen. El tama?o se adapta al formato elegido.</small>
      <div class="tools"><label>Tamano<input type="number" min="12" max="150" :value="current.size || 30" @input="setNumber('size',$event,12,150)" /></label><label>Color<input type="color" :value="current.color || settings.description.color" @input="set('color',$event.target.value)" /></label></div>
      <label>Fuente<select :value="current.family || settings.typography.family" @change="set('family',$event.target.value)"><option v-for="font in fonts" :key="font.value" :value="font.value">{{ font.label }}</option></select></label>
      <div class="tools"><button :class="{active:(current.weight||850)>=800}" @click="set('weight',(current.weight||850)>=800?500:900)"><b>Negrita</b></button><button v-for="(name,key) in {left:'Izq.',center:'Centro',right:'Der.'}" :key="key" :class="{active:(current.align||'left')===key}" @click="set('align',key)">{{ name }}</button></div>
      <div class="tools"><label v-if="element==='description'">Lineas visibles<input type="number" min="1" max="30" :value="current.lines" @input="setNumber('lines',$event,1,30)" /></label><label>Interlineado<input type="number" min="0.9" max="2" step="0.05" :value="current.line || 1.2" @input="setNumber('line',$event,.9,2)" /></label></div>
      <label v-if="element==='title'">Lineas visibles (0 = todas)<input type="number" min="0" max="30" :value="current.lines || 0" @input="setNumber('lines',$event,0,30)" /></label>
-     <label v-if="element==='title'">Ancho del texto<input type="number" min="180" max="1000" :value="current.width" @input="setNumber('width',$event,180,1000)" /></label>
+     <label>Ancho de la caja de texto (px)<input type="number" min="180" max="1000" :value="current.width || 916" @input="setNumber('width',$event,180,1000)" /></label><small>Arrastra los tiradores laterales para cambiar el ancho sin cambiar la letra.</small>
      <label v-if="element==='points'">Espacio entre puntos<input type="number" min="0" max="60" :value="current.gap ?? 18" @input="setNumber('gap',$event,0,60)" /></label>
      <p v-if="overflow" role="status">Parte del texto no cabe. Ajusta las lineas o el tamano.</p>
      <button @click="emit('fit')">Ajustar textos al espacio</button>
@@ -52,30 +59,40 @@ function setNumber(key,event,min,max){const value=Number(event.target.value);if(
      <button @click="emit('select','overlay')">Color y sombreado del fondo</button>
     </template>
     <template v-else-if="element==='overlay'">
-     <label>Color del fondo<input type="color" :value="current.color" @input="set('color',$event.target.value)" /></label>
+     <SocialPaintControls :value="current" @change="set($event.key,$event.value)" />
      <label>Intensidad<input type="number" min="0" max="1" step="0.05" :value="current.intensity" @input="setNumber('intensity',$event,0,1)" /></label>
-     <label class="check"><input type="checkbox" :checked="current.gradient" @change="set('gradient',$event.target.checked)" /> Degradado</label>
+
      <button @click="emit('select','image')">Editar imagen de fondo</button>
     </template>
     <template v-else>
+     <label v-if="element==='cta'">Invitacion a comentar<textarea :value="cta" rows="2" @input="emit('cta',$event.target.value)" /></label>
      <label v-if="['part','button'].includes(element)">Texto<input :value="current.text" @input="set('text',$event.target.value)" /></label>
      <label v-if="element==='gameLogo'">URL del logo<input type="url" :value="current.url" @change="set('url',$event.target.value)" /></label>
      <template v-if="element==='author'"><label v-for="(name,key) in {avatar:'Mostrar avatar',name:'Mostrar nombre',date:'Mostrar fecha'}" :key="key" class="check"><input type="checkbox" :checked="current[key]" @change="set(key,$event.target.checked)" />{{ name }}</label></template>
      <label v-if="element==='arrow'">Icono<select :value="current.icon" @change="set('icon',$event.target.value)"><option value="fa-arrow-right">Flecha</option><option value="fa-chevron-right">Indicador</option><option value="fa-plus">Mas</option></select></label>
-     <label>Tamano<input type="number" min="16" max="760" :value="current.size || 100" @input="setNumber('size',$event,16,760)" /></label>
-     <label v-if="current.color">Color<input type="color" :value="current.color" @input="set('color',$event.target.value)" /></label>
+     <label v-if="element!=='progress'">Tamano<input type="number" min="16" max="760" :value="current.size || 100" @input="setNumber('size',$event,16,760)" /></label>
+     <template v-if="['part','arrow','button','progress'].includes(element)">
+      <label v-if="['arrow','button','part'].includes(element)">{{ element==='arrow' ? 'Color de la flecha interior' : 'Color del texto' }}<input type="color" :value="current.foregroundColor || (element==='part' && slideAccent==='gold' ? '#18120a' : '#ffffff')" @input="set('foregroundColor',$event.target.value)" /></label>
+      <strong class="paint-heading">{{ element==='progress' ? 'Color de la barra' : 'Fondo del botón' }}</strong>
+      <SocialPaintControls :value="current" @change="set($event.key,$event.value)" />
+     </template>
+     <label v-else-if="current.color">Color<input type="color" :value="current.color" @input="set('color',$event.target.value)" /></label>
     </template>
+    <button @click="emit('reset')">Restablecer este elemento</button>
     <button v-if="!['image','overlay'].includes(element)" @click="emit('center')">Centrar horizontalmente</button>
     <button v-if="element!=='overlay'" class="hide" @click="set('visible',false)">Ocultar {{ names[element]?.toLowerCase() }}</button>
     <small v-if="notice" role="status">{{ notice }}</small>
    </section>
    <details class="elements"><summary>Elementos de la imagen</summary><div class="chips"><button v-for="(name,key) in names" :key="key" :class="{active:element===key}" @click="emit('select',key)">{{ name }}</button></div></details>
    <section v-if="hidden.length" class="hidden"><strong>Elementos ocultos</strong><small>Pulsa uno para volver a mostrarlo.</small><div class="chips"><button v-for="key in hidden" :key="key" @click="restore(key)">+ {{ names[key] }}</button></div></section>
+   <section class="template-library"><strong>Mis plantillas</strong><small>Guardan colores, posiciones y ajustes. No incluyen los textos ni las fotos de la noticia.</small><label>Nombre<input v-model="templateName" maxlength="80" placeholder="Mi plantilla" /></label><button :disabled="!templateName.trim()" @click="emit('save-template',templateName); templateName=''">Guardar plantilla nueva</button><label>Cargar plantilla<select value="" @change="emit('load-template',$event.target.value); $event.target.value='' "><option value="" disabled>Elegir plantilla...</option><option v-for="item in templates" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><small v-if="templateNotice" role="status">{{ templateNotice }}</small></section>
    <button class="download" @click="emit('download')">Descargar carrusel ZIP</button>
   </fieldset>
  </aside>
 </template>
 <style scoped>
+.scope-pill{display:flex;padding:4px;border:1px solid #ffffff25;border-radius:999px;background:#ffffff08;gap:4px}.scope-pill button{border:0;border-radius:999px;flex:1;font-weight:700}.scope-pill button.active{background:linear-gradient(110deg,#7c3aed,#c026d3);box-shadow:0 2px 10px #7c3aed40}.template-library{display:grid;gap:10px;border-top:1px solid #ffffff20;padding-top:16px}
+.paint-heading{font-size:12px;color:#bdc5d8;margin-top:6px}
 .layers-panel{display:none}
 .layer-list{display:grid;gap:6px}.layer-row{display:flex;border:1px solid #ffffff15;border-radius:9px;overflow:hidden}.layer-row.selected{border-color:#a855f7;background:#7c3aed28}.layer-row button{border:0;border-radius:0;background:transparent;text-align:left}.layer-row .visibility{flex:0 0 36px;text-align:center;padding:7px}.layer-row.muted>button:first-child{color:#929db4}.layer-hidden{display:grid;gap:10px;padding-top:14px;border-top:1px solid #ffffff20}.layer-hidden strong{font-size:13px}
 @media(min-width:1100px){.layers-panel{display:flex;flex-direction:column;gap:14px;position:fixed;left:0;top:var(--public-nav-offset,72px);bottom:0;width:240px;background:#0b1020;color:#fff;padding:18px;box-sizing:border-box;overflow:auto;border-right:1px solid #ffffff20;z-index:5000;font-family:Inter,Arial,sans-serif}.visual-inspector{width:340px!important;top:var(--public-nav-offset,72px)!important}.visual-inspector .elements,.visual-inspector .hidden{display:none}}

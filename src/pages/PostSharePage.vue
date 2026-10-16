@@ -6,6 +6,7 @@ import JSZip from 'jszip'
 import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { mergeSocialSettings, updateSocialSetting } from '@/services/socialTemplateState'
+import { normalizeSocialContent, titleRuns } from '@/services/socialContent'
 import SocialVisualInspector from '@/components/posts/SocialVisualInspector.vue'
 import { resolveProfileIcon } from '@/services/profileProgress'
 import { apiUrl } from '@/services/appEnvironment'
@@ -30,6 +31,7 @@ const updateEditorViewport = () => { editorViewport.value = { width: window.inne
 const editorOpen = ref(false)
 const selectedElement = ref('title')
 const selectionHandle = ref(null)
+const textWidthHandles = ref(null)
 const textOverflow = ref(false)
 const centerGuide = ref(false)
 const savedTemplates = ref([])
@@ -47,6 +49,8 @@ const activeDrawerSection = ref('image')
 const globalImageOverride = ref('')
 const slideImageOverrides = ref({})
 const slideTextOverrides = ref({})
+const slideHighlightOverrides = ref({})
+const slideCtaOverrides = ref({})
 const slideDescriptionOverrides = ref({})
 const slidePointsOverrides = ref({})
 const fitNotice = ref('')
@@ -67,19 +71,22 @@ const arrowIcons = [
 
 const defaultTemplateSettings = {
   image: { visible: true, brightness: 100, contrast: 100, saturation: 100, blur: 0, scale: 100, x: 50, y: 0 },
-  logo: { visible: true, size: 120, x: 50, y: 34, opacity: 1 },
+  logo: { visible: false, size: 120, x: 50, y: 34, opacity: 1 },
   gameLogo: { visible: false, url: '', size: 220, x: 50, y: 150, opacity: 1 },
   coverGameLogo: { size: 450, x: 50, y: 120 },
-  author: { visible: true, avatar: true, name: true, date: true, size: 100, x: 82, y: 86, opacity: 1 },
-  arrow: { visible: true, icon: 'fa-arrow-right', size: 96, color: '#9333ea', x: 34, y: 56, opacity: 1 },
-  part: { visible: true, color: '#8b5cf6', text: '', size: 25, radius: 16 },
-  title: { visible: true, size: 82, weight: 950, color: '#ffffff', width: 820, line: 1.04, spacing: 34 },
+  author: { visible: false, avatar: true, name: true, date: true, size: 100, x: 82, y: 86, opacity: 1 },
+  arrow: { visible: true, icon: 'fa-arrow-right', foregroundColor: '#ffffff', size: 96, color: '#f5e9ff', endColor: '#ec4899', gradient: true, x: 34, y: 56, opacity: 1 },
+  part: { visible: true, foregroundColor: null, color: '#8b5cf6', endColor: '#5b21cf', gradient: true, text: '', size: 30, radius: 999 },
+  title: { visible: true, highlightColor: '#facc15', size: 88, weight: 950, color: '#ffffff', width: 916, line: 1.08, spacing: 26 },
   subtitle: { visible: false, size: 25, color: '#ffffff', lines: 1 },
-  points: { visible: true, size: 30, gap: 18 },
-  description: { visible: true, size: 40, color: '#f8fafc', lines: 3 },
-  button: { visible: true, text: 'Leela en la web', color: '#f97316', radius: 999, y: 126 },
+  brand: { visible: true, size: 32 },
+  cta: { visible: true, size: 40, color: '#ffc02b' },
+  progress: { visible: true, color: '#facc15', endColor: '#fb7185', gradient: true },
+  points: { visible: true, size: 36, gap: 22, weight: 500, line: 1.25 },
+  description: { visible: true, size: 42, color: '#ede9fe', lines: 6 },
+  button: { visible: false, foregroundColor: '#ffffff', text: 'Leela en la web', color: '#f97316', endColor: '#f59e0b', gradient: true, radius: 999, y: 126 },
   number: { visible: true, color: '#ffffff', size: 30 },
-  overlay: { color: '#050816', intensity: 0.9, height: 100, gradient: true },
+  overlay: { color: '#050816', endColor: '#050816', intensity: 0.9, height: 100, gradient: true },
   typography: { family: 'Inter, system-ui, sans-serif' }
 }
 
@@ -161,8 +168,8 @@ const templatePresets = {
 }
 
 const styleSettingsStore = ref({
-  editorial: loadStoredTemplate('editorial') || cloneSettings(defaultTemplateSettings),
-  impact: loadStoredTemplate('impact') || cloneSettings(impactTemplateSettings)
+  editorial: cloneSettings(defaultTemplateSettings),
+  impact: cloneSettings(impactTemplateSettings)
 })
 const styleOverridesStore = ref({ editorial: {}, impact: {} })
 const globalTemplateSettings = ref(cloneSettings(styleSettingsStore.value.editorial))
@@ -207,7 +214,7 @@ const hasScore = computed(() => {
   const normalizedCategory = normalize(category.value)
   return score.value !== null && (normalizedCategory.includes('analisis') || normalizedCategory.includes('review'))
 })
-const isAnalysisPost = computed(() => Boolean(post.value?.analysis) || normalize(category.value).includes('analisis'))
+const isAnalysisPost = computed(() => ['analisis','review'].some(label => normalize(category.value).includes(label)))
 const createdAtLabel = computed(() => formatDate(post.value?.createdAt))
 const activeFormat = computed(() => formats[selectedFormat.value] || formats.story)
 const activeStyle = computed(() => styleDefinitions[selectedStyle.value] || styleDefinitions.editorial)
@@ -249,7 +256,7 @@ const imageIssueMessage = computed(() => {
 const carouselSlides = computed(() => {
   if (!post.value) return []
 
-  const social = socialContent.value
+  const social = normalizeSocialContent(socialContent.value)
   const socialSlides = Array.isArray(social?.slides)
     ? social.slides
     : (Array.isArray(social?.diapositivas)
@@ -258,7 +265,10 @@ const carouselSlides = computed(() => {
 
   const baseSlide = {
     id: 'resumen',
-    eyebrow: 'Parte 1',
+    type: 'cover',
+    titleHighlights: social.titleHighlights,
+    accent: social.accent,
+    eyebrow: social.eyebrow || category.value,
     title: stripHtml(social.title || social.titulo || title.value),
     subtitle: social.subtitle || social.subtitulo || post.value?.subtitle || category.value,
     description: stripHtml(social.summary || social.resumen || social.content || social.contenido || social.description || description.value),
@@ -281,10 +291,14 @@ const carouselSlides = computed(() => {
 
         return {
           id: `social-${index + 1}`,
-          eyebrow: `Parte ${index + 2}`,
+          type: socialSlide.type,
+          titleHighlights: socialSlide.titleHighlights,
+          accent: socialSlide.accent,
+          cta: socialSlide.cta,
+          eyebrow: socialSlide.eyebrow || primarySection.label || category.value,
           title: stripHtml(socialSlide.title || socialSlide.titulo || primarySection.title || title.value),
           subtitle: socialSlide.subtitle || socialSlide.subtitulo || primarySection.subtitle || primarySection.label || category.value,
-          description: stripHtml(socialSlide.content || socialSlide.contenido || socialSlide.summary || socialSlide.resumen || socialSlide.description || primarySection.content || description.value),
+          description: socialSlide.type === 'closing' ? stripHtml(socialSlide.content) : stripHtml(socialSlide.content || socialSlide.contenido || socialSlide.summary || socialSlide.resumen || socialSlide.description || primarySection.content || description.value),
           points: (Array.isArray(socialSlide.points) ? socialSlide.points : (Array.isArray(socialSlide.puntos) ? socialSlide.puntos : (Array.isArray(socialSlide.highlights) ? socialSlide.highlights : [])))
             .map(point => stripHtml(point))
             .filter(Boolean),
@@ -297,7 +311,10 @@ const carouselSlides = computed(() => {
         .filter(section => section?.hidden !== true && (section?.title || section?.content || section?.image))
         .map((section, index) => ({
           id: `seccion-${index + 1}`,
-          eyebrow: `Parte ${index + 2}`,
+          type: 'content',
+          titleHighlights: [],
+          accent: 'violet',
+          eyebrow: section.label || category.value,
           title: stripHtml(section.title || title.value),
           subtitle: section.subtitle || section.label || category.value,
           description: stripHtml(section.content || description.value),
@@ -332,18 +349,18 @@ onBeforeUpdate(() => {
 })
 
 
-function designSnapshot() { return cloneSettings({ global: globalTemplateSettings.value, overrides: slideTemplateOverrides.value, texts: slideTextOverrides.value, descriptions: slideDescriptionOverrides.value, points: slidePointsOverrides.value, images: slideImageOverrides.value, globalImage: globalImageOverride.value, format: selectedFormat.value }) }
+function designSnapshot() { return cloneSettings({ global: globalTemplateSettings.value, overrides: slideTemplateOverrides.value, texts: slideTextOverrides.value, highlights: slideHighlightOverrides.value, ctas: slideCtaOverrides.value, descriptions: slideDescriptionOverrides.value, points: slidePointsOverrides.value, images: slideImageOverrides.value, globalImage: globalImageOverride.value, format: selectedFormat.value, style: selectedStyle.value }) }
 function rememberDesign() { undoStack.value = [...undoStack.value.slice(-49), designSnapshot()]; redoStack.value = [] }
 function restoreHistory(redo) {
  const from = redo ? redoStack : undoStack; const to = redo ? undoStack : redoStack
  if (!from.value.length) return
  to.value.push(designSnapshot()); const state = from.value.pop()
- globalTemplateSettings.value = state.global; slideTemplateOverrides.value = state.overrides; slideTextOverrides.value = state.texts; slideDescriptionOverrides.value = state.descriptions || {}; slidePointsOverrides.value = state.points || {}; slideImageOverrides.value = state.images || {}; globalImageOverride.value = state.globalImage || ''; selectedFormat.value = state.format || selectedFormat.value
+ selectedStyle.value = state.style || selectedStyle.value; globalTemplateSettings.value = state.global; slideTemplateOverrides.value = state.overrides; slideTextOverrides.value = state.texts; slideHighlightOverrides.value = state.highlights || {}; slideCtaOverrides.value = state.ctas || {}; slideDescriptionOverrides.value = state.descriptions || {}; slidePointsOverrides.value = state.points || {}; slideImageOverrides.value = state.images || {}; globalImageOverride.value = state.globalImage || ''; selectedFormat.value = state.format || selectedFormat.value
 }
 function resetSingleDesign() { rememberDesign(); const next = { ...slideTemplateOverrides.value }; delete next[selectedSlideIndex.value]; slideTemplateOverrides.value = next }
 function visualElementStyle(index, key) {
  const settings = settingsForSlide(index); const layout = settings['visual_' + key] || {}; const typography = settings[key] || {}
- return { translate: ((layout.x || 0) * exportSize.value.width / 100) + 'px ' + ((layout.y || 0) * exportSize.value.height / 100) + 'px', textAlign: typography.align || undefined, maxWidth: key === 'title' && typography.customWidth ? typography.width + 'px' : undefined, scale: key === 'button' && typography.size ? typography.size / 100 : undefined, fontWeight: typography.weight || undefined, fontFamily: typography.family || undefined, lineHeight: typography.line || undefined, WebkitLineClamp: key === 'title' && typography.lines > 0 ? String(typography.lines) : undefined, display: key === 'title' && typography.lines > 0 ? '-webkit-box' : undefined, WebkitBoxOrient: key === 'title' && typography.lines > 0 ? 'vertical' : undefined, overflow: key === 'title' && typography.lines > 0 ? 'hidden' : undefined, color: ['title','description','points','number'].includes(key) ? typography.color || undefined : undefined, outline: editorOpen.value && !isDownloading.value && selectedSlideIndex.value === index && selectedElement.value === key ? 'var(--selection-outline, 4px solid #c084fc)' : undefined, outlineOffset: '6px', position: key === 'title' ? 'relative' : undefined }
+ return { translate: ((layout.x || 0) * exportSize.value.width / 100) + 'px ' + ((layout.y || 0) * exportSize.value.height / 100) + 'px', textAlign: typography.align || undefined, width: ['title','description','points'].includes(key) && typography.customWidth ? typography.width + 'px' : undefined, maxWidth: ['title','description','points'].includes(key) && typography.customWidth ? 'none' : undefined, scale: key === 'button' && typography.size ? typography.size / 100 : undefined, fontWeight: typography.weight || undefined, fontFamily: typography.family || undefined, lineHeight: typography.line || undefined, WebkitLineClamp: key === 'title' && typography.lines > 0 ? String(typography.lines) : undefined, display: key === 'title' && typography.lines > 0 ? '-webkit-box' : undefined, WebkitBoxOrient: key === 'title' && typography.lines > 0 ? 'vertical' : undefined, overflow: key === 'title' && typography.lines > 0 ? 'hidden' : undefined, color: ['title','description','points','number'].includes(key) ? typography.color || undefined : undefined, outline: editorOpen.value && !isDownloading.value && selectedSlideIndex.value === index && selectedElement.value === key ? 'var(--selection-outline, 4px solid #c084fc)' : undefined, outlineOffset: '6px', position: key === 'title' ? 'relative' : undefined }
 }
 function startVisualDrag(event, index, resize = false) {
  if (isDownloading.value || event.button !== 0) return
@@ -355,34 +372,50 @@ function startVisualDrag(event, index, resize = false) {
  if (!element) { selectedSlideIndex.value = index; selectedElement.value = 'overlay'; return }
  event.preventDefault(); selectedSlideIndex.value = index; selectedElement.value = element.dataset.edit || 'image'; rememberDesign()
  const card = cardElement.getBoundingClientRect(); const box = element.getBoundingClientRect(); const layout = selectedElement.value === 'image' ? settingsForSlide(index).image : settingsForSlide(index)['visual_' + selectedElement.value] || {}
- visualDrag = { key: selectedElement.value, startX: event.clientX, startY: event.clientY, x: layout.x || 0, y: layout.y || 0, card, box, resize, size: selectedElement.value === 'gameLogo' && selectedStyle.value === 'impact' && index === 0 ? settingsForSlide(index).coverGameLogo.size : settingsForSlide(index)[selectedElement.value]?.size || 100, width: settingsForSlide(index).title.width }
+ visualDrag = { key: selectedElement.value, startX: event.clientX, startY: event.clientY, x: layout.x || 0, y: layout.y || 0, card, box, resize, size: selectedElement.value === 'gameLogo' && selectedStyle.value === 'impact' && index === 0 ? settingsForSlide(index).coverGameLogo.size : settingsForSlide(index)[selectedElement.value]?.size || 100, width: box.width * exportSize.value.width / card.width }
  event.currentTarget.setPointerCapture(event.pointerId)
 }
 function moveVisualDrag(event) {
  if (!visualDrag) return
  const d = visualDrag; const dx = event.clientX - d.startX; const dy = event.clientY - d.startY
  if (d.key === 'image') { setSetting('image.x', Math.max(0, Math.min(100, d.x - dx / d.card.width * 100))); setSetting('image.y', Math.max(0, Math.min(100, d.y - dy / d.card.height * 100))); return }
+ if (d.resize === 'width-right' || d.resize === 'width-left') {
+  const left = d.resize === 'width-left'
+  const width = Math.max(180, Math.min(1000, d.width + (left ? -dx : dx) * exportSize.value.width / d.card.width))
+  setSetting(d.key + '.width', width)
+  if (left) setSetting('visual_' + d.key + '.x', d.x + (d.width - width) / exportSize.value.width * 100)
+  return
+ }
+ if (d.resize && ['title','description','points'].includes(d.key)) {
+  const ratio = Math.max(.2, 1 + dx / Math.max(20, d.box.width))
+  setSetting(d.key + '.size', Math.max(12, Math.min(150, d.size * ratio)))
+  return
+ }
  if (d.resize && d.key !== 'title') {
   const ratio = Math.max(0.2, 1 + dx / Math.max(20, d.box.width))
   setVisualInspectorSetting({ path: d.key + '.size', value: Math.max(16, Math.min(760, d.size * ratio)) })
   return
  }
- if (d.resize) { setSetting('title.width', Math.max(180, Math.min(1000, d.width + dx * exportSize.value.width / d.card.width))); setSetting('title.size', Math.max(24, Math.min(150, d.size + dy * exportSize.value.height / d.card.height / 5))); return }
+
  let x = Math.max(d.card.left - d.box.left, Math.min(d.card.right - d.box.right, dx)); let y = Math.max(d.card.top - d.box.top, Math.min(d.card.bottom - d.box.bottom, dy))
  const center = d.card.left + d.card.width / 2 - (d.box.left + d.box.width / 2); centerGuide.value = Math.abs(x - center) < 8; if (centerGuide.value) x = center
  setSetting('visual_' + d.key + '.x', d.x + x / d.card.width * 100); setSetting('visual_' + d.key + '.y', d.y + y / d.card.height * 100)
 }
 function stopVisualDrag() { visualDrag = null; centerGuide.value = false }
-watch([globalTemplateSettings, slideTemplateOverrides, slideTextOverrides, slideDescriptionOverrides, slidePointsOverrides, selectedSlideIndex, selectedElement, selectedFormat, editorOpen, editorViewport], async () => {
+watch([globalTemplateSettings, slideTemplateOverrides, slideTextOverrides, slideHighlightOverrides, slideCtaOverrides, slideDescriptionOverrides, slidePointsOverrides, selectedSlideIndex, selectedElement, selectedFormat, editorOpen, editorViewport], async () => {
  await nextTick()
  const card = cardRefs.value[selectedSlideIndex.value]; const element = card?.querySelector('[data-edit="' + selectedElement.value + '"]'); const viewport = card?.closest('.share-card-viewport')
  const copy = card?.querySelector('.social-card-copy')
  const author = card?.querySelector('.social-card-top')
- const copyTooHigh = Boolean(copy && copy.offsetTop < (author ? author.offsetTop + author.offsetHeight + 24 : 40))
+ const header = card?.querySelector('.network-header')
+ const reservedTop = Math.max(author ? author.offsetTop + author.offsetHeight + 24 : 0, header ? header.offsetTop + header.offsetHeight + 40 : 40)
+ const copyTooHigh = Boolean(copy && copy.offsetTop < reservedTop)
  const textClipped = [...(copy?.querySelectorAll('h2,p,.social-subtitle') || [])].some(node => node.scrollHeight > node.clientHeight + 2)
  textOverflow.value = copyTooHigh || textClipped
- if (!element || !viewport || selectedElement.value === 'image') { selectionHandle.value = null; return }
+ textWidthHandles.value = null
+ if (!element || !viewport || ['image','progress'].includes(selectedElement.value)) { selectionHandle.value = null; return }
  const box = element.getBoundingClientRect(); const area = viewport.getBoundingClientRect()
+ if (['title','description','points'].includes(selectedElement.value)) textWidthHandles.value = { left: { left: (box.left - area.left - 6) + 'px', top: (box.top + box.height / 2 - area.top - 16) + 'px' }, right: { left: (box.right - area.left - 6) + 'px', top: (box.top + box.height / 2 - area.top - 16) + 'px' } }
  selectionHandle.value = { left: Math.max(0, Math.min(area.width - 24, box.right - area.left - 12)) + 'px', top: Math.max(0, Math.min(area.height - 24, box.bottom - area.top - 12)) + 'px' }
 }, { deep: true, flush: 'post' })
 function setVisualInspectorSetting({ path, value }) {
@@ -394,6 +427,35 @@ function setVisualInspectorSetting({ path, value }) {
   setSetting('coverGameLogo.size', value)
  } else setSetting(path, value)
 }
+function resetVisualElement() {
+ rememberDesign()
+ const key = selectedElement.value
+ const defaults = activeStyle.value.settings
+ const resetKeys = [key, 'visual_' + key]
+ if (key === 'gameLogo') resetKeys.push('coverGameLogo')
+ const reset = target => {
+  const next = cloneSettings(target)
+  for (const name of resetKeys) { next[name] = defaults[name] ? cloneSettings(defaults[name]) : name.startsWith('visual_') ? { x: 0, y: 0 } : {} }
+  next[key] = { ...next[key], customPaint: false }
+  if (['title','description','points'].includes(key)) next[key].customWidth = false
+  if (key === 'title') Object.assign(next[key], { customWidth: false, lines: 0, align: 'left', family: defaults.typography.family })
+  return next
+ }
+ if (applyScope.value === 'all') {
+  globalTemplateSettings.value = reset(globalTemplateSettings.value)
+  slideTemplateOverrides.value = Object.fromEntries(Object.entries(slideTemplateOverrides.value).map(([index, value]) => { const next = cloneSettings(value); resetKeys.forEach(name => delete next[name]); return [index, next] }))
+ }
+ else {
+  const next = { ...slideTemplateOverrides.value }
+  next[selectedSlideIndex.value] = reset(next[selectedSlideIndex.value] || {})
+  slideTemplateOverrides.value = next
+ }
+}
+function elementPaint(settings, key, slide) {
+ const value = settings[key]
+ if (key === 'part' && slide?.accent === 'gold' && !value.customPaint) return 'linear-gradient(90deg,#ffe879,#ffb329)'
+ return value.gradient === false ? value.color : 'linear-gradient(110deg,' + value.color + ',' + (value.endColor || value.color) + ')'
+}
 function centerVisualElement() {
  const card = cardRefs.value[selectedSlideIndex.value]; const element = card?.querySelector('[data-edit="' + selectedElement.value + '"]'); if (!element) return
  const c = card.getBoundingClientRect(); const e = element.getBoundingClientRect(); const layout = settingsForSlide(selectedSlideIndex.value)['visual_' + selectedElement.value] || {}
@@ -404,14 +466,14 @@ async function loadTemplateLibrary() {
 }
 async function saveNamedTemplate(name) {
  if (!name.trim()) return
- const item = { id: 'template-' + Date.now(), name: name.trim(), style: selectedStyle.value, format: selectedFormat.value, settings: cloneSettings(globalTemplateSettings.value) }
+ const item = { id: 'template-' + Date.now(), name: name.trim(), style: selectedStyle.value, format: selectedFormat.value, settings: cloneSettings(globalTemplateSettings.value), overrides: cloneSettings(slideTemplateOverrides.value) }
  try { localStorage.setItem('galaxia-social-library', JSON.stringify([...savedTemplates.value, item])); savedTemplates.value.push(item); templateNotice.value = 'Plantilla guardada en este navegador.' } catch { templateNotice.value = 'No hay espacio para guardar la plantilla.'; return }
  if (auth.currentUser) { try { await setDoc(doc(db, 'users', auth.currentUser.uid, 'socialTemplates', item.id), item); templateNotice.value = 'Plantilla guardada en tu cuenta.' } catch { templateNotice.value = 'Guardada en este navegador; la cuenta no permite sincronizarla.' } }
 }
 function loadNamedTemplate(id) {
  const item = savedTemplates.value.find(template => template.id === id); if (!item || !styleDefinitions[item.style] || !formats[item.format]) return
- switchStyle(item.style); rememberDesign(); selectedFormat.value = item.format; globalTemplateSettings.value = mergeSettings(styleDefinitions[item.style].settings, item.settings)
- templateNotice.value = 'Diseno general aplicado; se conservan los ajustes individuales.'
+ rememberDesign(); selectedStyle.value = item.style; selectedFormat.value = item.format; globalTemplateSettings.value = mergeSettings(styleDefinitions[item.style].settings, item.settings); slideTemplateOverrides.value = cloneSettings(item.overrides || {})
+ templateNotice.value = 'Plantilla aplicada: colores, posiciones y ajustes restaurados.'
 }
 function selectSlide(index) {
   selectedSlideIndex.value = index
@@ -453,7 +515,8 @@ function settingValue(path) {
 function setSetting(path, value) {
   if (!visualDrag) rememberDesign()
   let next = updateSocialSetting(globalTemplateSettings.value, slideTemplateOverrides.value, selectedSlideIndex.value, applyScope.value, path, value)
-  if (path === 'title.width') next = updateSocialSetting(next.global, next.overrides, selectedSlideIndex.value, applyScope.value, 'title.customWidth', true)
+  if (/^(part|arrow|button|progress)\.(color|endColor|gradient)$/.test(path)) next = updateSocialSetting(next.global, next.overrides, selectedSlideIndex.value, applyScope.value, path.split('.')[0] + '.customPaint', true)
+  if (/^(title|description|points)\.width$/.test(path)) next = updateSocialSetting(next.global, next.overrides, selectedSlideIndex.value, applyScope.value, path.split('.')[0] + '.customWidth', true)
   globalTemplateSettings.value = next.global
   slideTemplateOverrides.value = next.overrides
 }
@@ -523,6 +586,14 @@ function resetPositions() {
   setCoverLogoSetting('y', defaults.coverGameLogo.y)
 }
 
+function displaySlideCta(slide) { return slideCtaOverrides.value[slide.id] ?? (slide.cta || 'Dejalo en los comentarios') }
+function setSlideCta(value) { if (selectedSlide.value) { rememberDesign(); slideCtaOverrides.value = { ...slideCtaOverrides.value, [selectedSlide.value.id]: value } } }
+function displayTitleHighlights(slide) { return slideHighlightOverrides.value[slide.id] ?? slide.titleHighlights ?? [] }
+function setTitleHighlights(value) {
+ if (!selectedSlide.value) return
+ rememberDesign()
+ slideHighlightOverrides.value = { ...slideHighlightOverrides.value, [selectedSlide.value.id]: value.split(/\r?\n/).map(item => item.trim()).filter(Boolean) }
+}
 function displaySlideTitle(slide) {
   return slideTextOverrides.value[slide.id] ?? slide.title
 }
@@ -554,7 +625,8 @@ async function fitSlideText() {
  if (!card || !copy) return
  // Reserve space below the author and above the footer/logos.
  const author = card.querySelector('.social-card-top')
- const top = author ? author.offsetTop + author.offsetHeight + 36 : 90
+ const header = card.querySelector('.network-header')
+ const top = Math.max(author ? author.offsetTop + author.offsetHeight + 36 : 0, header ? header.offsetTop + header.offsetHeight + 48 : 90)
  let attempts = 0
  while (copy.offsetTop < top && attempts++ < 80) {
   const settings = settingsForSlide(index)
@@ -653,14 +725,25 @@ function cardStyleFor(index) {
     '--arrow-y': `${settings.arrow.y}%`,
     '--arrow-size': `${settings.arrow.size}px`,
     '--arrow-inner-size': `${Math.round(settings.arrow.size * 0.77)}px`,
-    '--arrow-color': settings.arrow.color,
+    '--arrow-color': settings.arrow.foregroundColor || '#ffffff',
+    '--button-text-color': settings.button.foregroundColor || '#ffffff',
+    '--part-text-color': settings.part.foregroundColor || (carouselSlides.value[index]?.accent === 'gold' ? '#18120a' : '#ffffff'),
     '--arrow-opacity': settings.arrow.opacity,
+    '--part-paint': elementPaint(settings, 'part', carouselSlides.value[index]),
+    '--arrow-paint': elementPaint(settings, 'arrow'),
+    '--button-paint': elementPaint(settings, 'button'),
+    '--progress-paint': elementPaint(settings, 'progress'),
     '--part-color': settings.part.color,
     '--part-size': `${settings.part.size}px`,
     '--part-radius': `${settings.part.radius}px`,
     '--copy-title-size': `${settings.title.size}px`,
     '--copy-title-weight': settings.title.weight,
     '--copy-title-color': settings.title.color,
+    '--title-highlight-color': settings.title.highlightColor || '#facc15',
+    '--brand-size': `${settings.brand?.size || 32}px`,
+    '--closing-cta-size': `${settings.cta?.size || 40}px`,
+    '--closing-cta-color': settings.cta?.color || '#ffc02b',
+    '--progress-color': settings.progress?.color || '#facc15',
     '--copy-title-width': `${settings.title.width}px`,
     '--copy-title-line': settings.title.line,
     '--subtitle-size': `${settings.subtitle.size}px`,
@@ -732,8 +815,9 @@ function loadStoredTemplate(style = 'editorial') {
 
 function overlayGradient(overlay) {
   const color = overlay.color || '#050816'
+  const end = overlay.endColor || color
   if (!overlay.gradient) return hexToRgba(color, overlay.intensity)
-  return `linear-gradient(180deg, ${hexToRgba(color, 0.22)} 0%, ${hexToRgba(color, 0.04)} ${100 - overlay.height}%, ${hexToRgba(color, overlay.intensity)} 100%), linear-gradient(90deg, rgba(88, 28, 135, 0.22), rgba(236, 72, 153, 0.08), rgba(5, 8, 22, 0.22))`
+  return `linear-gradient(180deg, ${hexToRgba(color, 0)} 4%, ${hexToRgba(color, 0.06)} 23%, ${hexToRgba(color, overlay.intensity * .5)} 43%, ${hexToRgba(color, overlay.intensity)} 72%, ${hexToRgba(end, 1)} 100%)`
 }
 
 function hexToRgba(hex, alpha) {
@@ -1076,7 +1160,7 @@ function slugify(value) {
             <div class="share-card-scale" :style="previewScaleStyle">
               <article
                 :ref="(el) => setCardRef(el, index)"
-                class="social-card" @pointerdown="startVisualDrag($event, index)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag"
+                class="social-card social-network-layout" :data-slide-type="slide.type" :data-accent="slide.accent" :data-format="selectedFormat" @pointerdown="startVisualDrag($event, index)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag"
                 :class="[activeStyle.className, {
                   analysis: isAnalysisPost,
                   'impact-cover': selectedStyle === 'impact' && index === 0,
@@ -1084,6 +1168,11 @@ function slugify(value) {
                 }]"
                 :style="cardStyleFor(index)"
               >
+                <div class="network-header">
+                  <strong v-if="settingsForSlide(index).brand?.visible !== false" class="network-brand" data-edit="brand" :style="visualElementStyle(index, 'brand')">GALAXIA<br />NINTENDERA</strong>
+                  <div v-if="settingsForSlide(index).progress?.visible !== false" class="network-progress" data-edit="progress" :style="visualElementStyle(index, 'progress')" :aria-label="'Imagen ' + slide.number + ' de ' + slide.total"><span v-for="step in slide.total" :key="step" :class="{ filled: step <= slide.number }"></span></div>
+                  <strong v-if="settingsForSlide(index).number.visible" class="network-count" data-edit="number" :style="visualElementStyle(index, 'number')">{{ slide.number }}/{{ slide.total }}</strong>
+                </div>
                 <img
                   v-if="settingsForSlide(index).image.visible"
                   :key="`${slide.id}-${slideImage(slide)}`"
@@ -1121,24 +1210,25 @@ function slugify(value) {
                     <i class="fas fa-gamepad"></i>
                     <span class="social-category-label">{{ labelForPart(slide, index) }}</span>
                   </span>
-                  <h2 v-if="settingsForSlide(index).title.visible !== false" data-edit="title" :style="visualElementStyle(index, 'title')">{{ displaySlideTitle(slide) }}</h2>
+                  <h2 v-if="settingsForSlide(index).title.visible !== false" data-edit="title" :style="visualElementStyle(index, 'title')"><span v-for="(run,runIndex) in titleRuns(displaySlideTitle(slide), displayTitleHighlights(slide))" :key="runIndex" :class="{ 'title-highlight': run.highlighted }">{{ run.text }}</span></h2>
                   <p data-edit="description" :style="visualElementStyle(index, 'description')" v-if="settingsForSlide(index).description.visible">{{ displaySlideDescription(slide) }}</p>
                   <ul v-if="displaySlidePoints(slide).filter(point => point.trim()).length && settingsForSlide(index).points?.visible !== false" class="social-points" data-edit="points" :style="visualElementStyle(index, 'points')">
                     <li v-for="(point, pointIndex) in displaySlidePoints(slide).filter(point => point.trim())" :key="`${slide.id}-point-${pointIndex}`">
-                      <span>{{ pointIndex + 1 }}</span>
+                      <span>{{ slide.type === 'closing' ? '✦' : pointIndex + 1 }}</span>
                       <strong>{{ point }}</strong>
                     </li>
                   </ul>
                 </div>
 
                 <div v-if="!slide.isLast && settingsForSlide(index).arrow.visible" class="social-next-cue" data-edit="arrow" :style="visualElementStyle(index, 'arrow')">
-                  <span>Siguiente</span>
-                  <i :class="['fas', settingsForSlide(index).arrow.icon]"></i>
+                  <span>Desliza</span>
+                  <svg class="network-arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path :d="settingsForSlide(index).arrow.icon === 'fa-plus' ? 'M12 5v14M5 12h14' : settingsForSlide(index).arrow.icon === 'fa-chevron-right' ? 'm9 5 7 7-7 7' : 'M4 12h16m-7-7 7 7-7 7'" /></svg>
                 </div>
 
+                <div v-if="slide.type === 'closing' && settingsForSlide(index).cta?.visible !== false" class="network-closing-cta" data-edit="cta" :style="visualElementStyle(index, 'cta')">{{ displaySlideCta(slide) }}</div>
                 <div class="social-card-footer">
                   <span v-if="settingsForSlide(index).button.visible" class="social-cta" data-edit="button" :style="visualElementStyle(index, 'button')">{{ settingsForSlide(index).button.text }}</span>
-                  <strong data-edit="number" :style="visualElementStyle(index, 'number')" v-if="settingsForSlide(index).number.visible">{{ slide.number }} / {{ slide.total }}</strong>
+
                 </div>
 
                 <img v-if="settingsForSlide(index).logo.visible" class="social-brand-logo" data-edit="logo" :style="visualElementStyle(index, 'logo')" :src="galaxyLogo" alt="Galaxia Nintendera" />
@@ -1152,7 +1242,8 @@ function slugify(value) {
               </article>
             </div>
             <div v-if="editorOpen && centerGuide" class="visual-center-guide" data-editor-ui></div>
-            <button v-if="editorOpen && !isDownloading && selectedSlideIndex === index && selectionHandle" data-editor-ui class="visual-selection-handle" :style="selectionHandle" aria-label="Redimensionar elemento" @pointerdown.stop="startVisualDrag($event, index, true)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag" @lostpointercapture="stopVisualDrag"></button>
+            <template v-if="editorOpen && !isDownloading && selectedSlideIndex === index && textWidthHandles"><button v-for="side in ['left','right']" :key="side" data-editor-ui class="visual-width-handle" :style="textWidthHandles[side]" :aria-label="side === 'left' ? 'Cambiar ancho desde la izquierda' : 'Cambiar ancho desde la derecha'" title="Arrastra para cambiar el ancho del texto" @pointerdown.stop="startVisualDrag($event, index, 'width-' + side)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag" @lostpointercapture="stopVisualDrag"></button></template>
+            <button v-if="editorOpen && !isDownloading && selectedSlideIndex === index && selectionHandle" data-editor-ui class="visual-selection-handle" :style="selectionHandle" :aria-label="['title','description','points'].includes(selectedElement) ? 'Cambiar tama?o de letra' : 'Redimensionar elemento'" @pointerdown.stop="startVisualDrag($event, index, true)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag" @lostpointercapture="stopVisualDrag"></button>
           </div>
         </div>
       </div>
@@ -1171,7 +1262,7 @@ function slugify(value) {
       </div>
     </section>
 
-    <SocialVisualInspector v-if="editorOpen" :element="selectedElement" :scope="applyScope" :number="selectedSlide?.number || 1" :settings="settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :points="selectedSlide ? displaySlidePoints(selectedSlide) : []" :image="selectedSlide ? slideImage(selectedSlide) : fallbackCover" :image-url="selectedTemporaryImage()" :fonts="fontOptions" :overflow="textOverflow" :notice="fitNotice" :inert="isDownloading" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectedElement = $event" @scope="applyScope = $event" @setting="setVisualInspectorSetting" @title="updateTextContent('title', $event)" @description="updateTextContent('subtitle', $event)" @points="updateTextContent('points', $event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @fit="fitSlideText" @download="downloadCarousel" @center="centerVisualElement" @image-url="handleTemporaryImageUrl" @upload="handleTemporaryImageUpload" @original="clearTemporaryImage" @close="editorOpen = false" />
+    <SocialVisualInspector v-if="editorOpen" :templates="savedTemplates" :template-notice="templateNotice" @save-template="saveNamedTemplate" @load-template="loadNamedTemplate" @reset="resetVisualElement" :element="selectedElement" :scope="applyScope" :number="selectedSlide?.number || 1" :settings="settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :slide-type="selectedSlide?.type" :slide-accent="selectedSlide?.accent" :cta="selectedSlide ? displaySlideCta(selectedSlide) : ''" :title-highlights="selectedSlide ? displayTitleHighlights(selectedSlide) : []" :points="selectedSlide ? displaySlidePoints(selectedSlide) : []" :image="selectedSlide ? slideImage(selectedSlide) : fallbackCover" :image-url="selectedTemporaryImage()" :fonts="fontOptions" :overflow="textOverflow" :notice="fitNotice" :inert="isDownloading" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectedElement = $event" @scope="applyScope = $event" @setting="setVisualInspectorSetting" @cta="setSlideCta" @title-highlights="setTitleHighlights" @title="updateTextContent('title', $event)" @description="updateTextContent('subtitle', $event)" @points="updateTextContent('points', $event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @fit="fitSlideText" @download="downloadCarousel" @center="centerVisualElement" @image-url="handleTemporaryImageUrl" @upload="handleTemporaryImageUpload" @original="clearTemporaryImage" @close="editorOpen = false" />
   </main>
 </template>
 
@@ -2416,6 +2507,7 @@ function slugify(value) {
 .visual-editing .share-toolbar { gap: 10px; }
 .visual-editing .social-card [data-edit] { cursor: grab; touch-action: none; }
 .visual-center-guide { position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px solid #22d3ee; pointer-events: none; z-index: 9; }
+.visual-width-handle{z-index:11;position:absolute;width:12px;height:32px;padding:0;border:2px solid white;border-radius:999px;background:#9333ea;cursor:ew-resize;touch-action:none}
 .visual-selection-handle { z-index: 10; position: absolute; width: 24px; height: 24px; border: 2px solid white; border-radius: 5px; background: #9333ea; cursor: nwse-resize; touch-action: none; }
 
 @media (max-width: 800px) { .visual-editing { padding-right: 12px; padding-bottom: 390px; } .visual-editing .share-preview { padding: 8px; } .visual-editing .share-toolbar h1 { font-size: 18px; } .visual-editing .format-switcher { margin: 8px 0; } }
@@ -2441,4 +2533,58 @@ function slugify(value) {
  .visual-editing .share-toolbar,.visual-editing .share-workbench{width:100%;max-width:none}
  .visual-editing .share-toolbar{flex-wrap:wrap}
 }
+
+/* Social carousel: shared geometry for preview and exported images. */
+.social-network-layout .network-header{position:absolute;top:58px;left:58px;right:58px;display:grid;grid-template-columns:230px minmax(0,1fr) 92px;gap:28px;align-items:start;z-index:4;color:white}
+.social-network-layout .network-brand{font-family:Inter,Arial,sans-serif;font-size:var(--brand-size);line-height:1.02;font-weight:800;letter-spacing:-.8px;text-shadow:0 2px 10px #0009}
+.network-progress{display:flex;gap:8px;padding:12px 0;min-width:0}.network-progress span{height:16px;min-width:0;flex:1;border-radius:999px;background:#9a9dbb70}.network-progress span.filled{background:linear-gradient(90deg,var(--progress-color),#ffad47,#fb7185)}
+.social-network-layout .network-count{font-size:var(--number-size);line-height:1.1;text-align:right;white-space:nowrap;padding-top:2px}
+.social-network-layout .social-card-scrim{background:var(--overlay-gradient)}
+.social-network-layout .social-card-glow{opacity:.22}.social-network-layout .analysis-gold-pattern{display:none}
+.social-network-layout .social-card-copy{left:64px;right:64px;bottom:214px;max-width:none}
+.social-network-layout .social-card-copy h2{max-width:var(--copy-title-width);line-height:var(--copy-title-line);letter-spacing:-2px;font-weight:var(--copy-title-weight);text-shadow:0 4px 24px #0008}
+.social-network-layout .title-highlight{color:var(--title-highlight-color)}
+.social-network-layout .social-category{margin-bottom:28px;padding:12px 24px;font-size:var(--part-size);line-height:1.1;border-radius:var(--part-radius);box-shadow:none;border:0;background:linear-gradient(100deg,var(--part-color),#5b21cf)}
+.social-network-layout[data-accent=gold] .social-category{background:linear-gradient(90deg,#ffe879,#ffb329);color:#18120a}
+.social-network-layout .social-category i{display:none}
+.social-network-layout .social-card-copy p{font-size:var(--copy-text-size);font-weight:500;line-height:1.33;color:var(--copy-text-color);max-width:916px;margin-top:26px;text-shadow:0 2px 14px #0006}
+.social-network-layout .social-points{padding:30px;border:2px solid #ffffff16;background:linear-gradient(130deg,#252230b8,#17141e8c);border-radius:30px;max-width:none;gap:var(--points-gap);margin-top:32px}
+.social-network-layout .social-points li{grid-template-columns:64px minmax(0,1fr);gap:24px;align-items:start}
+.social-network-layout .social-points li>span{height:64px;width:64px;border-radius:18px;font-size:38px;background:linear-gradient(140deg,#8b38f5,#e346db);border:2px solid #ffffff35;box-shadow:inset 0 0 20px #ffffff16}
+.social-network-layout .social-points li>strong{font-size:var(--points-size);font-weight:var(--points-weight,500);line-height:var(--points-line,1.25);color:var(--points-color)}
+.social-network-layout .social-next-cue{top:auto;bottom:70px;right:64px;transform:none;height:88px;width:88px;border:3px solid #b65ddd;box-shadow:none;background:#20152e85}
+.social-network-layout .social-next-cue i{background:transparent;width:100%;height:100%;font-size:46px}
+.social-network-layout .social-next-cue>span{clip:auto;clip-path:none;height:auto;width:auto;right:204px;white-space:nowrap;position:absolute;overflow:visible;font-size:30px;font-weight:500;text-transform:none}
+.social-network-layout .social-next-cue>span::after{content:'';position:absolute;left:calc(100% + 20px);top:50%;width:96px;height:3px;background:#e9d5ff}
+.social-network-layout .social-card-top{top:160px}.social-network-layout .social-card-footer{bottom:64px}
+.network-closing-cta{position:absolute;bottom:86px;left:64px;right:64px;text-align:right;color:var(--closing-cta-color);font-size:var(--closing-cta-size);font-weight:700;font-style:italic;z-index:3}
+.social-network-layout[data-slide-type=closing] .social-points{padding:0;border:0;background:none;gap:14px}
+.social-network-layout[data-slide-type=closing] .social-points li{padding:22px 26px;border:2px solid #c084fc4a;border-radius:24px;background:#171520b3;align-items:center}
+.social-network-layout[data-slide-type=closing] .social-points li>span{background:none;border:0;box-shadow:none;color:#dc8cff;height:52px;font-size:42px}
+.social-network-layout[data-format=square] .network-header{top:38px}
+.social-network-layout[data-format=square] .social-card-copy{bottom:160px}
+.social-network-layout[data-format=square] .social-next-cue{bottom:38px}
+.social-network-layout[data-format=square] .network-closing-cta{bottom:40px}
+
+.social-network-layout{--network-scale:1}
+.social-network-layout[data-format=portrait]{--network-scale:.85}
+.social-network-layout[data-format=square]{--network-scale:.68}
+.social-network-layout .social-card-copy h2{font-size:calc(var(--copy-title-size) * var(--network-scale))}
+.social-network-layout .social-card-copy p{font-size:calc(var(--copy-text-size) * var(--network-scale))}
+.social-network-layout .social-points{padding:calc(30px * var(--network-scale));gap:calc(var(--points-gap) * var(--network-scale))}
+.social-network-layout .social-points li{grid-template-columns:calc(64px * var(--network-scale)) minmax(0,1fr);gap:calc(24px * var(--network-scale))}
+.social-network-layout .social-points li>strong{font-size:calc(var(--points-size) * var(--network-scale))}
+.social-network-layout .social-points li>span{width:calc(64px * var(--network-scale));height:calc(64px * var(--network-scale));font-size:calc(38px * var(--network-scale))}
+.social-network-layout[data-slide-type=closing] .social-points{padding:0}
+.social-network-layout .social-score-independent{top:170px;right:64px}
+.social-network-layout .network-arrow-icon{width:48px;height:48px;color:var(--arrow-color);flex:0 0 auto}
+.network-brand{grid-column:1;grid-row:1}.network-progress{grid-column:2;grid-row:1}.network-count{grid-column:3;grid-row:1}
+</style>
+
+<style scoped>
+.social-network-layout .social-category,.social-network-layout[data-accent=gold] .social-category{background:var(--part-paint)}
+.social-network-layout .network-progress span.filled{background:var(--progress-paint)}
+.social-network-layout .social-next-cue{background:var(--arrow-paint)}
+.social-network-layout .social-cta{background:var(--button-paint);color:var(--button-text-color)}
+.social-network-layout .social-category,.social-network-layout[data-accent=gold] .social-category{color:var(--part-text-color)}
 </style>

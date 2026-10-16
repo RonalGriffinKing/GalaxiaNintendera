@@ -1,5 +1,12 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
+import { homePinnedPosts } from '@/services/homePins'
+import { socialHeadline } from '@/services/socialSummary'
+import HomeEditorialCard from '@/components/home/HomeEditorialCard.vue'
+import HomeNewsHero from '@/components/home/HomeNewsHero.vue'
+import HomeContentCarousel from '@/components/home/HomeContentCarousel.vue'
+const PostSummaryViewer = defineAsyncComponent(() => import('@/components/posts/PostSummaryViewer.vue'))
+const summaryPost = ref(null)
 import { useRouter } from 'vue-router'
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { db } from '@/firebase'
@@ -9,7 +16,6 @@ import { useTimedCarousel } from '@/composables/useTimedCarousel'
 import bienvenidaImage from '@/iconos/bienvenida.png'
 import bannerImage from '@/iconos/Banner.png'
 import logoImage from '@/iconos/logo.png'
-import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import HomeMediaPanel from '@/components/home/HomeMediaPanel.vue'
 import HomeWelcomeLoader from '@/components/home/HomeWelcomeLoader.vue'
 import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
@@ -32,7 +38,6 @@ const isInitialHomeLoading = ref(shouldShowHomeWelcome)
 const initialLoadCompleted = ref(!shouldShowHomeWelcome)
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
 const COMMUNITY_SLIDE_DURATION = 3600
-const ANALYSIS_SLIDE_DURATION = 5200
 let homeWelcomeTimer = null
 
 const approvedPosts = computed(() => posts.value
@@ -45,18 +50,7 @@ const approvedPosts = computed(() => posts.value
 
 const latestPost = computed(() => approvedPosts.value[0] || null)
 const analysisPosts = computed(() => approvedPosts.value.filter(isAnalysisPost))
-const featuredAnalysisPost = computed(() => analysisPosts.value[0] || null)
-const secondaryAnalysisPool = computed(() => analysisPosts.value.slice(1))
-const secondaryAnalysisPageCount = computed(() => Math.max(1, Math.ceil(secondaryAnalysisPool.value.length / 3)))
-const secondaryAnalysisPosts = computed(() => {
-  const pool = secondaryAnalysisPool.value
-  if (pool.length <= 3) return pool
-  const start = secondaryAnalysisSlideIndex.value * 3
-  const page = pool.slice(start, start + 3)
-  if (page.length === 3) return page
-  return [...page, ...pool.slice(0, 3 - page.length)]
-})
-const allNews = computed(() => approvedPosts.value.slice(0, 8))
+const allNews = computed(() => approvedPosts.value.filter(post => !isAnalysisPost(post) && post.id !== latestPost.value?.id).slice(0, 20))
 const mainEntry = computed(() => mainEntries.value[0] || null)
 const officialCommunity = computed(() => communities.value.find(item => item.isOfficial || item.id === OFFICIAL_COMMUNITY_ID) || communities.value[0] || null)
 const pinnedHomeThread = computed(() => [...communityThreads.value]
@@ -101,104 +95,13 @@ const visibleCommunityCards = computed(() => {
   if (page.length === 3) return page
   return [...page, ...cards.slice(0, 3 - page.length)]
 })
-const heroSlides = computed(() => {
-  const slides = []
-
-  if (latestPost.value) {
-    slides.push({
-      id: `latest-${latestPost.value.id}`,
-      eyebrow: latestPost.value.category || 'Ultima noticia',
-      title: cardTitle(latestPost.value),
-      text: latestPost.value.content || 'Una noticia destacada para empezar la visita.',
-      image: latestPost.value.image || bannerImage,
-      label: cardCategory(latestPost.value),
-      meta: formatAgo(postDisplayDate(latestPost.value)),
-      primaryLabel: 'Leer noticia',
-      primaryIcon: 'fas fa-newspaper',
-      action: () => goPost(latestPost.value)
-    })
-  }
-
-  if (mainEntry.value) {
-    slides.push({
-      id: `main-${mainEntry.value.id}`,
-      eyebrow: mainEntry.value.category || 'Principal',
-      title: cardTitle(mainEntry.value),
-      text: mainEntry.value.content || 'Un aviso destacado para recibir a la comunidad.',
-      image: mainEntry.value.image || bienvenidaImage,
-      label: mainEntry.value.category || 'Principal',
-      meta: formatAgo(postDisplayDate(mainEntry.value)),
-      primaryLabel: 'Leer ahora',
-      primaryIcon: 'fas fa-bullhorn',
-      action: () => goPost(mainEntry.value)
-    })
-  }
-
-  featuredEvents.value.forEach((event) => {
-    slides.push({
-      id: `event-${event.id}`,
-      eyebrow: event.type || 'Evento',
-      title: event.title || 'Evento destacado',
-      text: event.description || 'Un evento importante de Galaxia Nintendera.',
-      image: event.backgroundUrl || event.imageUrl || bannerImage,
-      label: event.type || 'Evento',
-      meta: formatHeroDate(event.startsAt),
-      primaryLabel: ['live', 'directo', 'direct'].includes(String(event.type || '').toLowerCase()) ? 'Apuntarme al live' : 'Ver evento',
-      primaryIcon: 'far fa-calendar',
-      action: () => router.push(`/eventos?id=${event.id}`)
-    })
-  })
-
-  if (pinnedHomeThread.value) {
-    const community = communityForThread(pinnedHomeThread.value)
-    slides.push({
-      id: `thread-${pinnedHomeThread.value.id}`,
-      eyebrow: pinnedHomeThread.value.communityName || 'Comunidad',
-      title: pinnedHomeThread.value.title || 'Destacado de la comunidad',
-      text: pinnedHomeThread.value.body || 'Un comunicado importante fijado desde comunidades.',
-      image: community?.bannerUrl || pinnedHomeThread.value.imageUrl || bannerImage,
-      label: 'Comunidad',
-      meta: community?.name || pinnedHomeThread.value.communityName || 'Galaxia',
-      primaryLabel: 'Ver hilo',
-      primaryIcon: 'far fa-comment',
-      action: () => router.push({
-        path: '/comunidad',
-        query: {
-          id: pinnedHomeThread.value.communityId || community?.id || OFFICIAL_COMMUNITY_ID,
-          thread: pinnedHomeThread.value.id
-        }
-      })
-    })
-  }
-
-  slides.push({
-    id: 'community',
-    eyebrow: 'Comunidades',
-    title: 'Unete a nuestras comunidades',
-    text: 'Comparte teorias, fanarts, dudas, partidas y eventos con otros fans de Nintendo.',
-    image: officialCommunity.value?.bannerUrl || bienvenidaImage,
-    label: 'Comunidad',
-    meta: `${communityCards.value.length} galaxias activas`,
-    primaryLabel: 'Explorar comunidades',
-    primaryIcon: 'fas fa-users',
-    action: () => router.push('/comunidad')
-  })
-
-  slides.push({
-    id: 'welcome',
-    eyebrow: 'Galaxia Nintendera',
-    title: 'Noticias Nintendo y comunidad en un solo lugar',
-    text: 'Lee novedades, guarda favoritos y encuentra comunidades creadas por fans.',
-    image: bienvenidaImage,
-    label: 'Bienvenida',
-    meta: 'Nuevo inicio',
-    primaryLabel: 'Ver noticias',
-    primaryIcon: 'fas fa-newspaper',
-    action: () => router.push('/noticias')
-  })
-
-  return slides
-})
+const heroSlides = computed(() => homePinnedPosts(posts.value).map(post => ({
+  id: post.id, eyebrow: post.category || 'Noticias',
+  title: socialHeadline(post).title, highlights: socialHeadline(post).highlights,
+  post, text: post.summary || post.content || '', image: post.image || bannerImage,
+  label: cardCategory(post), meta: formatAgo(postDisplayDate(post)),
+  primaryLabel: 'Leer noticia', action: () => goPost(post)
+})))
 const liveItems = computed(() => {
   const eventItems = events.value.map(event => ({
     id: `event-${event.id}`,
@@ -367,7 +270,6 @@ const openMediaItem = (item) => {
 }
 
 const postCategories = (post) => postCategoryLabels(post)
-const cardTitle = (post) => post?.analysis?.hypeTitle || post?.title || 'Publicacion'
 const cardCategory = (post) => postCategories(post)[0] || post?.category || 'Noticias'
 const isAnalysisPost = (post) => postCategories(post).some(category => normalizeCategory(category).includes('analisis'))
 const authorProfile = (post) => authorProfiles.value[post?.authorId] || {}
@@ -376,20 +278,26 @@ const authorIconMeta = (post) => post?.authorId ? resolveProfileIconMeta(authorP
 const heroCarousel = useTimedCarousel(computed(() => heroSlides.value.length), HOME_HERO_SLIDE_DURATION)
 const heroSlideIndex = heroCarousel.index
 const heroProgressPercent = heroCarousel.progressPercent
+const heroPaused = ref(false)
+function startHeroIfAllowed() { if (!heroPaused.value && !summaryPost.value) heroCarousel.start(); else heroCarousel.stop() }
+function pauseHero() { heroPaused.value=true; heroCarousel.stop() }
+function resumeHero() { heroPaused.value=false; startHeroIfAllowed() }
 const activeHeroSlide = computed(() => heroSlides.value[heroSlideIndex.value] || heroSlides.value[0] || null)
 const communityCarousel = useTimedCarousel(communityPageCount, COMMUNITY_SLIDE_DURATION)
 const communitySlideIndex = communityCarousel.index
-const secondaryAnalysisCarousel = useTimedCarousel(secondaryAnalysisPageCount, ANALYSIS_SLIDE_DURATION)
-const secondaryAnalysisSlideIndex = secondaryAnalysisCarousel.index
 const selectHeroSlide = (index) => {
   heroCarousel.select(index)
+  if (heroPaused.value || summaryPost.value) heroCarousel.stop()
+}
+function swipeHero(direction) {
+  if (heroSlides.value.length > 1) selectHeroSlide((heroSlideIndex.value + direction + heroSlides.value.length) % heroSlides.value.length)
 }
 const selectCommunitySlide = (index) => {
   communityCarousel.select(index)
 }
-const selectSecondaryAnalysisSlide = (index) => {
-  secondaryAnalysisCarousel.select(index)
-}
+function openSummary(post) { summaryPost.value = post; heroCarousel.stop() }
+function closeSummary() { summaryPost.value = null; startHeroIfAllowed() }
+function readSummaryArticle() { const post = summaryPost.value; closeSummary(); goPost(post) }
 const openHeroSlide = () => {
   if (typeof activeHeroSlide.value?.action === 'function') activeHeroSlide.value.action()
 }
@@ -404,7 +312,6 @@ onMounted(() => {
   window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
   heroCarousel.start()
   communityCarousel.start()
-  secondaryAnalysisCarousel.start()
   loadData()
 })
 
@@ -412,12 +319,12 @@ onUnmounted(() => {
   if (typeof window !== 'undefined') window.clearTimeout(homeWelcomeTimer)
   heroCarousel.stop()
   communityCarousel.stop()
-  secondaryAnalysisCarousel.stop()
 })
 </script>
 
 <template>
   <div class="home2-page">
+    <PostSummaryViewer v-if="summaryPost" :post="summaryPost" @close="closeSummary" @read="readSummaryArticle" />
     <HomeWelcomeLoader :visible="isInitialHomeLoading" />
 
     <main class="home2-shell">
@@ -429,42 +336,25 @@ onUnmounted(() => {
 
       <template v-else>
         <section class="home2-hero-grid">
-          <article
-            v-if="activeHeroSlide"
-            :class="['home2-main-hero', `is-${activeHeroSlide.id.split('-')[0]}`]"
-            :style="{ '--hero-image': `url(${resolveAssetUrl(activeHeroSlide.image, bannerImage)})` }"
-            role="button"
-            tabindex="0"
-            @click="openHeroSlide"
-            @keydown.enter.prevent="openHeroSlide"
-          >
-            <span class="home2-pill"><i class="fas fa-fire"></i> {{ activeHeroSlide.eyebrow }}</span>
-            <h1>{{ activeHeroSlide.title }}</h1>
-            <p>{{ activeHeroSlide.text }}</p>
-            <div class="home2-meta">
-              <span><i class="far fa-clock"></i> {{ activeHeroSlide.meta }}</span>
-              <span>{{ activeHeroSlide.label }}</span>
-              <span class="home2-hero-cta">
-                <i :class="activeHeroSlide.primaryIcon || 'fas fa-arrow-right'"></i>
-                {{ activeHeroSlide.primaryLabel || 'Ver mas' }}
-              </span>
-            </div>
-            <div v-if="heroSlides.length > 1" class="home2-hero-controls" @click.stop>
+          <HomeNewsHero v-if="activeHeroSlide" :slide="activeHeroSlide" @read="openHeroSlide" @summary="openSummary" @pause="pauseHero" @resume="resumeHero" @next="swipeHero(1)" @previous="swipeHero(-1)">
+            <div v-if="heroSlides.length > 1" class="home2-hero-controls" role="group" aria-label="Cambiar noticia destacada" @click.stop>
+              <span class="hero-news-label">Destacados {{ heroSlideIndex+1 }} / {{ heroSlides.length }}</span>
               <div class="home2-hero-progress">
                 <span :style="{ width: `${heroProgressPercent}%` }"></span>
               </div>
-              <div class="home2-hero-dots" aria-label="Destacados principales">
+              <div class="home2-hero-dots" aria-label="Noticias destacadas">
                 <button
                   v-for="(slide, index) in heroSlides"
                   :key="slide.id"
                   type="button"
                   :class="{ active: index === heroSlideIndex }"
-                  :aria-label="`Ver ${slide.label}`"
+                  :aria-label="`Ver destacado ${index+1}: ${slide.title}`"
+                  :aria-current="index===heroSlideIndex ? 'true' : undefined"
                   @click="selectHeroSlide(index)"
                 ></button>
               </div>
             </div>
-          </article>
+          </HomeNewsHero>
         </section>
 
         <section id="home2-next-section" class="home2-community-band">
@@ -495,76 +385,24 @@ onUnmounted(() => {
           </div>
         </section>
 
+        <div class="home2-editorial-columns">
+        <section class="home2-panel home2-news-panel">
+          <header class="home2-panel-head">
+            <h2><i class="far fa-newspaper"></i> Últimas noticias</h2>
+            <button type="button" @click="router.push('/noticias')">Archivo <i class="fas fa-arrow-right"></i></button>
+          </header>
+          <HomeContentCarousel :items="allNews" :page-size="4" label="Últimas noticias"><template #default="{item:post}"><HomeEditorialCard :post="post" compact :author-icon="authorIcon(post)" :to="postPath(post)" :category="cardCategory(post)" :date="formatAgo(postDisplayDate(post))" /></template></HomeContentCarousel>
+        </section>
+
         <section class="home2-panel analysis-panel">
           <header class="home2-panel-head">
             <h2><i class="fas fa-star"></i> Analisis destacados</h2>
             <button type="button" @click="router.push('/categoria/Analisis')">Ver todos <i class="fas fa-arrow-right"></i></button>
           </header>
-          <button
-            v-if="featuredAnalysisPost"
-            type="button"
-            class="home2-analysis-featured"
-            :style="{ '--analysis-image': `url(${resolveAssetUrl(featuredAnalysisPost.image, bannerImage)})` }"
-            @click="goPost(featuredAnalysisPost)"
-          >
-            <span><i class="fas fa-crown"></i> Analisis premium</span>
-            <em><i class="fas fa-star"></i> {{ featuredAnalysisPost.analysis?.score || '--' }} <small>Nota</small></em>
-            <div>
-              <h3>{{ cardTitle(featuredAnalysisPost) }}</h3>
-              <p>{{ featuredAnalysisPost.content }}</p>
-              <footer>
-                <ProfileAvatar
-                  v-if="featuredAnalysisPost.authorId"
-                  :src="authorIcon(featuredAnalysisPost)"
-                  :alt="featuredAnalysisPost.authorName || 'Autor'"
-                  :icon-id="authorIconMeta(featuredAnalysisPost)?.id"
-                  :frame-id="authorIconMeta(featuredAnalysisPost)?.frameId"
-                  size="sm"
-                />
-                <strong>{{ featuredAnalysisPost.authorName || 'Redactor' }} - {{ formatAgo(postDisplayDate(featuredAnalysisPost)) }}</strong>
-                <b>Leer analisis <i class="fas fa-arrow-right"></i></b>
-              </footer>
-            </div>
-          </button>
-          <Transition name="analysis-page" mode="out-in">
-            <div :key="`analysis-group-${secondaryAnalysisSlideIndex}`" class="home2-analysis-grid">
-              <button v-for="post in secondaryAnalysisPosts" :key="post.id" type="button" class="home2-analysis-card" @click="goPost(post)">
-                <img :src="resolveAssetUrl(post.image || bannerImage)" alt="" />
-                <span><i class="fas fa-crown"></i> Analisis premium</span>
-                <strong>{{ cardTitle(post) }}</strong>
-                <p>{{ post.content }}</p>
-                <em><i class="fas fa-star"></i> {{ post.analysis?.score || '--' }} <small>Nota</small></em>
-              </button>
-            </div>
-          </Transition>
-          <div v-if="secondaryAnalysisPageCount > 1" class="home2-analysis-dots" aria-label="Grupos de analisis destacados">
-            <button
-              v-for="page in secondaryAnalysisPageCount"
-              :key="`analysis-page-${page}`"
-              type="button"
-              :class="{ active: page - 1 === secondaryAnalysisSlideIndex }"
-              :aria-label="`Ver grupo ${page} de analisis`"
-              @click="selectSecondaryAnalysisSlide(page - 1)"
-            ></button>
-          </div>
+          <HomeContentCarousel :items="analysisPosts" label="Análisis destacados"><template #default="{item:post,index}"><HomeEditorialCard :post="post" :to="postPath(post)" :date="formatAgo(postDisplayDate(post))" analysis :featured="index===0" /></template></HomeContentCarousel>
         </section>
 
-        <section class="home2-panel">
-          <header class="home2-panel-head">
-            <h2><i class="far fa-newspaper"></i> Todas las noticias</h2>
-            <button type="button" @click="router.push('/noticias')">Archivo <i class="fas fa-arrow-right"></i></button>
-          </header>
-          <div class="home2-all-grid">
-            <RouterLink v-for="post in allNews" :key="post.id" :to="postPath(post)" :class="['home2-all-card', { analysis: isAnalysisPost(post) }]">
-              <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
-              <div>
-                <span>{{ cardCategory(post) }}</span>
-                <strong>{{ cardTitle(post) }}</strong>
-                <small>{{ post.authorName || 'Redactor' }} - {{ formatAgo(postDisplayDate(post)) }}</small>
-              </div>
-            </RouterLink>
-          </div>
-        </section>
+        </div>
 
         <HomeMediaPanel
           :items="liveItems"
@@ -1591,4 +1429,78 @@ onUnmounted(() => {
 
 @media(min-width:761px) { .home2-shell { width:var(--public-content-width); max-width:100%; margin-inline:auto; } }
 @media(min-width:1441px) { .home2-main-hero { height:380px; padding:28px; }.home2-main-hero h1 { font-size:38px; line-height:1.15; }.home2-community-band h2 { font-size:30px; } }
+</style>
+
+
+
+<style scoped>
+.home-title-emphasis{color:#facc15;background:none;font:inherit}.home2-meta .home2-summary-cta{display:inline-flex;align-items:center;gap:8px;border:1px solid #d8b4fe55;border-radius:999px;background:linear-gradient(110deg,#7c3aed,#c026d3);padding:10px 16px;color:white;font:inherit;font-weight:800;cursor:pointer}.home2-meta button.home2-hero-cta{display:inline-flex;align-items:center;gap:8px;border-radius:999px;font:inherit;border:1px solid #ffffff30;cursor:pointer}.home2-meta button:focus-visible{outline:3px solid #d8b4fe;outline-offset:3px}
+</style>
+
+<style scoped>
+.home2-main-hero{background-position:center top}
+.home2-meta button.home2-hero-cta,.home2-meta button.home2-summary-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;min-height:44px;padding:0 16px;font-size:13px;line-height:1.2;white-space:nowrap}
+.home2-meta button.home2-hero-cta{background:#101427b8;border:1px solid #ffffff50;box-shadow:none}
+.home2-editorial-columns{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
+.home2-editorial-columns>.home2-panel{min-width:0;margin:0}
+.home2-editorial-columns .home2-panel-head h2{font-size:20px}
+.home2-editorial-columns .home2-all-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.home2-editorial-columns .home2-analysis-featured{height:300px;min-height:0;padding:20px;gap:10px;background-position:center top;box-sizing:border-box;width:100%}
+.home2-editorial-columns .home2-analysis-featured h3{font-size:24px;line-height:1.12;margin:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.home2-editorial-columns .home2-analysis-featured p{font-size:13px;line-height:1.4;margin:10px 0 0;-webkit-line-clamp:2}
+.home2-editorial-columns .home2-analysis-featured>span{font-size:10px;top:14px;left:14px;padding:7px 10px}
+.home2-editorial-columns .home2-analysis-featured em{font-size:24px;top:12px;right:12px;padding:8px}
+.home2-editorial-columns .home2-analysis-featured footer{margin-top:12px;gap:8px;flex-wrap:wrap}
+.home2-editorial-columns .home2-analysis-featured footer strong{font-size:10px}
+.home2-editorial-columns .home2-analysis-featured footer b{min-height:30px;font-size:11px;padding:0 10px}
+.home2-editorial-columns .home2-analysis-grid{grid-template-columns:minmax(0,1fr);gap:10px}
+.home2-editorial-columns .home2-analysis-card{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:6px 12px;padding:12px;min-height:100px;align-items:center;text-align:left;position:relative}
+.home2-editorial-columns .home2-analysis-card img{grid-column:1;grid-row:1/4;height:80px;aspect-ratio:auto;object-position:center top}
+.home2-editorial-columns .home2-analysis-card>span{grid-column:2;grid-row:1;font-size:9px;padding:3px 7px;min-height:0;position:static;width:max-content}
+.home2-editorial-columns .home2-analysis-card strong{grid-column:2;grid-row:2;font-size:14px;-webkit-line-clamp:3}
+.home2-editorial-columns .home2-analysis-card p{display:none}
+.home2-editorial-columns .home2-analysis-card em{grid-column:3;grid-row:1/4;position:static;font-size:19px;padding:0;background:none;border:0}
+.home2-editorial-columns .home2-analysis-card em small{display:none}
+@media(min-width:960px){.home2-editorial-columns{grid-template-columns:minmax(0,1.5fr) minmax(290px,1fr)}.home2-editorial-columns .home2-all-grid{grid-template-columns:minmax(0,1fr)}.home2-editorial-columns .home2-all-card{grid-template-columns:110px minmax(0,1fr);min-height:120px}.home2-editorial-columns .home2-all-card img{height:110px;object-position:center top}}
+@media(min-width:1440px){.home2-editorial-columns .home2-all-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home2-editorial-columns .home2-all-card{grid-template-columns:minmax(0,1fr)}.home2-editorial-columns .home2-all-card img{width:100%;height:150px}.home2-editorial-columns .home2-all-card strong{-webkit-line-clamp:3}}
+@media(max-width:640px){.home2-main-hero{height:auto;min-height:390px;gap:12px;background-position:center top}.home2-meta{gap:8px}.home2-meta button.home2-hero-cta,.home2-meta button.home2-summary-cta{font-size:12px;min-height:42px;padding:0 14px}.home2-meta .home2-summary-cta{margin-left:0}.home2-editorial-columns .home2-all-grid{grid-template-columns:minmax(0,1fr)}.home2-editorial-columns .home2-analysis-featured{height:310px}.home2-editorial-columns .home2-analysis-card{grid-template-columns:72px minmax(0,1fr) auto}.home2-editorial-columns .home2-analysis-card img{height:72px}.home2-editorial-columns .home2-panel-head h2{font-size:18px}}
+</style>
+
+<style scoped>
+@media(max-width:640px){.home2-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:center;gap:10px}.home2-meta>span{width:max-content;min-width:0;max-width:100%;box-sizing:border-box;font-size:11px;padding:0 10px}.home2-meta button.home2-summary-cta{grid-column:1;grid-row:2}.home2-meta button.home2-hero-cta{grid-column:2;grid-row:2}.home2-meta button.home2-summary-cta,.home2-meta button.home2-hero-cta{width:100%;box-sizing:border-box;padding:0 10px}}
+</style>
+
+<style scoped>
+.home2-editorial-columns{align-items:stretch;--editorial-card-height:280px}.home2-editorial-columns>.home2-panel{display:flex;flex-direction:column;gap:14px;align-items:stretch}.home2-editorial-columns .home2-panel-head{min-height:40px;flex-shrink:0}.home2-editorial-columns .home2-all-grid,.home2-editorial-columns .home2-analysis-grid{gap:14px;align-items:stretch;grid-auto-rows:var(--editorial-card-height)}.home2-editorial-columns .home2-analysis-dots{margin-top:auto;padding-top:12px}
+@media(max-width:640px){.home2-editorial-columns{--editorial-card-height:280px}}
+</style>
+
+<style scoped>
+@media(min-width:1200px){.home2-editorial-columns .home2-all-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:641px) and (max-width:1199px){.home2-editorial-columns{grid-template-columns:minmax(0,1fr)}.home2-editorial-columns .home2-all-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home2-editorial-columns .home2-analysis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+
+<style scoped>
+.home2-news-panel .home2-all-grid{grid-auto-rows:162px}.home2-hero-grid .home2-hero-controls{margin:0;max-width:none;width:100%;display:flex;align-items:center;gap:14px}.home2-hero-grid .home2-hero-progress{flex:1;max-width:550px}.home2-hero-grid .home2-hero-dots{flex-shrink:0}
+@media(min-width:960px) and (max-width:1439px){.home2-news-panel .home2-all-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:640px){.home2-news-panel .home2-all-grid{grid-auto-rows:150px}}
+</style>
+
+<style scoped>
+.home2-editorial-columns>.home2-panel{align-self:start}.home2-editorial-columns .analysis-panel{--editorial-card-height:338px}.home2-news-panel :deep(.home-editorial-card.compact){height:100%}
+</style>
+
+<style scoped>
+.hero-news-label{font-size:10px;color:#c7c5db;white-space:nowrap;flex:0 0 auto}.home2-hero-grid .home2-hero-controls{flex-direction:row;gap:12px}.home2-hero-grid .home2-hero-progress{max-width:360px}.home2-hero-grid .home2-hero-controls .home2-hero-dots{gap:5px}
+@media(max-width:760px){.home2-hero-grid .home2-hero-controls{gap:9px;flex-wrap:wrap}.home2-hero-grid .home2-hero-progress{min-width:40px}.home2-hero-grid .home2-hero-dots button{width:7px;height:7px}.home2-hero-grid .home2-hero-dots button.active{width:22px}}
+</style>
+
+<style scoped>
+@media(max-width:760px){
+ .home2-hero-grid .home2-hero-controls .home2-hero-dots{gap:0}
+ .home2-hero-grid .home2-hero-dots button,
+ .home2-hero-grid .home2-hero-dots button.active{width:26px;height:32px;display:grid;place-items:center;background:transparent;box-shadow:none;border-radius:8px}
+ .home2-hero-grid .home2-hero-dots button::before{content:'';width:7px;height:7px;border-radius:999px;background:#647084}
+ .home2-hero-grid .home2-hero-dots button.active::before{width:22px;background:linear-gradient(90deg,#a855f7,#ec4899);box-shadow:0 0 12px #c026d355}
+}
 </style>

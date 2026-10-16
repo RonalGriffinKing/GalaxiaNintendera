@@ -1,10 +1,12 @@
 <script setup>
 import { computed } from 'vue'
+import { socialSummarySlides } from '@/services/socialSummary'
 import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
 import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
 const props = defineProps({
+  allowSummary: { type: Boolean, default: true },
   post: {
     type: Object,
     default: () => ({})
@@ -63,7 +65,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['favorite', 'profile', 'share', 'copy', 'home', 'news'])
+const emit = defineEmits(['summary', 'favorite', 'profile', 'share', 'copy', 'home', 'news'])
 
 const coverMedia = computed(() => mediaFromUrl(props.post.image))
 const categoryLabel = computed(() => props.post.category || props.post.categories?.[0] || 'General')
@@ -233,6 +235,7 @@ const scoreTone = computed(() => {
         </div>
 
         <div class="hero-actions">
+          <button v-if="allowSummary && !preview && socialSummarySlides(post).length" type="button" class="hero-action" @click="emit('summary')"><i class="far fa-clone"></i><span>Ver resumen</span></button>
           <div
             v-if="readBadgeText"
             class="hero-read-state"

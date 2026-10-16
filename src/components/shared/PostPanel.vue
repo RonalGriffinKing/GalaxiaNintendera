@@ -64,9 +64,9 @@
               <i class="fas fa-paste"></i>
               Pegar JSON
             </button>
-            <button type="button" @click="runToolAction('hero')">
-              <i class="fas fa-bullhorn"></i>
-              Crear principal
+            <button v-if="isAdmin" type="button" @click="filter = 'pinned'; showToolsMenu = false">
+              <i class="fas fa-thumbtack"></i>
+              Gestionar pineados
             </button>
             <button v-if="isAdmin" type="button" @click="runToolAction('categories')">
               <i class="fas fa-tags"></i>
@@ -77,6 +77,7 @@
       </div>
     </div>
 
+    <p v-if="isAdmin" class="pin-help">Pineados en Inicio: {{ pinnedPosts.length }} / 6. La última publicación entra automáticamente; puedes quitarle el pin. Una nueva publicación sustituye al pin más antiguo si se llena el carrusel.</p>
     <div v-if="isLoadingPosts" class="post-empty-results">
       <i class="fas fa-circle-notch fa-spin"></i>
       <strong>Cargando publicaciones</strong>
@@ -120,6 +121,7 @@
             <td>{{ formatUpdated(post.updatedAt || post.createdAt) }}</td>
             <td>
               <div class="post-actions">
+                <button v-if="isAdmin && post.status === 'approved'" class="post-share-btn" type="button" :aria-pressed="isPinned(post)" :disabled="pinSaving" @click="togglePin(post)"><i class="fas fa-thumbtack"></i>{{ isPinned(post) ? 'Quitar pin' : 'Pinear' }}</button>
                 <button v-if="isAdmin && post.status === 'pending'" class="mini-btn-xs btn-success" title="Aprobar" @click="triggerApprove(post)">
                   <i class="fas fa-check"></i>
                 </button>
@@ -155,6 +157,7 @@
           <p><span :class="['state-pill', post.status]">{{ statusLabel(post.status) }}</span> {{ formatUpdated(post.updatedAt || post.createdAt) }}</p>
         </div>
         <div class="post-mobile-actions">
+          <button v-if="isAdmin && post.status === 'approved'" type="button" :aria-label="isPinned(post) ? 'Quitar pin' : 'Pinear en Inicio'" :aria-pressed="isPinned(post)" :disabled="pinSaving" @click="togglePin(post)"><i class="fas fa-thumbtack"></i></button>
           <button v-if="isAdmin && post.status === 'pending'" class="approve-mobile" type="button" title="Aprobar" @click="triggerApprove(post)">
             <i class="fas fa-check"></i>
           </button>
@@ -264,7 +267,7 @@
 import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, deleteDoc, deleteField, doc, getDocs, updateDoc } from 'firebase/firestore'
+import { collection, deleteDoc, deleteField, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { resolveAssetUrl } from '@/constants/assets'
 import PostEditor from '@/components/posts/PostEditor.vue'
@@ -274,6 +277,7 @@ import SitePagesPanel from '@/components/sitePages/SitePagesPanel.vue'
 import { notifyNewPost } from '@/services/notifications'
 import { useListNavigation } from '@/composables/useListNavigation'
 import { DEFAULT_POST_CATEGORIES, loadPostCategories, postCategoryLabels, postMatchesCategory, savePostCategories } from '@/services/postCategories'
+import { homePinnedPosts, homePinOverflow, MAX_HOME_PINS } from '@/services/homePins'
 
 const route = useRoute()
 const router = useRouter()
@@ -294,6 +298,22 @@ const props = defineProps({
 const emit = defineEmits(['loading', 'ready'])
 
 const posts = ref([])
+const pinSaving = ref(false)
+const pinnedPosts = computed(() => homePinnedPosts(posts.value))
+const isPinned = post => pinnedPosts.value.some(item => item.id === post.id)
+async function togglePin(post) {
+  if (!isAdmin.value || pinSaving.value) return
+  const next = !isPinned(post)
+  if (next && pinnedPosts.value.length >= MAX_HOME_PINS) return showToast('Quita un pin antes de añadir otro. Máximo seis.', 'delete')
+  pinSaving.value = true
+  try {
+    const patch = { homePinned: next, homePinnedAt: next ? Date.now() : 0 }
+    await updateDoc(doc(db, 'posts', post.id), patch)
+    Object.assign(post, patch)
+    showToast(next ? 'Publicación pineada en Inicio' : 'Pin retirado de Inicio')
+  } catch (error) { console.error(error); showToast('No se pudo guardar el pin', 'delete') }
+  finally { pinSaving.value = false }
+}
 const isLoadingPosts = ref(false)
 const loadError = ref('')
 const filter = ref('all')
@@ -314,7 +334,7 @@ const confirmDialog = ref({ show: false, id: null, type: '', title: '', message:
 const isAdmin = computed(() => props.userRole === 'admin')
 const canPublish = computed(() => ['admin', 'publisher'].includes(props.userRole))
 const showSitePages = computed(() => route.query.section === 'pages' || route.query.create === 'page')
-const filterOptions = computed(() => isAdmin.value ? ['all', 'pending', 'approved', 'mine'] : ['mine', 'pending', 'approved'])
+const filterOptions = computed(() => isAdmin.value ? ['all', 'pinned', 'pending', 'approved', 'mine'] : ['mine', 'pending', 'approved'])
 const postSortOptions = [
   { value: 'recent', label: 'Más recientes' },
   { value: 'oldest', label: 'Más antiguos' },
@@ -375,6 +395,7 @@ const filteredPosts = computed(() => {
   const query = normalizeSearch(searchQuery.value)
 
   if (filter.value === 'mine') visiblePosts = visiblePosts.filter(p => p.authorId === user?.uid)
+  if (filter.value === 'pinned') visiblePosts = visiblePosts.filter(isPinned)
   if (['pending', 'approved'].includes(filter.value)) visiblePosts = visiblePosts.filter(p => p.status === filter.value)
   if (categoryFilter.value !== 'all') visiblePosts = visiblePosts.filter(p => postMatchesCategory(p, categoryFilter.value))
   if (query) {
@@ -425,6 +446,7 @@ function normalizeSearch(value = '') {
 
 const tabLabel = (value) => ({
   all: 'Todos',
+  pinned: 'Pineados',
   pending: 'Pendientes',
   approved: 'Aprobados',
   mine: 'Mios'
@@ -502,7 +524,7 @@ const openHeroCreate = () => {
 
 const editPost = (post) => {
   if (!canEditPost(post)) return
-  editingPost.value = post
+  editingPost.value = { ...post, ...(post.status === 'approved' ? { homePinned: isPinned(post) } : {}) }
   editorMode.value = post.placement === 'hero' ? 'hero' : 'post'
   pasteJsonOnOpen.value = false
   showEditor.value = true
@@ -607,19 +629,32 @@ const triggerApprove = (post) => {
 
 const executeApprove = async (post) => {
   if (!isAdmin.value) return
-  const publishedAt = Date.now()
-  await updateDoc(doc(db, 'posts', post.id), {
-    status: 'approved',
-    stickers: deleteField(),
-    updatedAt: publishedAt,
-    publishedAt: post.publishedAt || publishedAt
-  })
-  post.status = 'approved'
-  post.updatedAt = publishedAt
-  post.publishedAt = post.publishedAt || publishedAt
-  confirmDialog.value.show = false
-  await notifyNewPost(post)
-  showToast('Post publicado')
+  try {
+    const publishedAt = Date.now()
+    const patch = {
+      status: 'approved',
+      stickers: deleteField(),
+      updatedAt: publishedAt,
+      publishedAt: post.publishedAt || publishedAt
+    }
+    const snapshot = await getDocs(collection(db, 'posts'))
+    const candidates = snapshot.docs.map(item => ({ ...item.data(), id: item.id, ...(item.id === post.id ? patch : {}) }))
+    const overflow = homePinOverflow(candidates)
+    const batch = writeBatch(db)
+    batch.update(doc(db, 'posts', post.id), patch)
+    overflow.forEach(item => batch.update(doc(db, 'posts', item.id), { homePinned: false, homePinnedAt: 0 }))
+    await batch.commit()
+    overflow.forEach(item => { const local = posts.value.find(p => p.id === item.id); if (local) Object.assign(local, { homePinned: false, homePinnedAt: 0 }) })
+    post.status = 'approved'
+    post.updatedAt = publishedAt
+    post.publishedAt = post.publishedAt || publishedAt
+    confirmDialog.value.show = false
+    await notifyNewPost(post).catch(error => console.error(error))
+    showToast('Post publicado')
+  } catch (error) {
+    console.error(error)
+    showToast('No se pudo publicar. Los cambios no se han confirmado.', 'delete')
+  }
 }
 
 const triggerDelete = (id) => {
@@ -643,6 +678,8 @@ const executeDelete = async (id) => {
 </script>
 
 <style scoped>
+.pin-help{font-size:12px;line-height:1.5;color:var(--text-secondary);margin:0 0 16px}
+.post-share-btn[aria-pressed=true],.post-mobile-actions button[aria-pressed=true]{background:#7024dc;color:#fff;border-color:#c084fc}
 .post-manager {
   min-height: 100%;
 }

@@ -14,6 +14,10 @@
         </div>
 
         <div class="editor-actions-top">
+          <button v-if="!isHeroMode" type="button" class="utility-btn" @click="copySocialJsonInstructions" title="Copiar instrucciones para generar el articulo completo y el carrusel con destacados">
+            <i class="far fa-copy"></i>
+            Instrucciones JSON
+          </button>
           <button v-if="!isHeroMode" type="button" class="utility-btn" @click="pasteJsonIntoPost">
             <i class="fas fa-code"></i>
             Pegar JSON
@@ -151,6 +155,9 @@
                   </label>
                 </div>
               </div>
+              <label v-if="!isHeroMode" class="home-pin-option"><input type="checkbox" :checked="post.homePinned !== false" @change="post.homePinned = $event.target.checked; post.homePinnedAt = Date.now()" /> Pinear en el carrusel de Inicio al publicarse <small>Hasta seis publicaciones. Puedes quitar el pin desde el gestor.</small></label>
+              <details class="hero-media-settings"><summary>Hero de Inicio: imagen, logo y galería</summary><p>Opcional. Usa una imagen horizontal y un logo transparente. Si no añades imagen, se usará la portada del post.</p><label class="field-group"><span>Imagen del hero (URL)</span><input v-model="post.hero.image" type="url" placeholder="https://..." /></label><label class="field-group"><span>Logo del juego (URL)</span><input v-model="post.hero.logoUrl" type="url" placeholder="https://.../logo.png" /></label><label class="field-group"><span>Encuadre de la portada</span><select v-model="post.hero.position"><option value="center top">Arriba</option><option value="center center">Centro</option><option value="center bottom">Abajo</option><option value="left top">Izquierda, arriba</option><option value="right top">Derecha, arriba</option></select></label><label class="field-group"><span>Galería: una URL por línea</span><textarea :value="post.hero.images.map(item=>item.url).join('\n')" rows="4" @change="post.hero.images = $event.target.value.split('\n').map(url=>({url:url.trim(),alt:'',position:'center top'})).filter(item=>item.url)" /></label></details>
+
             </div>
           </article>
 
@@ -740,9 +747,14 @@
 </template>
 
 <script setup>
+import { normalizeSocialContent } from '@/services/socialContent'
+import { normalizeHomeHero } from '@/services/homeHero'
+import { homePinOverflow } from '@/services/homePins'
+import socialJsonInstructions from '../../../docs/prompt-post-completo-redes.md?raw'
+import socialJsonExample from '../../../examples/post-completo-social-v2.example.json?raw'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { addDoc, collection, deleteField, doc, updateDoc } from 'firebase/firestore'
+import { addDoc, collection, deleteField, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
 import { loadPostCategories } from '@/services/postCategories'
@@ -821,12 +833,15 @@ const fallbackCategoryOptions = ['Nintendo Switch', 'Super Mario', 'Zelda', 'Pok
 
 const post = ref({
   title: '',
+  homePinned: props.editData ? props.editData.homePinned : true,
+  homePinnedAt: 0,
   subtitle: '',
   content: '',
   category: '',
   image: '',
   publicationType: 'noticia',
   tagsText: '',
+  hero: normalizeHomeHero(),
   bannerImage: '',
   extraMediaText: '',
   mediaCredits: '',
@@ -1040,6 +1055,7 @@ onMounted(async () => {
     post.value.subtitle = post.value.subtitle || ''
     post.value.publicationType = post.value.publicationType || 'noticia'
     post.value.tagsText = Array.isArray(post.value.tags) ? post.value.tags.join(', ') : (post.value.tagsText || '')
+    post.value.hero = normalizeHomeHero(post.value.hero)
     post.value.extraMediaText = Array.isArray(post.value.extraMedia) ? post.value.extraMedia.join('\n') : (post.value.extraMediaText || '')
     post.value.keywordsText = Array.isArray(post.value.keywords) ? post.value.keywords.join(', ') : (post.value.keywordsText || '')
     post.value.rewardBadgesText = Array.isArray(post.value.rewardBadges) ? post.value.rewardBadges.join(', ') : (post.value.rewardBadgesText || '')
@@ -1306,34 +1322,6 @@ const normalizeSections = (sections = [], { dropEmpty = false } = {}) => {
   return filtered.length ? filtered : [{ title: '', label: 'Introduccion', image: '', content: '', hidden: false }]
 }
 
-const normalizeSocialContent = (social = {}) => {
-  const slidesSource = Array.isArray(social?.slides)
-    ? social.slides
-    : (Array.isArray(social?.diapositivas)
-        ? social.diapositivas
-        : (Array.isArray(social?.sections) ? social.sections : (Array.isArray(social?.secciones) ? social.secciones : [])))
-
-  return {
-    title: String(social?.title || social?.titulo || '').trim(),
-    subtitle: String(social?.subtitle || social?.subtitulo || '').trim(),
-    summary: String(social?.summary || social?.resumen || social?.content || social?.contenido || social?.description || '').trim(),
-    image: String(social?.image || social?.imagen || '').trim(),
-    slides: slidesSource.map(slide => ({
-      title: String(slide?.title || slide?.titulo || '').trim(),
-      subtitle: String(slide?.subtitle || slide?.subtitulo || '').trim(),
-      content: String(slide?.content || slide?.contenido || slide?.summary || slide?.resumen || slide?.description || '').trim(),
-      image: String(slide?.image || slide?.imagen || '').trim(),
-      points: (Array.isArray(slide?.points) ? slide.points : (Array.isArray(slide?.puntos) ? slide.puntos : (Array.isArray(slide?.highlights) ? slide.highlights : [])))
-        .map(point => String(point || '').trim())
-        .filter(Boolean)
-        .slice(0, 4),
-      sectionIndexes: (Array.isArray(slide?.sectionIndexes) ? slide.sectionIndexes : (Array.isArray(slide?.secciones) ? slide.secciones : []))
-        .map(index => Number(index))
-        .filter(index => Number.isInteger(index) && index >= 0)
-    }))
-  }
-}
-
 const parseAiJsonPost = (value) => {
   const data = JSON.parse(value || '{}')
   const title = String(data?.title || data?.titulo || '').trim()
@@ -1361,9 +1349,9 @@ const parseAiJsonPost = (value) => {
   if (!social.slides.length) {
     throw new Error('El JSON debe incluir al menos una entrada en social.slides.')
   }
-  const incompleteSocialSlide = social.slides.findIndex(slide => !slide.title || !slide.content)
+  const incompleteSocialSlide = social.slides.findIndex(slide => !slide.title || (!slide.content && !slide.points.length && slide.type !== 'closing'))
   if (incompleteSocialSlide >= 0) {
-    throw new Error(`La entrada ${incompleteSocialSlide + 1} de social.slides necesita title y content.`)
+    throw new Error(`La entrada ${incompleteSocialSlide + 1} de social.slides necesita title y content o points.`)
   }
   const invalidSocialReference = social.slides.findIndex(slide => slide.sectionIndexes.some(index => index >= sectionsSource.length))
   if (invalidSocialReference >= 0) {
@@ -1375,6 +1363,7 @@ const parseAiJsonPost = (value) => {
     subtitle,
     content: summary,
     image: String(data?.image || data?.imagen || '').trim(),
+    hero: data.hero ? normalizeHomeHero(data.hero) : null,
     categories: mergedCategories,
     sections: normalizeSections(sectionsSource),
     social,
@@ -1386,12 +1375,22 @@ const parseAiJsonPost = (value) => {
   }
 }
 
+const copySocialJsonInstructions = async () => {
+  try {
+    await navigator.clipboard.writeText(socialJsonInstructions + '\n\nPLANTILLA JSON DE EJEMPLO (reemplaza todo el texto ficticio):\n' + socialJsonExample)
+    showEditorToast('Instrucciones copiadas. Pegalas en Chat junto con la informacion verificada del post.')
+  } catch {
+    showEditorToast('No se pudo copiar. Revisa el permiso del portapapeles.', 'error')
+  }
+}
+
 const pasteJsonIntoPost = async () => {
   jsonPasteError.value = ''
   try {
     const text = await navigator.clipboard.readText()
     const parsed = parseAiJsonPost(text)
     post.value.title = parsed.title
+    if (parsed.hero) post.value.hero = parsed.hero
     post.value.subtitle = parsed.subtitle
     post.value.content = parsed.content
     post.value.image = parsed.image || post.value.image
@@ -1512,6 +1511,8 @@ const savePost = async (targetStatus = 'pending') => {
     const cleanPost = JSON.parse(JSON.stringify(post.value))
     delete cleanPost.stickers
     cleanPost.sections = normalizeSections(cleanPost.sections, { dropEmpty: !isHeroMode.value })
+    cleanPost.hero = normalizeHomeHero(cleanPost.hero)
+    if (cleanPost.homePinned === true && !cleanPost.homePinnedAt) cleanPost.homePinnedAt = Date.now()
     cleanPost.social = normalizeSocialContent(cleanPost.social)
     cleanPost.game = normalizeGameData({
       ...cleanPost.game
@@ -1561,12 +1562,22 @@ const savePost = async (targetStatus = 'pending') => {
 
     if (props.editData) {
       const nextUpdatedAt = Date.now()
-      await updateDoc(doc(db, 'posts', props.editData.id), {
+      const patch = {
         ...cleanPost,
         stickers: deleteField(),
         updatedAt: nextUpdatedAt,
         ...(props.editData.status === 'approved' ? { publishedAt: cleanPost.publishedAt || props.editData.publishedAt || nextUpdatedAt } : {})
-      })
+      }
+      if (props.editData.status === 'approved' && cleanPost.homePinned === true) {
+        const snapshot = await getDocs(collection(db, 'posts'))
+        const candidates = snapshot.docs.map(item => ({ ...item.data(), ...(item.id === props.editData.id ? cleanPost : {}), id: item.id }))
+        const batch = writeBatch(db)
+        batch.update(doc(db, 'posts', props.editData.id), patch)
+        homePinOverflow(candidates).forEach(item => batch.update(doc(db, 'posts', item.id), { homePinned: false, homePinnedAt: 0 }))
+        await batch.commit()
+      } else {
+        await updateDoc(doc(db, 'posts', props.editData.id), patch)
+      }
     } else {
       const createdAt = Date.now()
       await addDoc(collection(db, 'posts'), {
@@ -1602,6 +1613,9 @@ const savePost = async (targetStatus = 'pending') => {
 </script>
 
 <style scoped>
+.home-pin-option{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:14px;border:1px solid #a855f755;border-radius:14px;background:#7c3aed12;font-weight:700;font-size:13px}
+.home-pin-option input{accent-color:#9333ea;width:18px;height:18px}
+.home-pin-option small{flex-basis:100%;font-weight:400;color:var(--text-secondary);line-height:1.5}
 .post-editor-modal {
   align-items: center;
   background:
@@ -4033,4 +4047,9 @@ const savePost = async (targetStatus = 'pending') => {
   color: #fef3c7;
 }
 
+.editor-actions-top{flex-wrap:wrap}
+</style>
+
+<style scoped>
+.hero-media-settings{display:grid;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--admin-surface);color:var(--text-primary)}.hero-media-settings summary{font-weight:800;cursor:pointer}.hero-media-settings p{font-size:12px;color:var(--text-secondary);line-height:1.5;margin:12px 0}.hero-media-settings .field-group{margin-top:12px}
 </style>
