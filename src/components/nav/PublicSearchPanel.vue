@@ -1,8 +1,5 @@
 <script setup>
-import { publicName, publicText } from '@/utils/publicIdentity'
-import { computed, ref } from 'vue'
-import PublicNavigationLink from './PublicNavigationLink.vue'
-import { usePublicPanelFocus } from '@/composables/usePublicPanelFocus'
+import { computed } from 'vue'
 import { defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
 import { postCategoryLabels } from '@/services/postCategories'
 import { resolveProfileIcon } from '@/services/profileProgress'
@@ -58,9 +55,6 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'submit', 'open-result', 'open-section', 'open-all', 'recent', 'follow-user'])
 
-const panel = ref(null)
-usePublicPanelFocus(() => props.open, panel, () => emit('close'), { initial: 'input' })
-
 const filters = [
   { id: 'all', label: 'Todo' },
   { id: 'posts', label: 'Noticias' },
@@ -97,7 +91,7 @@ const formatMembers = (value = 0) => {
 const communityCategory = (community) => community.category || community.threadTopics?.[0] || (community.isOfficial ? 'Oficial' : 'Comunidad')
 const communityAvatar = (community) => community.iconUrl || community.imageUrl || defaultLogoUrl
 const userAvatar = (user) => resolveProfileIcon(user) || user.imageUrl || user.photoURL || ''
-const userHandle = (user) => publicText(user.username) ? `@${user.username}` : `@${publicName(user.name, user.displayName, 'usuario').toLowerCase().replace(/\s+/g, '')}`
+const userHandle = (user) => user.username ? `@${user.username}` : user.email ? `@${String(user.email).split('@')[0]}` : `@${String(user.name || 'usuario').toLowerCase().replace(/\s+/g, '')}`
 const isFollowing = (user) => props.followingIds?.has?.(user.id)
 const canFollow = (user) => props.currentUserId && user.id !== props.currentUserId && !isFollowing(user)
 
@@ -107,13 +101,12 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
 </script>
 
 <template>
-  <div v-if="open" ref="panel" tabindex="-1" class="public-search-panel" :class="{ expanded }">
-    <form role="search" aria-label="Búsqueda global" class="public-search-box" @submit.prevent="emit('submit')">
+  <div v-if="open" class="public-search-panel" :class="{ expanded }">
+    <form class="public-search-box" @submit.prevent="emit('submit')">
       <i class="fas fa-search"></i>
       <input
         v-model="query"
-        type="search"
-        aria-label="Buscar noticias, comunidades o usuarios"
+        autofocus
         placeholder="Buscar noticias, comunidades o usuarios..."
       />
       <button type="button" aria-label="Cerrar busqueda" @click="emit('close')">
@@ -126,7 +119,7 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
         v-for="filter in filters"
         :key="filter.id"
         type="button"
-        :class="{ active: activeFilter === filter.id }" :aria-pressed="activeFilter === filter.id"
+        :class="{ active: activeFilter === filter.id }"
         @click="activeFilter = filter.id"
       >
         {{ filter.label }}
@@ -188,20 +181,22 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
             v-for="user in sections.users"
             :key="user.id"
             class="search-result-row user-row"
+            role="button"
+            tabindex="0"
+            @click="openUser(user)"
+            @keydown.enter.prevent="openUser(user)"
           >
-            <PublicNavigationLink class="search-user-profile" :to="`/perfil/${user.id}`" @navigate="openUser(user)">
-              <span class="user-avatar">
-                <img v-if="userAvatar(user)" :src="userAvatar(user)" alt="" />
-                <i v-else class="far fa-user"></i>
-              </span>
-              <span>
-                <strong>
-                  {{ publicName(user.name, user.displayName, user.username) }}
-                  <i v-if="user.emailVerified" class="fas fa-circle-check verified-mark"></i>
-                </strong>
-                <small>{{ userHandle(user) }}</small>
-              </span>
-              </PublicNavigationLink>
+            <span class="user-avatar">
+              <img v-if="userAvatar(user)" :src="userAvatar(user)" alt="" />
+              <i v-else class="far fa-user"></i>
+            </span>
+            <span>
+              <strong>
+                {{ user.name || user.displayName || user.email || 'Usuario' }}
+                <i v-if="user.emailVerified" class="fas fa-circle-check verified-mark"></i>
+              </strong>
+              <small>{{ userHandle(user) }}</small>
+            </span>
             <em v-if="isFollowing(user)">Siguiendo</em>
             <em v-else-if="!currentUserId || user.id === currentUserId">Perfil</em>
             <button v-else-if="canFollow(user)" type="button" class="follow-mini" @click.stop="emit('follow-user', user)">Seguir</button>
@@ -221,8 +216,8 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
 .public-search-panel {
   animation: searchPanelIn 0.18s ease both;
   background: rgba(255, 255, 255, 0.96);
-  border: var(--border-width) solid var(--notice-light-border);
-  border-radius: var(--public-menu-radius);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 22px;
   box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12);
   color: #111827;
   left: 50%;
@@ -234,46 +229,42 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
   transform-origin: top center;
   width: calc(100vw - 28px);
   z-index: 1200;
-  max-height: calc(100dvh - var(--public-nav-offset, 72px) - var(--space-4));
-  overflow-y: auto;
 }
 
 .public-search-box {
   align-items: center;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: var(--radius-control);
+  border-radius: 16px;
   display: grid;
   gap: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  min-height: var(--public-control-height);
+  min-height: 44px;
   padding: 0 12px;
 }
 
 .public-search-box > i {
   color: #7c3aed;
-  font-size: var(--public-icon-size);
 }
 
 .public-search-box input {
-  min-height: var(--public-control-height);
   background: transparent;
   border: 0;
   color: #111827;
-  font-size: var(--font-body);
-  font-weight: var(--weight-body);
+  font-size: 14px;
+  font-weight: 800;
   min-width: 0;
   outline: none;
 }
 
 .public-search-box input::placeholder {
-  color: var(--public-menu-light-muted);
+  color: #94a3b8;
 }
 
 .public-search-box button {
   color: #64748b;
-  height: var(--public-control-height);
-  width: var(--public-control-height);
+  height: 32px;
+  width: 32px;
 }
 
 .search-filter-row,
@@ -291,11 +282,11 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
   background: #f8fafc;
   border: 1px solid #e5e7eb;
   border-radius: 999px;
-  color: var(--public-menu-light-muted);
+  color: #64748b;
   flex: 0 0 auto;
-  font-size: var(--font-button);
-  font-weight: var(--weight-label);
-  min-height: var(--public-control-height);
+  font-size: 11px;
+  font-weight: 950;
+  min-height: 30px;
   padding: 0 12px;
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
@@ -313,10 +304,10 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
 }
 
 .recent-searches span {
-  color: var(--public-menu-light-muted);
+  color: #94a3b8;
   flex: 0 0 auto;
-  font-size: var(--font-label);
-  font-weight: var(--weight-label);
+  font-size: 10px;
+  font-weight: 950;
   text-transform: uppercase;
 }
 
@@ -349,8 +340,8 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
   align-items: center;
   color: #111827;
   display: inline-flex;
-  font-size: var(--font-label);
-  font-weight: var(--weight-label);
+  font-size: 12px;
+  font-weight: 950;
   gap: 8px;
 }
 
@@ -359,17 +350,16 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
 }
 
 .search-section header button {
-  color: var(--action-message-text);
-  font-size: var(--font-button);
-  font-weight: var(--weight-label);
-  min-height: var(--public-control-height);
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 950;
 }
 
 .search-result-row {
   align-items: center;
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: var(--radius-control);
+  border-radius: 14px;
   color: #111827;
   display: grid;
   gap: 10px;
@@ -430,10 +420,10 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
   align-items: center;
   color: #111827;
   display: flex;
-  font-size: var(--font-body);
-  font-weight: var(--weight-label);
+  font-size: 13px;
+  font-weight: 950;
   gap: 5px;
-  line-height: var(--line-body);
+  line-height: 1.25;
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
@@ -442,15 +432,14 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
 }
 
 .search-result-row small {
-  color: var(--public-menu-light-muted);
+  color: #64748b;
   display: block;
-  font-size: var(--font-caption);
-  font-weight: var(--weight-body);
+  font-size: 11px;
+  font-weight: 800;
   margin-top: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: var(--line-body);
 }
 
 .verified-mark {
@@ -462,10 +451,10 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
 .user-row em,
 .follow-mini {
   border-radius: 999px;
-  font-size: var(--font-caption);
+  font-size: 10px;
   font-style: normal;
-  font-weight: var(--weight-label);
-  min-height: var(--badge-height);
+  font-weight: 950;
+  min-height: 28px;
   padding: 0 10px;
 }
 
@@ -477,25 +466,23 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
 }
 
 .follow-mini {
-  background: var(--public-action-background);
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
   color: #ffffff;
-  min-height: var(--public-control-height);
 }
 
 .search-state {
   align-items: center;
   background: #f8fafc;
   border: 1px dashed #ddd6fe;
-  border-radius: var(--radius-control);
-  color: var(--public-menu-light-muted);
+  border-radius: 14px;
+  color: #64748b;
   display: flex;
-  font-size: var(--font-caption);
-  font-weight: var(--weight-body);
+  font-size: 12px;
+  font-weight: 850;
   gap: 8px;
   justify-content: center;
   min-height: 70px;
   padding: 14px;
-  line-height: var(--line-body);
 }
 
 .search-state i {
@@ -520,9 +507,6 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
     padding: 12px 16px 16px;
     top: calc(var(--public-nav-offset, 64px) - 1px);
     width: calc(100vw - 28px);
-    border-radius: var(--public-menu-radius);
-    max-height: calc(100dvh - var(--public-nav-offset, 72px) - var(--space-4));
-    overflow-y: auto;
   }
 
   .public-search-results {
@@ -533,14 +517,10 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
 @media (max-width: 420px) {
   .public-search-panel {
     padding: 12px 14px 14px;
-    border-radius: var(--public-menu-radius);
-    max-height: calc(100dvh - var(--public-nav-offset, 72px) - var(--space-4));
-    overflow-y: auto;
   }
 
   .search-result-row {
     grid-template-columns: 38px minmax(0, 1fr) auto;
-    border-radius: var(--radius-control);
   }
 
   .post-row {
@@ -559,6 +539,4 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
     width: 54px;
   }
 }
-.search-user-profile { grid-column: 1 / 3; display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: var(--space-2); min-width: 0; min-height: var(--public-control-height); color: inherit; text-decoration: none; }
-@media (prefers-reduced-motion: reduce) { .public-search-panel { animation: none; } .search-result-row { transition: none; } }
 </style>

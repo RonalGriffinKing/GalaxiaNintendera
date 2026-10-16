@@ -55,7 +55,3 @@ export const resolveAssetUrl = (url, fallback = '', options = {}) => {
   if (options.proxy === false) return resolved
   return shouldProxyImageUrl(resolved) ? proxiedImageUrl(resolved) : resolved
 }
-
-// Resolve only files known to this build; no server-controlled dynamic imports.
-const knownProfileAssets=import.meta.glob('../iconos/iconos*/*.{png,jpg,jpeg,webp,gif}',{eager:true,import:'default',query:'?url'})
-export const resolveKnownProfileAsset=sourcePath=>knownProfileAssets['../iconos/'+sourcePath]||''

@@ -15,8 +15,8 @@ const emit = defineEmits(['cancel', 'save'])
 </script>
 
 <template>
-  <form class="post-edit-card social-editor" @submit.prevent="emit('save')">
-    <textarea aria-label="Editar comentario" v-model="model" maxlength="280" rows="3" autofocus></textarea>
+  <form class="post-edit-card" @submit.prevent="emit('save')">
+    <textarea v-model="model" maxlength="280" rows="3" autofocus></textarea>
     <footer>
       <button type="button" @click="emit('cancel')">Cancelar</button>
       <button type="submit" class="save" :disabled="disabled">

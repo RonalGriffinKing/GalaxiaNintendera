@@ -17,7 +17,7 @@ const emit = defineEmits(['page'])
     <p>Mostrando {{ startItem }}-{{ endItem }} de {{ totalItems }} {{ itemLabel }}</p>
 
     <div class="pagination-desktop">
-      <button class="admin-action admin-action--sm" type="button" :disabled="currentPage <= 1" @click="emit('page', currentPage - 1)">
+      <button type="button" :disabled="currentPage <= 1" @click="emit('page', currentPage - 1)">
         <i class="fas fa-chevron-left"></i>
         Anterior
       </button>
@@ -26,27 +26,26 @@ const emit = defineEmits(['page'])
         <button
           v-else
           type="button"
-          class="admin-action admin-action--sm"
-          :class="{ active: token === currentPage, 'is-selected': token === currentPage }"
+          :class="{ active: token === currentPage }"
           :aria-current="token === currentPage ? 'page' : undefined"
           @click="emit('page', token)"
         >
           {{ token }}
         </button>
       </template>
-      <button class="admin-action admin-action--sm" type="button" :disabled="currentPage >= totalPages" @click="emit('page', currentPage + 1)">
+      <button type="button" :disabled="currentPage >= totalPages" @click="emit('page', currentPage + 1)">
         Siguiente
         <i class="fas fa-chevron-right"></i>
       </button>
     </div>
 
     <div class="pagination-mobile">
-      <button class="admin-action admin-action--sm" type="button" :disabled="currentPage <= 1" @click="emit('page', currentPage - 1)">
+      <button type="button" :disabled="currentPage <= 1" @click="emit('page', currentPage - 1)">
         <i class="fas fa-chevron-left"></i>
         Anterior
       </button>
       <strong>{{ currentPage }} / {{ totalPages }}</strong>
-      <button class="admin-action admin-action--sm" type="button" :disabled="currentPage >= totalPages" @click="emit('page', currentPage + 1)">
+      <button type="button" :disabled="currentPage >= totalPages" @click="emit('page', currentPage + 1)">
         Siguiente
         <i class="fas fa-chevron-right"></i>
       </button>
@@ -58,17 +57,15 @@ const emit = defineEmits(['page'])
 .pagination-nav {
   align-items: center;
   display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  min-width: 0;
+  gap: 12px;
   justify-content: space-between;
   margin-top: 14px;
 }
 
 .pagination-nav p {
   color: var(--control-muted, #64748b);
-  font-size: var(--font-caption);
-  font-weight: var(--weight-label);
+  font-size: 12px;
+  font-weight: 850;
 }
 
 .pagination-desktop,
@@ -82,21 +79,22 @@ const emit = defineEmits(['page'])
   display: none;
 }
 
+.pagination-nav button,
 .pagination-nav strong,
 .pagination-nav span {
   align-items: center;
   background: var(--control-surface, #ffffff);
-  border: var(--control-border-width) solid var(--control-border, #e5e7eb);
-  border-radius: var(--radius-control);
+  border: 1px solid var(--control-border, #e5e7eb);
+  border-radius: 10px;
   color: var(--control-muted, #64748b);
   display: inline-flex;
-  font-size: var(--font-button);
-  font-weight: var(--weight-label);
+  font-size: 12px;
+  font-weight: 900;
   gap: 7px;
   justify-content: center;
-  min-height: var(--button-height-sm);
-  min-width: var(--button-height-sm);
-  padding: 0 var(--space-3);
+  min-height: 36px;
+  min-width: 36px;
+  padding: 0 11px;
 }
 
 .pagination-nav span {
@@ -106,7 +104,17 @@ const emit = defineEmits(['page'])
   padding: 0 4px;
 }
 
-.pagination-desktop { flex-wrap: wrap; }
+.pagination-nav button.active {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  border-color: transparent;
+  color: var(--control-surface, #ffffff);
+  box-shadow: 0 10px 20px rgba(147, 51, 234, 0.16);
+}
+
+.pagination-nav button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
 
 @media (max-width: 760px) {
   .pagination-nav {
@@ -122,6 +130,5 @@ const emit = defineEmits(['page'])
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   }
-  .pagination-mobile strong { min-height: var(--control-height-touch); }
 }
 </style>

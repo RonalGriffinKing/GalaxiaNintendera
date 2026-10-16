@@ -1,5 +1,4 @@
 <script setup>
-import { publicName } from '@/utils/publicIdentity'
 defineProps({
   activeLive: {
     type: String,
@@ -65,7 +64,7 @@ const emit = defineEmits(['update:activeLive', 'join'])
           </div>
           <div class="chat-list">
             <p v-for="message in chatMessages" :key="message.name">
-              <strong>{{ publicName(message.name) }}</strong>
+              <strong>{{ message.name }}</strong>
               {{ message.text }}
             </p>
           </div>
@@ -110,7 +109,7 @@ const emit = defineEmits(['update:activeLive', 'join'])
           <span>{{ thread.tag }}</span>
           <div>
             <h3>{{ thread.title }}</h3>
-            <p>Por {{ publicName(thread.author) }} - {{ thread.replies }} respuestas</p>
+            <p>Por {{ thread.author }} - {{ thread.replies }} respuestas</p>
           </div>
           <i class="fas fa-chevron-right"></i>
         </button>

@@ -1,14 +1,7 @@
 <script setup>
-import {isEditorialOwner} from '@/services/editorial'
-
-import {communitySnapshot,communityWrite} from '@/services/community'
-
-import {getProfileSnapshot} from '@/services/profiles'
-
-import { publicName } from '@/utils/publicIdentity'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { collection, getDocs } from 'firebase/firestore'
+import { addDoc, collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import GlobalGifStickerPicker from '@/components/thread/GlobalGifStickerPicker.vue'
 import { DEFAULT_THREAD_TOPICS, CONTENT_TAB_ICONS, OFFICIAL_COMMUNITY_ID } from '@/constants/community'
@@ -55,11 +48,11 @@ const officialFallback = {
   threadTopics: defaultTopics
 }
 
-const canManageOfficial = computed(() => isEditorialOwner(auth.currentUser))
+const canManageOfficial = computed(() => ['admin', 'publisher'].includes(props.userRole))
 const isCurrentUserBlocked = computed(() => Boolean(currentProfile.value?.isBlocked))
 const user = computed(() => auth.currentUser)
 const displayName = computed(() => currentProfile.value?.name || user.value?.displayName || user.value?.email || 'Usuario')
-const userInitial = computed(() => publicName(currentProfile.value?.name, user.value?.displayName, currentProfile.value?.username).slice(0, 1).toUpperCase())
+const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const currentProfileIcon = computed(() => resolveProfileIcon({
   ...currentProfile.value,
   imageUrl: currentProfile.value.imageUrl || user.value?.photoURL || ''
@@ -166,9 +159,9 @@ const loadContext = async () => {
   isLoading.value = true
   try {
     const [communitySnap, joinedSnap, userSnap] = await Promise.all([
-      communitySnapshot('communities',{}).catch(() => ({ docs: [] })),
+      getDocs(collection(db, 'communities')).catch(() => ({ docs: [] })),
       getDocs(collection(db, 'users', activeUser.uid, 'communities')).catch(() => ({ docs: [] })),
-      getProfileSnapshot(activeUser.uid).catch(() => null)
+      getDoc(doc(db, 'users', activeUser.uid)).catch(() => null)
     ])
     const savedCommunities = communitySnap.docs.map(item => ({ id: item.id, ...item.data() }))
     const official = savedCommunities.find(item => item.id === officialFallback.id)
@@ -304,7 +297,7 @@ const publish = async () => {
   isPublishing.value = true
   try {
     const now = Date.now()
-    await communityWrite('thread-create',undefined,{
+    await addDoc(collection(db, 'communityThreads'), {
       communityId: community.id,
       communityName: community.name || '',
       authorId: activeUser.uid,
@@ -375,7 +368,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="thread-composer social-composer" :class="[`is-${variant}`, { 'picker-open': communityPickerOpen, 'sticker-open': giphyOpen }]">
+  <section class="thread-composer" :class="[`is-${variant}`, { 'picker-open': communityPickerOpen, 'sticker-open': giphyOpen }]">
     <div v-if="isLoading" class="composer-loading">Preparando comunidades...</div>
 
     <template v-else-if="allowedCommunities.length">
@@ -398,7 +391,6 @@ onMounted(async () => {
             <textarea
               ref="textAreaRef"
               v-model="body"
-              aria-label="Contenido de la publicación comunitaria"
               maxlength="240"
               :placeholder="placeholder"
               @click="syncCaret"

@@ -2,23 +2,22 @@
   <div class="relative min-h-full">
     <div v-if="!embedded" class="panel-header">
       <div>
-        <h1 class="panel-title admin-list-title admin-list-title--page">Usuarios</h1>
-        <p class="panel-subtitle admin-list-subtitle">Administra quienes pueden crear contenido</p>
+        <h1 class="panel-title">Usuarios</h1>
+        <p class="panel-subtitle">Administra quienes pueden crear contenido</p>
       </div>
 
       <button
         v-if="canManageUsers"
         @click="openCreate"
-        class="admin-action admin-action--primary"
-        type="button"
+        class="btn-primary-galaxy-xs flex items-center gap-2"
       >
         <i class="fas fa-plus"></i>
         Crear usuario
       </button>
     </div>
 
-    <div v-if="!canManageUsers" class="admin-surface admin-surface--card mb-5">
-      <p class="admin-description">
+    <div v-if="!canManageUsers" class="app-card p-4 mb-5">
+      <p class="section-caption">
         Solo un usuario con rol admin puede crear o eliminar usuarios.
       </p>
     </div>
@@ -32,7 +31,7 @@
         :sort-options="userSortOptions"
       >
         <template #filters>
-          <select v-model="roleFilter" aria-label="Filtrar por rol">
+          <select v-model="roleFilter">
             <option value="all">Todos los usuarios</option>
             <option value="admin">Administradores</option>
             <option value="publisher">Publicadores</option>
@@ -43,26 +42,26 @@
       </ListControls>
     </div>
 
-    <div v-if="isLoadingUsers" class="users-empty admin-list-state">
+    <div v-if="isLoadingUsers" class="users-empty">
       <i class="fas fa-circle-notch fa-spin"></i>
       <strong>Cargando usuarios</strong>
       <span>Conectando con la base de datos...</span>
     </div>
 
-    <div v-else-if="loadError" class="users-empty admin-list-state">
+    <div v-else-if="loadError" class="users-empty">
       <i class="fas fa-triangle-exclamation"></i>
       <strong>No se pudieron cargar los usuarios</strong>
       <span>{{ loadError }}</span>
     </div>
 
-    <div v-else-if="!filteredUsers.length" class="users-empty admin-list-state">
+    <div v-else-if="!filteredUsers.length" class="users-empty">
       <i class="fas fa-magnifying-glass"></i>
       <strong>No hay usuarios con esos criterios</strong>
       <span>Prueba con otra búsqueda, filtro u ordenación.</span>
     </div>
 
     <div v-if="!isLoadingUsers && !loadError && filteredUsers.length" class="users-grid">
-      <AdminSurface
+      <div
         v-for="user in paginatedUsers"
         :key="user.id"
         class="user-card"
@@ -71,26 +70,22 @@
 
         <div class="user-info">
           <div class="user-row">
-            <h3 class="admin-card-title">{{ user.name || user.email || 'Usuario' }}</h3>
-            <AdminBadge :variant="roleBadgeVariant(user.role || 'user')">
+            <h3>{{ user.name || user.email || 'Usuario' }}</h3>
+            <span :class="['role-pill', user.role || 'user']">
               {{ user.role || 'user' }}
-            </AdminBadge>
-            <AdminBadge v-if="user.emailVerified" variant="success">Verificado</AdminBadge>
-            <AdminBadge v-if="user.isBlocked" variant="danger">Solo lectura</AdminBadge>
+            </span>
+            <span v-if="user.emailVerified" class="status-pill verified">Verificado</span>
+            <span v-if="user.isBlocked" class="status-pill blocked">Solo lectura</span>
           </div>
 
-          <p class="admin-description">{{ user.description || 'Sin descripcion' }}</p>
-          <small class="admin-meta">{{ user.email || 'Sin email' }}</small>
+          <p>{{ user.description || 'Sin descripcion' }}</p>
+          <small>{{ user.email || 'Sin email' }}</small>
         </div>
 
         <div class="user-actions">
-          <button v-if="true && canManageUsers && user.id !== currentUid" class="admin-action admin-action--sm" type="button" :disabled="isSaving" @click="togglePublisher(user)">
-            {{ user.role === 'publisher' ? 'Retirar publicador' : 'Nombrar publicador' }}
-          </button>
           <button
             v-if="user.id !== currentUid && !user.isBlocked"
-            class="admin-action admin-action--sm admin-action--icon admin-action--message"
-            type="button"
+            class="mini-btn-xs btn-message"
             title="Enviar mensaje"
             @click="openDirectChat(user)"
           >
@@ -99,8 +94,7 @@
 
           <button
             v-if="canManageUsers"
-            class="admin-action admin-action--sm admin-action--icon admin-action--edit"
-            type="button"
+            class="mini-btn-xs btn-edit"
             title="Editar"
             @click="openEdit(user)"
           >
@@ -109,15 +103,14 @@
 
           <button
             v-if="canManageUsers && user.id !== currentUid"
-            class="admin-action admin-action--sm admin-action--icon admin-action--danger"
-            type="button"
+            class="mini-btn-xs btn-danger"
             title="Eliminar"
             @click="triggerDelete(user)"
           >
             <i class="fas fa-trash"></i>
           </button>
         </div>
-      </AdminSurface>
+      </div>
     </div>
 
     <PaginationNav
@@ -132,29 +125,142 @@
       @page="userPager.setPage"
     />
 
-    <AdminDialog :open="showPanel" :busy="isSaving" :title="isEditing ? 'Editar usuario' : 'Crear usuario'" :description="isEditing ? 'Actualiza perfil y rol' : 'Crea una cuenta para el panel'" size="wide" @close="closePanel">
-      <fieldset class="user-form" :disabled="isSaving">
-        <AdminField label="Nombre" v-slot="{ id, describedBy }"><input :id="id" :aria-describedby="describedBy" class="admin-control" data-dialog-autofocus v-model="form.name" placeholder="Ej: Marta" /></AdminField>
-        <AdminField label="Email" v-slot="{ id, describedBy }"><input :id="id" :aria-describedby="describedBy" class="admin-control" v-model="form.email" type="email" placeholder="persona@email.com" :disabled="isEditing" /></AdminField>
-        <AdminField v-if="!isEditing" label="Password temporal" help="Minimo 6 caracteres." v-slot="{ id, describedBy }"><input :id="id" :aria-describedby="describedBy" class="admin-control" v-model="form.password" type="password" placeholder="Minimo 6 caracteres" /></AdminField>
-        <AdminField label="Descripcion" v-slot="{ id, describedBy }"><textarea :id="id" :aria-describedby="describedBy" class="admin-control" v-model="form.description" rows="3" placeholder="Ej: redactora, streamer, editor..." /></AdminField>
-        <AdminField label="Icono por URL" v-slot="{ id, describedBy }"><input :id="id" :aria-describedby="describedBy" class="admin-control" v-model="form.imageUrl" placeholder="https://..." /></AdminField>
-        <AdminField label="Rol" help="El permiso de publicador se gestiona mediante la accion autorizada del servidor." v-slot="{ id, describedBy }"><select :id="id" :aria-describedby="describedBy" class="admin-control" v-model="form.role" disabled><option value="user">Usuario</option><option value="publisher">Publicador</option></select></AdminField>
-        <label class="admin-toggle"><input v-model="form.canChat" type="checkbox" /><span><strong>Permitir chat</strong><small>Los admins y publicadores pueden chatear siempre.</small></span></label>
-        <label class="admin-toggle"><input v-model="form.emailVerified" type="checkbox" /><span><strong>Correo verificado manualmente</strong><small>Util para cuentas creadas por admin con correos internos o no reales.</small></span></label>
-        <label class="admin-toggle admin-toggle--danger"><input v-model="form.isBlocked" type="checkbox" /><span><strong>Bloquear acciones</strong><small>El usuario podra leer, pero no crear hilos, comentar, chatear ni publicar acciones sociales.</small></span></label>
-        <AdminField v-if="form.isBlocked" label="Motivo del bloqueo" v-slot="{ id, describedBy }"><textarea :id="id" :aria-describedby="describedBy" class="admin-control" v-model="form.blockReason" rows="2" placeholder="Ej: spam, acoso, incumplimiento de normas..." /></AdminField>
-      </fieldset>
-      <p v-if="toast.show && toast.type === 'error'" class="admin-field-message admin-field-message--error" role="alert">{{ toast.message }}</p>
-      <div v-if="isSaving" class="panel-loading-cover">
-        <GalaxyLoader compact title="Guardando usuario" text="Aplicando cambios con la pantalla de carga de la galaxia..." />
+    <Transition name="fade">
+      <div
+        v-if="showPanel"
+        class="side-panel-backdrop"
+        @click="closePanel"
+      ></div>
+    </Transition>
+
+    <Transition name="slide">
+      <div v-if="showPanel" class="user-panel">
+        <div class="panel-top">
+          <div>
+            <h2>{{ isEditing ? 'Editar usuario' : 'Crear usuario' }}</h2>
+            <p>{{ isEditing ? 'Actualiza perfil y rol' : 'Crea una cuenta para el panel' }}</p>
+          </div>
+
+          <button class="panel-close-btn" @click="closePanel" :disabled="isSaving">x</button>
+        </div>
+
+        <div class="panel-body">
+          <label class="field">
+            Nombre
+            <input v-model="form.name" placeholder="Ej: Marta" />
+          </label>
+
+          <label class="field">
+            Email
+            <input v-model="form.email" type="email" placeholder="persona@email.com" :disabled="isEditing" />
+          </label>
+
+          <label v-if="!isEditing" class="field">
+            Password temporal
+            <input v-model="form.password" type="password" placeholder="Minimo 6 caracteres" />
+          </label>
+
+          <label class="field">
+            Descripcion
+            <textarea v-model="form.description" rows="3" placeholder="Ej: redactora, streamer, editor..." />
+          </label>
+
+          <label class="field">
+            Icono por URL
+            <input v-model="form.imageUrl" placeholder="https://..." />
+          </label>
+
+          <label class="field">
+            Rol
+            <select v-model="form.role">
+              <option value="user">Usuario</option>
+              <option value="publisher">Publicador</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+
+          <label class="chat-toggle">
+            <input v-model="form.canChat" type="checkbox" />
+            <span>
+              <strong>Permitir chat</strong>
+              <small>Los admins y publicadores pueden chatear siempre.</small>
+            </span>
+          </label>
+
+          <label class="chat-toggle">
+            <input v-model="form.emailVerified" type="checkbox" />
+            <span>
+              <strong>Correo verificado manualmente</strong>
+              <small>Util para cuentas creadas por admin con correos internos o no reales.</small>
+            </span>
+          </label>
+
+          <label class="chat-toggle danger-toggle">
+            <input v-model="form.isBlocked" type="checkbox" />
+            <span>
+              <strong>Bloquear acciones</strong>
+              <small>El usuario podra leer, pero no crear hilos, comentar, chatear ni publicar acciones sociales.</small>
+            </span>
+          </label>
+
+          <label v-if="form.isBlocked" class="field">
+            Motivo del bloqueo
+            <textarea v-model="form.blockReason" rows="2" placeholder="Ej: spam, acoso, incumplimiento de normas..." />
+          </label>
+        </div>
+
+        <div class="panel-footer">
+          <button
+            @click="saveUser"
+            :disabled="isSaving || !form.name || !form.email || (!isEditing && !form.password)"
+            class="btn-primary-galaxy w-full disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {{ isSaving ? 'Guardando...' : (isEditing ? 'Guardar cambios' : 'Crear usuario') }}
+          </button>
+        </div>
+
+        <Transition name="fade">
+          <div v-if="isSaving" class="panel-loading-cover">
+            <GalaxyLoader compact title="Guardando usuario" text="Aplicando cambios con la pantalla de carga de la galaxia..." />
+          </div>
+        </Transition>
       </div>
-      <template #footer>
-        <button class="admin-action" type="button" :disabled="isSaving" @click="closePanel">Cancelar</button>
-        <button class="admin-action admin-action--primary" type="button" @click="saveUser" :disabled="isSaving || !form.name || !form.email || (!isEditing && !form.password)" :aria-busy="isSaving">{{ isSaving ? 'Guardando...' : (isEditing ? 'Guardar cambios' : 'Crear usuario') }}</button>
-      </template>
-    </AdminDialog>
-    <AdminConfirmDialog :open="confirmDialog.show" :busy="isDeleting" title="Eliminar usuario?" description="Se eliminara su perfil y permisos del panel. Para borrar su Auth completamente hace falta backend Admin SDK." confirm-label="Eliminar usuario" pending-label="Eliminando..." :confirm-action="executeDelete" :error="toast.show && toast.type === 'error' ? toast.message : ''" @close="confirmDialog.show = false" />
+    </Transition>
+
+    <Transition name="fade">
+      <div v-if="confirmDialog.show" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="!isDeleting && (confirmDialog.show = false)"></div>
+
+        <div class="bg-white rounded-3xl p-6 max-w-sm w-full relative shadow-2xl text-center">
+          <div class="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 text-lg bg-red-100 text-red-600">
+            <i class="fas fa-trash-alt"></i>
+          </div>
+
+          <h2 class="text-lg font-black text-gray-800 mb-1">Eliminar usuario?</h2>
+          <p class="text-gray-500 mb-6 text-xs">
+            Se eliminara su perfil y permisos del panel. Para borrar su Auth completamente hace falta backend Admin SDK.
+          </p>
+
+          <div class="flex gap-2">
+            <button
+              @click="confirmDialog.show = false"
+              :disabled="isDeleting"
+              class="flex-1 py-2 text-xs rounded-xl font-bold bg-gray-100 text-gray-500 disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+
+            <button
+              @click="executeDelete"
+              :disabled="isDeleting"
+              class="flex-1 py-2 text-xs rounded-xl font-bold text-white shadow-lg bg-red-500 shadow-red-100 disabled:opacity-60"
+            >
+              {{ isDeleting ? 'Eliminando...' : 'Confirmar' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <Teleport to="body">
       <AppNotice :visible="toast.show" :message="toast.message" :type="toast.type" />
@@ -164,20 +270,12 @@
 
 <script setup>
 import AppNotice from '@/components/shared/AppNotice.vue'
-import { roleBadgeVariant } from '@/components/shared/adminBadgeVariants'
-import AdminBadge from '@/components/shared/AdminBadge.vue'
-import AdminSurface from '@/components/shared/AdminSurface.vue'
-import AdminField from '@/components/shared/AdminField.vue'
-import AdminDialog from '@/components/shared/AdminDialog.vue'
-import AdminConfirmDialog from '@/components/shared/AdminConfirmDialog.vue'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { initializeApp, deleteApp } from 'firebase/app'
-
-
-import {isEditorialOwner,manageEditorial} from "@/services/editorial";
-import { auth } from '@/firebase'
-import {profileRequest} from '@/services/profiles'
+import { createUserWithEmailAndPassword, getAuth, signOut, updateProfile } from 'firebase/auth'
+import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
+import { auth, db, firebaseConfig } from '@/firebase'
 import { resolveProfileIcon } from '@/services/profileProgress'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
 import ListControls from '@/components/shared/ListControls.vue'
@@ -226,7 +324,7 @@ const form = ref({
 })
 
 const currentUid = computed(() => auth.currentUser?.uid || '')
-const canManageUsers = computed(() => isEditorialOwner(auth.currentUser))
+const canManageUsers = computed(() => currentRole.value === 'admin')
 const canUseChat = computed(() => ['admin', 'publisher'].includes(currentRole.value))
 const userSortOptions = [
   { value: 'az', label: 'A-Z' },
@@ -288,8 +386,36 @@ const loadUsers = async () => {
   isLoadingUsers.value = true
   loadError.value = ''
   try {
-    {users.value=(await manageEditorial(auth.currentUser,{action:'users'})).items;currentRole.value=isEditorialOwner(auth.currentUser)?'admin':'user';return}
-    
+    const snap = await getDocs(collection(db, 'users'))
+    users.value = snap.docs.map(d => ({ ...d.data(), id: d.id }))
+
+    const user = auth.currentUser
+    if (!user) return
+
+    const currentSnap = await getDoc(doc(db, 'users', user.uid))
+
+    if (!currentSnap.exists() && users.value.length === 0) {
+      currentRole.value = 'admin'
+      await setDoc(doc(db, 'users', user.uid), {
+        name: user.displayName || 'Admin',
+        email: user.email || '',
+        description: 'admin',
+        imageUrl: user.photoURL || '',
+        role: 'admin',
+        canChat: true,
+        adminCreated: true,
+        emailVerified: true,
+        emailVerificationRequired: false,
+        emailOptIn: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }, { merge: true })
+      await loadUsers()
+      return
+    }
+
+    const currentProfile = currentSnap.data() || {}
+    currentRole.value = currentProfile.isBlocked ? 'user' : (currentProfile.role || 'user')
   } catch (error) {
     console.error(error)
     users.value = []
@@ -297,14 +423,6 @@ const loadUsers = async () => {
   } finally {
     isLoadingUsers.value = false
   }
-}
-
-const togglePublisher = async user => {
-  if(isSaving.value)return
-  isSaving.value=true
-  try{await manageEditorial(auth.currentUser,{action:'publisher',id:user.id,requestId:crypto.randomUUID(),data:{enabled:user.role!=='publisher'}});await loadUsers();showToast('Permiso editorial actualizado')}
-  catch{showToast('No se pudo actualizar el permiso editorial','error')}
-  finally{isSaving.value=false}
 }
 
 const showToast = (message, type = 'success') => {
@@ -359,9 +477,73 @@ const closePanel = () => {
 }
 
 const saveUser = async () => {
- if(!canManageUsers.value||isSaving.value)return
- isSaving.value=true
- try{if(isEditing.value){const keys=['name','description','imageUrl','emailOptIn','canChat','isBlocked','blockReason','emailVerified'];await profileRequest('admin-user-update',{uid:form.value.id,...Object.fromEntries(keys.filter(k=>form.value[k]!==undefined).map(k=>[k,form.value[k]]))})}else await profileRequest('admin-user-create',{name:form.value.name.trim(),email:form.value.email.trim(),password:form.value.password,description:form.value.description||'',canChat:!!form.value.canChat,emailOptIn:form.value.emailOptIn!==false});showPanel.value=false;await loadUsers();showToast('Usuario guardado')}catch(error){showToast(error.message||'No se pudo guardar el usuario','error')}finally{isSaving.value=false}
+  if (!canManageUsers.value || isSaving.value) return
+
+  isSaving.value = true
+
+  try {
+    if (isEditing.value) {
+      await setDoc(doc(db, 'users', form.value.id), userPayload(form.value), { merge: true })
+      showToast('USUARIO ACTUALIZADO')
+    } else {
+      const secondaryApp = initializeApp(firebaseConfig, `user-create-${Date.now()}`)
+      const secondaryAuth = getAuth(secondaryApp)
+
+      try {
+        const credential = await createUserWithEmailAndPassword(
+          secondaryAuth,
+          form.value.email.trim(),
+          form.value.password
+        )
+
+        await updateProfile(credential.user, {
+          displayName: form.value.name.trim(),
+          photoURL: form.value.imageUrl.trim() || null
+        })
+
+        await setDoc(doc(db, 'users', credential.user.uid), {
+          ...userPayload(form.value),
+          email: form.value.email.trim(),
+          provider: 'password',
+          adminCreated: true,
+          emailVerified: Boolean(form.value.emailVerified),
+          emailVerificationRequired: !form.value.emailVerified,
+          createdAt: Date.now()
+        })
+
+        await signOut(secondaryAuth)
+      } finally {
+        await deleteApp(secondaryApp)
+      }
+
+      showToast('USUARIO CREADO')
+    }
+
+    await loadUsers()
+
+    if (isEditing.value) {
+      showPanel.value = false
+    } else {
+      form.value = {
+        id: null,
+        name: '',
+        email: '',
+        password: '',
+        description: '',
+        imageUrl: '',
+        role: 'user',
+        canChat: false,
+        emailVerified: true,
+        isBlocked: false,
+        blockReason: ''
+      }
+    }
+  } catch (error) {
+    console.error(error)
+    showToast(error.code === 'auth/email-already-in-use' ? 'EL EMAIL YA EXISTE' : 'NO SE PUDO GUARDAR', 'error')
+  } finally {
+    isSaving.value = false
+  }
 }
 
 const userPayload = (source) => ({
@@ -397,9 +579,21 @@ const triggerDelete = (user) => {
 }
 
 const executeDelete = async () => {
- if(!canManageUsers.value||!confirmDialog.value.user||isDeleting.value)return
- isDeleting.value=true
- try{await profileRequest('admin-user-delete',{uid:confirmDialog.value.user.id});confirmDialog.value.show=false;await loadUsers();showToast('Cuenta eliminada; las publicaciones se conservan')}catch(error){showToast(error.message||'No se pudo eliminar la cuenta','error')}finally{isDeleting.value=false}
+  if (!canManageUsers.value || !confirmDialog.value.user || isDeleting.value) return
+
+  isDeleting.value = true
+
+  try {
+    await deleteDoc(doc(db, 'users', confirmDialog.value.user.id))
+    users.value = users.value.filter(u => u.id !== confirmDialog.value.user.id)
+    confirmDialog.value.show = false
+    showToast('USUARIO ELIMINADO', 'delete')
+  } catch (error) {
+    console.error(error)
+    showToast('NO SE PUDO ELIMINAR', 'error')
+  } finally {
+    isDeleting.value = false
+  }
 }
 
 onMounted(async () => {
@@ -416,33 +610,73 @@ watch(() => route.query.create, (createTarget) => {
   if (createTarget === 'user' && canManageUsers.value) openCreate()
 })
 
-
+watch([showPanel, () => confirmDialog.value.show], ([isPanelOpen, isConfirmOpen]) => {
+  document.body.style.overflow = isPanelOpen || isConfirmOpen ? 'hidden' : ''
+})
 
 watch([searchQuery, roleFilter, sortMode], userPager.resetPage)
 
-
+onUnmounted(() => {
+  document.body.style.overflow = ''
+})
 </script>
 
 <style scoped>
-.user-form { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: var(--space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.user-form .admin-field:nth-child(4), .user-form .admin-field:nth-child(5), .user-form .admin-toggle { grid-column: 1 / -1; }
-@media (max-width: 760px) { .user-form { grid-template-columns: minmax(0, 1fr); } }
-
 .users-toolbar {
   margin-bottom: 16px;
 }
 
 .users-grid {
   display: grid;
-  gap: var(--space-3);
+  gap: 14px;
   grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+}
+
+.users-empty {
+  align-items: center;
+  background: var(--admin-surface);
+  border: 1px dashed #d8b4fe;
+  border-radius: 16px;
+  color: var(--text-muted);
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  min-height: 180px;
+  padding: 24px;
+  text-align: center;
+}
+
+.users-empty i {
+  color: #a855f7;
+  font-size: 24px;
+}
+
+.users-empty strong {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.users-empty span {
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .user-card {
   align-items: center;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-surface-raised);
+  border-radius: 14px;
   display: grid;
-  gap: var(--space-3);
+  gap: 12px;
   grid-template-columns: 48px minmax(0, 1fr) auto;
+  padding: 14px;
+  transition: all 0.2s ease;
+}
+
+.user-card:hover {
+  box-shadow: 0 8px 15px rgba(0,0,0,0.04);
+  transform: translateY(-2px);
 }
 
 .user-card img {
@@ -459,13 +693,232 @@ watch([searchQuery, roleFilter, sortMode], userPager.resetPage)
 .user-row {
   align-items: center;
   display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.user-row h3 {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-info p {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-info small {
+  color: #9ca3af;
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  margin-top: 4px;
+}
+
+.role-pill {
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 3px 7px;
+  text-transform: uppercase;
+}
+
+.role-pill.admin {
+  background: var(--admin-surface-raised);
+  color: var(--accent-hover);
+}
+
+.role-pill.user {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.role-pill.publisher {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.status-pill {
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 950;
+  padding: 3px 7px;
+  text-transform: uppercase;
+}
+
+.status-pill.verified {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-pill.blocked {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .user-actions {
   display: flex;
   gap: 6px;
+}
+
+.side-panel-backdrop {
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(16px);
+  inset: 0;
+  position: fixed;
+  z-index: 2000;
+}
+
+.user-panel {
+  background: var(--admin-surface);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 22px;
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.26);
+  display: flex;
+  flex-direction: column;
+  height: min(720px, calc(100dvh - 48px));
+  left: 50%;
+  max-width: 720px;
+  position: fixed;
+  right: auto;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(100vw - 32px);
+  z-index: 2001;
+  overflow: hidden;
+}
+
+.panel-top {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding: 24px;
+}
+
+.panel-top h2 {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.panel-top p {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 3px;
+}
+
+.panel-body {
+  display: grid;
+  flex: 1;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.panel-body .field:nth-child(4),
+.panel-body .field:nth-child(5),
+.panel-body .chat-toggle {
+  grid-column: 1 / -1;
+}
+
+.panel-footer {
+  background: var(--admin-surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: 24px 24px max(24px, env(safe-area-inset-bottom));
+}
+
+.field {
+  color: var(--text-muted);
+  display: grid;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 7px;
+  text-transform: uppercase;
+}
+
+.field input,
+.field textarea,
+.field select {
+  background: var(--admin-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+  padding: 10px 12px;
+  resize: none;
+  text-transform: none;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: #94a3b8;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  border-color: #c084fc;
+  box-shadow: 0 0 0 3px #f3e8ff;
+}
+
+.chat-toggle {
+  align-items: center;
+  background: var(--admin-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  padding: 12px;
+}
+
+.chat-toggle input {
+  accent-color: var(--accent-hover);
+  height: 18px;
+  width: 18px;
+}
+
+.danger-toggle {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.danger-toggle input {
+  accent-color: #e11d48;
+}
+
+.chat-toggle strong {
+  color: var(--text-primary);
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.chat-toggle small {
+  color: var(--text-muted);
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-top: 3px;
 }
 
 .panel-loading-cover {
@@ -530,6 +983,28 @@ watch([searchQuery, roleFilter, sortMode], userPager.resetPage)
   .users-grid {
     grid-template-columns: 1fr;
   }
+
+  .user-panel {
+    border-radius: 18px;
+    bottom: auto;
+    height: min(720px, calc(100svh - 32px));
+    left: 50%;
+    max-width: none;
+    right: auto;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100vw - 32px);
+  }
+
+  .panel-top,
+  .panel-body,
+  .panel-footer {
+    padding: 18px;
+  }
+
+  .panel-body {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -559,6 +1034,4 @@ watch([searchQuery, roleFilter, sortMode], userPager.resetPage)
     gap: 5px;
   }
 }
-
-.user-info .admin-description, .user-info .admin-meta { margin-top: var(--space-1); }
 </style>

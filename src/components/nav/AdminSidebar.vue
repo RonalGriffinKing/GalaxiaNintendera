@@ -13,13 +13,13 @@
       </button>
     </div>
 
-    <AdminNavGroup as="nav" vertical class="nav" aria-label="Administración">
+    <div class="nav">
       <button
-        class="nav-item return-item admin-action" type="button"
+        class="nav-item return-item"
         title="Volver a la web"
         @click="returnToWeb"
       >
-        <span class="nav-icon" aria-hidden="true">
+        <span class="nav-icon">
           <i class="fas fa-arrow-left"></i>
         </span>
         <span class="nav-label">Volver</span>
@@ -28,16 +28,15 @@
       <button
         v-for="item in visibleNavItems"
         :key="item.view"
-        class="nav-item admin-action admin-action--ghost" type="button"
-        :class="{ active: active === item.view, 'is-selected': active === item.view }"
+        class="nav-item"
+        :class="{ active: active === item.view }"
         :title="item.label"
-        :aria-current="active === item.view ? 'page' : undefined"
         @click="change(item.view)"
       >
-        <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+        <span class="nav-icon">{{ item.icon }}</span>
         <span class="nav-label">{{ item.label }}</span>
       </button>
-    </AdminNavGroup>
+    </div>
 
     <div class="bottom">
       <button class="notifications-btn" @click="toggleNotifications">
@@ -204,12 +203,9 @@
 </template>
 
 <script setup>
-import {getProfileSnapshot,profileRequest} from '@/services/profiles'
-
-import AdminNavGroup from '../shared/AdminNavGroup.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { collection, doc, getDocs, limit, onSnapshot, orderBy, query, updateDoc, writeBatch } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { signOut, updateProfile } from 'firebase/auth'
 import { auth, db } from '@/firebase'
 
@@ -298,7 +294,7 @@ const loadProfile = async () => {
   const user = auth.currentUser
   if (!user) return
 
-  const snap = await getProfileSnapshot(user.uid)
+  const snap = await getDoc(doc(db, 'users', user.uid))
   const saved = snap.exists() ? snap.data() : {}
 
   profile.value = {
@@ -481,7 +477,7 @@ const saveProfile = async () => {
       updatedAt: Date.now()
     }
 
-    await profileRequest('update',{name:cleanProfile.name,description:cleanProfile.description,...(cleanProfile.imageUrl?{imageUrl:cleanProfile.imageUrl}:{})})
+    await setDoc(doc(db, 'users', user.uid), cleanProfile, { merge: true })
     await updateProfile(user, {
       displayName: cleanProfile.name,
       photoURL: cleanProfile.imageUrl || null
@@ -543,15 +539,14 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100vh;
   padding: 20px 14px;
-  width: var(--sidebar-width);
-  --control-surface: #ffffff; --control-text: #334155; --control-muted: #475569; --control-hover-surface: #f5f3ff; --surface-card: #ffffff; --border-default: #e5e7eb;
+  width: 260px;
 }
 
 @media (min-width: 761px) {
   .sidebar {
-    flex: 0 0 var(--sidebar-width-wide);
+    flex: 0 0 320px;
     padding: 24px 20px;
-    width: var(--sidebar-width-wide);
+    width: 320px;
   }
 
   .logo {
@@ -559,8 +554,18 @@ onUnmounted(() => {
   }
 
   .nav {
-    gap: var(--space-2);
-    margin-top: var(--space-6);
+    gap: 8px;
+    margin-top: 24px;
+  }
+
+  .nav-item {
+    gap: 12px;
+    min-height: 48px;
+    padding: 13px 14px;
+  }
+
+  .nav-icon {
+    width: 24px;
   }
 
   .bottom {
@@ -629,26 +634,52 @@ onUnmounted(() => {
 .nav {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  margin-top: var(--space-5);
+  gap: 6px;
+  margin-top: 20px;
 }
 
-.nav-item { justify-content: flex-start; text-align: left; }
+.nav-item {
+  align-items: center;
+  border-radius: 12px;
+  color: #374151;
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 10px;
+  min-height: 44px;
+  padding: 12px;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.nav-item:hover {
+  background: #f1f5f9;
+}
+
+.nav-item.active {
+  background: linear-gradient(to right, #9333ea20, #ec489920);
+  color: #9333ea;
+  font-weight: 900;
+}
 
 .return-item {
   background: #111827;
   color: #ffffff;
-  font-weight: var(--weight-label);
+  font-weight: 900;
 }
 
 .return-item:hover {
   background: #1f2937;
 }
 
-.nav-icon { flex: 0 0 auto; font-size: var(--icon-size-md); text-align: center; width: var(--icon-size-lg); }
+.nav-icon {
+  flex: 0 0 auto;
+  text-align: center;
+  width: 20px;
+}
 
-.nav-label { min-width: 0; overflow-wrap: anywhere; }
-
+.nav-label,
 .logo span,
 .user-copy,
 .logout-btn span {

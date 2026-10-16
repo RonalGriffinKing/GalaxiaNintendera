@@ -1,41 +1,38 @@
 <template>
-  <main class="global-manager-page admin-surfaces">
+  <main class="global-manager-page">
     <header class="global-manager-head">
       <div>
-        <span class="admin-list-kicker">Galaxia Nintendera</span>
-        <h1 class="admin-list-title admin-list-title--page">Gestor Global</h1>
-        <p class="admin-list-subtitle">Administra la plataforma desde una sola seccion interna, sin salir del flujo normal de la web.</p>
+        <span>Galaxia Nintendera</span>
+        <h1>Gestor Global</h1>
+        <p>Administra la plataforma desde una sola seccion interna, sin salir del flujo normal de la web.</p>
       </div>
     </header>
 
-    <AdminNavGroup as="nav" class="global-manager-tabs" aria-label="Modulos del gestor global">
+    <nav class="global-manager-tabs" aria-label="Modulos del gestor global">
       <button
         v-for="tab in visibleTabs"
         :key="tab.id"
-        :aria-current="activeTab === tab.id ? 'page' : undefined"
         type="button"
-        class="admin-action admin-action--ghost"
-        :class="{ active: activeTab === tab.id, 'is-selected': activeTab === tab.id }"
+        :class="{ active: activeTab === tab.id }"
         @click="setActiveTab(tab.id)"
       >
-        <i :class="tab.icon" aria-hidden="true"></i>
+        <i :class="tab.icon"></i>
         {{ tab.label }}
       </button>
-    </AdminNavGroup>
+    </nav>
 
-    <AdminSurface as="section" variant="panel" class="global-manager-shell">
+    <section class="global-manager-shell">
       <header class="module-head">
         <div>
-          <span class="admin-list-kicker">{{ activeMeta.kicker }}</span>
-          <h2 class="admin-list-title">{{ activeMeta.title }}</h2>
-          <p class="admin-list-subtitle">{{ activeMeta.description }}</p>
+          <span>{{ activeMeta.kicker }}</span>
+          <h2>{{ activeMeta.title }}</h2>
+          <p>{{ activeMeta.description }}</p>
         </div>
 
         <div v-if="activeActions.length" class="module-actions">
           <button
             v-for="action in activeActions"
             :key="action.id"
-            class="admin-action admin-action--primary"
             type="button"
             @click="runAction(action)"
           >
@@ -76,18 +73,15 @@
           </Transition>
         </section>
       </Transition>
-    </AdminSurface>
+    </section>
   </main>
 </template>
 
 <script setup>
-import {isEditorialOwner,editorialRole} from "@/services/editorial";
-import AdminNavGroup from '@/components/shared/AdminNavGroup.vue'
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-
-import { auth } from '@/firebase'
-import AdminSurface from '@/components/shared/AdminSurface.vue'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '@/firebase'
 import ContentLoading from '@/components/shared/ContentLoading.vue'
 import { createLoadingManager } from '@/composables/useLoadingManager'
 
@@ -238,7 +232,8 @@ const loadRole = async () => {
   const user = auth.currentUser
   if (!user) return
 
-  currentRole.value = await editorialRole(user)
+  const snap = await getDoc(doc(db, 'users', user.uid))
+  currentRole.value = snap.data()?.role || 'user'
 
   if (!['admin', 'publisher'].includes(currentRole.value)) {
     router.replace('/')
@@ -263,7 +258,8 @@ onMounted(loadRole)
   background:
     radial-gradient(circle at top left, rgba(168, 85, 247, 0.16), transparent 30%),
     linear-gradient(180deg, var(--admin-bg) 0%, var(--admin-bg) 100%);
-  min-height: 100vh; padding: calc(var(--public-nav-offset, 0px) + var(--space-6)) var(--page-gutter) var(--space-6);
+  min-height: 100vh;
+  padding: calc(var(--public-nav-offset, 0px) + 24px) 22px 36px;
 }
 
 .global-manager-head,
@@ -271,47 +267,120 @@ onMounted(loadRole)
 .global-manager-shell {
   margin-left: auto;
   margin-right: auto;
-  max-width: var(--content-max);
+  max-width: 1280px;
 }
 
 .global-manager-head {
   align-items: end;
   display: flex;
   justify-content: space-between;
-  margin-bottom: var(--section-gap);
+  margin-bottom: 18px;
+}
+
+.global-manager-head span,
+.module-head span {
+  color: var(--accent-hover);
+  display: block;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
 }
 
 .global-manager-head h1 {
-  margin-top: var(--space-1);
+  color: var(--text-primary);
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 950;
+  line-height: 1.05;
+  margin-top: 4px;
 }
 
 .global-manager-head p,
 .module-head p {
-  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.5;
+  margin-top: 6px;
 }
 
-.global-manager-tabs { margin-bottom: var(--section-gap); }
+.global-manager-tabs {
+  align-items: center;
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 20px 46px rgba(88, 28, 135, 0.08);
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  padding: 8px;
+}
+
+.global-manager-tabs button {
+  align-items: center;
+  border-radius: 14px;
+  color: var(--text-muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 950;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.global-manager-tabs button.active {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  box-shadow: 0 12px 26px rgba(147, 51, 234, 0.24);
+  color: #ffffff;
+}
 
 .global-manager-shell {
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
   overflow: visible;
+  padding: 18px;
 }
 
 .module-head {
   align-items: end;
+  border-bottom: 1px solid var(--border);
   display: flex;
+  gap: 16px;
   justify-content: space-between;
-  margin-bottom: var(--section-gap); border-bottom: var(--border-width) solid var(--border-default); gap: var(--space-4); padding-bottom: var(--space-4);
+  margin-bottom: 18px;
+  padding-bottom: 16px;
 }
 
 .module-head h2 {
-  margin-top: var(--space-1);
+  color: var(--text-primary);
+  font-size: 26px;
+  font-weight: 950;
+  line-height: 1.08;
+  margin-top: 4px;
 }
 
 .module-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: 10px;
   justify-content: flex-end;
+}
+
+.module-actions button {
+  align-items: center;
+  background: linear-gradient(135deg, #9333ea, #ec4899);
+  border-radius: 13px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 950;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
 }
 
 .module-panel {
@@ -326,7 +395,7 @@ onMounted(loadRole)
 
 .module-loading-layer {
   background: var(--admin-surface);
-  border-radius: var(--radius-control);
+  border-radius: 16px;
   inset: 0;
   padding: 0;
   position: absolute;
@@ -360,7 +429,7 @@ onMounted(loadRole)
 }
 @media (max-width: 760px) {
   .global-manager-page {
-    padding: calc(var(--public-nav-offset, 0px) + var(--space-4)) var(--space-3) var(--space-6);
+    padding: calc(var(--public-nav-offset, 0px) + 16px) 12px 26px;
   }
 
   .global-manager-head,
@@ -369,13 +438,35 @@ onMounted(loadRole)
     display: grid;
   }
 
-  .global-manager-tabs { margin-bottom: var(--section-gap); }
+  .global-manager-tabs {
+    border-radius: 16px;
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .global-manager-tabs button {
+    font-size: 12px;
+    min-height: 40px;
+    padding: 0 12px;
+  }
+
+  .global-manager-shell {
+    border-radius: 18px;
+    padding: 14px;
+  }
+
+  .module-head h2 {
+    font-size: 22px;
+  }
 
   .module-actions {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
     justify-content: stretch;
   }
+
+  .module-actions button {
+    justify-content: center;
+  }
 }
-@media(max-width:760px) { }
 </style>

@@ -1,13 +1,19 @@
 <script setup>
-import {communityWrite} from '@/services/community'
-
-import {watchCommunity} from '@/services/community'
-
-import {getProfileSnapshot,subscribeProfileDirectory} from '@/services/profiles'
-
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onAuthStateChanged } from 'firebase/auth'
-import { collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  where
+} from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
@@ -96,7 +102,7 @@ const loadProfile = async (user) => {
   currentProfile.value = { role: 'user', canChat: false, imageUrl: '' }
   if (!user) return
 
-  const snap = await getProfileSnapshot(user.uid)
+  const snap = await getDoc(doc(db, 'users', user.uid))
   const saved = snap.exists() ? snap.data() : {}
   currentProfile.value = {
     ...saved,
@@ -112,7 +118,7 @@ const subscribeUsers = () => {
   users.value = []
   if (!currentUser.value) return
 
-  unsubscribeUsers = subscribeProfileDirectory((snap) => {
+  unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
     users.value = snap.docs
       .map(item => ({ ...item.data(), id: item.id }))
       .filter(user => !user.isBlocked && user.id !== currentUser.value.uid)
@@ -230,12 +236,12 @@ const subscribeLiveChatInfo = () => {
   liveChatInfo.value = { active: false }
   if (!currentUser.value || !canUseChat.value) return
 
-  unsubscribeLiveChatInfo = watchCommunity('live',{id:LIVE_CHAT_ID},(snap) => {
+  unsubscribeLiveChatInfo = onSnapshot(doc(db, 'liveChats', LIVE_CHAT_ID), (snap) => {
     liveChatInfo.value = {
       active: false,
       ...(snap.data() || {})
     }
-  },(error) => {
+  }, (error) => {
     console.error(error)
   })
 }
@@ -251,7 +257,7 @@ const subscribeLiveGoals = () => {
     limit(8)
   )
 
-  unsubscribeLiveGoals = watchCommunity('goals',{limit:8},(snap) => {
+  unsubscribeLiveGoals = onSnapshot(goalsQuery, (snap) => {
     liveGoals.value = snap.docs.map(item => ({
       id: item.id,
       type: 'likes',
@@ -261,7 +267,7 @@ const subscribeLiveGoals = () => {
       likerProfiles: {},
       ...item.data()
     }))
-  },(error) => {
+  }, (error) => {
     console.error(error)
   })
 }
@@ -273,9 +279,107 @@ const getMillis = (value) => {
   return new Date(value).getTime()
 }
 
-const sendMessage = async()=>{const body=draft.value.trim();if(!body||!currentUser.value||!canUseChat.value||isSending.value)return;if(!isLiveChat.value&&!activeUser.value)return;isSending.value=true;chatError.value='';try{if(isLiveChat.value)await communityWrite('live-create',undefined,{body});else await communityWrite('direct-send',undefined,{targetUid:activeUser.value.id,body});draft.value='';replyTarget.value=null}catch(error){chatError.value=error.message||'No se pudo enviar el mensaje.'}finally{isSending.value=false}}
+const sendMessage = async () => {
+  const body = draft.value.trim()
+  if (!body || !currentUser.value || !canUseChat.value || isSending.value) return
+  if (!isLiveChat.value && !activeUser.value) return
+  if (isLiveChat.value && !liveChatActive.value) {
+    chatError.value = 'El chat se habilita cuando inicia el live.'
+    return
+  }
 
-const addLiveGoalLike = async()=>{const goal=currentLiveGoal.value;if(!goal?.id||!currentUser.value||!canUseChat.value||!liveChatActive.value)return;await communityWrite('goal-like',goal.id)}
+  isSending.value = true
+  chatError.value = ''
+
+  try {
+    if (isLiveChat.value) {
+      await addDoc(collection(db, 'liveChats', LIVE_CHAT_ID, 'messages'), {
+        body,
+        authorId: currentUser.value.uid,
+        author: currentUser.value.displayName || currentUser.value.email || 'Usuario',
+        authorImage: currentProfile.value.imageUrl || currentUser.value.photoURL || '',
+        createdAt: serverTimestamp()
+      })
+      await setDoc(doc(db, 'liveChats', LIVE_CHAT_ID), {
+        title: 'Chat en live',
+        lastMessagePreview: body,
+        lastMessageAuthorId: currentUser.value.uid,
+        updatedAt: serverTimestamp()
+      }, { merge: true })
+      draft.value = ''
+      return
+    }
+
+    await setDoc(doc(db, 'directChats', chatId.value), {
+      participants: [currentUser.value.uid, activeUser.value.id],
+      participantNames: {
+        [currentUser.value.uid]: currentUser.value.displayName || currentUser.value.email || 'Usuario',
+        [activeUser.value.id]: activeUser.value.name || activeUser.value.email || 'Usuario'
+      },
+      updatedAt: serverTimestamp()
+    }, { merge: true })
+
+    const messageRef = await addDoc(collection(db, 'directChats', chatId.value, 'messages'), {
+      body,
+      authorId: currentUser.value.uid,
+      author: currentUser.value.displayName || currentUser.value.email || 'Usuario',
+      createdAt: serverTimestamp(),
+      readBy: {
+        [currentUser.value.uid]: true
+      },
+      seenAt: {
+        [currentUser.value.uid]: serverTimestamp()
+      }
+    })
+
+    await setDoc(doc(db, 'directChats', chatId.value), {
+      participants: [currentUser.value.uid, activeUser.value.id],
+      participantNames: {
+        [currentUser.value.uid]: currentUser.value.displayName || currentUser.value.email || 'Usuario',
+        [activeUser.value.id]: activeUser.value.name || activeUser.value.email || 'Usuario'
+      },
+      lastMessageId: messageRef.id,
+      lastMessageAuthorId: currentUser.value.uid,
+      lastMessagePreview: body,
+      lastReadBy: {
+        [currentUser.value.uid]: messageRef.id
+      },
+      updatedAt: serverTimestamp()
+    }, { merge: true })
+
+    draft.value = ''
+    replyTarget.value = null
+  } catch (error) {
+    console.error(error)
+    chatError.value = 'No se pudo enviar. Revisa permisos o intenta abrir de nuevo el chat.'
+  } finally {
+    isSending.value = false
+  }
+}
+
+const addLiveGoalLike = async () => {
+  const goal = currentLiveGoal.value
+  const user = currentUser.value
+  if (!goal?.id || !user || !canUseChat.value || !liveChatActive.value) return
+
+  const likesBy = {
+    ...(goal.likesBy || {}),
+    [user.uid]: Number(goal.likesBy?.[user.uid] || 0) + 1
+  }
+  const likerProfiles = {
+    ...(goal.likerProfiles || {}),
+    [user.uid]: {
+      name: user.displayName || user.email || 'Usuario',
+      imageUrl: currentProfile.value.imageUrl || user.photoURL || ''
+    }
+  }
+
+  await setDoc(doc(db, 'liveGoals', goal.id), {
+    likesBy,
+    likerProfiles,
+    updatedAt: Date.now()
+  }, { merge: true })
+}
 
 const markMessagesSeen = async () => {
   if (!open.value || !chatId.value || !currentUser.value || !activeUser.value) return

@@ -28,7 +28,7 @@ const emit = defineEmits(['edit', 'toggle-membership'])
 </script>
 
 <template>
-  <section class="galaxy-hero social-community-hero" :style="{ '--community-banner': `url(${resolveAssetUrl(community.bannerUrl, defaultBannerUrl)})` }">
+  <section class="galaxy-hero" :style="{ '--community-banner': `url(${resolveAssetUrl(community.bannerUrl, defaultBannerUrl)})` }">
     <div class="galaxy-icon">
       <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
       <span v-else>{{ community.name.slice(0, 2).toUpperCase() }}</span>

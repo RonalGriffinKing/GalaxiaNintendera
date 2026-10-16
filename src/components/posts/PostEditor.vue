@@ -382,11 +382,11 @@
               <div class="field-grid-2">
                 <label class="field-group">
                   <span>Puntos estrella</span>
-                  <input v-model.number="post.starReward" :disabled="!isEditorialOwner(auth.currentUser)" type="number" min="0" />
+                  <input v-model.number="post.starReward" type="number" min="0" />
                 </label>
                 <label class="field-group">
                   <span>Multiplicador</span>
-                  <select v-model="post.rewardMultiplier" :disabled="!isEditorialOwner(auth.currentUser)">
+                  <select v-model="post.rewardMultiplier">
                     <option value="1">x1</option>
                     <option value="1.5">x1.5</option>
                     <option value="2">x2</option>
@@ -395,7 +395,7 @@
               </div>
               <label class="field-group">
                 <span>Badges / misiones relacionadas</span>
-                <input v-model="post.rewardBadgesText" :disabled="!isEditorialOwner(auth.currentUser)" placeholder="kirby-day, direct-live, guia-pro" />
+                <input v-model="post.rewardBadgesText" placeholder="kirby-day, direct-live, guia-pro" />
               </label>
             </div>
           </article>
@@ -741,10 +741,9 @@
 
 <script setup>
 import AppNotice from '@/components/shared/AppNotice.vue'
-import {manageEditorial,editorialFormData,editorialOperation,isEditorialOwner} from "@/services/editorial";
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-
-import { auth } from '@/firebase'
+import { addDoc, collection, deleteField, doc, updateDoc } from 'firebase/firestore'
+import { auth, db } from '@/firebase'
 import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
 import { loadPostCategories } from '@/services/postCategories'
 import { READ_REWARD_STARS } from '@/services/profileProgress'
@@ -1531,7 +1530,7 @@ const savePost = async (targetStatus = 'pending') => {
     cleanPost.rewardBadges = String(cleanPost.rewardBadgesText || '').split(',').map(item => item.trim()).filter(Boolean)
     cleanPost.starReward = Number(cleanPost.starReward || READ_REWARD_STARS)
     cleanPost.rewardMultiplier = String(cleanPost.rewardMultiplier || '1')
-    cleanPost.slug = props.editData ? String(props.editData.slug||props.editData.id) : String(cleanPost.slug || autoSlug.value).trim()
+    cleanPost.slug = String(cleanPost.slug || autoSlug.value).trim()
     cleanPost.metaDescription = String(cleanPost.metaDescription || autoMetaDescription.value).trim()
     cleanPost.placement = isHeroMode.value ? 'hero' : 'news'
     cleanPost.isMainEntry = isHeroMode.value
@@ -1560,9 +1559,24 @@ const savePost = async (targetStatus = 'pending') => {
 
     if (isHeroMode.value) cleanPost.sections = []
 
-    {
-      const data=editorialFormData(cleanPost,{includeRewards:isEditorialOwner(user)})
-      await manageEditorial(user,editorialOperation(props.editData?'save':'create',props.editData,data,targetStatus))
+    if (props.editData) {
+      const nextUpdatedAt = Date.now()
+      await updateDoc(doc(db, 'posts', props.editData.id), {
+        ...cleanPost,
+        stickers: deleteField(),
+        updatedAt: nextUpdatedAt,
+        ...(props.editData.status === 'approved' ? { publishedAt: cleanPost.publishedAt || props.editData.publishedAt || nextUpdatedAt } : {})
+      })
+    } else {
+      const createdAt = Date.now()
+      await addDoc(collection(db, 'posts'), {
+        ...cleanPost,
+        authorId: user?.uid || 'anon',
+        authorName: user?.displayName || 'Admin',
+        status: targetStatus === 'draft' ? 'draft' : 'pending',
+        createdAt,
+        updatedAt: createdAt
+      })
     }
 
     showEditorToast(props.editData ? 'Cambios guardados' : successLabel.value)

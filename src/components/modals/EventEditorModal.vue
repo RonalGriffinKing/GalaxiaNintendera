@@ -1,9 +1,7 @@
 <script setup>
-import {communityWrite} from '@/services/community'
-
 import { computed, ref, watch } from 'vue'
-
-import { auth } from '@/firebase'
+import { addDoc, collection, doc, updateDoc } from 'firebase/firestore'
+import { auth, db } from '@/firebase'
 import { resolveAssetUrl } from '@/constants/assets'
 
 const props = defineProps({
@@ -89,13 +87,13 @@ const saveEvent = async () => {
 
   try {
     if (isEditing.value) {
-      await communityWrite('site-save',props.event.id,{kind:'events',value:payload})
+      await updateDoc(doc(db, 'galaxyEvents', props.event.id), payload)
     } else {
-      await communityWrite('site-save',undefined,{kind:'events',value:{
+      await addDoc(collection(db, 'galaxyEvents'), {
         ...payload,
         createdAt: now,
         createdBy: auth.currentUser?.uid || ''
-      }})
+      })
     }
     emit('saved')
     emit('close')

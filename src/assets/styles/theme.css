@@ -1,44 +1,4 @@
 :root {
-  /* Social surfaces opt in; rewards and equipped-avatar resolution stay independent. */
-  --social-surface: var(--surface);
-  --social-border: var(--border);
-  --social-radius: var(--radius-card);
-  --social-padding: var(--space-4);
-  --social-avatar-main: 96px;
-  --social-avatar-thread: 44px;
-  --social-avatar-comment: 36px;
-  --social-avatar-reply: 28px;
-  --social-reply-indent: var(--space-2);
-  /* Editorial roles: reading and featured headlines are distinct from admin UI. */
-  --editorial-title-article: clamp(28px, 2.65vw, 46px);
-  --editorial-title-featured: clamp(24px, 2.2vw, 38px);
-  --editorial-title-card: 18px;
-  --editorial-title-compact: var(--font-h3);
-  --editorial-title-section: var(--font-h2);
-  --editorial-title-article-section: clamp(24px, 3vw, 32px);
-  --editorial-lead-size: 16px;
-  --editorial-reading-size: 16px;
-  --editorial-reading-line: 1.75;
-  --editorial-reading-width: 72ch;
-  --editorial-meta-size: var(--font-caption);
-  --editorial-card-radius: var(--radius-card);
-  --editorial-compact-radius: var(--radius-sm);
-  --editorial-card-border: var(--border);
-  --editorial-card-surface: rgba(15, 23, 42, 0.74);
-  --editorial-link: #d8b4fe;
-  /* Public structure: pills and spatial surfaces retain their own identity. */
-  --public-header-height: 64px;
-  --public-header-compact-height: 52px;
-  --public-control-height: 44px;
-  --public-icon-size: 16px;
-  --public-nav-surface: var(--background);
-  --public-nav-border: rgba(255, 255, 255, 0.1);
-  --public-menu-radius: var(--radius-card);
-  --public-menu-light-surface: var(--notice-light-surface);
-  --public-menu-light-text: var(--notice-light-text);
-  --public-menu-light-muted: #475569;
-  --public-action-background: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)), var(--action-primary-background);
-  --public-footer-padding: 32px;
   --admin-bg: #0b1020;
   --admin-surface: #131a2e;
   --admin-surface-raised: #1c2540;
@@ -74,105 +34,6 @@
   --font-h3: 16px;
   --font-body: 14px;
   --font-caption: 12px;
-  /* Semantic UI contract: change roles here, never individual screens. */
-  --font-subtitle: 14px;
-  --font-label: 12px;
-  --font-button: 12px;
-  --badge-height: 24px;
-  --badge-padding-block: var(--space-1);
-  --badge-padding-inline: var(--space-2);
-  --badge-success-surface: #143628;
-  --badge-success-text: var(--notice-success-icon);
-  --badge-warning-surface: #422e16;
-  --badge-warning-text: #fcd34d;
-  --badge-danger-surface: #451e28;
-  --badge-danger-text: var(--notice-error-icon);
-  --badge-info-surface: #132f4b;
-  --badge-info-text: #7dd3fc;
-  --badge-neutral-surface: var(--admin-surface-raised);
-  --badge-neutral-text: var(--text-secondary);
-  --badge-brand-surface: var(--admin-surface-raised);
-  --badge-brand-text: var(--accent-hover);
-  --weight-heading: 900;
-  --weight-label: 700;
-  --weight-body: 400;
-  --line-heading: 1.2;
-  --line-body: 1.5;
-  --radius-control: var(--radius-md);
-  --radius-popover: var(--radius-control);
-  --nav-gap: var(--space-1);
-  --nav-padding: var(--space-1);
-  --nav-item-height: var(--button-height-md);
-  --nav-selected-background: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)), var(--action-primary-background);
-  --popover-width: 280px;
-  --sidebar-width: 260px;
-  --sidebar-width-wide: 320px;
-  --radius-card: var(--radius-lg);
-  --radius-dialog: var(--radius-xl);
-  --radius-pill: 999px;
-  --border-width: 1px;
-  --focus-ring: 2px solid var(--accent-hover);
-  /* Administrative consumers opt in; existing editor/export styles keep their tokens. */
-  --control-height-touch: 48px;
-  --control-padding-inline: var(--space-4);
-  --control-gap: var(--space-2);
-  --control-border-width: var(--border-width);
-  --control-disabled-opacity: 0.58;
-  --control-focus-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
-  --control-hover-surface: #f5f3ff;
-  --action-primary-background: linear-gradient(135deg, var(--color-galaxy-purple), var(--color-galaxy-pink));
-  --action-featured-background: linear-gradient(135deg, #facc15, var(--color-galaxy-pink));
-  --action-on-accent: #ffffff;
-  --action-danger-surface: #fef2f2;
-  --action-danger-text: #b91c1c;
-  --action-success-surface: #f0fdf4;
-  --action-success-text: #15803d;
-  --action-edit-surface: #f0f9ff;
-  --action-edit-text: #0369a1;
-  --action-message-surface: #f5f3ff;
-  --action-message-text: #6d28d9;
-  --notice-success-icon: #86efac;
-  --notice-error-icon: #fca5a5;
-  --notice-info-icon: var(--accent-hover);
-  --notice-light-surface: #ffffff;
-  --notice-light-text: #1f2937;
-  --notice-light-border: #e5e7eb;
-  --notice-light-info-icon: var(--action-message-text);
-  --field-gap: var(--space-2);
-  /* Administrative surfaces opt in; existing public/editor aliases remain intact. */
-  --surface-base: var(--admin-bg);
-  --surface-card: var(--admin-surface);
-  --surface-raised: var(--admin-surface-raised);
-  --surface-interactive: var(--admin-surface-raised);
-  --border-default: var(--border);
-  --border-strong: var(--accent-hover);
-  --shadow-card: var(--shadow-soft-card);
-  --shadow-panel: 0 24px 70px rgba(15, 23, 42, 0.08);
-  --shadow-raised: 0 20px 46px rgba(15, 23, 42, 0.16);
-  --radius-panel: var(--radius-xl);
-  --card-padding: var(--space-4);
-  --panel-padding: var(--space-5);
-  --section-gap: var(--space-5);
-  --list-state-min-height: 180px;
-  --list-state-icon-size: 24px;
-  --line-section: 1.25;
-  --line-card-title: 1.3;
-  --field-light-muted: #64748b;
-  --field-light-hover-surface: #f5f3ff;
-  --field-padding-block: var(--space-2);
-  --field-label-size: var(--font-label);
-  --field-control-size: var(--font-body);
-  --field-error-text: var(--action-danger-text);
-  --field-error-border: #f87171;
-  --field-success-text: var(--action-success-text);
-  --field-success-border: #4ade80;
-  --checkbox-size: 18px;
-  --dialog-width: 400px;
-  --dialog-width-wide: 720px;
-  --dialog-padding: var(--space-6);
-  --dialog-gap: var(--space-4);
-  --dialog-shadow: 0 30px 90px rgba(15, 23, 42, 0.26);
-  --dialog-backdrop: rgba(15, 23, 42, 0.55);
   --button-height-sm: 36px;
   --button-height-md: 42px;
   --button-height-lg: 48px;
@@ -205,9 +66,9 @@ select {
   background-repeat: no-repeat;
   background-size: 6px 6px, 6px 6px;
   border: 1px solid var(--color-soft-border);
-  border-radius: var(--radius-control);
+  border-radius: 12px;
   color: #334155;
-  font-weight: var(--weight-label);
+  font-weight: 850;
   line-height: 1;
   min-height: 42px;
   padding: 0 38px 0 14px;
@@ -234,34 +95,34 @@ select:disabled {
 
 .panel-title {
   color: var(--color-panel-text);
-  font-size: var(--font-h2);
-  font-weight: var(--weight-heading);
+  font-size: 20px;
+  font-weight: 900;
   line-height: 1.25;
 }
 
 .panel-subtitle {
   color: var(--color-muted-text);
-  font-size: var(--font-subtitle);
+  font-size: 12px;
   font-weight: 500;
 }
 
 .section-title {
   color: var(--color-panel-text);
-  font-size: var(--font-body);
-  font-weight: var(--weight-heading);
+  font-size: 14px;
+  font-weight: 900;
   text-transform: uppercase;
 }
 
 .section-caption {
   color: var(--color-muted-text);
-  font-size: var(--font-caption);
+  font-size: 12px;
   font-weight: 500;
 }
 
 .app-card {
   background: #ffffff;
   border: 1px solid #f1f5f9;
-  border-radius: var(--radius-card);
+  border-radius: 14px;
   transition: transform var(--motion-normal) var(--ease-standard), box-shadow var(--motion-normal) var(--ease-standard), border-color var(--motion-fast) ease;
 }
 
@@ -272,32 +133,32 @@ select:disabled {
 
 .app-card-title {
   color: var(--color-panel-text);
-  font-size: var(--font-caption);
-  font-weight: var(--weight-label);
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1.25;
 }
 
 .app-meta {
   color: #9ca3af;
   font-size: 9px;
-  font-weight: var(--weight-label);
+  font-weight: 700;
   text-transform: uppercase;
 }
 
 .app-label {
   color: var(--color-muted-text);
-  font-size: var(--font-label);
-  font-weight: var(--weight-label);
+  font-size: 12px;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
 .app-input {
   width: 100%;
   border: 1px solid var(--color-soft-border);
-  border-radius: var(--radius-control);
+  border-radius: 10px;
   padding: 8px 12px;
   color: var(--color-panel-text);
-  font-size: var(--font-body);
+  font-size: 14px;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -311,12 +172,12 @@ select:disabled {
   align-items: center;
   background: #f9fafb;
   border: 1px solid #f3f4f6;
-  border-radius: var(--radius-pill);
+  border-radius: 999px;
   color: #9ca3af;
   display: flex;
   flex: 0 0 auto;
-  font-size: var(--font-body);
-  font-weight: var(--weight-heading);
+  font-size: 13px;
+  font-weight: 900;
   height: 40px;
   justify-content: center;
   line-height: 1;
@@ -342,13 +203,13 @@ select:disabled {
   background: linear-gradient(to right, var(--color-galaxy-purple), var(--color-galaxy-pink));
   color: #ffffff;
   display: inline-flex;
-  font-weight: var(--weight-heading);
+  font-weight: 900;
   justify-content: center;
   transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), filter var(--motion-fast) ease;
 }
 
 .btn-primary-galaxy-xs {
-  border-radius: var(--radius-control);
+  border-radius: 10px;
   font-size: 11px;
   gap: 8px;
   padding: 8px 16px;
@@ -361,7 +222,7 @@ select:disabled {
 }
 
 .btn-primary-galaxy {
-  border-radius: var(--radius-control);
+  border-radius: 16px;
   padding: 16px;
 }
 
@@ -421,13 +282,13 @@ select:focus-visible {
 .app-toast {
   align-items: center;
   background: #111827;
-  border-radius: var(--radius-control);
+  border-radius: 999px;
   bottom: 96px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   color: #ffffff;
   display: flex;
-  font-size: var(--font-body);
-  font-weight: var(--weight-label);
+  font-size: 14px;
+  font-weight: 700;
   gap: 12px;
   left: 50%;
   letter-spacing: 0.025em;
@@ -439,7 +300,7 @@ select:focus-visible {
 
 .app-toast-icon {
   align-items: center;
-  border-radius: var(--radius-pill);
+  border-radius: 999px;
   color: #ffffff;
   display: flex;
   font-size: 10px;
@@ -458,10 +319,10 @@ select:focus-visible {
 
 @media (max-width: 520px) {
   .app-toast {
-    border-radius: var(--radius-control);
+    border-radius: 16px;
     bottom: 18px;
     box-sizing: border-box;
-    font-size: var(--font-caption);
+    font-size: 12px;
     gap: 10px;
     left: 12px;
     max-width: calc(100vw - 24px);
@@ -486,13 +347,13 @@ select:focus-visible {
 
 .modal-title {
   color: var(--color-panel-text);
-  font-size: var(--font-h3);
-  font-weight: var(--weight-heading);
+  font-size: 18px;
+  font-weight: 900;
 }
 
 .modal-text {
   color: var(--color-muted-text);
-  font-size: var(--font-caption);
+  font-size: 12px;
 }
 
 /* Keep tablet margins, but give large desktop screens room for readable cards. */

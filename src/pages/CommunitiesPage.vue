@@ -1,10 +1,8 @@
 <script setup>
-import {communitySnapshot} from '@/services/community'
-
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-
-
+import { collection, getDocs } from 'firebase/firestore'
+import { db } from '@/firebase'
 import { createOfficialCommunity } from '@/constants/community'
 import { defaultBannerUrl, defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
 defineProps({ embedded: Boolean })
@@ -25,7 +23,7 @@ const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    const snap = await communitySnapshot('communities',{})
+    const snap = await getDocs(collection(db, 'communities'))
     const items = snap.docs.map(item => ({ ...item.data(), id: item.id }))
     const official = createOfficialCommunity()
     if (!items.some(item => item.id === official.id)) items.unshift(official)
@@ -38,7 +36,7 @@ onMounted(load)
 </script>
 
 <template>
-  <component :is="embedded ? 'section' : 'main'" class="communities-page social-page" :class="{ embedded }">
+  <component :is="embedded ? 'section' : 'main'" class="communities-page" :class="{ embedded }">
     <header><component :is="embedded ? 'h2' : 'h1'"><i class="fas fa-users" aria-hidden="true"></i> {{ embedded ? 'Explora las comunidades' : 'Comunidades' }}</component><p v-if="!embedded">Encuentra tu comunidad y descubre qué comparten sus miembros.</p></header>
     <label class="community-search"><i class="fas fa-search" aria-hidden="true"></i><input v-model="search" type="search" aria-label="Buscar comunidades" placeholder="Buscar comunidad o saga…" /></label>
     <p v-if="loading" role="status">Cargando comunidades…</p>

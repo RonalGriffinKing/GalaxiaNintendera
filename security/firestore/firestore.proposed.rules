@@ -1,0 +1,259 @@
+// PROPOSAL FOR REVIEW ONLY. Do not deploy before completing docs/firestore-security-audit.md.
+// Several existing client flows intentionally require migration; never combine with the open rule.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function own(uid) { return signedIn() && request.auth.uid == uid; }
+    function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function active() { return signedIn() && profile().get('isBlocked', false) == false; }
+    function admin() { return active() && profile().get('role', 'user') == 'admin'; }
+    function publisher() { return active() && profile().get('role', 'user') in ['admin', 'publisher']; }
+    function chatAllowed() { return active() && (publisher() || profile().get('canChat', false) == true); }
+    function changedOnly(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+    function text(value, max) { return value is string && value.size() <= max; }
+    function ownToggle(before, after) {
+      return before is list && after is list && after.size() == after.toSet().size()
+        && ((!(request.auth.uid in before) && after.size() == before.size() + 1
+          && after.toSet() == before.toSet().union([request.auth.uid].toSet()))
+        || (request.auth.uid in before && after.size() == before.size() - 1
+          && after.toSet() == before.toSet().difference([request.auth.uid].toSet())));
+    }
+    function ownMapChange(key) {
+      return request.resource.data.get(key, {}) is map
+        && request.resource.data.get(key, {}).diff(resource.data.get(key, {})).affectedKeys().hasOnly([request.auth.uid]);
+    }
+    function publicPost(data) {
+      return data.get('status', '') == 'approved'
+        && data.get('visibility', 'public') in ['public', 'unlisted']
+        && data.get('releaseAt', data.get('scheduledAt', 0)) is number
+        && data.get('releaseAt', data.get('scheduledAt', 0)) <= request.time.toMillis();
+    }
+    function discoverablePost(data) { return publicPost(data) && data.get('visibility', 'public') == 'public'; }
+
+    match /users/{uid} {
+      // Users contains emails, moderation settings and financial state: never public.
+      allow get: if own(uid) || admin();
+      allow list: if admin();
+      allow create: if admin() || (own(uid)
+        && request.resource.data.keys().hasOnly(['name','email','description','imageUrl','provider',
+          'emailVerified','emailVerificationRequired','emailOptIn','legalAccepted','legalAcceptedAt',
+          'legalVersion','parentalConsentConfirmed','role','stars','readPostsCount','unlockedIcons',
+          'selectedIcon','selectedIconUrl','createdAt','updatedAt'])
+        && request.resource.data.get('role', 'user') == 'user'
+        && request.resource.data.get('stars', 0) == 0
+        && request.resource.data.get('readPostsCount', 0) == 0
+        && request.resource.data.get('unlockedIcons', ['kirby-01']) == ['kirby-01']
+        && request.resource.data.get('selectedIcon', 'kirby-01') == 'kirby-01'
+        && request.resource.data.get('selectedIconUrl', '') == ''
+        && request.resource.data.email == request.auth.token.get('email', '')
+        && request.resource.data.get('emailVerified', false) == request.auth.token.get('email_verified', false)
+        && text(request.resource.data.name, 120));
+      allow update: if admin() || (own(uid) && active()
+        && changedOnly(['name','description','imageUrl','email','provider','emailVerified','emailOptIn',
+          'socialLinks','legalAccepted','legalAcceptedAt','legalVersion','parentalConsentConfirmed',
+          'selectedIcon','selectedIconUrl','isOnline','lastActiveAt','updatedAt'])
+        && text(request.resource.data.get('name', ''), 120)
+        && text(request.resource.data.get('description', ''), 2000)
+        && request.resource.data.get('email', '') == request.auth.token.get('email', '')
+        && request.resource.data.get('emailVerified', false) == request.auth.token.get('email_verified', false)
+        && request.resource.data.get('selectedIcon', 'kirby-01') in resource.data.get('unlockedIcons', ['kirby-01'])
+        // Icon URL/effects must come from authoritative catalog; migrate selectIcon first.
+        && request.resource.data.get('selectedIconUrl', '') == resource.data.get('selectedIconUrl', ''));
+      allow delete: if admin();
+
+      match /notifications/{id} {
+        allow read: if own(uid) || admin();
+        allow create: if admin(); // Cross-user notifications need a verified event path, not arbitrary payloads.
+        allow update: if admin() || (own(uid) && changedOnly(['read']) && request.resource.data.read is bool);
+        allow delete: if own(uid) || admin();
+      }
+      match /readPosts/{id} {
+        allow read: if own(uid) || admin();
+        allow write: if admin(); // awardPostRead cannot be trusted as currently written.
+      }
+      match /favorites/{id} {
+        allow read: if own(uid) || admin();
+        allow create, update: if active() && own(uid)
+          && request.resource.data.keys().hasOnly(['postId','postSlug','title','image','category','authorName','createdAt','savedAt'])
+          && request.resource.data.postId == id
+          && publicPost(get(/databases/$(database)/documents/posts/$(id)).data);
+        allow delete: if own(uid) || admin();
+      }
+      match /socialTemplates/{id} { allow read, write: if publisher() && own(uid); }
+      match /communities/{communityId} {
+        allow read: if own(uid) || admin();
+        allow create, update: if admin() || (active() && own(uid)
+          && communityId != 'galaxia-oficial'
+          && get(/databases/$(database)/documents/communities/$(communityId)).data.get('lockedMembership', false) == false
+          && request.resource.data.keys().hasOnly(['communityId','name','description','bannerUrl','iconUrl','role','joinedAt','updatedAt'])
+          && request.resource.data.communityId == communityId && request.resource.data.role == 'Miembro');
+        allow delete: if admin() || (own(uid) && communityId != 'galaxia-oficial');
+      }
+      match /followers/{follower} {
+        allow read: if true; // Only the whitelisted public relation payload may be stored here.
+        allow create, update: if active() && own(follower) && follower != uid
+          && exists(/databases/$(database)/documents/users/$(uid))
+          && request.resource.data.keys().hasOnly(['userId','name','imageUrl','followedAt','createdAt'])
+          && request.resource.data.userId == follower;
+        allow delete: if own(follower) || admin();
+      }
+      match /following/{target} {
+        allow read: if true;
+        allow create, update: if active() && own(uid) && target != uid
+          && exists(/databases/$(database)/documents/users/$(target))
+          && request.resource.data.keys().hasOnly(['userId','name','imageUrl','followedAt','createdAt'])
+          && request.resource.data.userId == target;
+        allow delete: if own(uid) || admin();
+      }
+    }
+    // Proposed public projection, NOT yet implemented. No email, role, moderation or private progress.
+    match /publicProfiles/{uid} {
+      allow read: if true;
+      allow write: if admin(); // Requires deliberate publication/synchronization; not automatic migration.
+    }
+    match /posts/{id} {
+      allow get: if publicPost(resource.data) || admin() || (publisher() && resource.data.authorId == request.auth.uid);
+      allow list: if discoverablePost(resource.data) || admin() || (publisher() && resource.data.authorId == request.auth.uid);
+      allow create: if admin() || (publisher() && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.status in ['draft', 'pending']);
+      allow update: if admin() || (publisher() && resource.data.authorId == request.auth.uid
+        && request.resource.data.authorId == resource.data.authorId
+        && resource.data.status in ['draft','pending'] && request.resource.data.status in ['draft','pending']);
+      allow delete: if admin() || (publisher() && resource.data.authorId == request.auth.uid);
+    }
+    match /sitePages/{id} {
+      allow read: if (resource.data.get('status', '') == 'published' && resource.data.get('visibility','public') == 'public') || publisher();
+      allow write: if publisher(); // Current page manager permits publisher role.
+    }
+    match /siteSettings/{id} { allow read: if id == 'postCategories'; allow write: if id == 'postCategories' && admin(); }
+    match /siteConfig/{id} { allow read: if id == 'profileAchievements'; allow write: if id == 'profileAchievements' && admin(); }
+    match /profileIcons/{id} { allow read: if true; allow write: if admin(); }
+    match /communities/{id} {
+      allow read: if true;
+      allow write: if admin(); // Non-admin membersCount increments require an atomic redesign.
+      match /members/{uid} {
+        allow read: if true;
+        allow create, update: if admin() || (active() && own(uid) && id != 'galaxia-oficial'
+          && get(/databases/$(database)/documents/communities/$(id)).data.get('lockedMembership', false) == false
+          && request.resource.data.keys().hasOnly(['userId','uid','name','imageUrl','joinedAt','updatedAt'])
+          && request.resource.data.get('userId', uid) == uid && request.resource.data.get('uid', uid) == uid);
+        allow delete: if admin() || (own(uid) && id != 'galaxia-oficial');
+      }
+    }
+    match /communityThreads/{id} {
+      function mayPost(data) {
+        return active() && ((data.communityId == 'galaxia-oficial' && publisher())
+          || (data.communityId != 'galaxia-oficial'
+            && exists(/databases/$(database)/documents/communities/$(data.communityId)/members/$(request.auth.uid))
+            && get(/databases/$(database)/documents/communities/$(data.communityId)).data.get('adminOnlyThreads',false) == false));
+      }
+      function likesOnly() {
+        return changedOnly(['likedBy','likes','updatedAt'])
+          && ownToggle(resource.data.get('likedBy',[]),request.resource.data.likedBy)
+          && request.resource.data.likes == request.resource.data.likedBy.size();
+      }
+      function appendComment() {
+        let before = resource.data.get('comments', []);
+        let after = request.resource.data.comments;
+        let last = after[after.size()-1];
+        return changedOnly(['comments','replies','updatedAt']) && after.size() <= 200
+          && after.size() == before.size()+1 && after.removeAll([last]) == before
+          && last.keys().hasOnly(['id','authorId','author','authorImage','authorIconEffect','handle','body','createdAt'])
+          && last.authorId == request.auth.uid && text(last.body,2000) && last.body.size() > 0
+          && request.resource.data.replies == after.size();
+      }
+      allow read: if true;
+      allow create: if mayPost(request.resource.data) && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.get('likes',0) == 0 && request.resource.data.get('replies',0) == 0
+        && request.resource.data.get('comments',[]) == [] && request.resource.data.get('likedBy',[]) == []
+        && request.resource.data.get('pinnedCommunity',false) == false && request.resource.data.get('pinnedHome',false) == false
+        && request.resource.data.get('showOnHome',false) == false
+        && request.resource.data.get('isOfficial',false) == (request.resource.data.communityId == 'galaxia-oficial')
+        && request.resource.data.get('lockedThread',false) == (request.resource.data.communityId == 'galaxia-oficial');
+      allow update: if admin() || (publisher() && changedOnly(['pinnedCommunity','pinnedAt','pinnedBy','pinnedHome','showOnHome','homePinnedAt','homePinnedBy','updatedAt']))
+        || (active() && (likesOnly() || appendComment()));
+      // Existing comment edit/delete arrays are blocked for ordinary users until normalized.
+      allow delete: if admin() || (active() && resource.data.authorId == request.auth.uid);
+    }
+    match /galaxyEvents/{id} {
+      allow read: if true;
+      allow create: if publisher() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if publisher() || (active() && changedOnly(['notifyBy']) && ownToggle(resource.data.get('notifyBy',[]),request.resource.data.notifyBy));
+      allow delete: if publisher();
+    }
+    match /liveGoals/{id} {
+      allow read: if true;
+      allow create, delete: if publisher();
+      allow update: if publisher() || (active() && resource.data.type != 'mission'
+        && changedOnly(['likesBy','likerProfiles','updatedAt']) && ownMapChange('likesBy') && ownMapChange('likerProfiles')
+        && request.resource.data.likesBy[request.auth.uid] == resource.data.get('likesBy',{}).get(request.auth.uid,0)+1);
+      // Repeated likes are the existing design, not an authenticated proof of live engagement.
+    }
+    match /liveChats/{id} {
+      allow read: if true;
+      allow create, update, delete: if publisher(); // Client-written lastMessagePreview requires redesign.
+      match /messages/{message} {
+        allow read: if true;
+        allow create: if chatAllowed() && get(/databases/$(database)/documents/liveChats/$(id)).data.get('active',false) == true
+          && request.resource.data.keys().hasOnly(['body','authorId','author','authorImage','createdAt'])
+          && request.resource.data.authorId == request.auth.uid && text(request.resource.data.body,2000);
+        allow update: if false;
+        allow delete: if publisher();
+      }
+    }
+    match /videoChats/{video} {
+      allow read, write: if false; // No parent document operations found.
+      match /messages/{message} {
+        allow read: if true;
+        allow create: if active() && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['videoId','videoTitle','videoSecond','body','gif','authorId','author','authorImage','authorIconEffect','likedBy','likes','replies','kind','createdAt'])
+          && text(request.resource.data.body,2000) && request.resource.data.get('likes',0) == 0
+          && request.resource.data.get('likedBy',[]) == [] && request.resource.data.get('replies',[]) == [];
+        allow update: if active() && changedOnly(['likes','likedBy'])
+          && ownToggle(resource.data.get('likedBy',[]),request.resource.data.likedBy)
+          && request.resource.data.likes == request.resource.data.likedBy.size();
+        allow delete: if admin() || (active() && resource.data.authorId == request.auth.uid);
+        // Embedded reply edits require normalized reply documents; denied meanwhile.
+      }
+    }
+    match /directChats/{chat} {
+      function member() { return chatAllowed() && request.auth.uid in resource.data.participants; }
+      function parentMember() { return chatAllowed() && request.auth.uid in get(/databases/$(database)/documents/directChats/$(chat)).data.participants; }
+      allow read: if member(); // Inbox queries must retain participants array-contains uid.
+      allow create: if chatAllowed() && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2 && request.resource.data.participants.toSet().size() == 2
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.keys().hasOnly(['participants','participantNames','updatedAt','lastMessage','lastMessageId','lastMessageAuthorId','lastMessagePreview','lastReadBy','deletedFor'])
+        && !request.resource.data.keys().hasAny(['lastMessageId','lastMessage','lastMessagePreview','lastMessageAuthorId'])
+        && request.resource.data.get('lastReadBy',{}).keys().hasOnly([request.auth.uid])
+        && request.resource.data.get('deletedFor',{}).keys().hasOnly([request.auth.uid]);
+      allow update: if member() && changedOnly(['participantNames','updatedAt','lastReadBy','hiddenBefore','deletedFor','pinnedBy','clearedAtBy'])
+        && ownMapChange('lastReadBy') && ownMapChange('hiddenBefore') && ownMapChange('deletedFor')
+        && ownMapChange('pinnedBy') && ownMapChange('clearedAtBy');
+      // Send summaries and resetting another participant's deletedFor require an atomic message-reference update.
+      allow delete: if false;
+      match /messages/{message} {
+        allow read: if parentMember();
+        allow create: if parentMember() && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['body','gif','authorId','author','authorName','createdAt','readBy','seenAt'])
+          && text(request.resource.data.body,2000)
+          && request.resource.data.get('readBy',{}).keys().hasOnly([request.auth.uid])
+          && request.resource.data.get('seenAt',{}).keys().hasOnly([request.auth.uid]);
+        allow update: if parentMember() && changedOnly(['readBy','seenAt']) && ownMapChange('readBy') && ownMapChange('seenAt');
+        allow delete: if false;
+      }
+    }
+    match /overlays/{uid}/items/{id} {
+      // Existing OBS uses an unauthenticated exact document listener. Scene data must contain no secrets.
+      allow get: if true;
+      allow list: if admin() && own(uid);
+      allow create, update, delete: if admin() && own(uid);
+    }
+    match /mailQueue/{id} { allow read, write: if admin(); }
+    match /ruzafaPrinterProducts/{id} { allow read: if true; allow write: if admin(); }
+    match /ruzafaPrinterHistory/{id} { allow read, write: if admin(); }
+    // All unrecognized collections remain denied, including future unregistered modules.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

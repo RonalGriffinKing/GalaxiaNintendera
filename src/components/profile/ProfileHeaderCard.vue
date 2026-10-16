@@ -1,5 +1,4 @@
 <script setup>
-import { publicName, publicText } from '@/utils/publicIdentity'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
 defineProps({
@@ -29,7 +28,7 @@ defineProps({
     default: ''
   },
   redeemedIconCount: {
-    type: [Number,String],
+    type: Number,
     default: 0
   },
   visibleProfileIcons: {
@@ -41,7 +40,7 @@ defineProps({
     default: () => []
   },
   displayStars: {
-    type: [Number,String],
+    type: Number,
     default: 0
   },
   isSpending: {
@@ -78,7 +77,7 @@ const emit = defineEmits([
 </script>
 
 <template>
-  <section class="profile-hero social-profile-header">
+  <section class="profile-hero">
     <button
       class="profile-level-pill"
       type="button"
@@ -98,7 +97,7 @@ const emit = defineEmits([
       <ProfileAvatar
         class="profile-avatar-circle"
         :src="profileIcon"
-        :alt="publicName(profile.name, profile.displayName, profile.username)"
+        :alt="profile.name || profile.email || 'Usuario'"
         :effect="profileIconMeta"
         :role-badge="profile.role || 'user'"
       />
@@ -115,8 +114,8 @@ const emit = defineEmits([
     </div>
 
     <div class="profile-main-copy">
-      <h1>{{ publicName(profile.name, profile.displayName, profile.username) }}</h1>
-      <small class="profile-username">@{{ publicText(profile.username) || publicName(profile.name, profile.displayName, 'usuario').replace(/\s+/g, '') }}</small>
+      <h1>{{ profile.name || profile.email || 'Usuario' }}</h1>
+      <small class="profile-username">@{{ profile.username || (profile.name || profile.email || 'usuario').toString().split('@')[0].replace(/\s+/g, '') }}</small>
       <p>{{ profile.description || 'Miembro de la comunidad' }}</p>
       <div class="profile-meta-row">
         <span v-if="memberSince"><i class="fas fa-calendar"></i> Miembro desde {{ memberSince }}</span>

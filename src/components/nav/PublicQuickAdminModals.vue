@@ -199,10 +199,10 @@ const emit = defineEmits([
           </label>
           <label>
             Rol
-            <select v-model="userDraft.role" disabled>
+            <select v-model="userDraft.role">
               <option value="user">Usuario</option>
               <option value="publisher">Publicador</option>
-              
+              <option value="admin">Admin</option>
             </select>
           </label>
 

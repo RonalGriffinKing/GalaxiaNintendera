@@ -1,14 +1,8 @@
 <script setup>
-import {communitySnapshot} from '@/services/community'
-
-import {getProfileSnapshot} from '@/services/profiles'
-
-import {editorialQueries} from "@/services/editorial";
-
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-
-
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
+import { db } from '@/firebase'
 import { resolveAssetUrl } from '@/constants/assets'
 import { HOME_HERO_SLIDE_DURATION } from '@/constants/home'
 import { useTimedCarousel } from '@/composables/useTimedCarousel'
@@ -236,7 +230,7 @@ const liveItems = computed(() => {
 })
 
 const loadData = async () => {
-  const postRequest = editorialQueries.search()
+  const postRequest = getDocs(collection(db, 'posts')).catch(() => ({ docs: [] }))
   loadCommunities()
   loadCommunityThreads()
   loadEvents()
@@ -258,17 +252,17 @@ const loadData = async () => {
 }
 
 const loadCommunities = async () => {
-  const snap = await communitySnapshot('communities',{}).catch(() => ({ docs: [] }))
+  const snap = await getDocs(collection(db, 'communities')).catch(() => ({ docs: [] }))
   communities.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
 }
 
 const loadCommunityThreads = async () => {
-  const snap = await communitySnapshot('threads',{}).catch(() => ({ docs: [] }))
+  const snap = await getDocs(collection(db, 'communityThreads')).catch(() => ({ docs: [] }))
   communityThreads.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
 }
 
 const loadEvents = async () => {
-  const snap = await communitySnapshot('events',{}).catch(() => ({ docs: [] }))
+  const snap = await getDocs(collection(db, 'galaxyEvents')).catch(() => ({ docs: [] }))
   events.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
     .filter(item => getTime(item.startsAt) >= Date.now() || item.featured)
     .sort((a, b) => getTime(a.startsAt) - getTime(b.startsAt))
@@ -288,7 +282,7 @@ const loadAuthorProfiles = async () => {
   const ids = [...new Set([...posts.value, ...mainEntries.value].map(post => post.authorId).filter(Boolean))]
   if (!ids.length) return
   const profiles = await Promise.all(ids.map(async (id) => {
-    const snap = await getProfileSnapshot(id).catch(() => null)
+    const snap = await getDoc(doc(db, 'users', id)).catch(() => null)
     return snap?.exists() ? [id, { id, ...snap.data() }] : null
   }))
   authorProfiles.value = Object.fromEntries(profiles.filter(Boolean))
@@ -423,7 +417,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="home2-page editorial-page">
+  <div class="home2-page">
     <HomeWelcomeLoader :visible="isInitialHomeLoading" />
 
     <main class="home2-shell">

@@ -1,15 +1,10 @@
 <script setup>
-import {communitySnapshot,communityWrite} from '@/services/community'
-
-import {editorialQueries,isEditorialOwner,editorialRole} from "@/services/editorial";
-import {profileRequest} from '@/services/profiles'
-
-import { computed, onMounted, onUnmounted, ref, watch, useId } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { collection, doc, getDocs, limit, onSnapshot, orderBy, query, updateDoc, writeBatch } from 'firebase/firestore'
-
-import { auth, db } from '@/firebase'
+import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth'
+import { addDoc, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
+import { deleteApp, initializeApp } from 'firebase/app'
+import { auth, db, firebaseConfig } from '@/firebase'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { resetPlayerSession } from '@/services/playerState'
 import { isNativeApp } from '@/services/appEnvironment'
@@ -18,8 +13,6 @@ import PublicCreateSheet from '@/components/nav/PublicCreateSheet.vue'
 import NotificationDropdown from '@/components/nav/NotificationDropdown.vue'
 import PublicQuickAdminModals from '@/components/nav/PublicQuickAdminModals.vue'
 import PublicSearchPanel from '@/components/nav/PublicSearchPanel.vue'
-import PublicNavigationLink from './PublicNavigationLink.vue'
-import { usePublicPanelFocus } from '@/composables/usePublicPanelFocus'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import GlobalThreadComposerLauncher from '@/components/thread/GlobalThreadComposerLauncher.vue'
 import { defaultLogoUrl } from '@/constants/assets'
@@ -334,9 +327,9 @@ const loadSearchIndex = async () => {
 
   try {
     const [postsSnap, communitiesSnap, usersSnap, followingSnap] = await Promise.all([
-      editorialQueries.search(),
-      communitySnapshot('communities',{}).catch(() => ({ docs: [] })),
-      profileRequest('directory').then(result=>({docs:result.items.map(item=>({id:item.id,data:()=>({name:item.displayName,imageUrl:item.avatarUrl})}))})),
+      getDocs(collection(db, 'posts')).catch(() => ({ docs: [] })),
+      getDocs(collection(db, 'communities')).catch(() => ({ docs: [] })),
+      getDocs(collection(db, 'users')).catch(() => ({ docs: [] })),
       currentUser.value ? getDocs(collection(db, 'users', currentUser.value.uid, 'following')).catch(() => ({ docs: [] })) : Promise.resolve({ docs: [] })
     ])
 
@@ -453,10 +446,24 @@ const applyRecentSearch = (value) => {
   searchQuery.value = value
 }
 
-const followSearchUser = async user => {
- const viewer=currentUser.value;if(!viewer||!user?.id||viewer.uid===user.id||searchFollowingIds.value.has(user.id))return
- await profileRequest('follow',{uid:user.id,following:true})
- searchFollowingIds.value=new Set([...searchFollowingIds.value,user.id])
+const followSearchUser = async (user) => {
+  const viewer = currentUser.value
+  if (!viewer || !user?.id || viewer.uid === user.id || searchFollowingIds.value.has(user.id)) return
+
+  searchFollowingIds.value = new Set([...searchFollowingIds.value, user.id])
+
+  await Promise.all([
+    setDoc(doc(db, 'users', user.id, 'followers', viewer.uid), {
+      userId: viewer.uid,
+      createdAt: Date.now()
+    }, { merge: true }),
+    setDoc(doc(db, 'users', viewer.uid, 'following', user.id), {
+      userId: user.id,
+      createdAt: Date.now()
+    }, { merge: true }),
+    updateDoc(doc(db, 'users', user.id), { followersCount: increment(1) }).catch(() => {}),
+    updateDoc(doc(db, 'users', viewer.uid), { followingCount: increment(1) }).catch(() => {})
+  ])
 }
 
 const isMobileNav = () => {
@@ -563,10 +570,10 @@ const loadUserRole = async (user) => {
   }
 
   try {
-    const snap = null
-    const data = (await profileRequest('get')).item||{}
+    const snap = await getDoc(doc(db, 'users', user.uid))
+    const data = snap.data() || {}
     currentProfile.value = data
-    currentRole.value = await editorialRole(user)
+    currentRole.value = data.isBlocked ? 'user' : (data.role || 'user')
     currentCanChat.value = !data.isBlocked && Boolean(data.canChat)
   } catch (error) {
     console.error(error)
@@ -575,13 +582,13 @@ const loadUserRole = async (user) => {
   }
 }
 
-const syncCurrentProfile = async (event) => {
+const syncCurrentProfile = (event) => {
   if (!currentUser.value || event.detail?.uid !== currentUser.value.uid) return
   currentProfile.value = {
     ...currentProfile.value,
     ...(event.detail.profile || {})
   }
-  currentRole.value = await editorialRole(currentUser.value)
+  currentRole.value = currentProfile.value.isBlocked ? 'user' : (currentProfile.value.role || currentRole.value || 'user')
   currentCanChat.value = !currentProfile.value.isBlocked && Boolean(currentProfile.value.canChat)
 }
 
@@ -813,7 +820,7 @@ const saveQuickCommunity = async () => {
   quickCreateSaving.value = true
   try {
     const now = Date.now()
-    await communityWrite('site-save',undefined,{kind:'communities',value:{
+    await addDoc(collection(db, 'communities'), {
       name,
       description,
       bannerUrl: quickCommunityDraft.value.bannerUrl.trim(),
@@ -826,7 +833,7 @@ const saveQuickCommunity = async () => {
       createdBy: currentUser.value?.uid || '',
       createdAt: now,
       updatedAt: now
-    }})
+    })
     quickCommunityOpen.value = false
   } finally {
     quickCreateSaving.value = false
@@ -834,13 +841,49 @@ const saveQuickCommunity = async () => {
 }
 
 const saveQuickUser = async () => {
- if(!isAdmin.value||quickCreateSaving.value)return
- const draft=quickUserDraft.value
- if(draft.imageUrl?.trim()){window.alert('Crea primero la cuenta y equipa su avatar desde el inventario.');return}
- quickCreateSaving.value=true
- try{await profileRequest('admin-user-create',{name:draft.name.trim(),email:draft.email.trim(),password:draft.password,description:draft.description.trim(),canChat:!!draft.canChat,emailOptIn:true});quickUserOpen.value=false}
- catch(error){window.alert(error.message||'No se pudo crear la cuenta.')}
- finally{quickCreateSaving.value=false}
+  if (!isAdmin.value || quickCreateSaving.value) return
+  const name = quickUserDraft.value.name.trim()
+  const email = quickUserDraft.value.email.trim()
+  const password = quickUserDraft.value.password
+  if (!name || !email || !password) return
+
+  quickCreateSaving.value = true
+  try {
+    const secondaryApp = initializeApp(firebaseConfig, `quick-user-create-${Date.now()}`)
+    const secondaryAuth = getAuth(secondaryApp)
+
+    try {
+      const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password)
+      await updateProfile(credential.user, {
+        displayName: name,
+        photoURL: quickUserDraft.value.imageUrl.trim() || null
+      })
+      await setDoc(doc(db, 'users', credential.user.uid), {
+        name,
+        email,
+        description: quickUserDraft.value.description.trim(),
+        imageUrl: quickUserDraft.value.imageUrl.trim(),
+        provider: 'password',
+        role: quickUserDraft.value.role,
+        canChat: ['admin', 'publisher'].includes(quickUserDraft.value.role) || Boolean(quickUserDraft.value.canChat),
+        adminCreated: true,
+        emailVerified: true,
+        emailVerificationRequired: false,
+        isBlocked: false,
+        blockReason: '',
+        emailOptIn: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      })
+      await signOut(secondaryAuth)
+    } finally {
+      await deleteApp(secondaryApp)
+    }
+
+    quickUserOpen.value = false
+  } finally {
+    quickCreateSaving.value = false
+  }
 }
 
 const isActivePath = (to) => {
@@ -941,56 +984,37 @@ onUnmounted(() => {
   document.body.style.overflow = ''
   document.documentElement.style.overflow = ''
 })
-// Disclosure presentation; route/auth handlers remain unchanged.
-// Apply the same existing scroll policy when an open account crosses a breakpoint.
-const syncAccountResponsiveScroll = () => {
-  if (!accountMenuOpen.value) return
-  document.body.style.overflow = menuOpen.value || createMenuOpen.value || isMobileNav() || quickPostOpen.value || quickCommunityOpen.value || quickUserOpen.value ? 'hidden' : ''
-}
-onMounted(() => window.addEventListener('resize', syncAccountResponsiveScroll))
-onUnmounted(() => window.removeEventListener('resize', syncAccountResponsiveScroll))
-const publicPanelId = useId()
-const searchPanelId = `public-search-${publicPanelId}`
-const notificationPanelId = `public-notifications-${publicPanelId}`
-const accountPanelId = `public-account-${publicPanelId}`
-const accountPanel = ref(null)
-const accountDesktopButton = ref(null)
-const accountMobileButton = ref(null)
-const logoutPanel = ref(null)
-const logoutPanelId = `public-logout-${publicPanelId}`
-usePublicPanelFocus(() => confirmLogoutOpen.value, logoutPanel, () => { if (!isLoggingOut.value) confirmLogoutOpen.value = false }, { trap: () => true, fallbackFocus: () => isMobileNav() ? accountMobileButton.value : accountDesktopButton.value })
-usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMenuOpen.value = false }, { trap: () => isMobileNav() })
 </script>
 
 <template>
-  <nav aria-label="Navegación principal" class="public-nav" :class="mobileNavClass" :style="{ '--read-progress': `${readingProgress}%` }">
+  <nav class="public-nav" :class="mobileNavClass" :style="{ '--read-progress': `${readingProgress}%` }">
     <div v-if="isReadingRoute" class="mobile-reading-progress" aria-hidden="true"></div>
     <div class="public-nav-inner">
       <div class="public-brand-zone">
-        <PublicNavigationLink class="public-brand" to="/" aria-label="Galaxia Nintendera, inicio" @navigate="goTo">
-          <img :src="defaultLogoUrl" class="public-brand-logo" alt="" />
+        <button class="public-brand" @click="goTo('/')">
+          <img :src="defaultLogoUrl" class="public-brand-logo" alt="Galaxia Nintendera" />
           <span>Galaxia Nintendera</span>
-        </PublicNavigationLink>
+        </button>
       </div>
 
       <div class="public-links">
-        <PublicNavigationLink
+        <button
           v-for="link in links"
           :key="link.label"
           class="public-nav-link"
-          :to="link.to" :active="isActivePath(link.to)"
-          
-          @navigate="goTo"
+          :class="{ active: isActivePath(link.to) }"
+          :aria-current="isActivePath(link.to) ? 'page' : undefined"
+          @click="goTo(link.to)"
         >
           {{ link.label }}
-        </PublicNavigationLink>
+        </button>
 
         <button
           class="public-nav-search"
           :class="{ open: searchOpen }"
           type="button"
           aria-label="Buscar"
-          :aria-expanded="searchOpen" :aria-controls="searchPanelId"
+          :aria-expanded="searchOpen"
           @click="toggleSearch"
         >
           <i class="fas fa-search"></i>
@@ -998,7 +1022,7 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
       </div>
 
       <div class="public-actions">
-        <button class="public-icon public-mobile-search-btn" type="button" aria-label="Buscar" :aria-expanded="searchOpen" :aria-controls="searchPanelId" @click="toggleSearch">
+        <button class="public-icon public-mobile-search-btn" aria-label="Buscar" @click="toggleSearch">
           <i class="fas fa-search"></i>
         </button>
 
@@ -1017,14 +1041,14 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
             v-if="currentUser"
             ref="notificationButton"
             class="public-icon notification-nav-btn"
-            type="button" aria-label="Notificaciones" :aria-expanded="notificationsOpen" :aria-controls="notificationPanelId"
+            aria-label="Notificaciones"
             @click="toggleNotifications"
           >
             <i class="fas fa-bell"></i>
             <strong v-if="unreadCount">{{ unreadCount }}</strong>
           </button>
 
-          <button v-if="currentUser" ref="accountDesktopButton" class="public-account-btn" type="button" :aria-label="`Opciones de cuenta: ${authLabel}`" :aria-expanded="accountMenuOpen" :aria-controls="accountPanelId" @click="goAccount">
+          <button v-if="currentUser" class="public-account-btn" type="button" @click="goAccount">
             <ProfileAvatar
               class="account-btn-avatar"
               :src="currentProfileIcon"
@@ -1037,24 +1061,24 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
             <i class="fas fa-chevron-down"></i>
           </button>
 
-          <PublicNavigationLink v-if="!currentUser" class="public-mobile-join-top is-login" to="/login?mode=login" @navigate="goAccountItem">
+          <button v-if="!currentUser" class="public-mobile-join-top is-login" type="button" @click="goAccountItem('/login?mode=login')">
             <i class="fas fa-right-to-bracket"></i>
             Entrar
-          </PublicNavigationLink>
+          </button>
 
-          <PublicNavigationLink v-if="!currentUser" class="public-mobile-join-top" to="/login?mode=register" @navigate="goAccountItem">
+          <button v-if="!currentUser" class="public-mobile-join-top" type="button" @click="goAccountItem('/login?mode=register')">
             <i class="fas fa-user-plus"></i>
             Unete
-          </PublicNavigationLink>
+          </button>
 
         </div>
 
         <button
           v-if="currentUser"
-          ref="accountMobileButton" class="public-menu-toggle"
+          class="public-menu-toggle"
           type="button"
           aria-label="Abrir opciones de perfil"
-          :aria-expanded="accountMenuOpen" :aria-controls="accountPanelId"
+          :aria-expanded="accountMenuOpen"
           @click="goAccount"
         >
           <ProfileAvatar
@@ -1069,7 +1093,7 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
       </div>
     </div>
 
-    <PublicSearchPanel :id="searchPanelId"
+    <PublicSearchPanel
       v-model:query="searchQuery"
       v-model:filter="searchFilter"
       :open="searchOpen"
@@ -1090,7 +1114,7 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
       @follow-user="followSearchUser"
     />
 
-    <NotificationDropdown :panel-id="notificationPanelId"
+    <NotificationDropdown
       :open="notificationsOpen"
       :anchor-el="notificationButton"
       :notifications="notifications"
@@ -1103,11 +1127,11 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
     />
 
     <div v-if="accountMenuOpen" class="public-account-panel" @click.self="accountMenuOpen = false">
-        <div ref="accountPanel" :id="accountPanelId" class="public-account-card" tabindex="-1" role="region" aria-label="Opciones de cuenta">
+        <div class="public-account-card">
         <button class="public-account-close" type="button" aria-label="Cerrar menu de cuenta" @click="accountMenuOpen = false">
           <i class="fas fa-xmark"></i>
         </button>
-        <button class="public-account-head" type="button" :aria-label="`${authLabel}, mi perfil`" @click="goOwnProfile">
+        <button class="public-account-head" type="button" @click="goOwnProfile">
           <span>
             <ProfileAvatar
               class="profile-icon-effect-wrap"
@@ -1125,15 +1149,15 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
         </button>
 
         <div class="public-account-list">
-          <component :is="item.to ? PublicNavigationLink : 'button'" :to="item.to" :type="item.to ? undefined : 'button'"
+          <button
             v-for="item in accountMenuItems"
             :key="item.label"
-            @click="!item.to && openAccountOption(item)" @navigate="openAccountOption(item)"
+            @click="openAccountOption(item)"
           >
             <i :class="item.icon"></i>
             <span>{{ item.label }}</span>
             <i class="fas fa-chevron-right"></i>
-          </component>
+          </button>
         </div>
 
         <template v-if="accountAdminItems.length">
@@ -1142,15 +1166,15 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
           </div>
 
           <div class="public-account-list admin-list">
-            <component :is="item.to ? PublicNavigationLink : 'button'" :to="item.to" :type="item.to ? undefined : 'button'"
+            <button
               v-for="item in accountAdminItems"
               :key="`admin-${item.label}`"
-              @click="!item.to && openAccountOption(item)" @navigate="openAccountOption(item)"
+              @click="openAccountOption(item)"
             >
               <i :class="item.icon"></i>
               <span>{{ item.label }}</span>
               <i class="fas fa-chevron-right"></i>
-            </component>
+            </button>
           </div>
         </template>
 
@@ -1168,12 +1192,12 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
       <Transition name="fade">
         <div v-if="confirmLogoutOpen" class="account-modal">
           <div class="account-backdrop" @click="!isLoggingOut && (confirmLogoutOpen = false)"></div>
-          <div ref="logoutPanel" class="account-card compact public-logout-dialog" role="dialog" aria-modal="true" :aria-labelledby="logoutPanelId" :aria-describedby="`${logoutPanelId}-description`" tabindex="-1">
+          <div class="account-card compact">
             <div class="logout-icon">
               <i class="fas fa-right-from-bracket"></i>
             </div>
-            <h2 :id="logoutPanelId">Cerrar sesion?</h2>
-            <p :id="`${logoutPanelId}-description`">Volveras a la pantalla de login.</p>
+            <h2>Cerrar sesion?</h2>
+            <p>Volveras a la pantalla de login.</p>
             <div class="logout-actions">
               <button @click="confirmLogoutOpen = false" :disabled="isLoggingOut">Cancelar</button>
               <button class="danger" @click="logout" :disabled="isLoggingOut">
@@ -1280,35 +1304,35 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
     />
 
     <Teleport to="body">
-      <nav :inert="bottomNavClass.suppressed" class="public-bottom-nav" :class="bottomNavClass" aria-label="Navegacion movil" :style="bottomNavStyle">
+      <div class="public-bottom-nav" :class="bottomNavClass" aria-label="Navegacion movil" :style="bottomNavStyle">
         <span class="bottom-nav-indicator" aria-hidden="true"></span>
-        <PublicNavigationLink
+        <button
           v-for="item in bottomNavItems.slice(0, 2)"
           :key="item.label"
-          :to="item.to"
-          :active="isActivePath(item.to)"
-          @navigate="goTo"
+          type="button"
+          :class="{ active: isActivePath(item.to) }"
+          @click="goTo(item.to)"
         >
           <i :class="item.icon"></i>
           <span>{{ item.label }}</span>
-        </PublicNavigationLink>
+        </button>
 
         <button class="bottom-create-btn" type="button" aria-label="Crear hilo" @click="openGlobalThreadComposer">
           <i class="fas fa-plus"></i>
           <span>Hilo</span>
         </button>
 
-        <PublicNavigationLink
+        <button
           v-for="item in bottomNavItems.slice(2)"
           :key="item.label"
-          :to="item.to"
-          :active="isActivePath(item.to)"
-          @navigate="goTo"
+          type="button"
+          :class="{ active: isActivePath(item.to) }"
+          @click="goTo(item.to)"
         >
           <i :class="item.icon"></i>
           <span>{{ item.label }}</span>
-        </PublicNavigationLink>
-      </nav>
+        </button>
+      </div>
     </Teleport>
 
     <PostEditor
@@ -1344,8 +1368,8 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
 <style scoped>
 .public-nav {
-  background: var(--public-nav-surface);
-  border-bottom: var(--border-width) solid var(--public-nav-border);
+  background: #050816;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
   color: white;
   left: 0;
   position: fixed;
@@ -1385,8 +1409,8 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
   margin: 0 auto;
   max-width: min(1500px, calc(100vw - 48px));
-  min-height: var(--public-header-height);
-  padding: var(--space-1) 0;
+  min-height: 64px;
+  padding: 8px 0;
   position: relative;
   transition: min-height 0.24s ease, padding 0.24s ease;
 }
@@ -1419,10 +1443,10 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 .public-brand span {
   color: #f8fafc;
   display: block;
-  font-size: var(--font-caption);
-  font-weight: var(--weight-heading);
+  font-size: 13px;
+  font-weight: 950;
   letter-spacing: 0;
-  line-height: var(--line-heading);
+  line-height: 0.95;
   max-width: 112px;
   text-align: left;
   text-shadow: 0 0 18px rgba(216, 180, 254, 0.34);
@@ -1436,9 +1460,9 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   border-radius: 999px;
   color: #ffffff;
   display: none;
-  font-size: var(--font-button);
-  font-weight: var(--weight-label);
-  gap: var(--space-1);
+  font-size: 13px;
+  font-weight: 900;
+  gap: 4px;
   justify-self: center;
   padding: 4px;
 }
@@ -1450,10 +1474,8 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
 .public-nav-link {
   border-radius: 999px;
-  min-height: var(--public-control-height);
+  min-height: 34px;
   padding: 0 16px;
-  font-size: var(--font-button);
-  font-weight: var(--weight-label);
 }
 
 .public-nav-search {
@@ -1461,12 +1483,12 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   color: #ffffff;
   border-radius: 999px;
   display: inline-flex;
-  font-size: var(--public-icon-size);
-  height: var(--public-control-height);
+  font-size: 15px;
+  height: 34px;
   justify-content: center;
-  min-height: var(--public-control-height);
+  min-height: 34px;
   transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.18s cubic-bezier(0.2, 0.9, 0.2, 1);
-  width: var(--public-control-height);
+  width: 34px;
 }
 
 .public-nav-search.open {
@@ -1490,14 +1512,14 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 }
 
 .public-nav-link.active:hover {
-  background: var(--public-action-background);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(192, 132, 252, 0.68));
   color: #ffffff;
 }
 
 .public-actions {
   align-items: center;
   display: flex;
-  gap: var(--space-2);
+  gap: 10px;
   justify-self: end;
 }
 
@@ -1516,13 +1538,12 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   border-radius: 999px;
   color: #ffffff;
   display: inline-flex;
-  font-size: var(--public-icon-size);
-  height: var(--public-control-height);
+  font-size: 15px;
+  height: 34px;
   justify-content: center;
   opacity: 0.92;
   transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.18s cubic-bezier(0.2, 0.9, 0.2, 1);
-  width: var(--public-control-height);
-  min-height: var(--public-control-height);
+  width: 34px;
 }
 
 .public-icon:hover {
@@ -1545,7 +1566,7 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 .public-icon:active,
 .public-nav-link:active,
 .public-mobile-link:active,
-.public-bottom-nav :is(button, a):active {
+.public-bottom-nav button:active {
   transform: scale(0.94);
 }
 
@@ -1560,16 +1581,16 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
 .public-mobile-join-top {
   align-items: center;
-  background: var(--public-action-background);
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
   border-radius: 999px;
   box-shadow: 0 10px 28px rgba(236, 72, 153, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   color: #ffffff;
   display: inline-flex;
-  font-size: var(--font-button);
-  font-weight: var(--weight-label);
-  gap: var(--space-1);
-  min-height: var(--public-control-height);
-  padding: 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 950;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 16px;
   text-transform: uppercase;
   transition: box-shadow 0.18s ease, filter 0.18s ease, transform 0.18s ease;
   white-space: nowrap;
@@ -1580,7 +1601,6 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   border: 1px solid rgba(216, 180, 254, 0.24);
   box-shadow: none;
   color: #f5f3ff;
-  font-size: var(--font-button);
 }
 
 .public-mobile-join-top:hover,
@@ -1600,16 +1620,16 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
 .notification-nav-btn strong {
   align-items: center;
-  background: var(--action-danger-text);
+  background: #ef4444;
   border: 2px solid #050816;
   border-radius: 999px;
   color: #ffffff;
   display: flex;
-  font-size: var(--font-caption);
-  font-weight: var(--weight-label);
-  height: var(--badge-height);
+  font-size: 9px;
+  font-weight: 900;
+  height: 18px;
   justify-content: center;
-  min-width: var(--badge-height);
+  min-width: 18px;
   padding: 0 4px;
   position: absolute;
   right: -2px;
@@ -1618,15 +1638,15 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
 .public-account-btn {
   align-items: center;
-  background: var(--public-action-background);
+  background: linear-gradient(to right, #9333ea, #ec4899);
   border-radius: 999px;
   color: #ffffff;
   display: inline-flex;
-  font-size: var(--font-button);
-  font-weight: var(--weight-label);
+  font-size: 11px;
+  font-weight: 900;
   gap: 8px;
   max-width: min(210px, 42vw);
-  min-height: var(--public-control-height);
+  min-height: 34px;
   overflow: hidden;
   padding: 0 12px;
   text-transform: uppercase;
@@ -1646,13 +1666,11 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   border-radius: 999px;
   display: none;
   flex: 0 0 auto;
-  height: var(--public-control-height);
+  height: 38px;
   justify-content: center;
   overflow: hidden;
   position: relative;
-  width: var(--public-control-height);
-  min-height: var(--public-control-height);
-  font-size: var(--public-icon-size);
+  width: 38px;
 }
 
 .public-menu-toggle[aria-expanded="true"] {
@@ -1887,7 +1905,7 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 .public-account-card {
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: var(--public-menu-radius);
+  border-radius: 14px;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
   color: #111827;
   display: grid;
@@ -1899,8 +1917,6 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   right: auto;
   top: auto;
   width: min(320px, calc(100vw - 32px));
-  max-height: calc(100dvh - var(--public-header-height) - var(--space-6));
-  overflow-y: auto;
 }
 
 .public-account-head {
@@ -1933,17 +1949,17 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 .public-account-head strong {
   color: #111827;
   display: block;
-  font-size: var(--font-body);
-  font-weight: var(--weight-label);
+  font-size: 14px;
+  font-weight: 900;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .public-account-head p {
-  color: var(--accent-hover);
-  font-size: var(--font-label);
-  font-weight: var(--weight-label);
+  color: #7c3aed;
+  font-size: 10px;
+  font-weight: 900;
   margin-top: 2px;
   text-transform: uppercase;
 }
@@ -1957,8 +1973,8 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   align-items: center;
   color: #c084fc;
   display: grid;
-  font-size: var(--font-label);
-  font-weight: var(--weight-label);
+  font-size: 10px;
+  font-weight: 950;
   grid-template-columns: minmax(28px, 1fr) auto minmax(28px, 1fr);
   letter-spacing: 0.08em;
   margin: 2px 0;
@@ -1977,28 +1993,27 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   padding: 0 12px;
 }
 
-.public-account-list :is(button, a) {
+.public-account-list button {
   align-items: center;
   background: #f8fafc;
   border: 1px solid #e5e7eb;
-  border-radius: var(--radius-control);
+  border-radius: 12px;
   color: #111827;
   display: grid;
-  font-size: var(--font-body);
-  font-weight: var(--weight-label);
+  font-size: 12px;
+  font-weight: 900;
   gap: 10px;
   grid-template-columns: 18px minmax(0, 1fr) 12px;
-  min-height: var(--public-control-height);
+  min-height: 42px;
   padding: 0 12px;
   text-align: left;
-  line-height: var(--line-body);
 }
 
-.public-account-list :is(button, a) i:first-child {
+.public-account-list button i:first-child {
   color: #7c3aed;
 }
 
-.public-account-list :is(button, a) i:last-child {
+.public-account-list button i:last-child {
   color: #cbd5e1;
   font-size: 10px;
 }
@@ -2014,15 +2029,14 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   align-items: center;
   background: #f8fafc;
   border: 1px solid #e5e7eb;
-  border-radius: var(--radius-control);
+  border-radius: 12px;
   color: #111827;
   display: inline-flex;
-  font-size: var(--font-body);
-  font-weight: var(--weight-label);
+  font-size: 12px;
+  font-weight: 900;
   gap: 9px;
-  min-height: var(--public-control-height);
+  min-height: 40px;
   padding: 0 12px;
-  line-height: var(--line-body);
 }
 
 .public-account-actions .danger {
@@ -2245,9 +2259,6 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 @media (min-width: 860px) {
   .public-links {
     display: flex;
-    font-size: var(--font-button);
-    font-weight: var(--weight-label);
-    gap: var(--space-1);
   }
 
   .public-search-box {
@@ -2261,11 +2272,10 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
 @media (max-width: 859px) {
   .public-nav {
-    background: var(--public-nav-surface);
+    background: rgba(5, 8, 22, 0.86);
     backdrop-filter: blur(18px) saturate(1.25);
     border-bottom-color: rgba(255, 255, 255, 0.08);
     box-shadow: 0 14px 38px rgba(0, 0, 0, 0.18);
-    border-bottom: var(--border-width) solid var(--public-nav-border);
   }
 
   .public-nav.compact {
@@ -2276,10 +2286,6 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
   .public-nav.hidden {
     transform: translate3d(0, calc(-100% - 8px), 0);
-  }
-
-  .public-nav.hidden:focus-within {
-    transform: none;
   }
 
   .public-nav.reading.compact {
@@ -2294,7 +2300,7 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   }
 
   .public-nav.compact .public-nav-inner {
-    min-height: var(--public-header-compact-height);
+    min-height: 52px;
     padding: calc(4px + var(--safe-top, 0px)) max(14px, var(--safe-right, 0px)) 4px max(14px, var(--safe-left, 0px));
   }
 
@@ -2304,9 +2310,6 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
   .public-brand span {
     display: none;
-    font-size: var(--font-caption);
-    font-weight: var(--weight-heading);
-    line-height: var(--line-heading);
   }
 
   .public-nav.compact .public-brand-logo {
@@ -2316,8 +2319,8 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   }
 
   .public-nav.compact .public-icon {
-    height: var(--public-control-height);
-    width: var(--public-control-height);
+    height: 32px;
+    width: 32px;
   }
 
   .public-profile-nav {
@@ -2344,24 +2347,14 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
   .public-account-btn {
     display: none;
-    min-height: var(--public-control-height);
-    font-size: var(--font-button);
-    font-weight: var(--weight-label);
   }
 
   .public-mobile-join-top {
     display: inline-flex;
-    min-height: var(--public-control-height);
-    font-size: var(--font-button);
-    font-weight: var(--weight-label);
   }
 
   .public-menu-toggle {
     display: inline-flex;
-    min-height: var(--public-control-height);
-    height: var(--public-control-height);
-    width: var(--public-control-height);
-    font-size: var(--public-icon-size);
   }
 
   .public-account-panel {
@@ -2388,12 +2381,12 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
     animation: mobile-account-drawer-in 0.24s cubic-bezier(0.2, 0.85, 0.25, 1);
     border: 0;
     border-right: 1px solid rgba(216, 180, 254, 0.2);
-    border-radius: var(--public-menu-radius);
+    border-radius: 0 24px 24px 0;
     box-shadow: 28px 0 70px rgba(0, 0, 0, 0.38);
     gap: 14px;
     height: 100dvh;
     margin: 0;
-    max-height: calc(100dvh - var(--public-header-height) - var(--space-6));
+    max-height: none;
     overflow-y: auto;
     padding: calc(16px + var(--safe-top, 0px)) 18px calc(18px + var(--safe-bottom, 0px));
     position: relative;
@@ -2404,8 +2397,6 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
   .public-account-close {
     display: flex;
-    height: var(--public-control-height);
-    width: var(--public-control-height);
   }
 
   .public-account-head {
@@ -2426,16 +2417,13 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   }
 
   .public-account-head strong {
-    font-size: var(--font-body);
+    font-size: 20px;
     line-height: 1.05;
-    font-weight: var(--weight-label);
   }
 
   .public-account-head p {
-    font-size: var(--font-label);
+    font-size: 13px;
     margin-top: 6px;
-    font-weight: var(--weight-label);
-    color: var(--accent-hover);
   }
 
   .public-account-list {
@@ -2443,32 +2431,29 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   }
 
   .public-account-role-line {
-    font-size: var(--font-label);
+    font-size: 11px;
     margin: 4px 0;
-    font-weight: var(--weight-label);
   }
 
-  .public-account-list :is(button, a) {
+  .public-account-list button {
     background: transparent;
     border: 0;
-    border-radius: var(--radius-control);
-    font-size: var(--font-body);
+    border-radius: 14px;
+    font-size: 15px;
     gap: 14px;
     grid-template-columns: 28px minmax(0, 1fr) 14px;
-    min-height: var(--public-control-height);
+    min-height: 46px;
     padding: 0 8px;
-    font-weight: var(--weight-label);
-    line-height: var(--line-body);
   }
 
-  .public-account-list :is(button, a) i:first-child {
+  .public-account-list button i:first-child {
     color: #f8fafc;
     font-size: 19px;
     text-align: center;
   }
 
-  .public-account-list :is(button, a):hover,
-  .public-account-list :is(button, a):focus-visible {
+  .public-account-list button:hover,
+  .public-account-list button:focus-visible {
     background: rgba(168, 85, 247, 0.16);
   }
 
@@ -2478,11 +2463,9 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   }
 
   .public-account-actions button {
-    border-radius: var(--radius-control);
-    font-size: var(--font-body);
-    min-height: var(--public-control-height);
-    font-weight: var(--weight-label);
-    line-height: var(--line-body);
+    border-radius: 14px;
+    font-size: 14px;
+    min-height: 46px;
   }
 
   @keyframes mobile-account-drawer-in {
@@ -2576,14 +2559,14 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
     width: 28px;
   }
 
-  .public-bottom-nav :is(button, a) {
+  .public-bottom-nav button {
     align-items: center;
     background: transparent;
     border-radius: 12px;
     color: #94a3b8;
     display: grid;
-    font-size: var(--font-label);
-    font-weight: var(--weight-label);
+    font-size: 10px;
+    font-weight: 900;
     gap: 3px;
     justify-items: center;
     min-height: 46px;
@@ -2594,25 +2577,24 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
       text-shadow 0.2s ease,
       transform 0.18s cubic-bezier(0.2, 0.9, 0.2, 1);
     z-index: 1;
-    overflow-wrap: anywhere;
   }
 
-  .public-bottom-nav :is(button, a):hover,
-  .public-bottom-nav :is(button, a):focus-visible {
+  .public-bottom-nav button:hover,
+  .public-bottom-nav button:focus-visible {
     background: rgba(255, 255, 255, 0.06);
     color: #f8fafc;
   }
 
   .public-bottom-nav i {
-    font-size: var(--public-icon-size);
+    font-size: 17px;
   }
 
-  .public-bottom-nav :is(button, a).active {
+  .public-bottom-nav button.active {
     color: #c084fc;
     text-shadow: 0 0 18px rgba(216, 180, 254, 0.46);
   }
 
-  .public-bottom-nav :is(button, a).active i {
+  .public-bottom-nav button.active i {
     filter: drop-shadow(0 0 12px rgba(192, 132, 252, 0.5));
   }
 
@@ -2686,7 +2668,7 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
 @media (max-width: 420px) {
   .public-nav-inner {
-    min-height: var(--public-header-height);
+    min-height: 58px;
     padding: 8px 16px;
   }
 
@@ -2696,25 +2678,23 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   }
 
   .public-actions {
-    gap: var(--space-2);
+    gap: 6px;
   }
 
   .public-account-btn {
-    font-size: var(--font-button);
-    min-height: var(--public-control-height);
+    font-size: 10px;
+    min-height: 32px;
     max-width: 128px;
     padding: 0 9px;
-    font-weight: var(--weight-label);
   }
 
   .public-mobile-join-top {
-    font-size: var(--font-button);
-    gap: var(--space-1);
+    font-size: 11px;
+    gap: 6px;
     height: 32px;
-    min-height: var(--public-control-height);
-    padding: 0 var(--space-2);
+    min-height: 32px;
+    padding: 0 10px;
     width: auto;
-    font-weight: var(--weight-label);
   }
 
   .public-mobile-join-top i {
@@ -2722,10 +2702,8 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   }
 
   .public-icon {
-    height: var(--public-control-height);
-    width: var(--public-control-height);
-    min-height: var(--public-control-height);
-    font-size: var(--public-icon-size);
+    height: 32px;
+    width: 32px;
   }
 
   .public-mobile-links {
@@ -2924,11 +2902,9 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 .public-account-card {
   background: #0b1020;
   border-color: rgba(255, 255, 255, 0.1);
-  border-radius: var(--public-menu-radius);
+  border-radius: 18px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
   color: #f8fafc;
-  max-height: calc(100dvh - var(--public-header-height) - var(--space-6));
-  overflow-y: auto;
 }
 
 .public-account-close {
@@ -2938,12 +2914,12 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   border-radius: 999px;
   color: #ffffff;
   display: none;
-  height: var(--public-control-height);
+  height: 36px;
   justify-content: center;
   position: absolute;
   right: 14px;
   top: 14px;
-  width: var(--public-control-height);
+  width: 36px;
   z-index: 3;
 }
 
@@ -2952,12 +2928,12 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 }
 
 .public-account-head strong,
-.public-account-list :is(button, a),
+.public-account-list button,
 .public-account-actions button {
   color: #f8fafc;
 }
 
-.public-account-list :is(button, a),
+.public-account-list button,
 .public-account-actions button {
   background: rgba(255, 255, 255, 0.055);
   border-color: rgba(255, 255, 255, 0.08);
@@ -2976,31 +2952,21 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
 
 @media (max-width: 768px) {
   .public-account-card {
-    border-radius: var(--public-menu-radius);
-    max-height: calc(100dvh - var(--public-header-height) - var(--space-6));
-    overflow-y: auto;
+    border-radius: 0 22px 22px 0;
   }
 
   .public-account-close {
     display: flex;
-    height: var(--public-control-height);
-    width: var(--public-control-height);
   }
 
-  .public-account-list :is(button, a) {
-    font-size: var(--font-body);
-    min-height: var(--public-control-height);
-    font-weight: var(--weight-label);
-    border-radius: var(--radius-control);
-    line-height: var(--line-body);
+  .public-account-list button {
+    font-size: 15px;
+    min-height: 46px;
   }
 
   .public-account-actions button {
-    font-size: var(--font-body);
-    min-height: var(--public-control-height);
-    font-weight: var(--weight-label);
-    border-radius: var(--radius-control);
-    line-height: var(--line-body);
+    font-size: 14px;
+    min-height: 46px;
   }
 }
 
@@ -3049,7 +3015,7 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   .public-brand-logo,
   .public-icon,
   .public-bottom-nav,
-  .public-bottom-nav :is(button, a),
+  .public-bottom-nav button,
   .bottom-nav-indicator,
   .bottom-create-btn i,
   .mobile-reading-progress {
@@ -3062,18 +3028,17 @@ usePublicPanelFocus(() => accountMenuOpen.value, accountPanel, () => { accountMe
   .public-nav-inner {
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 12px;
-    width: calc(100% - var(--space-6));
-    max-width: 100%;
+    max-width: calc(100% - 24px);
   }
-  .public-links { gap: var(--space-1); min-width: 0; font-size: var(--font-button); font-weight: var(--weight-label); }
-  .public-nav-link { padding: 0 10px; white-space: nowrap; min-height: var(--public-control-height); font-size: var(--font-button); font-weight: var(--weight-label); }
-  .public-actions { min-width: 0; gap: var(--space-2); }
+  .public-links { gap: 2px; min-width: 0; }
+  .public-nav-link { padding: 0 10px; white-space: nowrap; }
+  .public-actions { min-width: 0; gap: 6px; }
   .public-profile-nav { min-width: 0; }
-  .public-account-btn { max-width: 150px; min-height: var(--public-control-height); font-size: var(--font-button); font-weight: var(--weight-label); }
+  .public-account-btn { max-width: 150px; }
   .public-account-btn > i, .public-icon, .account-btn-avatar { flex-shrink: 0; }
 }
 @media (min-width: 860px) and (max-width: 960px) {
-  .public-brand span { display: none; font-size: var(--font-caption); font-weight: var(--weight-heading); line-height: var(--line-heading); }
+  .public-brand span { display: none; }
 }
-@media(min-width:1201px) { .public-nav-inner { width:var(--public-content-width); max-width:100%; margin-inline:auto; grid-template-columns:minmax(140px,1fr) auto minmax(140px,1fr); gap:12px; } }
+@media(min-width:860px) { .public-nav-inner { width:var(--public-content-width); max-width:100%; margin-inline:auto; grid-template-columns:minmax(140px,1fr) auto minmax(140px,1fr); gap:12px; } }
 </style>

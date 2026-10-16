@@ -2,14 +2,7 @@
   command = "npm run build"
   publish = "dist"
 
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
-  external_node_modules = ["firebase-admin"]
-
 [build.environment]
-  NODE_VERSION = "22"
-  # Firebase project identifiers are public; the private Admin credential remains scanned.
   SECRETS_SCAN_OMIT_KEYS = "GALAXIA_FIREBASE_PROJECT,VITE_YOUTUBE_CHANNEL_ID,VITE_YOUTUBE_API_KEY,VITE_SOCKET_URL,VITE_YOUTUBE_HANDLE,IGDB_CLIENT_ID,IGDB_CLIENT_SECRET,TWITCH_CLIENT_ID,TWITCH_CLIENT_SECRET"
   VITE_SITE_URL = "https://galaxianintendera.com"
 

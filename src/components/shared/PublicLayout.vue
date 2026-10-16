@@ -1,10 +1,8 @@
 <script setup>
-import {communitySnapshot} from '@/services/community'
-
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-
-
+import { collection, getDocs } from 'firebase/firestore'
+import { db } from '@/firebase'
 import DirectChatBubble from '@/components/widgets/chat/DirectChatBubble.vue'
 import GalaxiaHub from '@/components/shared/GalaxiaHub.vue'
 import PublicNavbar from '@/components/nav/PublicNavbar.vue'
@@ -77,7 +75,7 @@ const toggleFavoriteCommunity = (community) => {
 }
 
 const loadCommunities = async () => {
-  const snap = await communitySnapshot('communities',{}).catch(() => ({ docs: [] }))
+  const snap = await getDocs(collection(db, 'communities')).catch(() => ({ docs: [] }))
   const savedCommunities = snap.docs.map(item => ({ id: item.id, membersCount: 0, ...item.data() }))
   const savedOfficial = savedCommunities.find(item => item.id === OFFICIAL_COMMUNITY_ID)
   communities.value = [

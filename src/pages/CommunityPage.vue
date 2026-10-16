@@ -1,11 +1,9 @@
 <script setup>
-import {getProfileSnapshot} from '@/services/profiles'
-
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { onAuthStateChanged } from 'firebase/auth'
-
-import { auth } from '@/firebase'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '@/firebase'
 import CommunityPanel from '@/components/community/CommunityPanel.vue'
 import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
 import CommunitiesPage from '@/pages/CommunitiesPage.vue'
@@ -26,7 +24,7 @@ const loadRole = async (user) => {
   currentRole.value = 'user'
   if (!user) return
 
-  const snap = await getProfileSnapshot(user.uid)
+  const snap = await getDoc(doc(db, 'users', user.uid))
   const profile = snap.data() || {}
   currentRole.value = profile.isBlocked ? 'user' : (profile.role || 'user')
 }
@@ -50,7 +48,7 @@ onUnmounted(() => {
 <template>
   <div>
     <Transition name="community-content" appear>
-      <main v-if="!isCheckingAuth" class="community-member-page social-page">
+      <main v-if="!isCheckingAuth" class="community-member-page">
         <FloatingBackButton />
         <CommunityPanel :user-role="currentRole" :initial-community-id="selectedCommunityId" :show-rail="false" />
         <CommunitiesPage v-if="!selectedCommunityId || selectedCommunityId === OFFICIAL_COMMUNITY_ID" embedded />

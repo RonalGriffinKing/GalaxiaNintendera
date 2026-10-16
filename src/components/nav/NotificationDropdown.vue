@@ -1,11 +1,8 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import './NotificationDropdown.css'
-import { notificationPosition } from './notificationPosition'
-import { usePublicPanelFocus } from '@/composables/usePublicPanelFocus'
 
 const props = defineProps({
-  panelId: { type: String, default: undefined },
   open: {
     type: Boolean,
     default: false
@@ -34,9 +31,6 @@ const props = defineProps({
 
 const emit = defineEmits(['clear', 'open-notification', 'close'])
 
-const panel = ref(null)
-usePublicPanelFocus(() => props.open, panel, () => emit('close'), { trap: () => true, initial: '.notification-dropdown-close' })
-
 const position = ref({
   top: '78px',
   left: 'auto',
@@ -57,12 +51,39 @@ const panelStyle = computed(() => ({
 const updatePosition = () => {
   if (typeof window === 'undefined') return
 
-  const tokens = window.getComputedStyle(document.documentElement)
-  position.value = notificationPosition(window.innerWidth, window.innerHeight, props.anchorEl?.getBoundingClientRect?.(), {
-    margin: parseFloat(tokens.getPropertyValue('--space-4')) || 16,
-    gap: parseFloat(tokens.getPropertyValue('--space-2')) || 8,
-    controlHeight: parseFloat(tokens.getPropertyValue('--public-control-height')) || 44
-  })
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const isMobile = viewportWidth <= 859
+  const anchorRect = props.anchorEl?.getBoundingClientRect?.()
+  const top = Math.max(isMobile ? 88 : 72, (anchorRect?.bottom || 64) + 12)
+  const safeBottom = isMobile ? 106 : 18
+
+  if (isMobile) {
+    position.value = {
+      top: `${top}px`,
+      left: '50%',
+      right: 'auto',
+      width: '92vw',
+      maxHeight: `${Math.max(180, viewportHeight - top - safeBottom - 18)}px`,
+      align: 'left'
+    }
+    return
+  }
+
+  const width = 360
+  const margin = 18
+  const anchorRight = anchorRect ? viewportWidth - anchorRect.right : margin
+  const right = Math.max(margin, anchorRight)
+  const leftIfRightAligned = viewportWidth - right - width
+
+  position.value = {
+    top: `${top}px`,
+    left: leftIfRightAligned < margin ? `${margin}px` : 'auto',
+    right: leftIfRightAligned < margin ? 'auto' : `${right}px`,
+    width: `${width}px`,
+    maxHeight: `${Math.max(220, viewportHeight - top - safeBottom)}px`,
+    align: leftIfRightAligned < margin ? 'left' : 'right'
+  }
 }
 
 watch(() => props.open, async (open) => {
@@ -95,7 +116,6 @@ onUnmounted(() => {
         <button class="notification-dropdown-backdrop" type="button" aria-label="Cerrar notificaciones" @click="emit('close')"></button>
 
         <section
-          ref="panel" :id="panelId" tabindex="-1" role="region" aria-label="Notificaciones"
           class="notification-dropdown-card"
           :data-align="position.align"
           :style="panelStyle"
@@ -130,7 +150,6 @@ onUnmounted(() => {
               v-for="notification in notifications"
               :key="notification.id"
               class="notification-dropdown-row"
-              :aria-label="`${notification.read ? 'Leída' : 'No leída'}: ${notification.title || ''}. ${notification.message || ''}. ${formatDate(notification.createdAt)}`"
               :class="{ unread: !notification.read }"
               @click="emit('open-notification', notification)"
             >

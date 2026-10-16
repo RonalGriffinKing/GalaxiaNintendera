@@ -1,5 +1,4 @@
 <script setup>
-import { publicName } from '@/utils/publicIdentity'
 const videoChatDraft = defineModel('videoChatDraft', {
   type: String,
   default: ''
@@ -81,7 +80,7 @@ const emit = defineEmits([
 <template>
   <Teleport to="body">
     <Transition name="fade">
-      <section v-if="open" class="media-theater social-theater">
+      <section v-if="open" class="media-theater">
         <header>
           <strong>{{ youtubeStageTitle }}</strong>
           <button type="button" aria-label="Cerrar vista grande" @click="emit('close')">
@@ -125,9 +124,9 @@ const emit = defineEmits([
             <div class="video-chat-list">
               <article v-for="message in visibleVideoChatMessages" :key="`theater-${message.id}`">
                 <img v-if="message.authorImage" :src="message.authorImage" alt="" />
-                <span v-else>{{ avatarInitial(publicName(message.author)) }}</span>
+                <span v-else>{{ avatarInitial(message.author) }}</span>
                 <div>
-                  <p><strong>{{ publicName(message.author) }}</strong> <em>{{ formatVideoChatTime(message.videoSecond) }}</em></p>
+                  <p><strong>{{ message.author }}</strong> <em>{{ formatVideoChatTime(message.videoSecond) }}</em></p>
                   <b>{{ message.body }}</b>
                   <img
                     v-if="message.gif?.url"

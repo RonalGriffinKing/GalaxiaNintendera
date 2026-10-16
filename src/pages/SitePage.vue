@@ -22,8 +22,10 @@ const loadPage = async () => {
   loading.value = true
   error.value = ''
   const slug = String(route.params.slug || route.meta?.slug || '')
-  let found
-  try{found=await getSitePageBySlug(slug)}catch(err){page.value=null;error.value='No se pudo cargar la pagina. No se ha sustituido su contenido.';loading.value=false;return}
+  const found = await getSitePageBySlug(slug).catch((err) => {
+    console.error(err)
+    return null
+  })
   const fallback = getDefaultSitePageBySlug(slug)
   const resolved = found ? (found.status === 'published' ? found : null) : fallback
   if (!resolved) {

@@ -2,10 +2,6 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
-import AppNotice from '@/components/shared/AppNotice.vue'
-
-const editorialError=ref('')
-const onEditorialError=event=>{editorialError.value=event.detail}
 
 const router = useRouter()
 const isRouteLoading = ref(false)
@@ -52,7 +48,6 @@ const hideLoader = () => {
 }
 
 onMounted(() => {
-  window.addEventListener('editorial-error',onEditorialError)
   removeBeforeGuard = router.beforeEach((to, from) => {
     const isQueryOnlyNavigation = to.path === from.path
     const canUseFullScreenLoader = to.fullPath !== from.fullPath && !isQueryOnlyNavigation
@@ -74,7 +69,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('editorial-error',onEditorialError)
   clearShowTimer()
   clearHideTimer()
   removeBeforeGuard?.()
@@ -84,7 +78,6 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <AppNotice v-if="editorialError" type="error" :message="editorialError" />
   <router-view v-slot="{ Component, route }">
     <Transition name="route-page" mode="out-in">
       <component :is="Component" :key="route.matched[0]?.path || route.path" class="route-page-shell" />

@@ -1,8 +1,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-
-
-import { listSitePages } from '@/services/sitePages'
+import { collection, getDocs, query, where } from 'firebase/firestore'
+import { db } from '@/firebase'
+import { normalizeSitePage } from '@/services/sitePages'
 import PageBlockRenderer from '@/components/sitePages/PageBlockRenderer.vue'
 
 const props = defineProps({
@@ -14,7 +14,10 @@ const pages = ref([])
 const visibleBlocks = computed(() => pages.value.flatMap(page => (page.blocks || []).map(block => ({ page, block }))))
 
 onMounted(async () => {
-  pages.value = (await listSitePages()).filter(page=>page.showInHome)
+  const homeQuery = query(collection(db, 'sitePages'), where('showInHome', '==', true))
+  const snap = await getDocs(homeQuery).catch(() => ({ docs: [] }))
+  pages.value = snap.docs
+    .map(item => ({ id: item.id, ...normalizeSitePage(item.data()) }))
     .filter(page => page.status === 'published' && (!props.section || page.homeSection === props.section || props.section === 'custom'))
     .sort((a, b) => Number(a.homeOrder || 0) - Number(b.homeOrder || 0))
     .slice(0, props.limit)

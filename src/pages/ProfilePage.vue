@@ -1,19 +1,10 @@
 <script setup>
-import {communitySnapshot} from '@/services/community'
-
-import {editorialQueries} from '@/services/editorial'
-
-import {listProfileSnapshots,getProfileSnapshot} from '@/services/profiles'
-
-import { publicName } from '@/utils/publicIdentity'
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { onAuthStateChanged, updateProfile } from 'firebase/auth'
-import { collection, doc, getDocs, limit, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc, where, onSnapshot } from 'firebase/firestore'
 import { DEFAULT_GACHAPON_PRICES, validateGachaponPrices } from '@/components/profile/gachapon/prices'
 import { auth, db } from '@/firebase'
-import {isEditorialOwner} from "@/services/editorial";
-import {profileRequest,getProfile} from '@/services/profiles'
 import ProfileRewardsHub from '@/components/profile/ProfileRewardsHub.vue'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import ProfileAchievementsPanel from '@/components/profile/ProfileAchievementsPanel.vue'
@@ -25,7 +16,7 @@ import ProfileStatsPanel from '@/components/profile/ProfileStatsPanel.vue'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import ProfileFavoritesPreview from '@/components/shared/ProfileFavoritesPreview.vue'
 import { resolveAssetUrl } from '@/constants/assets'
-
+import { notifyNewFollower } from '@/services/notifications'
 import {
   ICON_COST,
   achievements,
@@ -42,16 +33,18 @@ const route = useRoute()
 const router = useRouter()
 const profile = ref(null)
 const gachaponPrices=ref({...DEFAULT_GACHAPON_PRICES})
-onMounted(async()=>{try{gachaponPrices.value=(await profileRequest('gachapon-prices')).prices}catch(error){message.value=error.message}})
+let unsubscribeGachaponPrices
+onMounted(()=>{unsubscribeGachaponPrices=onSnapshot(doc(db,'siteSettings','gachaponPrices'),snapshot=>{if(snapshot.exists()){try{gachaponPrices.value=validateGachaponPrices(snapshot.data())}catch{}}},()=>{})})
+onUnmounted(()=>unsubscribeGachaponPrices?.())
 async function saveGachaponPrices(value){
  if(!isAdminOwnProfile.value || !auth.currentUser)throw Error('Solo administradores.')
  const prices=validateGachaponPrices(value)
- await profileRequest('gachapon-prices-save',prices)
+ await setDoc(doc(db,'siteSettings','gachaponPrices'),{...prices,updatedAt:Date.now()})
  gachaponPrices.value=prices
 }
 const gachaponOpen = ref(false)
 const gachaponSaga = ref('all')
-const openGachapon = (saga = 'all') => {if(!isOwnProfile.value)return;gachaponSaga.value=saga;gachaponOpen.value=true}
+const openGachapon = (saga = 'all') => { if (!isOwnProfile.value) return; gachaponSaga.value = saga; gachaponOpen.value = true }
 const viewGachaponCollection = () => { gachaponOpen.value = false; openRewards('collection') }
 const mirrorSceneId = ref('')
 async function prepareGachaponMirror() {
@@ -151,9 +144,9 @@ const profileId = computed(() => String(route.params.uid || ''))
 const isOwnProfile = computed(() => viewerUid.value === profileId.value)
 const readCount = computed(() => Number(profile.value?.readPostsCount || 0))
 const stars = computed(() => Number(profile.value?.stars || 0))
-const unlockedIcons = computed(() => !isOwnProfile.value?(profile.value?.selectedIcon?[profile.value.selectedIcon]:[]):profile.value?.unlockedIcons?.length?profile.value.unlockedIcons:['kirby-01'])
-const isAdminOwnProfile = computed(() => isOwnProfile.value && (isEditorialOwner(auth.currentUser)))
-const displayStars = computed(() => isOwnProfile.value?stars.value:'?')
+const unlockedIcons = computed(() => profile.value?.unlockedIcons?.length ? profile.value.unlockedIcons : ['kirby-01'])
+const isAdminOwnProfile = computed(() => isOwnProfile.value && profile.value?.role === 'admin')
+const displayStars = computed(() => stars.value)
 const managedAchievements = ref([...achievements])
 const effectiveUnlockedIcons = computed(() => unlockedIcons.value)
 const profileIcon = computed(() => {
@@ -194,7 +187,7 @@ const achievementTypeMeta = (achievement) => achievementTypeMap[achievement?.typ
 const earnedAchievements = computed(() => managedAchievements.value.filter(item => achievementMetricValue(item) >= achievementTarget(item)))
 const nextAchievement = computed(() => managedAchievements.value.find(item => achievementMetricValue(item) < achievementTarget(item)) || managedAchievements.value[managedAchievements.value.length - 1] || achievements[0])
 const currentAchievement = computed(() => [...earnedAchievements.value].pop() || managedAchievements.value[0] || achievements[0])
-const canManageAchievements = computed(() => isEditorialOwner(auth.currentUser))
+const canManageAchievements = computed(() => viewerProfile.value.role === 'admin')
 const achievementRoadmap = computed(() => managedAchievements.value.map((achievement) => {
   const currentValue = achievementMetricValue(achievement)
   const target = achievementTarget(achievement)
@@ -370,8 +363,13 @@ const editAchievement = (achievement) => {
 }
 
 const saveAchievementsConfig = async (items = managedAchievements.value) => {
-  const result=await profileRequest('achievements-save',{items});managedAchievements.value=normalizeAchievements(result.items);return result.items
-  
+  const normalized = normalizeAchievements(items)
+  managedAchievements.value = normalized
+  await setDoc(doc(db, 'siteConfig', 'profileAchievements'), {
+    items: normalized,
+    updatedAt: Date.now(),
+    updatedBy: auth.currentUser?.uid || ''
+  }, { merge: true })
 }
 
 const saveAchievementDraft = async () => {
@@ -427,8 +425,6 @@ const applyProfileData = (userData = {}) => {
 }
 
 const loadProfile = async () => {
-  await auth.authStateReady();viewerUid.value=auth.currentUser?.uid||''
-  if(isRewardsPage.value&&!isOwnProfile.value){router.replace('/perfil/'+profileId.value);return}
   const requestId = ++profileLoadRequestId
   isLoading.value = true
   message.value = ''
@@ -446,37 +442,39 @@ const loadProfile = async () => {
   followingList.value = []
 
   try {
-    {
-      const item=await getProfile(profileId.value);if(requestId!==profileLoadRequestId)return
-      if(!item){profile.value=null;message.value='Perfil no disponible o no publicado.';return}
-      applyProfileData(item);message.value=item.reviewRequired?'Cuenta en solo lectura pendiente de revision; no se han cambiado tus datos.':'';await loadProfileExtras(requestId);return
+    const userSnap = await getDoc(doc(db, 'users', profileId.value))
+    if (requestId !== profileLoadRequestId) return
+
+    if (!userSnap.exists()) {
+      profile.value = null
+      return
     }
-    
-  } catch(error) {
-    {profile.value=null;message.value=error.message||'No se pudo cargar el perfil; no se confirma que no exista.'}
+
+    applyProfileData(userSnap.data())
+    await loadProfileExtras(requestId).catch(console.error)
   } finally {
     if (requestId === profileLoadRequestId) isLoading.value = false
   }
 }
 
 const loadProfileExtras = async (requestId) => {
-  const relations=await profileRequest('relations',{uid:profileId.value})
-  const snapshot=items=>({docs:items.map(item=>({id:item.id,data:()=>item,exists:()=>true}))})
   const [favoritesSnap, threadsSnap, postsSnap, usersSnap, communitiesSnap, followersSnap, followingSnap, followSnap, viewerSnap, uploadedIcons, achievementsSnap, readsSnap] = await Promise.all([
-    isOwnProfile.value?getDocs(query(collection(db, 'users', profileId.value, 'favorites'), limit(6))):Promise.resolve({docs:[]}),
-    communitySnapshot('threads',{limit:80}).catch(() => ({ docs: [] })),
-    editorialQueries.search().catch(() => ({ docs: [] })),
-    listProfileSnapshots().catch(() => ({ docs: [] })),
-    Promise.resolve(snapshot(relations.communities)),
-    Promise.resolve(snapshot(relations.followers)),
-    Promise.resolve(snapshot(relations.following)),
-    Promise.resolve({exists:()=>relations.followers.some(r=>r.id===auth.currentUser?.uid)}),
+    getDocs(query(collection(db, 'users', profileId.value, 'favorites'), limit(6))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'communityThreads'), limit(80))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'posts'), limit(120))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'users'), limit(120))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'users', profileId.value, 'communities'), limit(12))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'users', profileId.value, 'followers'), limit(500))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'users', profileId.value, 'following'), limit(500))).catch(() => ({ docs: [] })),
+    auth.currentUser && auth.currentUser.uid !== profileId.value
+      ? getDoc(doc(db, 'users', profileId.value, 'followers', auth.currentUser.uid)).catch(() => ({ exists: () => false }))
+      : Promise.resolve({ exists: () => false }),
     auth.currentUser
-      ? getProfileSnapshot(auth.currentUser.uid).catch(() => ({ exists: () => false, data: () => ({}) }))
+      ? getDoc(doc(db, 'users', auth.currentUser.uid)).catch(() => ({ exists: () => false, data: () => ({}) }))
       : Promise.resolve({ exists: () => false, data: () => ({}) }),
-    loadUploadedProfileIcons({ includeHidden: isAdminOwnProfile.value }).catch(() => []),
-    profileRequest('achievements').then(result=>({exists:()=>result.items!==null,data:()=>({items:result.items})})),
-    isOwnProfile.value?getDocs(query(collection(db, 'users', profileId.value, 'readPosts'), orderBy('readAt', 'desc'), limit(12))):Promise.resolve({docs:[]})
+    loadUploadedProfileIcons({ includeHidden: true }).catch(() => []),
+    getDoc(doc(db, 'siteConfig', 'profileAchievements')).catch(() => ({ exists: () => false, data: () => ({}) })),
+    getDocs(query(collection(db, 'users', profileId.value, 'readPosts'), orderBy('readAt', 'desc'), limit(12))).catch(() => ({ docs: [] }))
   ])
 
   if (requestId !== profileLoadRequestId || !profile.value) return
@@ -507,7 +505,7 @@ const loadProfileExtras = async (requestId) => {
     followingIds
   })
   const missingUserIds = [...connectedIds].filter(id => id && !usersById.has(id)).slice(0, 24)
-  const missingUserSnaps = await Promise.all(missingUserIds.map(id => getProfileSnapshot(id).catch(() => null)))
+  const missingUserSnaps = await Promise.all(missingUserIds.map(id => getDoc(doc(db, 'users', id)).catch(() => null)))
   missingUserSnaps.forEach((snap, index) => {
     if (snap?.exists?.()) {
       usersById.set(missingUserIds[index], { id: missingUserIds[index], ...snap.data() })
@@ -529,7 +527,7 @@ const loadProfileExtras = async (requestId) => {
   const postsById = new Map(postsSnap.docs.map(item => [item.id, { ...item.data(), id: item.id }]))
   const history = readsSnap.docs.map(item => ({ ...item.data(), postId: item.data().postId || item.id }))
   const missingPosts = [...new Set(history.map(item => item.postId))].filter(id => !postsById.has(id))
-  const historySnaps = await Promise.all(missingPosts.map(id => editorialQueries.article(id).catch(() => null)))
+  const historySnaps = await Promise.all(missingPosts.map(id => getDoc(doc(db, 'posts', id)).catch(() => null)))
   if (requestId !== profileLoadRequestId || !profile.value) return
   historySnaps.forEach(snap => {
     if (snap?.exists()) postsById.set(snap.id, { ...snap.data(), id: snap.id })
@@ -558,7 +556,7 @@ const relationFromDoc = (item, usersById) => {
 
   return {
     id,
-    name: publicName(data.name, liveProfile.name, liveProfile.displayName, liveProfile.username),
+    name: data.name || liveProfile.name || liveProfile.displayName || liveProfile.email || 'Usuario',
     username: liveProfile.username || '',
     email: liveProfile.email || '',
     role: liveProfile.role || data.role || 'user',
@@ -580,7 +578,7 @@ const isRealPublicProfile = (user) => {
 }
 
 const publicProfileName = (user) => {
-  return publicName(user.name, user.displayName, user.username)
+  return user.name || user.displayName || user.email?.split('@')[0] || 'Usuario'
 }
 
 const publicProfileRelationLabel = (user, followerIds, followingIds, interactionIds) => {
@@ -728,12 +726,63 @@ const resetUploadIconForm = () => {
 }
 
 const saveUploadedIcon = async () => {
- if(!isAdminOwnProfile.value||isUploadingIcon.value)return
- const icon=manageableProfileIcons.value.find(i=>i.id===editingIconId.value);if(!icon)return
- isUploadingIcon.value=true;uploadIconMessage.value=''
- try{const saved=await updateProfileIcon({id:icon.id,...uploadIconDraft.value,src:icon.src,sourcePath:icon.sourcePath});customIcons.value=[...customIcons.value.filter(i=>i.id!==icon.id),{...icon,...saved,src:icon.src}];if(profile.value?.selectedIcon===icon.id)await selectIcon(icon.id);iconUploadOpen.value=false;resetUploadIconForm();message.value='Icono actualizado.'}
- catch(error){uploadIconMessage.value=error.message||'No se pudo guardar el icono.'}
- finally{isUploadingIcon.value=false}
+  if (!isAdminOwnProfile.value || isUploadingIcon.value) return
+  const icon = manageableProfileIcons.value.find(item => item.id === editingIconId.value)
+  if (!icon) {
+    uploadIconMessage.value = 'Elige un icono local para gestionarlo.'
+    return
+  }
+
+  isUploadingIcon.value = true
+  uploadIconMessage.value = ''
+
+  try {
+    const saved = await updateProfileIcon({
+      iconId: icon.id,
+      name: uploadIconDraft.value.name,
+      saga: uploadIconDraft.value.saga,
+      rarity: uploadIconDraft.value.rarity,
+      cost: uploadIconDraft.value.cost,
+      visible: uploadIconDraft.value.visible,
+      special: uploadIconDraft.value.special,
+      effectColor: uploadIconDraft.value.effectColor,
+      sourcePath: icon.sourcePath,
+      src: icon.src
+    })
+    const updatedIcon = { ...icon, ...saved, src: icon.src, sourcePath: icon.sourcePath }
+    customIcons.value = customIcons.value.some(item => item.id === icon.id)
+      ? customIcons.value.map(item => (item.id === icon.id ? { ...item, ...updatedIcon } : item))
+      : [...customIcons.value, updatedIcon]
+    if (profile.value?.selectedIcon === icon.id) {
+      const selectedIconEffect = {
+        special: Boolean(updatedIcon.special),
+        effectColor: updatedIcon.effectColor || '#a855f7',
+        saga: iconSaga(updatedIcon)
+      }
+      await updateDoc(doc(db, 'users', profileId.value), {
+        selectedIconEffect,
+        updatedAt: Date.now()
+      })
+      profile.value = {
+        ...profile.value,
+        selectedIconEffect,
+        updatedAt: Date.now()
+      }
+      window.dispatchEvent(new CustomEvent('galaxy-profile-updated', {
+        detail: {
+          uid: profileId.value,
+          profile: profile.value
+        }
+      }))
+    }
+    iconUploadOpen.value = false
+    resetUploadIconForm()
+    message.value = saved.visible ? 'Icono visible para todo el mundo.' : 'Icono oculto para todo el mundo.'
+  } catch (error) {
+    uploadIconMessage.value = 'No se pudo guardar la ficha del icono.'
+  } finally {
+    isUploadingIcon.value = false
+  }
 }
 
 const saveProfile = async () => {
@@ -751,11 +800,15 @@ const saveProfile = async () => {
   editMessage.value = ''
 
   try {
-    await profileRequest('update',{name:cleanName,description:cleanDescription,socialLinks:cleanSocialLinks})
-    try {await updateProfile(user,{displayName:cleanName})} catch(authError) {
-      
-      editMessage.value='Perfil guardado; el nombre de Firebase Auth no pudo sincronizarse. Recarga antes de reintentar.'
-    }
+    await updateDoc(doc(db, 'users', profileId.value), {
+      name: cleanName,
+      description: cleanDescription,
+      socialLinks: cleanSocialLinks,
+      updatedAt: Date.now()
+    })
+    await updateProfile(user, {
+      displayName: cleanName
+    })
     profile.value = {
       ...profile.value,
       name: cleanName,
@@ -763,20 +816,61 @@ const saveProfile = async () => {
       socialLinks: cleanSocialLinks,
       updatedAt: Date.now()
     }
-    if(!editMessage.value)editMessage.value = 'Perfil actualizado.'
+    editMessage.value = 'Perfil actualizado.'
   } catch (error) {
-    editMessage.value = error.message||'No se guardaron cambios.'
+    editMessage.value = 'No se pudo guardar el perfil.'
   } finally {
     isSavingProfile.value = false
   }
 }
 
-const selectIcon = async iconId => {
- if(!isOwnProfile.value||isSavingIcon.value)return false
- isSavingIcon.value=true;message.value=''
- try{const equipped=await profileRequest('equip-icon',{iconId});profile.value={...profile.value,...equipped};pendingSelectedIcon.value=equipped.selectedIcon;window.dispatchEvent(new CustomEvent('galaxy-profile-updated',{detail:{uid:profileId.value,profile:profile.value}}));message.value='Icono actualizado.';return true}
- catch(error){message.value=error.message||'No se pudo equipar el icono.';return false}
- finally{isSavingIcon.value=false}
+const selectIcon = async (iconId) => {
+  if (!isOwnProfile.value || !effectiveUnlockedIcons.value.includes(iconId) || isSavingIcon.value) return
+
+
+  isSavingIcon.value = true
+  message.value = ''
+  const selectedCatalogIcon = allProfileIcons.value.find(icon => icon.id === iconId)
+  const selectedIconUrl = selectedCatalogIcon?.builtIn ? '' : selectedCatalogIcon?.src || ''
+  const selectedIconEffect = {
+    special: Boolean(selectedCatalogIcon?.special),
+    effectColor: selectedCatalogIcon?.effectColor || '#a855f7',
+    saga: iconSaga(selectedCatalogIcon || {})
+  }
+  const previousProfile = profile.value
+  const nextProfile = {
+    ...profile.value,
+    selectedIcon: iconId,
+    selectedIconUrl,
+    selectedIconEffect,
+    updatedAt: Date.now()
+  }
+  profile.value = nextProfile
+  pendingSelectedIcon.value = iconId
+  window.dispatchEvent(new CustomEvent('galaxy-profile-updated', {
+    detail: {
+      uid: profileId.value,
+      profile: nextProfile
+    }
+  }))
+
+  try {
+    await updateDoc(doc(db, 'users', profileId.value), {
+      selectedIcon: iconId,
+      selectedIconUrl,
+      selectedIconEffect,
+      updatedAt: Date.now()
+    })
+    message.value = 'Icono actualizado.'
+    return true
+  } catch (error) {
+    profile.value = previousProfile
+    pendingSelectedIcon.value = previousProfile?.selectedIcon || 'kirby-01'
+    message.value = 'No se pudo guardar el icono.'
+    return false
+  } finally {
+    isSavingIcon.value = false
+  }
 }
 
 const postPath = (postOrId) => {
@@ -795,12 +889,83 @@ const changeRecentPost = (direction) => {
 }
 
 const toggleFollow = async () => {
- if(!auth.currentUser){router.push('/login?mode=login');return}
- if(isOwnProfile.value||followBusy.value)return
- followBusy.value=true
- try{const result=await profileRequest('follow',{uid:profileId.value,following:!isFollowing.value});isFollowing.value=result.following;followersTotal.value=result.followersCount;await loadProfileExtras(profileLoadRequestId)}
- catch(error){message.value=error.message||'No se pudo cambiar el seguimiento.'}
- finally{followBusy.value=false}
+  const user = auth.currentUser
+  if (!user) {
+    router.push(`/login?redirect=${encodeURIComponent(route.fullPath)}`)
+    return
+  }
+  if (isOwnProfile.value || followBusy.value || !profile.value) return
+
+  followBusy.value = true
+  const now = Date.now()
+  const followerRef = doc(db, 'users', profileId.value, 'followers', user.uid)
+  const followingRef = doc(db, 'users', user.uid, 'following', profileId.value)
+
+  try {
+    if (isFollowing.value) {
+      await Promise.all([
+        deleteDoc(followerRef),
+        deleteDoc(followingRef),
+        updateDoc(doc(db, 'users', profileId.value), {
+          followersCount: increment(-1),
+          updatedAt: now
+        }).catch(() => {}),
+        updateDoc(doc(db, 'users', user.uid), {
+          followingCount: increment(-1),
+          updatedAt: now
+        }).catch(() => {})
+      ])
+      isFollowing.value = false
+      followersTotal.value = Math.max(0, followersTotal.value - 1)
+      followersList.value = followersList.value.filter(item => item.id !== user.uid)
+      return
+    }
+
+    await Promise.all([
+      setDoc(followerRef, {
+        userId: user.uid,
+        name: user.displayName || user.email || 'Usuario',
+        imageUrl: auth.currentUser?.photoURL || '',
+        followedAt: now
+      }),
+      setDoc(followingRef, {
+        userId: profileId.value,
+        name: profile.value.name || profile.value.email || 'Usuario',
+        imageUrl: profileIcon.value,
+        followedAt: now
+      }),
+      updateDoc(doc(db, 'users', profileId.value), {
+        followersCount: increment(1),
+        updatedAt: now
+      }).catch(() => {}),
+      updateDoc(doc(db, 'users', user.uid), {
+        followingCount: increment(1),
+        updatedAt: now
+      }).catch(() => {})
+    ])
+    await notifyNewFollower({
+      targetUserId: profileId.value,
+      actor: {
+        uid: user.uid,
+        name: user.displayName || user.email || 'Usuario'
+      }
+    })
+    isFollowing.value = true
+    followersTotal.value += 1
+    followersList.value = [
+      {
+        id: user.uid,
+        name: user.displayName || user.email || 'Usuario',
+        email: user.email || '',
+        role: 'user',
+        imageUrl: auth.currentUser?.photoURL || fallbackProfileIcon,
+        canChat: true
+      },
+      ...followersList.value.filter(item => item.id !== user.uid)
+    ]
+  } finally {
+    followBusy.value = false
+  }
 }
 
 const openRelationModal = (type) => {
@@ -868,7 +1033,7 @@ const openDirectMessage = () => {
 
 const shareProfile = async () => {
   const url = `${window.location.origin}/perfil/${profileId.value}`
-  const title = publicName(profile.value?.name, profile.value?.displayName, profile.value?.username, 'Perfil de Galaxia Nintendera')
+  const title = profile.value?.name || profile.value?.email || 'Perfil de Galaxia Nintendera'
   try {
     if (navigator.share) {
       await navigator.share({ title, url })
@@ -915,7 +1080,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="profile-page social-page" :class="{ 'profile-ready': !isLoading && profile }" :aria-busy="isLoading">
+  <main class="profile-page" :class="{ 'profile-ready': !isLoading && profile }" :aria-busy="isLoading">
     <section v-if="isLoading && isRewardsPage" class="rewards-loading" :class="{ 'loading-achievements': rewardsTab === 'achievements' }" role="status" aria-label="Cargando logros y recompensas">
       <span class="profile-loading-label">Cargando logros y recompensas…</span>
       <div class="rewards-loading-back" aria-hidden="true"></div>
@@ -935,11 +1100,11 @@ onUnmounted(() => {
       <div class="profile-loading-columns" aria-hidden="true"><div v-for="index in 3" :key="index"><span></span><span></span><span></span></div></div>
     </section>
     <div v-if="!isLoading && !profile" class="profile-empty">
-      {{ true && message ? message : 'Este perfil no existe.' }}
+      Este perfil no existe.
     </div>
 
     <template v-if="!isLoading && profile">
-      <ProfileRewardsHub v-if="isRewardsPage" :tab="rewardsTab" :profile="{ ...profile, name: publicName(profile.name, profile.displayName, profile.username, 'Perfil'), selectedIcon: pendingSelectedIcon || profile.selectedIcon }" :icons="allProfileIcons" :unlocked="effectiveUnlockedIcons" :stars="displayStars" :selection-reset="selectionReset" :own="isOwnProfile" :admin="isAdminOwnProfile" :busy="isSavingIcon" :cost="iconCost" :saga="iconSaga"
+      <ProfileRewardsHub v-if="isRewardsPage" :tab="rewardsTab" :profile="{ ...profile, selectedIcon: pendingSelectedIcon || profile.selectedIcon }" :icons="allProfileIcons" :unlocked="effectiveUnlockedIcons" :stars="displayStars" :selection-reset="selectionReset" :own="isOwnProfile" :admin="isAdminOwnProfile" :busy="isSavingIcon" :cost="iconCost" :saga="iconSaga"
         @tab="changeRewardsTab" @back="router.push({ name: 'profile', params: { uid: profileId } })" @equip="selectIcon" @gachapon="openGachapon" @manage-icon="openIconUpload">
         <template #achievements>      <ProfileAchievementsPanel
         v-model:draft="achievementDraft"
@@ -985,7 +1150,7 @@ onUnmounted(() => {
         :next-progress="achievementRoadmap.find(item => item.isNext || !item.unlocked)"
         :is-own-profile="isOwnProfile"
         :member-since="memberSince"
-        :redeemed-icon-count="isOwnProfile ? redeemedProfileIcons.length : '?'"
+        :redeemed-icon-count="redeemedProfileIcons.length"
         :visible-profile-icons="visibleProfileIcons"
         :social-items="socialItems"
         :display-stars="displayStars"
@@ -1070,11 +1235,11 @@ onUnmounted(() => {
             <ProfileAvatar
               class="directory-profile-avatar"
               :src="resolveProfileIcon(user)"
-              :alt="publicName(user.name, user.displayName, user.username)"
-              :label="publicName(user.name, user.displayName, user.username)"
+              :alt="user.name || user.email || 'Usuario'"
+              :label="user.name || user.email || 'Usuario'"
               :effect="user.iconMeta"
             />
-            <strong>{{ publicName(user.name, user.displayName, user.username) }}</strong>
+            <strong>{{ user.name || user.email || 'Usuario' }}</strong>
             <small>{{ user.relationLabel }}</small>
           </button>
         </div>

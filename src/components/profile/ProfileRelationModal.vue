@@ -1,5 +1,4 @@
 <script setup>
-import { publicName, publicText } from '@/utils/publicIdentity'
 import { fallbackProfileIcon } from '@/services/profileProgress'
 
 defineProps({
@@ -22,7 +21,7 @@ const emit = defineEmits(['close', 'open-profile', 'open-chat'])
 
 <template>
   <Teleport to="body">
-    <div class="profile-relation-modal social-relations">
+    <div class="profile-relation-modal">
       <button class="relation-backdrop" type="button" aria-label="Cerrar" @click="emit('close')"></button>
       <section class="relation-card">
         <div class="relation-head">
@@ -40,8 +39,8 @@ const emit = defineEmits(['close', 'open-profile', 'open-chat'])
             <button type="button" class="relation-profile" @click="emit('open-profile', user)">
               <img :src="user.imageUrl || fallbackProfileIcon" alt="" class="profile-icon-img" />
               <span>
-                <strong>{{ publicName(user.name, user.displayName, user.username) }}</strong>
-                <small>{{ publicText(user.username) ? `@${publicText(user.username)}` : user.role }}</small>
+                <strong>{{ user.name }}</strong>
+                <small>{{ user.username ? `@${user.username}` : user.role }}</small>
               </span>
             </button>
             <button type="button" class="relation-talk" @click="canUseDirectChat ? emit('open-chat', user) : emit('open-profile', user)">
