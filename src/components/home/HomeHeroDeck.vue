@@ -56,7 +56,6 @@ onUnmounted(()=>{clearTimeout(openTimer);motion?.removeEventListener('change',vi
    <div v-for="card in cards" :key="card.position" class="deck-slot" :style="card.theme" :class="['slot-'+card.position,{'is-opening':opening && card.position==='main'}]"><Transition name="deck-fade" type="transition"><article :key="card.slide.id" class="hero-deck-card" :class="['deck-'+card.position,{'is-analysis':isAnalysis(card.slide)}]" :style="card.theme" :inert="card.position==='hidden'" :aria-hidden="card.position==='hidden'" :aria-label="card.position==='main'?card.slide.title:undefined" @click="activate(card,$event)">
     <img class="deck-cover" :src="resolveAssetUrl(card.hero.image || card.slide.image,defaultBannerUrl)" :style="{objectPosition:card.hero.position}" alt="" :loading="card.position==='main'?'eager':'lazy'" :fetchpriority="card.position==='main'?'high':'auto'" decoding="async" />
     <div class="deck-shade"></div>
-    <div v-if="opening && card.position==='main'" class="deck-opening-ring" aria-hidden="true"></div>
     <FeaturedSheen v-if="card.position==='main'" :gold="isAnalysis(card.slide)" />
     <span class="deck-category">{{ card.slide.eyebrow }}</span>
     <div class="deck-copy">
@@ -90,11 +89,14 @@ onUnmounted(()=>{clearTimeout(openTimer);motion?.removeEventListener('change',vi
 .deck-read{display:flex;align-items:center;justify-content:center;gap:12px;min-height:44px;border:1px solid var(--visual-border,#b185ff66);border-radius:999px;background:var(--visual-button-background,#7024dc);color:var(--visual-button-text,#fff);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .is-analysis .deck-read{background:linear-gradient(110deg,#e8b923,#ffdf64);color:#211804;border-color:#ffda64}
 .deck-read>span{position:relative}
-.deck-opening-ring{position:absolute;inset:0;z-index:5;border-radius:inherit;padding:4px;background:linear-gradient(100deg,var(--visual-accent,#76dfff),#c7b3ff,#ff8bd4,#fff0ac,var(--visual-accent,#76dfff));background-size:300% 100%;-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask-composite:exclude;pointer-events:none;animation:deck-opening-colors .46s ease-out both}
-.slot-main.is-opening{border-radius:20px;animation:deck-opening-glow .46s ease-out both}
-@keyframes deck-opening-colors{from{background-position:0% 50%;opacity:.35}to{background-position:100% 50%;opacity:1}}
-@keyframes deck-opening-glow{0%{box-shadow:0 0 0 transparent}65%,100%{box-shadow:0 0 12px color-mix(in srgb,var(--visual-accent,#76dfff) 80%,transparent),0 0 30px #bc8aff80}}
-@media(prefers-reduced-motion:reduce){.deck-opening-ring,.slot-main.is-opening{animation:none}}
+.slot-main.is-opening .deck-main{animation:deck-opening-border .46s ease-out both}
+@keyframes deck-opening-border{
+ 0%{border-color:var(--visual-accent,#76dfff);box-shadow:0 12px 30px #0004}
+ 30%{border-color:#ff9edc;box-shadow:0 0 12px #ff9edc99,0 0 26px #bc8aff66}
+ 65%{border-color:#a8f3ff;box-shadow:0 0 14px #a8f3ffbb,0 0 30px #bc8aff80}
+ 100%{border-color:#e0c5ff;box-shadow:0 0 12px #e0c5ff99,0 0 26px #bc8aff66}
+}
+@media(prefers-reduced-motion:reduce){.slot-main.is-opening .deck-main{animation:none}}
 .deck-select{background:transparent;border:0;color:#d9c7ff;font:inherit;font-size:11px;text-align:left;padding:0;min-height:28px;cursor:pointer}
 .deck-previous .deck-copy,.deck-next .deck-copy{left:18px;right:18px}.deck-copy h1{min-height:3.45em}.deck-copy p{height:3.1em}
 .deck-controls{display:flex;align-items:center;justify-content:center;gap:4px;padding:10px 16px}.deck-controls button{width:36px;height:32px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;cursor:pointer}.deck-controls button span{width:26px;height:6px;border-radius:999px;background:#ffffff35}.deck-controls button[aria-current=true] span{background:linear-gradient(90deg,#7c3aed,#c084fc)}
