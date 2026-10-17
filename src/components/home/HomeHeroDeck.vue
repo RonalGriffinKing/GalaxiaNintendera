@@ -30,7 +30,7 @@ function openArticle(){
  emit('pause')
  if(motion?.matches){emit('read');return}
  opening.value=true
- openTimer=setTimeout(()=>{emit('read');opening.value=false},460)
+ openTimer=setTimeout(()=>{emit('read');opening.value=false},680)
 }
 function step(delta){if(props.slides.length>1)select((props.activeIndex+delta+props.slides.length)%props.slides.length)}
 function activate(card,event){
@@ -53,9 +53,13 @@ onUnmounted(()=>{clearTimeout(openTimer);motion?.removeEventListener('change',vi
 <template>
  <section ref="root" class="hero-deck" :class="{'is-single':slides.length===1,'is-pair':slides.length===2}" role="region" aria-label="Noticias destacadas" aria-roledescription="carrusel" @mouseenter="emit('pause')" @mouseleave="resume" @focusin="emit('pause')" @focusout="!root.contains($event.relatedTarget) && resume()" @keydown.left.prevent="step(-1)" @keydown.right.prevent="step(1)">
   <div class="hero-deck-scene" @touchstart.passive="touchStart" @touchend.passive="touchEnd" @touchcancel.passive="startTouch=null;resume()">
-   <div v-for="card in cards" :key="card.position" class="deck-slot" :style="card.theme" :class="['slot-'+card.position,{'is-opening':opening && card.position==='main'}]"><Transition name="deck-fade" type="transition"><article :key="card.slide.id" class="hero-deck-card" :class="['deck-'+card.position,{'is-analysis':isAnalysis(card.slide)}]" :style="card.theme" :inert="card.position==='hidden'" :aria-hidden="card.position==='hidden'" :aria-label="card.position==='main'?card.slide.title:undefined" @click="activate(card,$event)">
+   <div v-for="card in cards" :key="card.position" class="deck-slot" :style="card.theme" :class="'slot-'+card.position"><Transition name="deck-fade" type="transition"><article :key="card.slide.id" class="hero-deck-card" :class="['deck-'+card.position,{'is-analysis':isAnalysis(card.slide)}]" :style="card.theme" :inert="card.position==='hidden'" :aria-hidden="card.position==='hidden'" :aria-label="card.position==='main'?card.slide.title:undefined" @click="activate(card,$event)">
     <img class="deck-cover" :src="resolveAssetUrl(card.hero.image || card.slide.image,defaultBannerUrl)" :style="{objectPosition:card.hero.position}" alt="" :loading="card.position==='main'?'eager':'lazy'" :fetchpriority="card.position==='main'?'high':'auto'" decoding="async" />
     <div class="deck-shade"></div>
+    <div v-if="opening && card.position==='main'" class="deck-aurora" aria-hidden="true">
+     <i v-for="n in 8" :key="n" class="aurora-star" :style="{'--star':n}">&#10022;</i>
+     <div class="aurora-message"><span>&#10023;</span><strong>La magia comienza...</strong><small>GALAXIA NINTENDERA</small></div>
+    </div>
     <FeaturedSheen v-if="card.position==='main'" :gold="isAnalysis(card.slide)" />
     <span class="deck-category">{{ card.slide.eyebrow }}</span>
     <div class="deck-copy">
@@ -89,14 +93,17 @@ onUnmounted(()=>{clearTimeout(openTimer);motion?.removeEventListener('change',vi
 .deck-read{display:flex;align-items:center;justify-content:center;gap:12px;min-height:44px;border:1px solid var(--visual-border,#b185ff66);border-radius:999px;background:var(--visual-button-background,#7024dc);color:var(--visual-button-text,#fff);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .is-analysis .deck-read{background:linear-gradient(110deg,#e8b923,#ffdf64);color:#211804;border-color:#ffda64}
 .deck-read>span{position:relative}
-.slot-main.is-opening .deck-main{animation:deck-opening-border .46s ease-out both}
-@keyframes deck-opening-border{
- 0%{border-color:var(--visual-accent,#76dfff);box-shadow:0 12px 30px #0004}
- 30%{border-color:#ff9edc;box-shadow:0 0 12px #ff9edc99,0 0 26px #bc8aff66}
- 65%{border-color:#a8f3ff;box-shadow:0 0 14px #a8f3ffbb,0 0 30px #bc8aff80}
- 100%{border-color:#e0c5ff;box-shadow:0 0 12px #e0c5ff99,0 0 26px #bc8aff66}
-}
-@media(prefers-reduced-motion:reduce){.slot-main.is-opening .deck-main{animation:none}}
+.deck-aurora{position:absolute;inset:0;z-index:6;border-radius:inherit;overflow:hidden;pointer-events:none;background:radial-gradient(ellipse at 18% 80%,#3456ffcc,transparent 65%),radial-gradient(ellipse at 80% 30%,#28e2efdd,transparent 60%),linear-gradient(125deg,#152951ee,#7428dbee 40%,#ec3aaadd 65%,#128eacfa);animation:deck-aurora-reveal .68s cubic-bezier(.2,.7,.25,1) both}
+.deck-aurora::before{content:'';position:absolute;inset:-60%;background:linear-gradient(125deg,transparent 35%,#89edff44 44%,#fff9 48%,#edb5ff66 51%,transparent 61%);transform:translateX(-35%) rotate(-15deg);animation:deck-aurora-flow .68s ease-out both}
+.aurora-message{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;text-align:center;text-shadow:0 2px 12px #34175d66;animation:deck-aurora-message .68s ease-out both}
+.aurora-message>span{font-size:36px;line-height:1}.aurora-message strong{font-size:18px;font-weight:700}.aurora-message small{font-size:10px;letter-spacing:.08em}
+.aurora-star{position:absolute;left:calc(8% + var(--star)*10%);top:56%;font-style:normal;font-size:16px;color:#fff;text-shadow:0 0 10px #c6faff;animation:deck-aurora-spark .68s ease-out both}
+.aurora-star:nth-child(even){top:24%;font-size:11px}.aurora-star:nth-child(3n){top:77%;font-size:20px}
+@keyframes deck-aurora-reveal{0%{clip-path:circle(0% at 50% 50%);opacity:0}20%{opacity:.65}70%,100%{clip-path:circle(85% at 50% 50%);opacity:1}}
+@keyframes deck-aurora-flow{to{transform:translateX(35%) rotate(-15deg)}}
+@keyframes deck-aurora-message{0%,40%{opacity:0;transform:translateY(6px)}85%,100%{opacity:1;transform:translateY(0)}}
+@keyframes deck-aurora-spark{0%,25%{opacity:0;transform:scale(.3)}70%{opacity:1;transform:scale(1.15)}100%{opacity:.8;transform:scale(1)}}
+@media(prefers-reduced-motion:reduce){.deck-aurora,.deck-aurora::before,.aurora-message,.aurora-star{animation:none}}
 .deck-select{background:transparent;border:0;color:#d9c7ff;font:inherit;font-size:11px;text-align:left;padding:0;min-height:28px;cursor:pointer}
 .deck-previous .deck-copy,.deck-next .deck-copy{left:18px;right:18px}.deck-copy h1{min-height:3.45em}.deck-copy p{height:3.1em}
 .deck-controls{display:flex;align-items:center;justify-content:center;gap:4px;padding:10px 16px}.deck-controls button{width:36px;height:32px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;cursor:pointer}.deck-controls button span{width:26px;height:6px;border-radius:999px;background:#ffffff35}.deck-controls button[aria-current=true] span{background:linear-gradient(90deg,#7c3aed,#c084fc)}
