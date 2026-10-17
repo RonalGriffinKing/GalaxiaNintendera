@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { managementDestination } from '@/services/managementNavigation'
 import Home from '@/pages/Home2Page.vue'
 import PublicLayout from '@/components/shared/PublicLayout.vue'
 import Editor from '@/pages/OverlayEditorPage.vue'
@@ -118,8 +119,7 @@ const routes = [
       },
       {
         path: 'admin/posts',
-        component: () => import('@/pages/WorkspacePage.vue'),
-        props: { panel: 'posts' },
+        redirect: to => managementDestination('posts', to.query),
         meta: { publisherOnly: true, workspace: true }
       },
       {
@@ -129,14 +129,12 @@ const routes = [
       },
       {
         path: 'admin/users',
-        component: () => import('@/pages/WorkspacePage.vue'),
-        props: { panel: 'users' },
+        redirect: to => managementDestination('users', to.query),
         meta: { adminOnly: true, workspace: true }
       },
       {
         path: 'admin/overlays',
-        component: () => import('@/pages/WorkspacePage.vue'),
-        props: { panel: 'overlays' },
+        redirect: to => managementDestination('overlays', to.query),
         meta: { adminOnly: true, workspace: true }
       }
     ]
@@ -235,12 +233,6 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if (to.path === '/admin/posts' && to.query.section === 'themes') {
-    return {path:'/admin/dashboard',query:{view:'themes'}}
-  }
-  if (to.path === '/admin/posts' && ['post', 'post-json', 'hero'].includes(to.query.create)) {
-    return { name:'post-create', query:to.query.create==='post-json' ? {json:'1'} : to.query.create==='hero' ? {mode:'hero'} : {} }
-  }
   return true
 })
 

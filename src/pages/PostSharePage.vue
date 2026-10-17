@@ -1145,7 +1145,7 @@ function slugify(value) {
       </div>
 
       <div class="share-toolbar-actions">
-        <button type="button" class="share-secondary" @click="router.push('/admin/posts')">
+        <button type="button" class="share-secondary" @click="router.push('/admin/dashboard?view=posts')">
           <i class="fas fa-arrow-left"></i>
           Volver
         </button>

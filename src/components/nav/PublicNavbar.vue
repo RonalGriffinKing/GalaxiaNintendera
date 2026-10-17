@@ -178,14 +178,14 @@ const manageOptions = computed(() => {
   if (canPublish.value) {
     options.push(
       { label: 'Gestor global', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' },
-      { label: 'Ver posts', icon: 'fas fa-newspaper', to: '/admin/posts' }
+      { label: 'Ver posts', icon: 'fas fa-newspaper', to: '/admin/dashboard?view=posts' }
     )
   }
 
   if (isAdmin.value) {
     options.push(
-      { label: 'Ver usuarios', icon: 'fas fa-users', to: '/admin/users' },
-      { label: 'Ver overlays', icon: 'fas fa-layer-group', to: '/admin/overlays' }
+      { label: 'Ver usuarios', icon: 'fas fa-users', to: '/admin/dashboard?view=users' },
+      { label: 'Ver overlays', icon: 'fas fa-layer-group', to: '/admin/dashboard?view=overlays' }
     )
   }
 
@@ -206,14 +206,14 @@ const accountAdminItems = computed(() => {
     items.push(
       { label: 'Gestor global', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' },
       { label: 'Crear post', icon: 'fas fa-pen-nib', action: 'post' },
-      { label: 'Crear pagina', icon: 'fas fa-file-circle-plus', to: '/admin/posts?section=pages&create=page' },
+      { label: 'Crear pagina', icon: 'fas fa-file-circle-plus', to: '/admin/dashboard?view=pages&create=page' },
       { label: 'Crear usuario', icon: 'fas fa-user-gear', action: 'user' },
-      { label: 'Crear overlay', icon: 'fas fa-layer-group', to: '/admin/overlays?create=overlay' }
+      { label: 'Crear overlay', icon: 'fas fa-layer-group', to: '/admin/dashboard?view=overlays&create=overlay' }
     )
   } else if (canPublish.value) {
     items.push(
       { label: 'Crear post', icon: 'fas fa-pen-nib', action: 'post' },
-      { label: 'Mis publicaciones', icon: 'far fa-newspaper', to: '/admin/posts' }
+      { label: 'Mis publicaciones', icon: 'far fa-newspaper', to: '/admin/dashboard?view=posts' }
     )
   }
 

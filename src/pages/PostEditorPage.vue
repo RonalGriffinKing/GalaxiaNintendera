@@ -49,7 +49,7 @@ async function loadEditor() {
 function backToPosts() {
  if (leaving.value) return
  leaving.value=true
- router.push('/admin/posts')
+ router.push('/admin/dashboard?view=posts')
 }
 watch(()=>[route.params.id,route.query.mode,route.query.json],loadEditor,{immediate:true})
 onMounted(()=>document.body.classList.add('post-editor-route-open'))
@@ -59,7 +59,7 @@ onUnmounted(()=>{requestId++;document.body.classList.remove('post-editor-route-o
 <template>
  <main class="post-editor-route-shell workspace-page">
   <section v-if="loading" class="editor-route-state" role="status"><span class="editor-route-spinner" aria-hidden="true"></span><h1>Abriendo editor…</h1><p>Preparando tu publicación.</p></section>
-  <section v-else-if="error" class="editor-route-state" role="alert"><h1>No se pudo abrir el editor</h1><p>{{ error }}</p><div><button type="button" @click="loadEditor">Reintentar</button><button type="button" @click="backToPosts">Volver a publicaciones</button></div></section>
+  <section v-else-if="error" class="editor-route-state" role="alert"><h1>No se pudo abrir el editor</h1><p>{{ error }}</p><div><button type="button" @click="loadEditor">Reintentar</button><button type="button" @click="backToPosts">Volver al Gestor Global</button></div></section>
   <PostEditor v-else :key="editorKey" :edit-data="post" :mode="mode" :category-options="categories" :paste-json-on-open="route.query.json==='1'" @close="backToPosts" @created="backToPosts" />
  </main>
 </template>
