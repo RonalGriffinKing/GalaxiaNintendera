@@ -72,6 +72,7 @@
             </button>
 
             <div v-show="isAccordionOpen('main')" class="accordion-body">
+              <section class="editor-info-group"><h3 class="info-group-title">Contenido</h3>
               <label class="field-group featured-field">
                 <span>Titulo del post</span>
                 <div class="input-shell">
@@ -120,9 +121,10 @@
                 </div>
               </div>
 
-              <div class="cover-tool">
+              </section>
+              <section class="editor-info-group cover-tool">
                 <div class="field-row">
-                  <span>Portada del post</span>
+                  <h3 class="info-group-title">Portada</h3>
                   <small>{{ post.image ? mediaLabel(postCoverMedia) : 'Pendiente' }}</small>
                 </div>
                 <div class="cover-preview-card" :class="{ empty: !post.image }">
@@ -139,23 +141,24 @@
                     <img v-else :src="postCoverMedia.url" alt="Portada del post" />
                   </template>
                   <span v-else><i class="far fa-image"></i></span>
-                  <button v-if="!isHeroMode" type="button" @click="openImagePicker('cover')">
-                    <i class="fas fa-images"></i>
-                    Cambiar media
-                  </button>
+
                 </div>
                 <div class="cover-actions">
                   <button v-if="!isHeroMode" type="button" @click="openImagePicker('cover')">
                     <i class="far fa-images"></i>
-                    Buscar en IGDB
+                    Elegir imagen
                   </button>
                   <div class="cover-url-control">
                     <ClipboardUrlField v-model="post.image" label="Portada del post" />
                   </div>
                 </div>
-              </div>
-              <label v-if="!isHeroMode" class="home-pin-option"><input type="checkbox" :checked="post.homePinned !== false" @change="post.homePinned = $event.target.checked; post.homePinnedAt = Date.now()" /> Pinear en el carrusel de Inicio al publicarse <small>Hasta seis publicaciones. Puedes quitar el pin desde el gestor.</small></label>
-              <details class="hero-media-settings"><summary>Hero de Inicio: imagen, logo y galería</summary><p>Opcional. Usa una imagen horizontal y un logo transparente. Si no añades imagen, se usará la portada del post.</p><div class="field-group"><span>Imagen del hero (URL)</span><ClipboardUrlField v-model="post.hero.image" label="Imagen del hero" /></div><div class="field-group"><span>Logo del juego (URL)</span><ClipboardUrlField v-model="post.hero.logoUrl" label="Logo del juego" /></div><label class="field-group"><span>Encuadre de la portada</span><select v-model="post.hero.position"><option value="center top">Arriba</option><option value="center center">Centro</option><option value="center bottom">Abajo</option><option value="left top">Izquierda, arriba</option><option value="right top">Derecha, arriba</option></select></label><div class="field-group"><span>Galería: una URL por línea</span><ClipboardUrlField :model-value="post.hero.images.map(item=>item.url).join('\n')" label="Galería del hero" multiple @update:model-value="value => post.hero.images = value.split('\n').filter(Boolean).map(url => post.hero.images.find(item=>item.url===url) || {url,alt:'',position:'center top'})" /></div></details>
+              <p class="info-group-help">Elige una imagen de la biblioteca o pega el enlace de tu portada.</p>
+              </section>
+              <section v-if="!isHeroMode" class="editor-info-group"><h3 class="info-group-title">Apariencia</h3><p class="info-group-help">Colores y estilo de la noticia.</p><VisualThemeSelector v-model="post.visualThemeId" /></section>
+              <section v-if="!isHeroMode" class="editor-info-group"><h3 class="info-group-title">En la portada de la web</h3>
+              <label v-if="!isHeroMode" class="home-pin-option"><input type="checkbox" :checked="post.homePinned !== false" @change="post.homePinned = $event.target.checked; post.homePinnedAt = Date.now()" /> Destacar en el carrusel de Inicio <small>Hasta seis publicaciones. Puedes quitar el pin desde el gestor.</small></label>
+              <details class="hero-media-settings"><summary>Personalizar imagen y galería de Inicio</summary><p>Opcional. Usa una imagen horizontal y un logo transparente. Si no añades imagen, se usará la portada del post.</p><div class="field-group"><span>Imagen del hero (URL)</span><ClipboardUrlField v-model="post.hero.image" label="Imagen del hero" /></div><div class="field-group"><span>Logo del juego (URL)</span><ClipboardUrlField v-model="post.hero.logoUrl" label="Logo del juego" /></div><label class="field-group"><span>Encuadre de la imagen (Inicio y noticia)</span><select v-model="post.hero.position"><option value="center top">Arriba</option><option value="center center">Centro</option><option value="center bottom">Abajo</option><option value="left top">Izquierda, arriba</option><option value="right top">Derecha, arriba</option></select></label><div class="field-group"><span>Galería: una URL por línea</span><ClipboardUrlField :model-value="post.hero.images.map(item=>item.url).join('\n')" label="Galería del hero" multiple @update:model-value="value => post.hero.images = value.split('\n').filter(Boolean).map(url => post.hero.images.find(item=>item.url===url) || {url,alt:'',position:'center top'})" /></div></details>
+              </section>
 
             </div>
           </article>
@@ -178,7 +181,7 @@
               <div class="analysis-editor">
                 <div class="analysis-editor-head">
                   <div>
-                    <span>Score del juego</span>
+                    <span>Valoración por estrellas</span>
                     <h3>Nota del analisis</h3>
                   </div>
                 </div>
@@ -196,12 +199,10 @@
                 </div>
 
                 <div class="analysis-criteria-grid">
-                  <label v-for="item in post.analysis.criteria" :key="item.key">
-                    {{ item.label }}
-                    <input v-model.number="item.score" type="number" min="0" max="10" step="0.5" />
-                  </label>
+                  <CriterionStarPicker v-for="item in post.analysis.criteria" :key="item.key" v-model="item.score" :label="item.label" />
                 </div>
 
+                <p class="analysis-save-hint">Toca de 1 a 10 estrellas por criterio. La nota final es la media convertida a 100. La vista previa cambia al editar; los cambios no se guardan automáticamente.</p>
                 <div class="analysis-pros-cons">
                   <label>
                     Lo mejor
@@ -212,6 +213,7 @@
                     <textarea v-model="post.analysis.consText" placeholder="Un punto por linea" />
                   </label>
                 </div>
+                <div class="analysis-save-row"><span>Guarda la nota junto con los demás cambios de la publicación.</span><button type="button" :disabled="loading" @click="savePost('draft')">{{ loading ? 'Guardando…' : (editData ? 'Guardar cambios' : 'Guardar borrador') }}</button></div>
               </div>
             </div>
           </article>
@@ -364,6 +366,11 @@
                   <input v-model="post.game.releaseDate" type="date" />
                 </label>
               </div>
+              <div class="field-grid-2">
+                <label class="field-group"><span>Desarrolladora</span><input v-model="post.game.developer" placeholder="Nombre del estudio" /></label>
+                <label class="field-group"><span>Géneros</span><input :value="(post.game.genres || []).join(', ')" @change="post.game.genres=$event.target.value.split(',').map(value=>value.trim()).filter(Boolean)" placeholder="RPG, Simulación" /></label>
+              </div>
+              <div class="field-group"><span>Carátula del juego</span><ClipboardUrlField v-model="post.game.cover" label="Carátula del juego" /></div>
               <label class="field-group">
                 <span>Nota del lanzamiento</span>
                 <input v-model="post.game.releaseNote" placeholder="Nintendo Switch 2 pendiente de anuncio oficial" />
@@ -474,7 +481,8 @@
                 </div>
 
                 <template v-if="activeSectionIndex === index">
-                  <input v-model="section.title" placeholder="Subtitulo de la seccion" />
+                  <input v-model="section.title" class="section-title-input" aria-label="Título de la sección" placeholder="Subtitulo de la seccion" />
+                  <input v-model="section.navLabel" maxlength="42" aria-label="Nombre corto en la navegación" placeholder="Nombre corto para navegar: Historia, Jugabilidad…" />
                   <div class="writing-toolbar" aria-label="Herramientas de redaccion">
                     <button type="button" title="Negrita" @click.stop="applySectionFormat(index, 'bold')"><i class="fas fa-bold"></i></button>
                     <button type="button" title="Cursiva" @click.stop="applySectionFormat(index, 'italic')"><i class="fas fa-italic"></i></button>
@@ -545,6 +553,7 @@
 
           <article
             class="post-live-preview"
+            :style="previewThemeStyle"
             :class="[
               { analysis: isAnalysisPost },
               isAnalysisPost ? `analysis-tier-${analysisTier.key}` : '',
@@ -552,6 +561,8 @@
             ]"
           >
             <PostCinematicHero
+              :editorial="true"
+              :show-actions="false"
               :post="{ ...post, authorName: 'Galaxia Nintendera' }"
               :is-analysis="isAnalysisPost"
               :analysis-score="analysisScore"
@@ -561,7 +572,11 @@
               :device="previewDevice"
             />
 
-            <section v-for="(section, index) in visibleSections" :key="index" class="preview-section">
+            <div class="editorial-preview-layout">
+            <main class="editorial-preview-article">
+             <nav class="preview-reader-tabs" aria-label="Apartados de la vista previa"><button type="button" :aria-pressed="previewSection === -1" @click="previewSection=-1">{{isAnalysisPost?'Análisis':'Noticia'}}</button><button v-for="(section,index) in visibleSections" :key="index" type="button" :aria-pressed="previewSection === index" @click="previewSection=index">{{sectionNavLabel(section,index)}}</button></nav>
+             <div v-if="previewSection === -1" class="preview-introduction" v-html="richText(post.content)"></div>
+            <section v-for="(section, index) in previewSections" :key="index" class="preview-section">
               <h2>{{ section.title || `Seccion ${index + 1}` }}</h2>
               <div v-if="section.image" class="preview-section-media">
                 <iframe
@@ -579,16 +594,10 @@
               <div class="preview-section-copy rich-content" v-html="richText(section.content || 'El contenido de esta seccion se vera aqui cuando lo escribas.')"></div>
             </section>
 
-            <div v-if="isAnalysisPost" class="preview-score-card">
-              <strong>{{ analysisScore }}</strong>
-              <span>{{ scoreLabel }}</span>
-              <div>
-                <small v-for="item in post.analysis.criteria" :key="item.key">
-                  {{ item.label }}
-                  <b>{{ item.score }}</b>
-                </small>
-              </div>
+            </main>
+            <aside class="editorial-preview-sidebar"><ReaderActions read-badge-text="Visto" :preview="true" /><AnalysisRatingCard v-if="isAnalysisPost" :analysis="post.analysis" :tier="analysisTier" /><GameInfoCard :game="post.game" /></aside>
             </div>
+
           </article>
         </aside>
       </main>
@@ -617,14 +626,14 @@
       <Transition name="fade">
         <div v-if="imagePickerOpen" class="image-picker-modal">
           <button class="image-picker-backdrop" type="button" @click="imagePickerOpen = false"></button>
-          <section class="image-picker-panel">
+          <section class="image-picker-panel" role="dialog" aria-modal="true" aria-labelledby="image-picker-title">
             <header>
               <div>
                 <span>BUSCADOR DE JUEGOS</span>
-                <h2>Escoger imagenes del juego</h2>
+                <h2 id="image-picker-title">Elegir imágenes del juego</h2>
                 <p>Escribe parte del nombre y el buscador mostrara juegos relacionados, portadas, capturas y artes.</p>
               </div>
-              <button type="button" @click="imagePickerOpen = false"><i class="fas fa-xmark"></i></button>
+              <button type="button" aria-label="Cerrar explorador de imágenes" @click="imagePickerOpen = false"><i class="fas fa-xmark"></i></button>
             </header>
 
             <form class="igdb-search-row" @submit.prevent="searchIgdbImages">
@@ -713,7 +722,7 @@
                     :class="{ active: activeIgdbImage?.id === image.id, assigned: assignedLabel(image.url) }"
                     @click="selectedIgdbImage = image"
                   >
-                    <img :src="image.url" :alt="`${image.gameName || 'Juego'} - ${image.typeLabel}`" />
+                    <img :src="image.url" :alt="`${image.gameName || 'Juego'} - ${image.typeLabel}`" loading="lazy" decoding="async" />
                     <span><i class="far fa-image"></i>{{ image.typeLabel }}</span>
                     <em v-if="assignedLabel(image.url)" :title="`Asignada a ${assignedLabel(image.url)}`"><i class="fas fa-check"></i></em>
                   </button>
@@ -749,8 +758,19 @@
 
 <script setup>
 import ClipboardUrlField from '@/components/posts/ClipboardUrlField.vue'
+import VisualThemeSelector from '@/components/posts/VisualThemeSelector.vue'
+import { clearPublicPageCache } from '@/services/publicPageCache'
 import { normalizeSocialContent } from '@/services/socialContent'
 import { normalizeHomeHero } from '@/services/homeHero'
+import { gameEditorialFields } from '@/services/articlePresentation'
+import { useVisualThemes } from '@/composables/useVisualThemes'
+import { postWebThemeCss } from '@/services/visualThemes'
+import ReaderActions from './ReaderActions.vue'
+import { sectionNavLabel } from '@/services/articlePresentation'
+import CriterionStarPicker from './CriterionStarPicker.vue'
+import { analysisRating, criterionRating } from '@/services/articlePresentation'
+import AnalysisRatingCard from '@/components/posts/AnalysisRatingCard.vue'
+import GameInfoCard from '@/components/posts/GameInfoCard.vue'
 import { homePinOverflow } from '@/services/homePins'
 import socialJsonInstructions from '../../../docs/prompt-post-completo-redes.md?raw'
 import socialJsonExample from '../../../examples/post-completo-social-v2.example.json?raw'
@@ -827,6 +847,7 @@ let igdbSearchSequence = 0
 const releaseAtInput = ref('')
 const openAccordions = ref(['main'])
 const previewDevice = ref('desktop')
+const previewSection = ref(-1)
 const categorySelectValue = ref('')
 const adminCategories = ref([])
 const sectionCardRefs = ref([])
@@ -871,6 +892,7 @@ const post = ref({
   teaserVisible: true,
   mediaGameName: '',
   game: {
+    cover: '', developer: '', genres: [],
     nameEs: '',
     nameEn: '',
     platforms: [],
@@ -937,6 +959,7 @@ const initialFlowMessage = computed(() => {
   return 'Completa la informacion principal para continuar.'
 })
 const visibleSections = computed(() => post.value.sections.filter(section => !section.hidden))
+const previewSections = computed(() => previewSection.value < 0 ? visibleSections.value : visibleSections.value.filter((_,index)=>index === previewSection.value))
 const postCoverMedia = computed(() => mediaFromUrl(post.value.image))
 const mediaFor = (url) => mediaFromUrl(url)
 const sectionSubtitle = (section = {}) => String(section.subtitle || '').trim()
@@ -950,17 +973,9 @@ const mediaLabel = (media) => {
   return 'Pendiente'
 }
 const richText = (value) => renderRichText(value)
-const analysisScore = computed(() => {
-  const criteria = post.value.analysis?.criteria || []
-  const validScores = criteria
-    .map(item => Number(item.score))
-    .filter(score => Number.isFinite(score))
-
-  if (!validScores.length) return 0
-
-  const average = validScores.reduce((sum, score) => sum + Math.max(0, Math.min(10, score)), 0) / validScores.length
-  return Math.round(average * 10)
-})
+const {theme:previewTheme,enabled:previewThemeEnabled}=useVisualThemes(()=>post.value)
+const previewThemeStyle=computed(()=>previewThemeEnabled.value.web?postWebThemeCss(post.value,previewTheme.value):{})
+const analysisScore = computed(() => analysisRating(post.value.analysis))
 const previewStars = computed(() => {
   return Math.max(0, Math.min(5, Math.round(analysisScore.value / 20)))
 })
@@ -1079,6 +1094,7 @@ onMounted(async () => {
     post.value.teaserVisible = post.value.teaserVisible !== false
     const savedGame = post.value.game || {}
     post.value.game = {
+      ...gameEditorialFields(savedGame),
       nameEs: savedGame.nameEs || savedGame.nameSpanish || '',
       nameEn: savedGame.nameEn || savedGame.nameEnglish || post.value.mediaGameName || '',
       platforms: normalizeGamePlatforms(savedGame.platforms || savedGame.platformsText || ''),
@@ -1176,6 +1192,7 @@ const normalizeGameData = (game = {}) => {
 
   return {
     nameEs: String(game.nameEs || game.nameSpanish || game.nombreEs || names.es || names.spanish || '').trim(),
+    ...gameEditorialFields(game),
     nameEn: String(game.nameEn || game.nameEnglish || game.nombreEn || names.en || names.english || '').trim(),
     platforms: normalizeGamePlatforms(platformsSource),
     releaseDate: String(game.releaseDate || game.fechaLanzamiento || '').trim(),
@@ -1322,6 +1339,7 @@ const normalizeSections = (sections = [], { dropEmpty = false } = {}) => {
   const normalized = sections.map((section, index) => ({
     title: section?.title || section?.subtitulo || '',
     label: section?.label || section?.type || sectionTypeLabel(index),
+    navLabel: String(section?.navLabel || '').trim().slice(0, 42),
     image: section?.image || section?.imagen || '',
     content: section?.content || section?.contenido || '',
     hidden: Boolean(section?.hidden)
@@ -1343,6 +1361,7 @@ const parseAiJsonPost = (value) => {
   const category = String(data?.category || data?.categoria || categories[0] || '').trim()
 
   if (!title) throw new Error('El JSON no tiene title/titulo.')
+  if (data.visualThemeId != null && (typeof data.visualThemeId !== 'string' || !/^[a-z0-9][a-z0-9-]{1,63}$/.test(data.visualThemeId))) throw new Error('visualThemeId debe ser un identificador válido de tema.')
   if (!summary) throw new Error('El JSON no tiene summary/resumen.')
   if (!category && !categories.length) throw new Error('El JSON no tiene category/categoria o categories.')
 
@@ -1371,6 +1390,8 @@ const parseAiJsonPost = (value) => {
   return {
     title,
     subtitle,
+    ...(typeof data.visualThemeId === 'string' && /^[a-z0-9][a-z0-9-]{1,63}$/.test(data.visualThemeId) ? { visualThemeId:data.visualThemeId } : {}),
+    ...(Array.isArray(data.titleHighlights) ? { titleHighlights:data.titleHighlights.filter(value=>typeof value==='string').slice(0,30) } : {}),
     content: summary,
     image: String(data?.image || data?.imagen || '').trim(),
     hero: data.hero ? normalizeHomeHero(data.hero) : null,
@@ -1380,8 +1401,8 @@ const parseAiJsonPost = (value) => {
     game: normalizeGameData(data?.game || data?.juego || {}),
     analysis: data?.analysis || data?.analisis || {},
     score: Number(data?.score || data?.nota || data?.analysis?.score || data?.analisis?.score || 0),
-    pros: Array.isArray(data?.pros) ? data.pros : [],
-    cons: Array.isArray(data?.cons) ? data.cons : []
+    pros: Array.isArray(data?.analysis?.pros) ? data.analysis.pros : Array.isArray(data?.analisis?.pros) ? data.analisis.pros : Array.isArray(data?.pros) ? data.pros : [],
+    cons: Array.isArray(data?.analysis?.cons) ? data.analysis.cons : Array.isArray(data?.analisis?.cons) ? data.analisis.cons : Array.isArray(data?.cons) ? data.cons : []
   }
 }
 
@@ -1400,6 +1421,8 @@ const pasteJsonIntoPost = async () => {
     const text = await navigator.clipboard.readText()
     const parsed = parseAiJsonPost(text)
     post.value.title = parsed.title
+    if (parsed.visualThemeId) post.value.visualThemeId = parsed.visualThemeId
+    if (parsed.titleHighlights) post.value.titleHighlights = parsed.titleHighlights
     if (parsed.hero) post.value.hero = parsed.hero
     post.value.subtitle = parsed.subtitle
     post.value.content = parsed.content
@@ -1429,7 +1452,10 @@ const pasteJsonIntoPost = async () => {
 
     if (isAnalysisPost.value) {
       ensureAnalysisData()
-      post.value.analysis.score = parsed.score || post.value.analysis.score
+      if (Array.isArray(parsed.analysis?.criteria) && parsed.analysis.criteria.length) {
+        post.value.analysis.criteria = parsed.analysis.criteria.map((item,index) => ({key:String(item.key || 'criterion-'+index),label:String(item.label || 'Criterio '+(index+1)),score:criterionRating(item.score)}))
+      }
+      post.value.analysis.score = analysisRating(post.value.analysis)
       post.value.analysis.hypeTitle = parsed.analysis?.hypeTitle || parsed.analysis?.titulo || parsed.title
       post.value.analysis.prosText = parsed.pros.join('\n') || post.value.analysis.prosText
       post.value.analysis.consText = parsed.cons.join('\n') || post.value.analysis.consText
@@ -1527,7 +1553,7 @@ const savePost = async (targetStatus = 'pending') => {
     cleanPost.game = normalizeGameData({
       ...cleanPost.game
     })
-    if (!cleanPost.game.nameEs && !cleanPost.game.nameEn && !cleanPost.game.platforms.length && !cleanPost.game.releaseDate && !cleanPost.game.officialUrl) {
+    if (!cleanPost.game.nameEs && !cleanPost.game.nameEn && !cleanPost.game.platforms.length && !cleanPost.game.releaseDate && !cleanPost.game.officialUrl && !cleanPost.game.cover && !cleanPost.game.developer && !cleanPost.game.genres.length) {
       delete cleanPost.game
     }
     if (cleanPost.game) {
@@ -1560,6 +1586,7 @@ const savePost = async (targetStatus = 'pending') => {
       cleanPost.analysis = {
         ...cleanPost.analysis,
         score: analysisScore.value,
+        criteria: cleanPost.analysis.criteria.map(item => ({...item,score:criterionRating(item.score)})),
         hypeTitle: String(cleanPost.analysis?.hypeTitle || '').trim(),
         pros: String(cleanPost.analysis?.prosText || '').split('\n').map(item => item.trim()).filter(Boolean),
         cons: String(cleanPost.analysis?.consText || '').split('\n').map(item => item.trim()).filter(Boolean)
@@ -1600,6 +1627,7 @@ const savePost = async (targetStatus = 'pending') => {
       })
     }
 
+    clearPublicPageCache()
     showEditorToast(props.editData ? 'Cambios guardados' : successLabel.value)
     playPublishSound()
     if (!props.editData) {
@@ -4108,4 +4136,110 @@ const savePost = async (targetStatus = 'pending') => {
  .section-image-row>.section-media-picker{width:56px;height:48px}
  .section-visible-toggle em{display:none}
 }
+</style>
+
+<style scoped>
+/* Surfaces establish groups; reserve strong edges for keyboard focus. */
+.field-group input,.field-group textarea,.field-group select{border-color:color-mix(in srgb,var(--text-secondary,#94a3b8) 15%,transparent);box-shadow:none}
+.field-group input:focus,.field-group textarea:focus,.field-group select:focus{outline:2px solid #a855f7;outline-offset:1px}
+.content-column{background:var(--admin-bg,#101629);border-color:transparent}
+.section-stack{gap:12px}
+.post-section-card,.post-section-card:not(.active){border:1px solid transparent;background:var(--admin-surface,#151d31);box-shadow:none;border-radius:14px;transition:background .16s ease,border-color .16s ease}
+.post-section-card:hover{transform:none;background:var(--admin-surface-raised,#1c263e)}
+.post-section-card.active{border-color:color-mix(in srgb,#a855f7 24%,transparent);background:var(--admin-surface,#151d31);box-shadow:inset 3px 0 #a855f7}
+.section-copy input,.section-copy textarea{border:1px solid transparent;background:color-mix(in srgb,var(--admin-bg,#0b1222) 65%,var(--admin-surface,#151d31));border-radius:8px;box-sizing:border-box;color:var(--text-primary);line-height:1.65}
+.section-copy .section-title-input{background:transparent;font-size:17px;font-weight:750;padding:8px 10px}
+.section-copy input:focus,.section-copy textarea:focus{outline:2px solid #a855f7;outline-offset:1px}
+.section-copy input::placeholder,.section-copy textarea::placeholder{color:var(--text-secondary,#94a3b8);font-weight:400}
+.writing-toolbar{border:0;border-radius:10px 10px 0 0;background:color-mix(in srgb,var(--admin-bg,#0b1222) 65%,var(--admin-surface,#151d31));margin-bottom:-8px;padding:8px 10px 4px;position:relative}
+.writing-toolbar+textarea{border-radius:0 0 10px 10px;min-height:180px;padding:12px 14px;font-weight:400;font-size:14px;line-height:1.85}
+.writing-toolbar button{border:0;background:transparent}
+.writing-toolbar button:focus-visible,.section-side-rail button:focus-visible{outline:2px solid #a855f7;outline-offset:2px}
+.section-image-row{border:0;background:transparent;padding:6px 0 0;border-radius:0}
+.section-side-rail button{border-color:transparent;background:transparent}
+.section-side-rail button:hover{background:#a855f71a}
+.section-card-head small{background:transparent;color:#bf9be8;padding-left:0;letter-spacing:.04em}
+.section-card-media,.post-section-card .section-card-media{border-color:transparent}
+.section-copy :deep(.clipboard-url button){border-color:transparent;background:var(--admin-surface-raised,#202b42)}
+.section-copy :deep(.clipboard-value){opacity:.65}
+@media(prefers-reduced-motion:reduce){.post-section-card{transition:none}}
+</style>
+
+<style scoped>
+.main-accordion>.accordion-body{gap:0;padding:0 20px}
+.editor-info-group{display:grid;gap:16px;padding:24px 0;min-width:0}
+.editor-info-group+.editor-info-group{border-top:1px solid #ffffff0c}
+.info-group-title{margin:0;font-size:14px;font-weight:750;color:var(--text-primary);line-height:1.4}
+.info-group-help{margin:0;font-size:12px;font-weight:400;line-height:1.6;color:var(--text-secondary)}
+.editor-info-group .field-group{min-width:0;margin:0}
+.main-accordion .input-shell{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:10px 12px;background:var(--admin-bg,#0b1222);border:1px solid transparent;border-radius:10px}
+.main-accordion .input-shell input,.main-accordion .input-shell textarea{border:0;background:transparent;padding:0;width:100%;min-width:0;box-shadow:none;font-size:14px;font-weight:400;line-height:1.65}
+.main-accordion .input-shell:focus-within{outline:2px solid #a855f7;outline-offset:1px}
+.main-accordion .input-shell input:focus,.main-accordion .input-shell textarea:focus{outline:0}
+.main-accordion .textarea-shell{grid-template-columns:minmax(0,1fr);gap:8px}
+.main-accordion .textarea-shell textarea{min-height:100px}
+.main-accordion .input-shell small{position:static;align-self:end;justify-self:end;font-size:10px;color:var(--text-secondary);padding:0}
+.cover-tool .cover-preview-card{width:100%;height:auto;aspect-ratio:16/9;max-height:240px;border:0;border-radius:12px;background:var(--admin-bg,#0b1222)}
+.cover-tool .cover-preview-card :is(img,video,iframe){width:100%;height:100%;max-height:none;object-fit:contain}
+.cover-tool .cover-actions{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px;min-width:0}
+.cover-tool .cover-actions>button{width:auto;flex:0 0 auto;min-height:40px;padding:8px 14px;border:0;background:#a855f71c;border-radius:10px}
+.cover-tool .cover-url-control{flex:1 1 170px;min-width:0}
+.cover-tool :deep(.clipboard-value){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;font-size:10px;opacity:.65}
+.editor-info-group .home-pin-option{margin:0;padding:14px;background:var(--admin-bg,#0b1222);border:0;line-height:1.5}
+.editor-info-group .hero-media-settings{margin:0;border:0;background:transparent;padding:0}
+.editor-info-group .hero-media-settings summary{font-size:12px;color:var(--text-secondary);padding:12px 0}
+.editor-info-group :deep(.visual-theme-selector){margin-top:0}
+@media(max-width:600px){.main-accordion>.accordion-body{padding:0 14px}.editor-info-group{padding:20px 0}}
+</style>
+
+<style scoped>
+.image-picker-panel{box-sizing:border-box;grid-template-rows:auto auto auto auto minmax(0,1fr);gap:12px;color:var(--text-primary,#f1f5f9)}
+.igdb-picker-workspace{min-width:0;grid-template-columns:210px minmax(0,1fr) 260px;height:min(540px,calc(100dvh - 290px));min-height:0}
+.igdb-picker-workspace>*{min-width:0}
+.igdb-pane-title,.igdb-targets>button strong{color:var(--text-primary,#f1f5f9)}
+.igdb-pane-title small,.igdb-targets>button small{color:var(--text-secondary,#aeb8cb)}
+.igdb-targets{grid-auto-rows:max-content;align-content:start}
+.igdb-targets>button{border-color:transparent;min-height:62px;background:var(--admin-bg,#0b1222)}
+.igdb-targets>button.active{border-color:#a855f7;background:#a855f719}
+.igdb-targets>button strong{font-size:12px;font-weight:650;line-height:1.4}
+.igdb-targets>button.active strong{color:#dcc4ff}
+.igdb-gallery{align-content:start;align-items:start;grid-auto-rows:max-content;gap:12px;scrollbar-gutter:stable;padding:3px 6px 6px 3px}
+.igdb-gallery>button{display:block;box-sizing:border-box;width:100%;height:auto;min-height:0;aspect-ratio:16/10;flex:none;isolation:isolate;background:var(--admin-bg,#0b1222)}
+.igdb-gallery>button img{position:absolute;inset:0;display:block;width:100%;height:100%;max-height:none;object-fit:contain}
+.igdb-gallery>button:focus-visible,.igdb-targets>button:focus-visible,.igdb-filter-tabs button:focus-visible{outline:2px solid #c084fc;outline-offset:2px}
+.igdb-selection-pane{overflow-y:auto;background:var(--admin-bg,#0b1222);border-color:transparent}
+.igdb-selection-pane>img{object-fit:contain;background:#0003}
+.igdb-use-image{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+.igdb-game-matches button{max-width:320px;white-space:normal;text-align:left;line-height:1.4;padding:8px 11px}
+@media(min-width:761px) and (max-width:1050px){.igdb-picker-workspace{grid-template-columns:170px minmax(0,1fr) 210px;gap:10px}.igdb-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}.igdb-targets,.igdb-results-pane,.igdb-selection-pane{padding:10px}}
+@media(max-width:760px){.image-picker-panel{display:flex;flex-direction:column;gap:12px;padding:16px}.igdb-picker-workspace{display:flex;flex-direction:column;height:auto;overflow:visible;flex-shrink:0}.igdb-targets{display:flex;flex-shrink:0;max-height:100px;padding:8px}.igdb-targets>button{flex:0 0 220px}.igdb-results-pane{display:flex;flex-direction:column;overflow:visible}.igdb-gallery{grid-template-columns:repeat(2,minmax(0,1fr));max-height:45dvh;min-height:140px}.igdb-selection-pane{overflow:visible}.igdb-selection-pane>img{max-height:180px}.igdb-search-row button{min-height:44px}}
+</style>
+
+<style scoped>
+.analysis-editor{background:var(--admin-bg,#0b1222);border:0;border-radius:12px;padding:18px}
+.analysis-criteria-grid>label{border:0;background:var(--admin-surface,#151d31);border-radius:10px;padding:12px;font-weight:600}
+.criterion-input{display:flex;align-items:center;gap:5px;min-width:0}.criterion-input input{width:64px!important;border:1px solid #ffffff18;background:var(--admin-bg,#0b1222);color:var(--text-primary);border-radius:8px;min-height:40px;padding:6px!important;box-sizing:border-box}.criterion-input small{font-size:10px;color:var(--text-secondary)}
+.analysis-save-hint,.analysis-save-row>span{font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0}
+.analysis-save-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px}.analysis-save-row button{background:#7c3aed;color:white;border:0;border-radius:10px;min-height:44px;padding:10px 16px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}.analysis-save-row button:disabled{opacity:.6;cursor:wait}
+.analysis-pros-cons>label,.score-editor-row{border-color:#ffffff14;background:var(--admin-surface,#151d31)}
+</style>
+
+<style scoped>
+.analysis-criteria-grid{grid-template-columns:minmax(0,1fr)}
+</style>
+
+<style scoped>
+.post-live-preview{padding:0;overflow:hidden;gap:0}
+.editorial-preview-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:22px;padding:18px;min-width:0}
+.editorial-preview-article,.editorial-preview-sidebar{display:grid;align-content:start;gap:20px;min-width:0}
+.preview-reader-tabs{display:flex;gap:4px;overflow-x:auto;background:var(--visual-surface,#11121e);border-radius:14px;padding:6px;min-width:0;max-width:100%}
+.preview-reader-tabs button{flex:0 0 auto;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:transparent;border:0;border-radius:999px;padding:10px 12px;font:inherit;font-size:11px;color:var(--text-primary,#f8fafc);cursor:pointer}
+.preview-reader-tabs button[aria-pressed=true]{background:var(--visual-label-background,#7024dc);color:var(--visual-label-text,#fff)}
+.post-live-preview.analysis .preview-reader-tabs button[aria-pressed=true]{background:#facc15;color:#241800}
+.preview-introduction{font-size:14px;line-height:1.8;color:#dbe4f0}.editorial-preview-article .preview-section{padding:0;border:0;background:transparent;min-width:0}
+.preview-desktop .editorial-preview-layout{grid-template-columns:minmax(0,1fr) 220px;gap:18px;padding-top:70px}.preview-desktop .editorial-preview-sidebar{position:relative}.preview-desktop .editorial-preview-sidebar>.reader-actions{position:absolute;left:0;top:-60px;width:100%;font-size:10px}
+.preview-desktop :deep(.reader-actions){gap:4px}.preview-desktop :deep(.reader-actions button),.preview-desktop :deep(.read-state){padding:0 6px;font-size:9px;gap:4px}
+.preview-desktop :deep(.rating-criterion){grid-template-columns:minmax(0,1fr) auto;gap:6px}.preview-desktop :deep(.rating-stars){grid-column:1;grid-row:2}.preview-desktop :deep(.rating-criterion b){grid-column:2;grid-row:2}
+.post-live-preview :deep(.is-editorial){border-radius:0;box-shadow:none;border:0}.post-live-preview :deep(.is-editorial .hero-content){min-height:0;padding:24px;grid-template-rows:auto;gap:16px}.post-live-preview :deep(.is-editorial .hero-copy h1){font-size:clamp(26px,3vw,38px)}
+.preview-mobile :deep(.is-editorial .hero-breadcrumb){margin-bottom:72px}.preview-mobile :deep(.is-editorial .hero-content){padding:18px}.preview-mobile :deep(.is-editorial .hero-copy h1){font-size:28px}.preview-mobile .editorial-preview-layout{padding:16px}
 </style>

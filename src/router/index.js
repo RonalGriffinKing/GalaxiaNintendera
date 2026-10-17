@@ -235,6 +235,9 @@ router.beforeEach(async (to) => {
     }
   }
 
+  if (to.path === '/admin/posts' && to.query.section === 'themes') {
+    return {path:'/admin/dashboard',query:{view:'themes'}}
+  }
   if (to.path === '/admin/posts' && ['post', 'post-json', 'hero'].includes(to.query.create)) {
     return { name:'post-create', query:to.query.create==='post-json' ? {json:'1'} : to.query.create==='hero' ? {mode:'hero'} : {} }
   }

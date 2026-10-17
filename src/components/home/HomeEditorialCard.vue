@@ -1,7 +1,9 @@
 <script setup>
+import { analysisRating } from '@/services/articlePresentation'
+import FeaturedSheen from '@/components/shared/FeaturedSheen.vue'
 import { computed } from 'vue'
 import { resolveAssetUrl, defaultBannerUrl } from '@/constants/assets'
-import { socialHeadline } from '@/services/socialSummary'
+import { socialHeadline } from '@/services/socialPostPresentation'
 import { titleRuns } from '@/services/socialContent'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
@@ -10,11 +12,12 @@ const headline = computed(() => socialHeadline(props.post))
 </script>
 
 <template>
- <RouterLink :to="to" class="home-editorial-card" :class="{ featured, compact }">
+ <RouterLink :to="to" class="home-editorial-card" :class="{ featured, compact, 'is-analysis':analysis }">
   <img class="card-cover" :src="resolveAssetUrl(post.image,defaultBannerUrl)" alt="" loading="lazy" decoding="async" />
   <div class="card-shade"></div>
+  <FeaturedSheen v-if="featured" :gold="analysis" />
   <span class="card-category">{{ analysis ? (featured ? 'Análisis premium' : 'Análisis') : category }}</span>
-  <span v-if="analysis" class="card-score"><span aria-hidden="true">★</span> {{ post.analysis?.score ?? '—' }}</span>
+  <span v-if="analysis" class="card-score"><span aria-hidden="true">★</span> {{ analysisRating(post.analysis) }}</span>
   <div class="card-copy">
    <div v-if="compact" class="card-meta"><small>◷ {{ date }}</small><span><ProfileAvatar v-if="authorIcon" :src="authorIcon" decorative class="card-avatar" /><small>{{ post.authorName || 'Redactor' }}</small></span></div>
    <small v-else>{{ post.authorName || 'Redactor' }} · {{ date }}</small>
@@ -47,4 +50,8 @@ const headline = computed(() => socialHeadline(props.post))
 <style scoped>
 .home-editorial-card.compact{height:100%;min-height:150px;background:#090d1b}.compact .card-cover{width:40%;height:100%;border-radius:13px 0 0 13px;object-position:center top}.compact .card-shade{background:linear-gradient(90deg,transparent 30%,#090d1b88 40%,#090d1b 45%)}.compact .card-category{left:8px;top:8px;padding:5px 8px;max-width:calc(40% - 16px);font-size:9px;background:#7024dcdd}.compact .card-copy{inset:18px 14px 18px 44%;display:flex;flex-direction:column;justify-content:center;gap:12px}.compact .card-copy h3{font-size:15px;line-height:1.3;order:0;-webkit-line-clamp:4}.compact .card-copy small{order:1;font-size:10px;font-weight:500;line-height:1.5}.compact .card-copy p{display:none}
 @media(max-width:640px){.compact .card-copy{inset:14px 12px 14px 44%;gap:10px}.compact .card-copy h3{font-size:14px}.compact .card-copy small{font-size:9px}}
+</style>
+
+<style scoped>
+.card-copy,.card-category,.card-score{z-index:3}.home-editorial-card.featured.is-analysis .card-shade{background:linear-gradient(180deg,transparent 10%,#120f08dd 100%),linear-gradient(110deg,#ffda6430,transparent 40%,#ffda6420)}
 </style>

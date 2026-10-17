@@ -1,12 +1,11 @@
 <script setup>
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
+import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { homePinnedPosts } from '@/services/homePins'
-import { socialHeadline } from '@/services/socialSummary'
+import { socialHeadline } from '@/services/socialPostPresentation'
 import HomeEditorialCard from '@/components/home/HomeEditorialCard.vue'
 import HomeNewsHero from '@/components/home/HomeNewsHero.vue'
 import HomeContentCarousel from '@/components/home/HomeContentCarousel.vue'
-const PostSummaryViewer = defineAsyncComponent(() => import('@/components/posts/PostSummaryViewer.vue'))
-const summaryPost = ref(null)
 import { useRouter } from 'vue-router'
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { db } from '@/firebase'
@@ -21,19 +20,21 @@ import HomeWelcomeLoader from '@/components/home/HomeWelcomeLoader.vue'
 import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
 import { postCategoryLabels, normalizeCategory } from '@/services/postCategories'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
+import { peekPublicPage, requestPublicPage } from '@/services/publicPageCache'
 
 const router = useRouter()
 const HOME_WELCOME_STORAGE_KEY = 'galaxia-home-welcome-seen'
 const HOME_WELCOME_MAX_WAIT = 4200
 const shouldShowHomeWelcome = typeof window !== 'undefined'
   && sessionStorage.getItem(HOME_WELCOME_STORAGE_KEY) !== 'true'
-const posts = ref([])
-const mainEntries = ref([])
-const communities = ref([])
-const communityThreads = ref([])
-const events = ref([])
-const authorProfiles = ref({})
-const isLoading = ref(false)
+const cachedHomePosts=peekPublicPage('home-posts')
+const posts = ref((cachedHomePosts || []).filter(post=>post.placement!=='hero'&&!post.isMainEntry))
+const mainEntries = ref((cachedHomePosts || []).filter(post=>post.placement==='hero'||post.isMainEntry))
+const communities = ref(peekPublicPage('home-communities') || [])
+const communityThreads = ref(peekPublicPage('home-threads') || [])
+const events = ref(peekPublicPage('home-events') || [])
+const authorProfiles = ref(Object.fromEntries((cachedHomePosts || []).map(post=>[post.authorId,peekPublicPage(`home-author:${post.authorId}`)]).filter(([,profile])=>profile)))
+const isLoading = ref(!cachedHomePosts)
 const isInitialHomeLoading = ref(shouldShowHomeWelcome)
 const initialLoadCompleted = ref(!shouldShowHomeWelcome)
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
@@ -133,21 +134,22 @@ const liveItems = computed(() => {
 })
 
 const loadData = async () => {
-  const postRequest = getDocs(collection(db, 'posts')).catch(() => ({ docs: [] }))
+  const postRequest = requestPublicPage('home-posts',async()=>{
+    const snapshot=await getDocs(collection(db,'posts'))
+    return snapshot.docs.map(item=>({id:item.id,...item.data()})).filter(post=>post.status==='approved'&&post.visibility!=='private'&&post.visibility!=='unlisted')
+  })
   loadCommunities()
   loadCommunityThreads()
   loadEvents()
 
   try {
-    const postSnap = await postRequest
-    const approved = postSnap.docs
-      .map(item => ({ id: item.id, ...item.data() }))
-      .filter(post => post.status === 'approved' && post.visibility !== 'private' && post.visibility !== 'unlisted')
+    const approved = [...await postRequest]
       .sort((a, b) => postSortTime(b) - postSortTime(a))
 
     posts.value = approved.filter(post => post.placement !== 'hero' && !post.isMainEntry)
     mainEntries.value = approved.filter(post => (post.placement === 'hero' || post.isMainEntry) && isReleased(post))
-  } finally {
+  } catch(error) {console.warn('No se pudo actualizar la home',error)} finally {
+    isLoading.value=false
     finishInitialHomeLoad()
   }
 
@@ -155,20 +157,18 @@ const loadData = async () => {
 }
 
 const loadCommunities = async () => {
-  const snap = await getDocs(collection(db, 'communities')).catch(() => ({ docs: [] }))
-  communities.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
+  try {communities.value=await requestPublicPage('home-communities',async()=>{const snap=await getDocs(collection(db,'communities'));return snap.docs.map(item=>({id:item.id,...item.data()}))})}catch{}
 }
 
 const loadCommunityThreads = async () => {
-  const snap = await getDocs(collection(db, 'communityThreads')).catch(() => ({ docs: [] }))
-  communityThreads.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
+  try {communityThreads.value=await requestPublicPage('home-threads',async()=>{const snap=await getDocs(collection(db,'communityThreads'));return snap.docs.map(item=>({id:item.id,...item.data()}))})}catch{}
 }
 
 const loadEvents = async () => {
-  const snap = await getDocs(collection(db, 'galaxyEvents')).catch(() => ({ docs: [] }))
-  events.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
+  try {events.value = (await requestPublicPage('home-events',async()=>{const snap=await getDocs(collection(db,'galaxyEvents'));return snap.docs.map(item=>({id:item.id,...item.data()}))}))
     .filter(item => getTime(item.startsAt) >= Date.now() || item.featured)
     .sort((a, b) => getTime(a.startsAt) - getTime(b.startsAt))
+  }catch{}
 }
 
 const finishInitialHomeLoad = () => {
@@ -185,8 +185,8 @@ const loadAuthorProfiles = async () => {
   const ids = [...new Set([...posts.value, ...mainEntries.value].map(post => post.authorId).filter(Boolean))]
   if (!ids.length) return
   const profiles = await Promise.all(ids.map(async (id) => {
-    const snap = await getDoc(doc(db, 'users', id)).catch(() => null)
-    return snap?.exists() ? [id, { id, ...snap.data() }] : null
+    const profile=await requestPublicPage(`home-author:${id}`,async()=>{const snap=await getDoc(doc(db,'users',id));return snap.exists()?{id,...snap.data()}:null}).catch(()=>null)
+    return profile?[id,profile]:null
   }))
   authorProfiles.value = Object.fromEntries(profiles.filter(Boolean))
 }
@@ -279,7 +279,7 @@ const heroCarousel = useTimedCarousel(computed(() => heroSlides.value.length), H
 const heroSlideIndex = heroCarousel.index
 const heroProgressPercent = heroCarousel.progressPercent
 const heroPaused = ref(false)
-function startHeroIfAllowed() { if (!heroPaused.value && !summaryPost.value) heroCarousel.start(); else heroCarousel.stop() }
+function startHeroIfAllowed() { if (!heroPaused.value) heroCarousel.start(); else heroCarousel.stop() }
 function pauseHero() { heroPaused.value=true; heroCarousel.stop() }
 function resumeHero() { heroPaused.value=false; startHeroIfAllowed() }
 const activeHeroSlide = computed(() => heroSlides.value[heroSlideIndex.value] || heroSlides.value[0] || null)
@@ -287,7 +287,7 @@ const communityCarousel = useTimedCarousel(communityPageCount, COMMUNITY_SLIDE_D
 const communitySlideIndex = communityCarousel.index
 const selectHeroSlide = (index) => {
   heroCarousel.select(index)
-  if (heroPaused.value || summaryPost.value) heroCarousel.stop()
+  if (heroPaused.value) heroCarousel.stop()
 }
 function swipeHero(direction) {
   if (heroSlides.value.length > 1) selectHeroSlide((heroSlideIndex.value + direction + heroSlides.value.length) % heroSlides.value.length)
@@ -295,9 +295,6 @@ function swipeHero(direction) {
 const selectCommunitySlide = (index) => {
   communityCarousel.select(index)
 }
-function openSummary(post) { summaryPost.value = post; heroCarousel.stop() }
-function closeSummary() { summaryPost.value = null; startHeroIfAllowed() }
-function readSummaryArticle() { const post = summaryPost.value; closeSummary(); goPost(post) }
 const openHeroSlide = () => {
   if (typeof activeHeroSlide.value?.action === 'function') activeHeroSlide.value.action()
 }
@@ -324,7 +321,7 @@ onUnmounted(() => {
 
 <template>
   <div class="home2-page">
-    <PostSummaryViewer v-if="summaryPost" :post="summaryPost" @close="closeSummary" @read="readSummaryArticle" />
+    <GalaxyAtmosphere />
     <HomeWelcomeLoader :visible="isInitialHomeLoading" />
 
     <main class="home2-shell">
@@ -335,8 +332,8 @@ onUnmounted(() => {
       </section>
 
       <template v-else>
-        <section class="home2-hero-grid">
-          <HomeNewsHero v-if="activeHeroSlide" :slide="activeHeroSlide" @read="openHeroSlide" @summary="openSummary" @pause="pauseHero" @resume="resumeHero" @next="swipeHero(1)" @previous="swipeHero(-1)">
+        <section class="home2-hero-grid" :class="{'home-cold-load':!cachedHomePosts}">
+          <HomeNewsHero v-if="activeHeroSlide" :slide="activeHeroSlide" @read="openHeroSlide" @pause="pauseHero" @resume="resumeHero" @next="swipeHero(1)" @previous="swipeHero(-1)">
             <div v-if="heroSlides.length > 1" class="home2-hero-controls" role="group" aria-label="Cambiar noticia destacada" @click.stop>
               <span class="hero-news-label">Destacados {{ heroSlideIndex+1 }} / {{ heroSlides.length }}</span>
               <div class="home2-hero-progress">
@@ -397,7 +394,7 @@ onUnmounted(() => {
         <section class="home2-panel analysis-panel">
           <header class="home2-panel-head">
             <h2><i class="fas fa-star"></i> Analisis destacados</h2>
-            <button type="button" @click="router.push('/categoria/Analisis')">Ver todos <i class="fas fa-arrow-right"></i></button>
+            <button type="button" @click="router.push({name:'news',query:{category:'Analisis'}})">Ver todos <i class="fas fa-arrow-right"></i></button>
           </header>
           <HomeContentCarousel :items="analysisPosts" label="Análisis destacados"><template #default="{item:post,index}"><HomeEditorialCard :post="post" :to="postPath(post)" :date="formatAgo(postDisplayDate(post))" analysis :featured="index===0" /></template></HomeContentCarousel>
         </section>
@@ -1503,4 +1500,14 @@ onUnmounted(() => {
  .home2-hero-grid .home2-hero-dots button::before{content:'';width:7px;height:7px;border-radius:999px;background:#647084}
  .home2-hero-grid .home2-hero-dots button.active::before{width:22px;background:linear-gradient(90deg,#a855f7,#ec4899);box-shadow:0 0 12px #c026d355}
 }
+</style>
+
+<style scoped>
+.home2-loading{height:520px;min-height:520px;border-radius:16px;box-sizing:border-box}
+@media(max-width:760px){.home2-loading{height:550px;min-height:550px}}
+@media(prefers-reduced-motion:no-preference){.home2-hero-grid.home-cold-load{animation:home-content-arrive .18s ease-out}@keyframes home-content-arrive{from{opacity:.7}to{opacity:1}}}
+</style>
+
+<style scoped>
+.home2-page{position:relative;isolation:isolate}
 </style>

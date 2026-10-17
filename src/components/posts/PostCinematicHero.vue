@@ -1,12 +1,16 @@
 <script setup>
 import { computed } from 'vue'
-import { socialSummarySlides } from '@/services/socialSummary'
+import { useVisualThemes } from '@/composables/useVisualThemes'
+import { postWebThemeCss } from '@/services/visualThemes'
+import { normalizeHomeHero } from '@/services/homeHero'
+import { titleRuns } from '@/services/socialContent'
 import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
 import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
 const props = defineProps({
-  allowSummary: { type: Boolean, default: true },
+  showActions: { type: Boolean, default: true },
+  editorial: { type: Boolean, default: false },
   post: {
     type: Object,
     default: () => ({})
@@ -65,7 +69,9 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['summary', 'favorite', 'profile', 'share', 'copy', 'home', 'news'])
+const emit = defineEmits(['favorite', 'profile', 'share', 'copy', 'home', 'news'])
+const {theme:visualTheme,enabled:themeEnabled}=useVisualThemes(()=>props.post)
+const visualCss=computed(()=>themeEnabled.value.web?postWebThemeCss(props.post,visualTheme.value):{})
 
 const coverMedia = computed(() => mediaFromUrl(props.post.image))
 const categoryLabel = computed(() => props.post.category || props.post.categories?.[0] || 'General')
@@ -105,6 +111,8 @@ const heroSummary = computed(() => {
   return `${text.slice(0, 227).trim()}...`
 })
 const heroStyle = computed(() => ({
+  ...visualCss.value,
+  '--post-image-position': normalizeHomeHero(props.post.hero).position,
   '--post-hero-image': `url("${resolveAssetUrl(coverMedia.value.url, defaultBannerUrl)}")`
 }))
 const scoreTone = computed(() => {
@@ -117,14 +125,20 @@ const scoreTone = computed(() => {
 })
 </script>
 
+
+
+
+
 <template>
   <section
     class="post-cinematic-hero"
     :class="[
+      Object.keys(visualCss).length ? 'visual-themed' : '',
       isAnalysis ? 'is-analysis' : 'is-standard',
       isAnalysis ? `analysis-tier-${analysisTier.key}` : '',
       isAnalysis ? scoreTone : '',
       preview ? 'is-preview' : '',
+      editorial ? 'is-editorial' : '',
       preview ? `preview-${device}` : ''
     ]"
     :style="heroStyle"
@@ -140,7 +154,7 @@ const scoreTone = computed(() => {
           allowfullscreen
         ></iframe>
         <video v-else-if="coverMedia.type === 'video'" :src="coverMedia.url" muted playsinline loop></video>
-        <img v-else :src="coverMedia.url" alt="" />
+        <img v-else :src="coverMedia.url" alt="" fetchpriority="high" decoding="async" />
       </div>
     </div>
 
@@ -181,7 +195,7 @@ const scoreTone = computed(() => {
       </div>
 
       <div class="hero-copy">
-        <h1>{{ post.title || 'Titulo de la publicacion' }}</h1>
+        <h1><span v-for="(run,index) in titleRuns(post.title || 'Titulo de la publicacion',post.titleHighlights)" :key="index" :class="{'visual-title-highlight':run.highlighted}">{{run.text}}</span></h1>
         <p v-if="heroSummary">{{ heroSummary }}</p>
       </div>
 
@@ -234,8 +248,7 @@ const scoreTone = computed(() => {
           </span>
         </div>
 
-        <div class="hero-actions">
-          <button v-if="allowSummary && !preview && socialSummarySlides(post).length" type="button" class="hero-action" @click="emit('summary')"><i class="far fa-clone"></i><span>Ver resumen</span></button>
+        <div v-if="showActions" class="hero-actions" :class="{ 'has-read-state': readBadgeText }">
           <div
             v-if="readBadgeText"
             class="hero-read-state"
@@ -814,4 +827,72 @@ const scoreTone = computed(() => {
  .post-cinematic-hero:not(.is-preview) { min-height:480px; }
  .post-cinematic-hero:not(.is-preview) .hero-copy h1 { font-size:46px; line-height:1.15; }
 }
+</style>
+
+<style scoped>
+.visual-title-highlight{color:var(--visual-highlight,inherit)}
+.visual-themed .hero-primary-pill{background:var(--visual-label-background);color:var(--visual-label-text);border-color:var(--visual-border)}
+.visual-themed .hero-action{background:var(--visual-button-background);color:var(--visual-button-text);border-color:var(--visual-border)}
+.visual-themed .hero-breadcrumb button:hover{color:var(--visual-accent)}
+</style>
+
+<style scoped>
+.post-cinematic-hero.visual-themed{--hero-accent:var(--visual-accent);--hero-accent-soft:color-mix(in srgb,var(--visual-primary) 32%,transparent);--hero-accent-glow:color-mix(in srgb,var(--visual-primary) 30%,transparent)}
+</style>
+
+<style scoped>
+.hero-actions .hero-action,.hero-actions .hero-read-state{white-space:nowrap;flex-shrink:0}
+.visual-themed .hero-action i{color:inherit}
+.visual-themed .hero-read-state{background:var(--visual-surface);color:var(--visual-text);border-color:var(--visual-border)}
+.visual-themed .hero-read-state i{color:var(--visual-accent)}
+.visual-themed .hero-read-state.earned{background:var(--visual-button-background);color:var(--visual-button-text);border-color:var(--visual-border)}
+.visual-themed .hero-read-state.earned i{color:inherit}
+@media(max-width:760px){
+ .hero-actions{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;width:100%;min-width:0}
+ .hero-actions.has-read-state{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px}
+ .hero-actions .hero-action,.hero-actions .hero-read-state{min-width:0;justify-content:center;padding:0 8px;gap:6px;min-height:44px;box-sizing:border-box}
+ .hero-actions .hero-action.icon-only{width:44px;min-width:44px;height:44px;padding:0}
+ .hero-actions .hero-action span,.hero-actions .hero-read-state span{font-size:11px;white-space:nowrap}
+}
+</style>
+
+<style scoped>
+.post-cinematic-hero.is-editorial:not(.is-preview){min-height:480px;border-radius:22px;box-shadow:0 18px 50px #0004;border-color:#d6b45b55}
+.is-editorial .hero-pattern{display:none}.is-editorial .hero-content{max-width:760px;min-height:480px;padding:30px 38px;gap:20px;grid-template-rows:auto auto 1fr auto auto}
+.is-editorial .hero-copy h1{font-size:clamp(32px,3.5vw,50px);line-height:1.12;letter-spacing:-.025em}.is-editorial .hero-copy p{font-size:17px;line-height:1.6;max-width:620px;margin-top:18px}
+.is-editorial .hero-media::after{background:linear-gradient(90deg,#090c18eb 0%,#090c1899 40%,#090c1810 80%),linear-gradient(0deg,#090c18e8,transparent 70%)}
+.is-editorial .hero-mini-score{display:none}.is-editorial .hero-footer{flex-wrap:wrap;gap:18px}.is-editorial .hero-copy p{color:#e5e7eb}
+@media(max-width:760px){.post-cinematic-hero.is-editorial:not(.is-preview){min-height:600px}.is-editorial .hero-content{padding:20px;min-height:600px;gap:16px}.is-editorial .hero-breadcrumb{margin-bottom:200px}.is-editorial .hero-copy h1{font-size:clamp(28px,7.8vw,38px)}.is-editorial .hero-copy p{font-size:15px;line-height:1.65;margin-top:14px}.is-editorial .hero-media::after{background:linear-gradient(180deg,#090c1808 5%,#090c1844 28%,#090c18e8 52%,#090c18 85%)}.is-editorial .hero-footer{align-items:start}.is-editorial .hero-author{max-width:100%}}
+</style>
+
+<style scoped>
+.post-cinematic-hero.is-editorial:not(.is-preview){border-radius:0;border-left:0;border-right:0}
+.is-editorial:not(.is-preview) .hero-content{margin-left:max(40px,calc((100% - 1320px)/2));padding-left:0;padding-right:24px}
+@media(max-width:1023px){.is-editorial:not(.is-preview) .hero-content{margin-left:0;padding-left:20px;padding-right:20px}}
+</style>
+
+<style scoped>
+.is-editorial:not(.is-preview) .hero-media::after{background:linear-gradient(90deg,#090c18e8 0%,#090c1880 40%,#090c1810 80%),linear-gradient(0deg,#0b0d18,transparent 55%)}
+@media(max-width:760px){.is-editorial:not(.is-preview) .hero-media::after{background:linear-gradient(180deg,#090c1808 5%,#090c1844 28%,#090c18d9 52%,#0b0d18 100%)}}
+</style>
+
+<style scoped>
+.is-editorial:not(.is-preview) .hero-backdrop::after{content:'';position:absolute;left:0;right:0;bottom:0;height:240px;pointer-events:none;background:linear-gradient(180deg,transparent,#0b0d1877);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);mask-image:linear-gradient(180deg,transparent,#000 65%);-webkit-mask-image:linear-gradient(180deg,transparent,#000 65%)}
+@media(max-width:760px){.is-editorial:not(.is-preview) .hero-backdrop::after{height:180px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}}
+</style>
+
+<style scoped>
+/* Blur a copy of the image itself; do not depend on backdrop-filter beneath a masked layer. */
+.is-editorial:not(.is-preview) .hero-backdrop::after{display:none}
+.is-editorial:not(.is-preview) .hero-media::before{content:'';position:absolute;inset:-18px;z-index:1;pointer-events:none;background:var(--post-hero-image) center / cover no-repeat;filter:blur(14px);mask-image:linear-gradient(to bottom,transparent calc(100% - var(--analysis-tail,240px)),#000 calc(100% - 50px));-webkit-mask-image:linear-gradient(to bottom,transparent calc(100% - var(--analysis-tail,240px)),#000 calc(100% - 50px))}
+.is-editorial:not(.is-preview) .hero-media::after{z-index:2}
+.is-editorial .hero-content,.is-editorial .hero-copy,.is-editorial .hero-footer{min-width:0;box-sizing:border-box}
+.is-editorial:not(.is-preview) .hero-content{grid-template-rows:auto auto 1fr auto;align-content:start}
+.is-editorial:not(.is-preview) .hero-content:has(.hero-platforms){grid-template-rows:auto auto 1fr auto auto}
+.is-editorial:not(.is-preview) .hero-footer{align-self:end}
+</style>
+
+<style scoped>
+.hero-media :is(img,video){object-position:var(--post-image-position,center top)}
+.is-editorial:not(.is-preview) .hero-media::before{background-position:var(--post-image-position,center top)}
 </style>

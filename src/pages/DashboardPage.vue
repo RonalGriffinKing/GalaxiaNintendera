@@ -34,6 +34,7 @@
             v-for="action in activeActions"
             :key="action.id"
             type="button"
+            :disabled="action.id === 'theme' && !activeModule"
             @click="runAction(action)"
           >
             <i :class="action.icon"></i>
@@ -46,6 +47,7 @@
         <section :key="activeTab" class="module-panel" :class="{ 'is-loading': isContentLoading }">
           <KeepAlive>
             <component
+              ref="activeModule"
               :is="activeComponent"
               :user-role="currentRole"
               :show-embedded-tools="activeTab !== 'posts'"
@@ -89,6 +91,8 @@ const PostPanel = defineAsyncComponent(() => import('@/components/shared/PostPan
 const SitePagesPanel = defineAsyncComponent(() => import('@/components/sitePages/SitePagesPanel.vue'))
 const UserPanel = defineAsyncComponent(() => import('@/components/shared/UserPanel.vue'))
 const OverlayPanel = defineAsyncComponent(() => import('@/components/shared/OverlayPanel.vue'))
+const VisualThemesPanel = defineAsyncComponent(() => import('@/components/posts/VisualThemesPanel.vue'))
+const activeModule=ref(null)
 
 const route = useRoute()
 const router = useRouter()
@@ -114,6 +118,16 @@ const tabs = computed(() => [
     kicker: 'Publicaciones',
     title: 'Gestion de posts',
     description: 'Crea, edita, aprueba y organiza publicaciones sin mezclar otros modulos.'
+  },
+  {
+    id: 'themes',
+    label: 'Temas Visuales',
+    icon: 'fas fa-palette',
+    component: VisualThemesPanel,
+    admin: true,
+    kicker: 'Apariencia',
+    title: 'Temas Visuales',
+    description: 'Biblioteca de prueba local. Configura los temas de artículos y carruseles sin cambiar publicaciones existentes.'
   },
   {
     id: 'pages',
@@ -157,6 +171,7 @@ const activeMeta = computed(() => visibleTabs.value.find(tab => tab.id === activ
 const activeComponent = computed(() => activeMeta.value.component)
 
 const activeActions = computed(() => {
+  if(activeTab.value==='themes' && isAdmin.value) return [{id:'theme',label:'Crear tema',icon:'fas fa-plus'}]
   if (activeTab.value === 'posts') {
     const actions = [
       { id: 'post', label: 'Crear post', icon: 'fas fa-plus', create: 'post' },
@@ -200,6 +215,7 @@ const setActiveTab = (tab) => {
 }
 
 const runAction = (action) => {
+  if(action.id==='theme') {activeModule.value?.createTheme();return}
   const query = { view: activeTab.value }
   if (action.create) query.create = action.create
   if (action.seed) query.seed = action.seed

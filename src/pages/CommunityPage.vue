@@ -1,4 +1,5 @@
 <script setup>
+import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { onAuthStateChanged } from 'firebase/auth'
@@ -49,6 +50,7 @@ onUnmounted(() => {
   <div>
     <Transition name="community-content" appear>
       <main v-if="!isCheckingAuth" class="community-member-page">
+    <GalaxyAtmosphere />
         <FloatingBackButton />
         <CommunityPanel :user-role="currentRole" :initial-community-id="selectedCommunityId" :show-rail="false" />
         <CommunitiesPage v-if="!selectedCommunityId || selectedCommunityId === OFFICIAL_COMMUNITY_ID" embedded />
@@ -466,20 +468,10 @@ onUnmounted(() => {
 }
 
 .community-content-enter-active,
-.community-content-leave-active {
-  transition:
-    opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
-    filter 0.65s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, filter, transform;
-}
-
+.community-content-leave-active { transition: opacity .25s ease; }
 .community-content-enter-from,
-.community-content-leave-to {
-  filter: blur(14px) saturate(0.92);
-  opacity: 0;
-  transform: translateY(8px) scale(0.995);
-}
+.community-content-leave-to { opacity: 0; }
+@media(prefers-reduced-motion:reduce){.community-content-enter-active,.community-content-leave-active{transition:none}}
 
 @media (max-width: 1100px) {
   .community-member-page :deep(.community-stage) {
@@ -615,4 +607,12 @@ onUnmounted(() => {
 }
 .community-member-page :deep(.galaxy-hero) { overflow: hidden; isolation: isolate; contain: paint; }
 .community-member-page :deep(.galaxy-hero::before),.community-member-page :deep(.galaxy-hero::after) { border-radius: inherit; pointer-events: none; }
+</style>
+
+<style scoped>
+.community-member-page{position:relative;isolation:isolate}
+</style>
+
+<style scoped>
+.community-shell{position:relative;isolation:isolate}
 </style>

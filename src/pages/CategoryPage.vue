@@ -1,23 +1,31 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { analysisRating } from '@/services/articlePresentation'
+import FeaturedSheen from '@/components/shared/FeaturedSheen.vue'
+import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter } from "firebase/firestore"
 import { auth, db } from "@/firebase"
 import { resolveAssetUrl } from '@/constants/assets'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
-import { categoryIcon, loadPostCategories, normalizeCategory as normalize, postCategoryLabels, postMatchesCategory } from '@/services/postCategories'
+import { categoryIcon, DEFAULT_POST_CATEGORIES, uniqueCategories, loadPostCategories, normalizeCategory as normalize, postCategoryLabels, postMatchesCategory } from '@/services/postCategories'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
+import { useVisualThemes } from '@/composables/useVisualThemes'
+import { resolveVisualTheme, postWebThemeCss } from '@/services/visualThemes'
+import { peekPublicPage, isPublicPageFresh, storePublicPage } from '@/services/publicPageCache'
 
 const route = useRoute()
 const router = useRouter()
 const posts = ref([])
+const {themes:visualThemes,enabled:themeEnabled}=useVisualThemes()
 const selectedFilter = ref('Todas')
 const viewedPosts = ref([])
 const rewardedPosts = ref([])
 const authorProfiles = ref({})
 const isLoading = ref(true)
-const filters = ref(['Todas'])
+const filters = ref(['Todas',...DEFAULT_POST_CATEGORIES])
+const displayFilters = computed(()=>uniqueCategories([...filters.value,selectedFilter.value]))
 const sortMode = ref('recent')
 const sortOpen = ref(false)
 const isLoadingMore = ref(false)
@@ -127,34 +135,61 @@ const moreLinks = computed(() => {
   ]
 })
 
+let activeListingKey=''
+function saveListingCache(){
+  if(activeListingKey&&!isLoading.value)storePublicPage(activeListingKey,{posts:posts.value,authorProfiles:authorProfiles.value,filters:filters.value,visiblePostLimit:visiblePostLimit.value,lastPostDoc:lastPostDoc.value,hasMorePosts:hasMorePosts.value})
+}
+onUnmounted(()=>{loadRequestId++})
 const loadPosts = async () => {
   const requestId = ++loadRequestId
-  isLoading.value = true
+  const cacheKey=`listing:feed:${sortMode.value}`
+  const cached=peekPublicPage(cacheKey)
+  activeListingKey=cacheKey
+  const homeSeed=peekPublicPage('home-posts')
+  const seed=Array.isArray(homeSeed)?homeSeed.filter(post=>post.status==='approved'&&post.visibility!=='private'&&post.visibility!=='unlisted'&&post.placement!=='hero'&&!post.isMainEntry):[]
+  isLoading.value = !cached && !posts.value.length && !seed.length
   isLoadingMore.value = false
   hasMorePosts.value = true
   lastPostDoc.value = null
   visiblePostLimit.value = PAGE_SIZE
-  posts.value = []
-  authorProfiles.value = {}
+  posts.value = cached?.posts || (posts.value.length ? posts.value : seed)
+  authorProfiles.value = cached?.authorProfiles || authorProfiles.value
   rewardedPosts.value = []
   loadLocalReadMarks()
+  if(cached){filters.value=cached.filters;visiblePostLimit.value=cached.visiblePostLimit;lastPostDoc.value=cached.lastPostDoc;hasMorePosts.value=cached.hasMorePosts}
+  if(cached&&isPublicPageFresh(cacheKey)){loadRewardedPosts(requestId).catch(console.error);return}
+  // Home already reads the complete public collection, so reuse its fresh result.
+  if(!cached && Array.isArray(homeSeed) && isPublicPageFresh('home-posts')){
+    posts.value=seed;hasMorePosts.value=false;isLoading.value=false
+    saveListingCache()
+    loadPostCategories().then(items=>{if(requestId===loadRequestId){filters.value=['Todas',...items];saveListingCache()}}).catch(console.warn)
+    loadAuthorProfiles(posts.value,requestId).catch(console.error)
+    loadRewardedPosts(requestId).catch(console.error)
+    return
+  }
+  lastPostDoc.value=null;hasMorePosts.value=true
   try {
-    const loadedCategories = await loadPostCategories()
-    if (requestId !== loadRequestId) return
-    filters.value = ['Todas', ...loadedCategories]
-    await loadMorePosts({ requestId, fillPage: true })
+    const categoriesRequest=loadPostCategories().then(items=>{if(requestId===loadRequestId)filters.value=['Todas',...items]})
+    await loadMorePosts({ requestId, fillPage: true, replaceFirst:true })
+    if(requestId!==loadRequestId)return
     isLoading.value = false
+    await categoriesRequest
+    if(requestId!==loadRequestId)return
+    saveListingCache()
 
     Promise.allSettled([
       loadAuthorProfiles(posts.value, requestId),
       loadRewardedPosts(requestId)
     ]).catch(console.error)
+  } catch(error) {
+    if(requestId===loadRequestId&&cached){lastPostDoc.value=cached.lastPostDoc;hasMorePosts.value=cached.hasMorePosts}
+    console.warn('No se pudo actualizar la lista de noticias',error)
   } finally {
     if (requestId === loadRequestId) isLoading.value = false
   }
 }
 
-const loadMorePosts = async ({ requestId = loadRequestId, fillPage = false } = {}) => {
+const loadMorePosts = async ({ requestId = loadRequestId, fillPage = false, replaceFirst=false } = {}) => {
   if (isLoadingMore.value || !hasMorePosts.value) return
   isLoadingMore.value = true
 
@@ -181,9 +216,10 @@ const loadMorePosts = async ({ requestId = loadRequestId, fillPage = false } = {
         .filter(p => p.status === 'approved' && p.visibility !== 'private' && p.visibility !== 'unlisted')
         .filter(p => p.placement !== 'hero' && !p.isMainEntry)
 
-      const existing = new Set(posts.value.map(post => post.id))
+      const existing = new Set(replaceFirst?[]:posts.value.map(post => post.id))
       const uniquePosts = nextPosts.filter(post => !existing.has(post.id))
-      posts.value = [...posts.value, ...uniquePosts]
+      posts.value = replaceFirst?uniquePosts:[...posts.value, ...uniquePosts]
+      replaceFirst=false
       loadAuthorProfiles(uniquePosts, requestId).catch(console.error)
 
       attempts += 1
@@ -201,11 +237,9 @@ const loadNextPostsPage = async () => {
 
   try {
     const shouldFetchMore = matchingPosts.value.length < nextLimit && hasMorePosts.value
-    await Promise.all([
-      shouldFetchMore ? loadMorePosts({ fillPage: true }) : Promise.resolve(),
-      new Promise(resolve => window.setTimeout(resolve, 850))
-    ])
+    if(shouldFetchMore)await loadMorePosts({fillPage:true})
     visiblePostLimit.value = nextLimit
+    saveListingCache()
   } finally {
     isShowingMoreLoader.value = false
   }
@@ -246,16 +280,8 @@ const goPost = (postOrId) => {
 }
 
 const selectFilter = (filter) => {
-  selectedFilter.value = filter
-
-  if (pageConfig.value.type !== 'category') return
-
-  if (filter === 'Todas') {
-    router.push('/noticias')
-    return
-  }
-
-  router.push(`/categoria/${encodeURIComponent(filter)}`)
+  if(normalize(selectedFilter.value)===normalize(filter))return
+  router.push({name:'news',query:{...route.query,category:normalize(filter)==='todas'?undefined:filter}})
 }
 
 const selectSort = (value) => {
@@ -277,7 +303,8 @@ const readState = (postId) => {
 const cardTitle = (post) => post.analysis?.hypeTitle || post.title
 const cardActionIcon = (post) => categoryIcon(post.category)
 const cardSurfaceStyle = (post, index) => {
-  if (index === 0 || !post.image) return null
+  if (index === 0) return themeEnabled.value.web ? postWebThemeCss(post,resolveVisualTheme(post.visualThemeId,visualThemes.value)) : null
+  if (!post.image) return null
   const image = resolveAssetUrl(post.image)
   if (!image) return null
   return { '--post-card-image': `url("${String(image).replace(/"/g, '\\"')}")` }
@@ -307,6 +334,7 @@ const loadAuthorProfiles = async (sourcePosts = posts.value, requestId = loadReq
         .map(item => [item.id, { id: item.id, ...item.data() }])
     )
   }
+  saveListingCache()
 }
 
 const loadLocalReadMarks = () => {
@@ -326,18 +354,27 @@ const loadRewardedPosts = async (requestId = loadRequestId) => {
   rewardedPosts.value = snap.docs.map(item => item.id)
 }
 
+let pendingFilterFill=false
+function fillCurrentFilter(){
+ if(isLoading.value || !activeListingKey || !hasMorePosts.value || matchingPosts.value.length>=visiblePostLimit.value)return
+ if(isLoadingMore.value){pendingFilterFill=true;return}
+ loadMorePosts({fillPage:true}).then(saveListingCache).catch(error=>console.warn('No se pudo ampliar la categoría',error))
+}
+watch(isLoadingMore,loading=>{if(!loading&&pendingFilterFill){pendingFilterFill=false;fillCurrentFilter()}})
 watch(() => route.fullPath, () => {
   window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
-  selectedFilter.value = pageConfig.value.type === 'category' && filters.value.includes(pageConfig.value.eyebrow)
-    ? pageConfig.value.eyebrow
-    : 'Todas'
-  loadPosts()
+  const wanted=pageConfig.value.type==='category'?pageConfig.value.eyebrow:route.query.category || pageConfig.value.filter || 'Todas'
+  selectedFilter.value = String(Array.isArray(wanted)?wanted[0]:wanted)
+  visiblePostLimit.value=PAGE_SIZE
+  if(!activeListingKey)loadPosts()
+  else fillCurrentFilter()
 }, { immediate: true })
 </script>
 
 <template>
   <div class="listing-page" @click="sortOpen = false">
-    <main v-if="!isLoading" class="listing-shell">
+    <GalaxyAtmosphere />
+    <main class="listing-shell" :aria-busy="isLoading">
       <header class="listing-header">
         <div>
           <div class="listing-title-row">
@@ -354,9 +391,10 @@ watch(() => route.fullPath, () => {
       <div class="listing-filter-bar">
         <div class="filter-row">
           <button
-            v-for="filter in filters"
+            v-for="filter in displayFilters"
             :key="filter"
-            :class="{ active: selectedFilter === filter }"
+            :class="{ active: normalize(selectedFilter) === normalize(filter) }"
+            :aria-pressed="normalize(selectedFilter) === normalize(filter)"
             @click="selectFilter(filter)"
           >
             <i :class="categoryIcon(filter)"></i>
@@ -405,21 +443,23 @@ watch(() => route.fullPath, () => {
               :class="['news-row', { analysis: isAnalysisPost(post), 'featured-latest': index === 0, 'grid-card': index > 0 }]"
               :style="cardSurfaceStyle(post, index)"
             >
+              <FeaturedSheen v-if="index===0" :gold="isAnalysisPost(post)" />
               <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
               <div v-else class="post-placeholder"></div>
 
-              <span class="listing-card-category">
+              <span v-if="index > 0" class="listing-card-category">
                 <i :class="cardActionIcon(post)"></i>
                 {{ post.category || 'General' }}
               </span>
 
               <span v-if="isAnalysisPost(post)" class="listing-analysis-score">
                 <i class="fas fa-star"></i>
-                <b>{{ post.analysis?.score || '--' }}</b>
+                <b>{{ analysisRating(post.analysis) }}</b>
                 <small>Nota</small>
               </span>
 
               <div class="post-copy">
+                <span v-if="index === 0" class="featured-category">{{ post.category || 'General' }}</span>
                 <div class="listing-card-author">
                   <ProfileAvatar
                     class="listing-author-avatar"
@@ -445,6 +485,7 @@ watch(() => route.fullPath, () => {
             </RouterLink>
           </div>
 
+          <div v-else-if="isLoading || isLoadingMore" class="listing-card-loading" role="status" aria-label="Cargando publicaciones"><span></span><span></span><span></span></div>
           <div v-else class="empty-state">
             <h2>No hay articulos disponibles</h2>
             <p>{{ canLoadMoreVisiblePosts ? 'No hay articulos en esta tanda. Puedes cargar mas resultados.' : 'Cuando apruebes publicaciones para esta seccion apareceran aqui.' }}</p>
@@ -3191,4 +3232,41 @@ watch(() => route.fullPath, () => {
  .popular-post strong { font-size:14px; line-height:1.4; }
 }
 
+</style>
+
+<style scoped>
+.listing-shell .news-list .news-row.featured-latest{position:relative;isolation:isolate;display:grid;grid-template-columns:minmax(0,1fr);gap:0;min-height:380px;padding:0;overflow:hidden;border:1px solid var(--visual-border,#a78bfa66);border-radius:18px;background:var(--visual-background,#070b1a);box-shadow:none}
+.listing-shell .news-list .news-row.featured-latest::after{content:none;display:none}
+.listing-shell .news-list .news-row.featured-latest::before{content:'';display:block;position:absolute;inset:0;width:100%;height:100%;z-index:1;opacity:1;animation:none;mask-image:none;border-radius:inherit;background:linear-gradient(90deg,var(--visual-background,#070b1a) 0%,color-mix(in srgb,var(--visual-background,#070b1a) 94%,transparent) 30%,color-mix(in srgb,var(--visual-background,#070b1a) 58%,transparent) 64%,transparent 100%),linear-gradient(0deg,color-mix(in srgb,var(--visual-background,#070b1a) 65%,transparent),transparent 70%);pointer-events:none}
+.listing-shell .news-list .news-row.featured-latest>img,.listing-shell .news-list .news-row.featured-latest>.post-placeholder{position:absolute;inset:0;z-index:0;width:100%;height:100%;min-height:0;max-height:none;border-radius:inherit;object-fit:cover;object-position:right center;grid-column:auto;grid-row:auto;margin:0}
+.listing-shell .news-list .news-row.featured-latest .post-copy{position:relative;inset:auto;z-index:2;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:13px;width:62%;max-width:680px;min-width:0;min-height:380px;grid-column:1;grid-row:1;margin:0;padding:32px;box-sizing:border-box;background:none}
+.listing-shell .news-list .news-row.featured-latest .featured-category{position:static;display:inline-flex;align-self:flex-start;max-width:100%;margin:0;padding:7px 12px;border:0;border-radius:999px;background:var(--visual-label-background,#7024dc);color:var(--visual-label-text,#ffffff);font-size:10px;line-height:1.3;font-weight:800;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:none;backdrop-filter:none}
+.listing-shell .news-list .news-row.featured-latest .post-copy h2{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;max-height:none;margin:0;font-size:clamp(25px,2.4vw,34px);line-height:1.15;color:#fff;overflow-wrap:anywhere;text-shadow:0 2px 12px #0005}
+.listing-shell .news-list .news-row.featured-latest .post-copy p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:0;font-size:14px;line-height:1.5;color:#e2e8f0;font-weight:500}
+.listing-shell .news-list .news-row.featured-latest .listing-card-author{display:flex;position:static;align-items:center;gap:8px;min-width:0;margin:0;background:none;padding:0;order:3;color:#d6d8e4}
+.listing-shell .news-list .news-row.featured-latest .listing-author-avatar{--avatar-size:28px;--avatar-border:1px;flex:0 0 28px}
+.listing-shell .news-list .news-row.featured-latest .listing-card-author strong{font-size:11px;line-height:1.4;color:#e2e8f0}
+.listing-shell .news-list .news-row.featured-latest .listing-card-author small{font-size:10px;line-height:1.4;color:#c5cada}
+.listing-shell .news-list .news-row.featured-latest .post-mobile-meta{display:none}
+.listing-shell .news-list .news-row.featured-latest:hover{border-color:var(--visual-accent,#c084fc);box-shadow:0 8px 28px #0003}
+.listing-shell .news-list .news-row.featured-latest:focus-visible{outline:3px solid var(--visual-accent,#c084fc);outline-offset:3px}
+@media(max-width:760px){
+ .listing-shell .news-list .news-row.featured-latest{min-height:0}
+ .listing-shell .news-list .news-row.featured-latest>img,.listing-shell .news-list .news-row.featured-latest>.post-placeholder{height:230px;object-position:center top}
+ .listing-shell .news-list .news-row.featured-latest::before{background:linear-gradient(180deg,transparent 80px,var(--visual-background,#070b1a) 230px)}
+ .listing-shell .news-list .news-row.featured-latest .post-copy{width:100%;max-width:none;min-height:0;margin-top:200px;padding:18px 20px 24px;gap:11px}
+ .listing-shell .news-list .news-row.featured-latest .post-copy h2{font-size:25px;line-height:1.16}
+ .listing-shell .news-list .news-row.featured-latest .post-copy p{font-size:13px}
+}
+@media(min-width:761px) and (max-width:1100px){.listing-shell .news-list .news-row.featured-latest .post-copy{width:68%}}
+</style>
+
+<style scoped>
+.listing-page{position:relative;isolation:isolate}
+</style>
+
+<style scoped>
+.listing-card-loading{display:grid;grid-template-columns:1fr 1fr;gap:16px;min-height:380px}.listing-card-loading span{border-radius:16px;background:linear-gradient(110deg,#8c97af10,#b0a4df24,#8c97af10);background-size:200% 100%;animation:listing-placeholder 1.8s ease-in-out infinite}.listing-card-loading span:first-child{grid-column:1/-1;min-height:240px}.news-row{animation:listing-card-reveal .16s ease-out}.filter-row button{transition:background-color .14s ease,border-color .14s ease,color .14s ease}
+@keyframes listing-card-reveal{from{opacity:.8}to{opacity:1}}@keyframes listing-placeholder{from{background-position:100% 0}to{background-position:-100% 0}}
+@media(prefers-reduced-motion:reduce){.listing-card-loading span,.news-row{animation:none}.filter-row button{transition:none}}
 </style>

@@ -66,6 +66,12 @@ El título sigue siendo texto completo. `titleHighlights` solo indica qué fragm
 
 ## Compatibilidad y revisión
 
+Para navegar por el análisis, cada entrada de `sections` puede incluir `navLabel`: una etiqueta corta de hasta 42 caracteres, por ejemplo «Historia», «Jugabilidad» o «Gráficos». El título completo sigue en `title`. Solo incluye apartados que existan; no rellenes categorías por obligación. Si falta `navLabel`, el lector utiliza `label` o el título existente. Las secciones con `hidden: true` no se muestran ni aparecen en el índice público.
+
+La ficha opcional `game` admite `nameEs`, `nameEn`, `platforms`, `releaseDate`, `releaseNote`, `officialUrl` y, para la presentación editorial, `cover` (URL de la carátula), `developer` (estudio) y `genres` (lista de géneros). Usa únicamente información verificada; deja vacíos los datos desconocidos. Las plataformas pueden ser cadenas o entradas `{ "name": "Nintendo Switch 2", "confirmed": true }`; conserva las pendientes como `confirmed: false`.
+
+En análisis, cada `analysis.criteria[].score` representa de 0 a 10 estrellas. Usa enteros para nuevas valoraciones: 7 significa siete estrellas, no 70. Los decimales antiguos se conservan al importar, aunque el selector permite elegir estrellas enteras. `analysis.score` es la media de los criterios multiplicada por 10 y redondeada, sobre 100; el editor y el lector la recalculan a partir de los criterios. No conviertas los criterios a porcentajes dentro del JSON. `analysis.hypeTitle` puede contener un veredicto breve. `analysis.pros` y `analysis.cons` son listas de puntos positivos y aspectos mejorables. Consulta `examples/post-analisis-estrellas.example.json` para un ejemplo completo ficticio con artículo y versión social.
+
 Los posts anteriores sin estos campos siguen cargando. Las entradas antiguas se interpretan como contenido normal; no se inventa un cierre ni se deducen palabras destacadas a partir de hechos no proporcionados. El importador y el guardado conservan los campos nuevos y no recortan los puntos a cuatro.
 
 Antes de publicar, revisa el artículo, las imágenes, las referencias de secciones y las frases destacadas. La previsualización avisa si el texto invade la cabecera o supera las líneas visibles. Usa «Ajustar textos al espacio» o divide el contenido. Comprueba el PNG exportado en el formato elegido (9:16, 3:4 o 1:1).

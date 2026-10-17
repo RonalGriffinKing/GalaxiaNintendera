@@ -14,6 +14,7 @@
   "sections": [
     {
       "label": "Exploración",
+      "navLabel": "Exploración",
       "title": "Una sección del artículo completo",
       "image": "",
       "content": "Aquí va el desarrollo completo y verificado de la noticia. El carrusel tiene una redacción independiente dentro de social.",
@@ -58,6 +59,17 @@
         "cta": "¡Cuéntanos en los comentarios!"
       }
     ]
+  },
+  "game": {
+    "nameEs": "",
+    "nameEn": "",
+    "cover": "",
+    "developer": "",
+    "genres": [],
+    "platforms": [],
+    "releaseDate": "",
+    "releaseNote": "",
+    "officialUrl": ""
   },
   "analysis": {},
   "score": 0,

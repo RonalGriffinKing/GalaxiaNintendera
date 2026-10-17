@@ -13,10 +13,15 @@ import { apiUrl } from '@/services/appEnvironment'
 import fallbackCover from '@/iconos/Banner.png'
 import galaxyLogo from '@/iconos/logo.png'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
+import { useVisualThemes } from '@/composables/useVisualThemes'
+import { pngWithThemeMetadata } from '@/services/visualThemePng'
+import { DEFAULT_VISUAL_THEME, isLegacyTheme, socialThemeSettings, socialThemeCss, visualThemeExportManifest } from '@/services/visualThemes'
 
 const route = useRoute()
 const router = useRouter()
 const post = ref(null)
+const {theme:assignedTheme,enabled:themeEnabled}=useVisualThemes(()=>post.value)
+const renderedTheme=ref(DEFAULT_VISUAL_THEME)
 const authorProfile = ref(null)
 const isLoading = ref(true)
 const isDownloading = ref(false)
@@ -174,6 +179,27 @@ const styleSettingsStore = ref({
 const styleOverridesStore = ref({ editorial: {}, impact: {} })
 const globalTemplateSettings = ref(cloneSettings(styleSettingsStore.value.editorial))
 const slideTemplateOverrides = ref({})
+let themeBaseline=null
+let previousThemePatch={}
+let appliedThemeKey=''
+watch([assignedTheme,()=>themeEnabled.value.social,selectedStyle,isDownloading],()=>{
+  if(isDownloading.value) return
+  const nextKey=JSON.stringify([assignedTheme.value,themeEnabled.value.social,selectedStyle.value])
+  if(nextKey===appliedThemeKey) return
+  appliedThemeKey=nextKey
+  // Restore only painted values; positions, typography and editor options stay intact.
+  let settings=cloneSettings(globalTemplateSettings.value)
+  if(themeBaseline) {
+    for(const [group,values] of Object.entries(previousThemePatch)) for(const key of Object.keys(values)) {
+      if(settings[group]?.[key]===values[key]) settings[group][key]=themeBaseline[group]?.[key]
+    }
+  }
+  themeBaseline=cloneSettings(settings)
+  renderedTheme.value=themeEnabled.value.social?assignedTheme.value:DEFAULT_VISUAL_THEME
+  previousThemePatch=socialThemeSettings(renderedTheme.value)
+  if(Object.keys(previousThemePatch).length) settings=mergeSettings(settings,previousThemePatch)
+  globalTemplateSettings.value=settings
+},{immediate:true})
 
 const formats = {
   story: {
@@ -712,6 +738,11 @@ function cardStyleFor(index) {
   const settings = settingsForSlide(index)
   return {
     ...cardStyle.value,
+    ...socialThemeCss(renderedTheme.value),
+    ...(!isLegacyTheme(renderedTheme.value) ? {
+      '--theme-arrow-bg':elementPaint(settings,'arrow'),
+      ...(settings.progress.customPaint ? {'--theme-progress-active':elementPaint(settings,'progress')} : {})
+    } : {}),
     '--template-font-family': settings.typography.family,
     '--image-filter': `brightness(${settings.image.brightness}%) contrast(${settings.image.contrast}%) saturate(${settings.image.saturation}%) blur(${settings.image.blur}px)`,
     '--image-scale': settings.image.scale / 100,
@@ -924,16 +955,22 @@ function isLocalOrInlineImage(value) {
   }
 }
 
+function exportThemeManifest() {
+  return {...visualThemeExportManifest(renderedTheme.value,themeEnabled.value.social),
+    requestedVisualThemeId:post.value?.visualThemeId||null,
+    postId:post.value?.id,format:selectedFormat.value,style:selectedStyle.value,
+    design:designSnapshot()}
+}
 async function downloadPng(index = 0) {
   const target = cardRefs.value[index]
   if (!target || isDownloading.value) return
-
+  const themeManifest=exportThemeManifest()
   isDownloading.value = true
   try {
     await nextTick()
     await document.fonts?.ready
     const dataUrl = await renderSlidePng(target)
-    triggerDownload(dataUrl, fileName(index))
+    triggerDownload(pngWithThemeMetadata(dataUrl,themeManifest), fileName(index))
   } catch (err) {
     error.value = 'No se pudo generar el PNG. Revisa que la imagen de portada permita exportacion.'
   } finally {
@@ -943,7 +980,7 @@ async function downloadPng(index = 0) {
 
 async function downloadCarousel() {
   if (!cardRefs.value.length || isDownloading.value) return
-
+  const themeManifest=exportThemeManifest()
   isDownloading.value = true
   error.value = ''
   exportProgress.value = {
@@ -956,6 +993,7 @@ async function downloadCarousel() {
     await nextTick()
     await document.fonts?.ready
     const zip = new JSZip()
+    zip.file('visual-theme.json', JSON.stringify(themeManifest,null,2))
 
     for (const [index, target] of cardRefs.value.entries()) {
       if (!target) continue
@@ -1160,7 +1198,7 @@ function slugify(value) {
             <div class="share-card-scale" :style="previewScaleStyle">
               <article
                 :ref="(el) => setCardRef(el, index)"
-                class="social-card social-network-layout" :data-slide-type="slide.type" :data-accent="slide.accent" :data-format="selectedFormat" @pointerdown="startVisualDrag($event, index)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag"
+                class="social-card social-network-layout" :data-visual-themed="!isLegacyTheme(renderedTheme) ? 'true' : null" :data-slide-type="slide.type" :data-accent="slide.accent" :data-format="selectedFormat" @pointerdown="startVisualDrag($event, index)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag"
                 :class="[activeStyle.className, {
                   analysis: isAnalysisPost,
                   'impact-cover': selectedStyle === 'impact' && index === 0,
@@ -2587,4 +2625,16 @@ function slugify(value) {
 .social-network-layout .social-next-cue{background:var(--arrow-paint)}
 .social-network-layout .social-cta{background:var(--button-paint);color:var(--button-text-color)}
 .social-network-layout .social-category,.social-network-layout[data-accent=gold] .social-category{color:var(--part-text-color)}
+</style>
+
+<style scoped>
+.social-network-layout[data-visual-themed=true] .network-progress span{background:var(--theme-progress-inactive)}
+.social-network-layout[data-visual-themed=true] .network-progress span.filled{background:var(--theme-progress-active)}
+.social-network-layout[data-visual-themed=true] .social-category{background:var(--part-paint);color:var(--part-text-color)}
+.social-network-layout[data-visual-themed=true] .social-points{background:var(--theme-card-bg);border-color:var(--theme-card-border)}
+.social-network-layout[data-visual-themed=true] .social-points li>span{background:var(--theme-number-bg);color:var(--theme-number-text)}
+.social-network-layout[data-visual-themed=true][data-slide-type=closing] .social-points{background:none}
+.social-network-layout[data-visual-themed=true][data-slide-type=closing] .social-points li{background:var(--theme-card-bg);border-color:var(--theme-card-border)}
+.social-network-layout[data-visual-themed=true] .social-next-cue{background:var(--theme-arrow-bg);border-color:var(--theme-arrow-border)}
+.social-network-layout[data-visual-themed=true] .social-card-glow{opacity:var(--theme-glow-opacity)}
 </style>

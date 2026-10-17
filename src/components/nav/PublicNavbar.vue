@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth'
 import { addDoc, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
@@ -42,6 +42,24 @@ const loadingSearch = ref(false)
 const currentUser = ref(auth.currentUser)
 const notificationsOpen = ref(false)
 const accountMenuOpen = ref(false)
+const accountButton = ref(null)
+const accountPanelPosition = ref({})
+function positionAccountMenu() {
+ if(!accountMenuOpen.value || !accountButton.value) return
+ const rect=accountButton.value.getBoundingClientRect()
+ const navBottom=accountButton.value.closest('nav')?.getBoundingClientRect().bottom || rect.bottom
+ accountPanelPosition.value={'--account-menu-right':Math.max(12,window.innerWidth-rect.right)+'px','--account-menu-top':(Math.max(rect.bottom,navBottom)+10)+'px'}
+}
+function closeAccountOnOutside(event) {
+ if(accountMenuOpen.value && !event.target.closest('.public-account-panel') && !accountButton.value?.contains(event.target)) accountMenuOpen.value=false
+}
+function closeAccountOnEscape(event) {
+ if(event.key==='Escape' && accountMenuOpen.value){accountMenuOpen.value=false;accountButton.value?.focus()}
+
+}
+watch(accountMenuOpen,async open=>{if(open){await nextTick();positionAccountMenu()}})
+onMounted(()=>{document.addEventListener('pointerdown',closeAccountOnOutside);document.addEventListener('keydown',closeAccountOnEscape);window.addEventListener('resize',positionAccountMenu);window.addEventListener('scroll',positionAccountMenu,{passive:true})})
+onUnmounted(()=>{document.removeEventListener('pointerdown',closeAccountOnOutside);document.removeEventListener('keydown',closeAccountOnEscape);window.removeEventListener('resize',positionAccountMenu);window.removeEventListener('scroll',positionAccountMenu)})
 const notifications = ref([])
 const isClearingNotifications = ref(false)
 const currentRole = ref('user')
@@ -1043,7 +1061,7 @@ onUnmounted(() => {
             <strong v-if="unreadCount">{{ unreadCount }}</strong>
           </button>
 
-          <button v-if="currentUser" class="public-account-btn" type="button" @click="goAccount">
+          <button v-if="currentUser" ref="accountButton" class="public-account-btn" type="button" @click="goAccount">
             <ProfileAvatar
               class="account-btn-avatar"
               :src="currentProfileIcon"
@@ -1121,7 +1139,8 @@ onUnmounted(() => {
       @open-notification="openNotification"
     />
 
-    <div v-if="accountMenuOpen" class="public-account-panel" @click.self="accountMenuOpen = false">
+    <Teleport to="body">
+    <div v-if="accountMenuOpen" class="public-account-panel" :style="accountPanelPosition" @click.self="accountMenuOpen = false">
         <div class="public-account-card">
         <button class="public-account-close" type="button" aria-label="Cerrar menu de cuenta" @click="accountMenuOpen = false">
           <i class="fas fa-xmark"></i>
@@ -1183,6 +1202,7 @@ onUnmounted(() => {
       </div>
     </div>
 
+    </Teleport>
     <Teleport to="body">
       <Transition name="fade">
         <div v-if="confirmLogoutOpen" class="account-modal">
@@ -3029,4 +3049,13 @@ onUnmounted(() => {
   .public-brand span { display: none; }
 }
 @media(min-width:860px) { .public-nav-inner { width:var(--public-content-width); max-width:100%; margin-inline:auto; grid-template-columns:minmax(140px,1fr) auto minmax(140px,1fr); gap:12px; } }
+</style>
+
+<style scoped>
+@media(min-width:860px){.public-account-panel{right:var(--account-menu-right,18px);top:var(--account-menu-top,72px)}.public-account-card{box-sizing:border-box;max-height:calc(100dvh - var(--account-menu-top,72px) - 12px);overflow-y:auto;overscroll-behavior:contain}}
+</style>
+
+<style scoped>
+.public-account-panel{z-index:1450;font-family:inherit}
+@media(min-width:860px){.public-account-panel{margin:0;transform:none}.public-account-card{margin:0}}
 </style>

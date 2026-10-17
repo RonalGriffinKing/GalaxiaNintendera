@@ -87,6 +87,7 @@ const followBusy = ref(false)
 const followersTotal = ref(0)
 const followingTotal = ref(0)
 const isLoading = ref(true)
+const extrasLoading = ref(false)
 const isSavingProfile = ref(false)
 const isSavingIcon = ref(false)
 const message = ref('')
@@ -427,6 +428,7 @@ const applyProfileData = (userData = {}) => {
 const loadProfile = async () => {
   const requestId = ++profileLoadRequestId
   isLoading.value = true
+  extrasLoading.value = true
   message.value = ''
   editMessage.value = ''
   iconPanelOpen.value = false
@@ -451,9 +453,13 @@ const loadProfile = async () => {
     }
 
     applyProfileData(userSnap.data())
+    if (!isRewardsPage.value) isLoading.value = false
     await loadProfileExtras(requestId).catch(console.error)
   } finally {
-    if (requestId === profileLoadRequestId) isLoading.value = false
+    if (requestId === profileLoadRequestId) {
+      isLoading.value = false
+      extrasLoading.value = false
+    }
   }
 }
 
@@ -889,6 +895,7 @@ const changeRecentPost = (direction) => {
 }
 
 const toggleFollow = async () => {
+  if (extrasLoading.value) return
   const user = auth.currentUser
   if (!user) {
     router.push(`/login?redirect=${encodeURIComponent(route.fullPath)}`)
@@ -1068,11 +1075,18 @@ watch([iconPanelOpen, iconUploadOpen, relationModal], values => {
   document.body.style.overflow = values.some(Boolean) ? 'hidden' : ''
 })
 onMounted(() => {
-  unsubscribeViewer = onAuthStateChanged(auth, user => { viewerUid.value = user?.uid || '' })
+  unsubscribeViewer = onAuthStateChanged(auth, user => {
+    const nextUid = user?.uid || ''
+    if (viewerUid.value === nextUid) return
+    viewerUid.value = nextUid
+    viewerProfile.value = { role: 'user', canChat: false }
+    loadProfile()
+  })
   window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
   loadProfile()
 })
 onUnmounted(() => {
+  profileLoadRequestId++
   unsubscribeViewer?.()
   clearTimeout(noticeTimer)
   document.body.style.overflow = ''
@@ -1156,7 +1170,7 @@ onUnmounted(() => {
         :display-stars="displayStars"
 
         :icon-panel-open="iconPanelOpen"
-        :follow-busy="followBusy"
+        :follow-busy="followBusy || extrasLoading"
         :is-following="isFollowing"
         :can-use-direct-chat="canUseDirectChat"
         @toggle-rewards="openRewards()"
@@ -1168,7 +1182,11 @@ onUnmounted(() => {
         @share="shareProfile"
       />
 
-      <ProfileStatsPanel :stats="heroStats" @open="openRewards($event === 'icons' ? 'collection' : 'achievements')" />
+      <section v-if="extrasLoading" role="status" class="profile-extras-loading" aria-label="Cargando actividad y colección">
+        <span class="profile-loading-label">Cargando actividad y colección…</span>
+        <div v-for="index in 4" :key="index" class="profile-stat-placeholder" aria-hidden="true"><span></span><span></span></div>
+      </section>
+      <ProfileStatsPanel v-else :stats="heroStats" @open="openRewards($event === 'icons' ? 'collection' : 'achievements')" />
 
 
       <section class="profile-dashboard">
@@ -2284,4 +2302,15 @@ onUnmounted(() => {
 }
 
 @media(min-width:761px) { .profile-page { width:var(--public-content-width); max-width:100%; margin-inline:auto; padding-inline:0; } }
+</style>
+
+<style scoped>
+.profile-extras-loading{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;height:82px;box-sizing:border-box;padding:14px 18px;border:1px solid #a855f726;border-radius:16px;background:#0b1020;margin:0}
+.profile-stat-placeholder{display:grid;justify-items:center;align-content:center;gap:8px;min-width:0}
+.profile-stat-placeholder span{display:block;border-radius:6px;background:linear-gradient(100deg,#94a3b81a,#c4b5fd30,#94a3b81a);background-size:220% 100%;animation:profileStatShimmer 2s ease-in-out infinite}
+.profile-stat-placeholder span:first-child{height:20px;width:36px}.profile-stat-placeholder span:last-child{height:8px;width:min(72px,80%)}
+@keyframes profileStatShimmer{0%,100%{background-position:100% 0}50%{background-position:0 0}}
+@media(max-width:680px){.profile-extras-loading{height:76px;gap:8px;padding:12px}}
+@media(min-width:761px) and (max-width:1440px),(min-width:761px) and (max-height:900px){.profile-extras-loading{height:64px;padding:10px}}
+@media(prefers-reduced-motion:reduce){.profile-stat-placeholder span{animation:none}}
 </style>

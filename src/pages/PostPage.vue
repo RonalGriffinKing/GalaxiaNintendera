@@ -1,5 +1,5 @@
 <script setup>
-import { defineAsyncComponent, computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from "firebase/firestore"
 import { auth, db } from "@/firebase"
@@ -7,15 +7,22 @@ import { resolveAssetUrl } from '@/constants/assets'
 import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
 import { READ_REWARD_STARS, awardPostRead, getReadRewardDelayMs, resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { renderRichText } from '@/services/richText'
+import AnalysisRatingCard from '@/components/posts/AnalysisRatingCard.vue'
+import ReaderActions from '@/components/posts/ReaderActions.vue'
+import GameInfoCard from '@/components/posts/GameInfoCard.vue'
+import { analysisRating, sectionNavLabel } from '@/services/articlePresentation'
+import ReaderLoadingShell from '@/components/posts/ReaderLoadingShell.vue'
 import PostCinematicHero from '@/components/posts/PostCinematicHero.vue'
+import { useVisualThemes } from '@/composables/useVisualThemes'
+import { postWebThemeCss } from '@/services/visualThemes'
 import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
 import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
 
-const PostSummaryViewer = defineAsyncComponent(() => import('@/components/posts/PostSummaryViewer.vue'))
-const summaryOpen = ref(false)
 const route = useRoute()
 const router = useRouter()
 const post = ref({ sections: [] })
+const {theme:visualTheme,enabled:themeEnabled}=useVisualThemes(()=>post.value)
+const articleThemeStyle=computed(()=>themeEnabled.value.web?postWebThemeCss(post.value,visualTheme.value):{})
 const relatedPosts = ref([])
 const copied = ref(false)
 const isFavorite = ref(false)
@@ -36,7 +43,30 @@ const currentUrl = computed(() => {
   return window.location.href
 })
 const publicPostPath = computed(() => `/post/${post.value.slug || post.value.id || route.params.id}`)
-const postSections = computed(() => Array.isArray(post.value.sections) ? post.value.sections : [])
+const postSections = computed(() => (Array.isArray(post.value.sections) ? post.value.sections : []).filter(section => !section.hidden))
+const activeSection = ref(-1)
+const actualNavHeight = ref(null)
+let navbarObserver
+const displayedSections = computed(() => postSections.value.map((section,index)=>({...section,articleIndex:index})).filter(section=>activeSection.value===-1 || section.articleIndex===activeSection.value))
+function selectArticleSection(index) { activeSection.value=index }
+async function tabKeydown(event) {
+ const nav=event.currentTarget
+ const count=postSections.value.length+1
+ const current=activeSection.value+1
+ let next
+ if(event.key==='ArrowRight')next=(current+1)%count
+ else if(event.key==='ArrowLeft')next=(current+count-1)%count
+ else if(event.key==='Home')next=0
+ else if(event.key==='End')next=count-1
+ else return
+ event.preventDefault()
+ selectArticleSection(next-1)
+ await nextTick()
+ const tab=nav?.querySelectorAll('[role="tab"]')[next]
+ tab?.focus({preventScroll:true})
+ if(tab && tab.offsetLeft<nav.scrollLeft)nav.scrollLeft=tab.offsetLeft
+ else if(tab && tab.offsetLeft+tab.offsetWidth>nav.scrollLeft+nav.clientWidth)nav.scrollLeft=tab.offsetLeft+tab.offsetWidth-nav.clientWidth
+}
 const mediaFor = (url) => mediaFromUrl(url)
 const richText = (value) => renderRichText(value)
 const sectionSubtitle = (section = {}) => String(section.subtitle || '').trim()
@@ -54,8 +84,8 @@ const normalizeCategory = (value) => String(value || '')
   .replace(/[\u0300-\u036f]/g, '')
   .toLowerCase()
   .trim()
-const isAnalysisPost = computed(() => normalizeCategory(post.value.category).includes('analisis') && post.value.analysis)
-const analysisScore = computed(() => Number(post.value.analysis?.score || 0))
+const isAnalysisPost = computed(() => Boolean(normalizeCategory(post.value.category).includes('analisis') && post.value.analysis))
+const analysisScore = computed(() => analysisRating(post.value.analysis))
 const analysisTier = computed(() => {
   const score = analysisScore.value
   if (score >= 95) {
@@ -101,7 +131,6 @@ const analysisTier = computed(() => {
     range: '<65'
   }
 })
-const analysisCriteria = computed(() => Array.isArray(post.value.analysis?.criteria) ? post.value.analysis.criteria : [])
 const analysisPros = computed(() => Array.isArray(post.value.analysis?.pros) ? post.value.analysis.pros : [])
 const analysisCons = computed(() => Array.isArray(post.value.analysis?.cons) ? post.value.analysis.cons : [])
 const readBadgeText = computed(() => {
@@ -112,6 +141,7 @@ const readBadgeText = computed(() => {
 
 const loadPost = async () => {
   const requestId = ++loadRequestId
+  activeSection.value = -1
   isLoading.value = true
   clearReadTimer()
   hasReachedEnd.value = false
@@ -244,14 +274,8 @@ const getTime = (timestamp) => {
   return timestamp?.toDate ? timestamp.toDate().getTime() : new Date(timestamp).getTime()
 }
 
-const goSection = (index) => {
-  const section = document.getElementById(`section-${index}`)
-  section?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
-
-const goTop = () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' })
-}
+const goSection = index => selectArticleSection(index)
+const goTop = () => selectArticleSection(-1)
 
 const postPath = (postOrId) => {
   if (typeof postOrId === 'object' && postOrId) return `/post/${postOrId.slug || postOrId.id}`
@@ -560,46 +584,60 @@ const toggleFavorite = async () => {
   }
 }
 
+let authorAlignmentObserver
+function alignReaderActions() {
+ const root=document.querySelector('.editorial-page')
+ const author=root?.querySelector('.hero-author')
+ const sidebar=root?.querySelector('.post-sidebar')
+ const actions=sidebar?.querySelector('.reader-actions')
+ if(!author || !sidebar || !actions || window.innerWidth<1200) return
+ const a=author.getBoundingClientRect(), b=sidebar.getBoundingClientRect()
+ sidebar.style.setProperty('--reader-actions-top', (a.top+a.height/2-b.top-actions.offsetHeight/2)+'px')
+}
+watch(isLoading, async loading => {
+ authorAlignmentObserver?.disconnect()
+ if(loading) return
+ await nextTick()
+ authorAlignmentObserver=new ResizeObserver(alignReaderActions)
+ for(const el of document.querySelectorAll('.editorial-page .hero-content,.editorial-page .hero-author,.editorial-page .post-sidebar')) authorAlignmentObserver.observe(el)
+ alignReaderActions()
+}, {flush:'post'})
 watch(() => route.params.id, loadPost, { immediate: true })
 watch(post, applyPostSeo, { deep: true })
 onMounted(() => {
   previousTitle = document.title
   window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
   window.addEventListener('scroll', checkEndReached, { passive: true })
+  const navbar=document.querySelector('.public-nav')
+  if(navbar){
+    const measure=()=>{actualNavHeight.value=navbar.getBoundingClientRect().height}
+    measure()
+    navbarObserver=new ResizeObserver(measure)
+    navbarObserver.observe(navbar)
+  }
   window.addEventListener('resize', checkEndReached)
+  window.addEventListener('resize', alignReaderActions)
 })
 onUnmounted(() => {
   if (previousTitle) document.title = previousTitle
   document.querySelector('#post-article-schema')?.remove()
   clearReadTimer()
   window.removeEventListener('scroll', checkEndReached)
+  navbarObserver?.disconnect()
+  authorAlignmentObserver?.disconnect()
+  window.removeEventListener('resize', alignReaderActions)
   window.removeEventListener('resize', checkEndReached)
 })
 </script>
 
 <template>
-  <div v-if="isLoading" class="post-loading-page">
-    <main class="post-loading-shell" aria-label="Cargando publicacion">
-      <div class="post-loading-hero">
-        <span></span>
-        <h1></h1>
-        <p></p>
-        <p></p>
-        <div></div>
-      </div>
-      <aside class="post-loading-sidebar">
-        <span></span>
-        <span></span>
-        <span></span>
-      </aside>
-    </main>
-  </div>
+  <ReaderLoadingShell v-if="isLoading" :style="{...articleThemeStyle,'--article-nav-height':actualNavHeight ? actualNavHeight+'px' : undefined}" />
 
   <div
     v-else
     class="post-page"
-    :class="[{ 'analysis-page': isAnalysisPost }, isAnalysisPost ? `analysis-tier-${analysisTier.key}` : '']"
-    :style="isAnalysisPost ? { '--analysis-pattern': `'${analysisTier.pattern}'` } : null"
+    :class="[{ 'analysis-page': isAnalysisPost, 'editorial-page':true, 'section-focused':activeSection>=0, 'visual-themed-article':Object.keys(articleThemeStyle).length }, isAnalysisPost ? `analysis-tier-${analysisTier.key}` : '']"
+    :style="{...articleThemeStyle,'--article-nav-height':actualNavHeight ? actualNavHeight+'px' : undefined,...(isAnalysisPost ? { '--analysis-pattern': `'${analysisTier.pattern}'` } : {})}"
   >
     <div v-if="isAnalysisPost" class="analysis-pattern-field" aria-hidden="true">
       <span v-for="tile in 36" :key="tile">{{ analysisTier.pattern }}</span>
@@ -612,16 +650,14 @@ onUnmounted(() => {
 
     <main class="post-layout">
       <FloatingBackButton fallback="/noticias" />
-      <article class="post-article">
-        <PostSummaryViewer v-if="summaryOpen && !isUpcomingPost" :post="post" @close="summaryOpen=false" @read="summaryOpen=false" />
         <PostCinematicHero
           :post="post"
-          :allow-summary="!isUpcomingPost"
-          @summary="summaryOpen=true"
           :author-profile="authorProfile"
           :author-icon="authorIcon"
           :author-icon-meta="authorIconMeta"
           :is-analysis="isAnalysisPost"
+          :editorial="true"
+          :show-actions="false"
           :analysis-score="analysisScore"
           :analysis-tier="analysisTier"
           :read-status="readStatus"
@@ -635,8 +671,15 @@ onUnmounted(() => {
           @home="router.push('/')"
           @news="router.push('/#noticias')"
         />
+      <article class="post-article" id="article-introduction">
+        <nav v-if="postSections.length && !isUpcomingPost" class="article-section-nav" role="tablist" aria-label="Apartados de la publicación" @keydown="tabKeydown">
+          <button id="article-tab-all" type="button" role="tab" aria-controls="article-reading-panel" :aria-selected="activeSection===-1" :tabindex="activeSection===-1 ? 0 : -1" @click="selectArticleSection(-1)">{{ isAnalysisPost ? 'Análisis' : 'Noticia' }}</button>
+          <button v-for="(section,index) in postSections" :id="'article-tab-'+index" :key="index" type="button" role="tab" aria-controls="article-reading-panel" :aria-selected="activeSection===index" :tabindex="activeSection===index ? 0 : -1" :title="section.title" @click="selectArticleSection(index)">{{ sectionNavLabel(section,index) }}</button>
+        </nav>
+        <div id="article-reading-panel" class="article-reading-panel" :role="postSections.length ? 'tabpanel' : undefined" :aria-labelledby="postSections.length ? (activeSection===-1 ? 'article-tab-all' : 'article-tab-'+activeSection) : undefined" tabindex="-1">
+        <div v-if="activeSection===-1 && post.content && !isUpcomingPost" class="analysis-introduction rich-content" v-html="richText(post.content)"></div>
 
-        <div v-if="!isAnalysisPost" class="post-paragraph rich-content mb-8" v-html="richText(post.content)"></div>
+
 
         <section v-if="isUpcomingPost" class="upcoming-post-lock">
           <span><i class="far fa-calendar"></i> Proximamente</span>
@@ -649,9 +692,9 @@ onUnmounted(() => {
 
         <template v-else>
           <section
-            v-for="(section, i) in postSections"
-            :id="`section-${i}`"
-            :key="i"
+            v-for="section in displayedSections"
+            :id="`section-${section.articleIndex}`"
+            :key="section.articleIndex"
             class="post-content-section scroll-mt-28"
           >
             <h2 class="text-xl font-black text-gray-800 mb-2">
@@ -666,7 +709,7 @@ onUnmounted(() => {
               <iframe
                 v-if="mediaFor(section.image).type === 'youtube'"
                 :src="mediaFor(section.image).embedUrl"
-                :title="section.title || `Seccion ${i + 1}`"
+                :title="section.title || `Seccion ${section.articleIndex + 1}`"
                 loading="lazy"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowfullscreen
@@ -683,85 +726,25 @@ onUnmounted(() => {
           </section>
         </template>
 
-        <section v-if="isAnalysisPost" class="analysis-summary analysis-summary-mobile">
-          <div class="analysis-score-card">
-            <strong>{{ analysisScore }}</strong>
-            <span>{{ analysisTier.label }}</span>
-          </div>
 
-          <div class="analysis-rating-grid">
-            <div v-for="item in analysisCriteria" :key="item.key || item.label">
-              <span>{{ item.label }}</span>
-              <strong>
-                <i
-                  v-for="star in 5"
-                  :key="star"
-                  :class="star <= Math.round(Number(item.score || 0)) ? 'fas fa-star' : 'far fa-star'"
-                ></i>
-              </strong>
-            </div>
-          </div>
-
-          <div class="analysis-pros-cons-view">
-            <article v-if="analysisPros.length">
-              <h3>Lo mejor</h3>
-              <ul>
-                <li v-for="item in analysisPros" :key="item">{{ item }}</li>
-              </ul>
-            </article>
-            <article v-if="analysisCons.length">
-              <h3>Lo peor</h3>
-              <ul>
-                <li v-for="item in analysisCons" :key="item">{{ item }}</li>
-              </ul>
-            </article>
-          </div>
-        </section>
+        </div>
       </article>
 
       <aside class="post-sidebar">
-        <section v-if="isAnalysisPost" class="analysis-summary analysis-summary-side">
-          <div class="analysis-score-card">
-            <strong>{{ analysisScore }}</strong>
-            <span>{{ analysisTier.label }}</span>
-          </div>
-
-          <div class="analysis-rating-grid">
-            <div v-for="item in analysisCriteria" :key="item.key || item.label">
-              <span>{{ item.label }}</span>
-              <strong>
-                <i
-                  v-for="star in 5"
-                  :key="star"
-                  :class="star <= Math.round(Number(item.score || 0)) ? 'fas fa-star' : 'far fa-star'"
-                ></i>
-              </strong>
-            </div>
-          </div>
-
-          <div v-if="analysisPros.length || analysisCons.length" class="analysis-pros-cons-view">
-            <article v-if="analysisPros.length">
-              <h3>Lo mejor</h3>
-              <ul>
-                <li v-for="item in analysisPros" :key="item">{{ item }}</li>
-              </ul>
-            </article>
-            <article v-if="analysisCons.length">
-              <h3>Lo peor</h3>
-              <ul>
-                <li v-for="item in analysisCons" :key="item">{{ item }}</li>
-              </ul>
-            </article>
-          </div>
+        <ReaderActions :read-status="readStatus" :read-badge-text="readBadgeText" :is-favorite="isFavorite" :saving-favorite="savingFavorite" @favorite="toggleFavorite" @copy="copyLink" />
+        <AnalysisRatingCard v-if="isAnalysisPost && !isUpcomingPost" :analysis="post.analysis" :tier="analysisTier" />
+        <GameInfoCard v-if="!isUpcomingPost" :game="post.game || {}" />
+        <section v-if="isAnalysisPost && !isUpcomingPost && (analysisPros.length || analysisCons.length)" class="editorial-verdict post-side-card">
+          <div v-if="analysisPros.length"><h3>Lo mejor</h3><ul><li v-for="item in analysisPros" :key="item">{{ item }}</li></ul></div>
+          <div v-if="analysisCons.length"><h3>A mejorar</h3><ul><li v-for="item in analysisCons" :key="item">{{ item }}</li></ul></div>
         </section>
-
         <div class="post-side-card">
           <h3 class="post-side-title">Contenido</h3>
 
           <ul class="post-index">
             <li>
               <button @click="goTop">
-                1. Resumen
+                {{ isAnalysisPost ? 'Análisis completo' : 'Noticia completa' }}
               </button>
             </li>
             <li v-for="(section, i) in postSections" :key="i">
@@ -843,85 +826,6 @@ onUnmounted(() => {
   position: relative;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
-}
-
-.post-loading-page {
-  background:
-    radial-gradient(circle at 72% 0%, rgba(124, 58, 237, 0.26), transparent 28%),
-    radial-gradient(circle at 12% 36%, rgba(168, 85, 247, 0.14), transparent 30%),
-    linear-gradient(135deg, #030712, #07111f 48%, #120827);
-  color: #e5e7eb;
-  min-height: calc(100vh - var(--public-nav-offset, 72px));
-  padding: 104px 0 72px;
-}
-
-.post-loading-shell {
-  display: grid;
-  gap: 28px;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  margin: 0 auto;
-  max-width: 1200px;
-  width: calc(100% - clamp(48px, 12vw, 180px));
-}
-
-.post-loading-hero,
-.post-loading-sidebar {
-  animation: postLoadingPulse 1.25s ease-in-out infinite alternate;
-  background: rgba(8, 13, 29, 0.78);
-  border: 1px solid rgba(168, 85, 247, 0.22);
-  border-radius: 28px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
-}
-
-.post-loading-hero {
-  display: grid;
-  gap: 18px;
-  min-height: 520px;
-  padding: clamp(28px, 5vw, 64px);
-}
-
-.post-loading-hero span,
-.post-loading-hero h1,
-.post-loading-hero p,
-.post-loading-hero div,
-.post-loading-sidebar span {
-  background: linear-gradient(90deg, rgba(148, 163, 184, 0.18), rgba(216, 180, 254, 0.26), rgba(148, 163, 184, 0.18));
-  border-radius: 999px;
-}
-
-.post-loading-hero span { height: 34px; width: 160px; }
-.post-loading-hero h1 { height: clamp(58px, 8vw, 96px); max-width: 760px; width: 78%; }
-.post-loading-hero p { height: 22px; max-width: 680px; width: 72%; }
-.post-loading-hero p + p { width: 54%; }
-.post-loading-hero div { align-self: end; height: 54px; width: 280px; }
-
-.post-loading-sidebar {
-  align-content: start;
-  display: grid;
-  gap: 14px;
-  min-height: 360px;
-  padding: 24px;
-}
-
-.post-loading-sidebar span { height: 42px; width: 100%; }
-
-@keyframes postLoadingPulse {
-  from { opacity: 0.68; }
-  to { opacity: 1; }
-}
-
-@media (max-width: 980px) {
-  .post-loading-page {
-    padding: 80px 16px var(--public-page-bottom-mobile, 132px);
-  }
-
-  .post-loading-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .post-loading-sidebar {
-    display: none;
-  }
 }
 
 .post-page.analysis-page {
@@ -1200,7 +1104,6 @@ onUnmounted(() => {
 }
 
 @media (max-width: 720px) {
-  .post-loading-shell { width: 100%; }
   .post-layout { gap: 22px; padding: 68px 0 var(--public-page-bottom-mobile, calc(112px + env(safe-area-inset-bottom))); width: 100%; }
   .post-cinematic-hero { margin-left: 6px; margin-right: 6px; }
   .post-paragraph, .post-content-section, .upcoming-post-lock, .analysis-summary-mobile { margin-left: 10px; margin-right: 10px; }
@@ -1258,7 +1161,7 @@ onUnmounted(() => {
 
 /* Articles use the same centered margins as the public listings. */
 @media(min-width:761px){
- .post-layout,.post-loading-shell { width:var(--public-content-width); max-width:1200px; }
+ .post-layout { width:var(--public-content-width); max-width:1200px; }
  .post-layout { padding-top:calc(var(--public-nav-offset, 72px) + 24px); }
 }
 @media(min-width:1024px) and (max-width:1440px){
@@ -1270,4 +1173,111 @@ onUnmounted(() => {
  .post-layout { padding-top:calc(var(--public-nav-offset, 64px) + 16px); }
 }
 .post-content-section { scroll-margin-top:calc(var(--public-nav-offset, 72px) + 20px); }
+</style>
+
+
+
+<style scoped>
+.post-page.visual-themed-article{background:radial-gradient(ellipse at 85% 5%,color-mix(in srgb,var(--visual-primary) 25%,transparent),transparent 45%),radial-gradient(ellipse at 10% 45%,color-mix(in srgb,var(--visual-secondary) 18%,transparent),transparent 55%),var(--visual-background);color:var(--visual-text)}
+.post-page.analysis-page.visual-themed-article{background:radial-gradient(ellipse at 90% 5%,color-mix(in srgb,var(--visual-primary) 70%,transparent),transparent 65%),linear-gradient(120deg,var(--visual-background),color-mix(in srgb,var(--visual-secondary) 65%,var(--visual-background)));}
+.visual-themed-article .post-side-card{background:color-mix(in srgb,var(--visual-surface) 92%,transparent);border-color:var(--visual-border);color:var(--visual-text)}
+.visual-themed-article .post-ambient-lights span{background:radial-gradient(circle,var(--visual-primary),transparent 65%);opacity:.25}
+.visual-themed-article .share-actions button{color:var(--visual-accent);border-color:var(--visual-border)}
+.visual-themed-article .post-content-section{border-color:var(--visual-border)}
+</style>
+
+<style scoped>
+.editorial-rating-mobile,.editorial-game-mobile,.editorial-verdict-mobile{display:none}
+.article-section-nav{position:sticky;top:76px;z-index:10;display:flex;gap:5px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:7px;background:#10121ef5;border:1px solid #ffffff20;border-radius:14px;min-width:0;max-width:100%;box-shadow:0 8px 22px #0003}
+.article-section-nav button{flex:0 0 auto;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:10px 15px;border:0;border-radius:999px;background:transparent;color:#e5e7eb;font-size:12px;font-weight:700;cursor:pointer;min-height:40px}.article-section-nav button[aria-selected="true"]{background:#ffda64;color:#241b05}.article-section-nav button:focus-visible{outline:2px solid #ffda64;outline-offset:-2px}
+#article-introduction{scroll-margin-top:85px}.editorial-page .post-content-section{scroll-margin-top:160px}.analysis-introduction{font-size:17px;line-height:1.85;color:#dae0eb}.editorial-verdict h3{font-size:15px;color:#ffe49a;margin-bottom:10px}.editorial-verdict ul{padding-left:18px;margin:0 0 14px;font-size:14px;line-height:1.7;color:#dce2ec}.editorial-page .analysis-pattern-field{display:none}.post-page.editorial-page.visual-themed-article{background:radial-gradient(ellipse at 90% 0,color-mix(in srgb,var(--visual-primary,#725818) 18%,transparent),transparent 65%),#0b0d18}.editorial-page .post-content-section h2{font-size:clamp(26px,2.5vw,34px);line-height:1.25}.editorial-page .post-paragraph,.analysis-introduction{font-weight:400}.editorial-page .rich-content :deep(strong){font-weight:750}
+@media(min-width:1024px){.post-layout>.post-cinematic-hero{grid-column:1;grid-row:1}.post-article{grid-column:1;grid-row:2;align-content:start}.post-sidebar{grid-column:2;grid-row:1 / span 2;position:static;align-content:start}.editorial-page .post-layout{max-width:1320px;width:calc(100% - 80px);grid-template-columns:minmax(0,1fr) 330px;gap:28px}.editorial-page .post-layout>.post-cinematic-hero{grid-column:1/-1}.editorial-page .post-sidebar{grid-row:2}.editorial-page .post-article{gap:28px}}
+@media(max-width:1023px){.editorial-page .post-sidebar{display:none}.editorial-rating-mobile,.editorial-game-mobile,.editorial-verdict-mobile{display:block}.editorial-rating-mobile{display:grid}.editorial-page .post-layout{width:calc(100% - 32px)}.editorial-page .post-layout>.post-cinematic-hero{margin:0}.article-section-nav{top:68px}.analysis-introduction{font-size:16px}.editorial-page .post-content-section,.analysis-introduction{margin:0}.editorial-page .post-paragraph{margin:0}.editorial-page .post-content-section h2{font-size:clamp(24px,5vw,32px);line-height:1.25}}
+</style>
+
+<style scoped>
+/* Full width artwork, with the reading columns kept within the editorial measure. */
+@media(min-width:1024px){
+ .editorial-page .post-layout{width:100%;max-width:none;grid-template-columns:minmax(12px,1fr) minmax(0,962px) 330px minmax(12px,1fr)}
+ .editorial-page .post-layout>.post-cinematic-hero{grid-column:1/-1}
+ .editorial-page .post-article{grid-column:2}
+ .editorial-page .post-sidebar{grid-column:3}
+}
+@media(max-width:1023px){
+ .editorial-page .post-layout{width:100%;grid-template-columns:16px minmax(0,1fr) 16px;column-gap:0}
+ .editorial-page .post-layout>.post-cinematic-hero{grid-column:1/-1}
+ .editorial-page .post-article{grid-column:2}
+}
+</style>
+
+<style scoped>
+.editorial-page .post-layout>.post-cinematic-hero{padding-bottom:180px;margin-bottom:-180px;border-bottom:0;box-shadow:none;mask-image:linear-gradient(to bottom,#000 calc(100% - 110px),transparent);-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 110px),transparent)}
+.editorial-page .post-layout>.post-cinematic-hero :deep(.hero-content){min-height:540px}
+.editorial-page .post-article{position:relative}.editorial-page .post-sidebar{z-index:1}
+@media(max-width:760px){
+ .editorial-page .post-layout>.post-cinematic-hero{padding-bottom:130px;margin-bottom:-130px}
+ .editorial-page .post-layout>.post-cinematic-hero :deep(.hero-content){min-height:640px}
+}
+</style>
+
+<style scoped>
+.editorial-page .post-layout{padding-top:var(--public-nav-offset,72px)}
+.article-section-nav{width:max-content;max-width:100%;justify-self:start;box-sizing:border-box}
+.editorial-page .post-layout>.post-cinematic-hero{padding-bottom:280px;margin-bottom:-280px;mask-image:linear-gradient(to bottom,#000 calc(100% - 280px),#000b calc(100% - 140px),transparent);-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 280px),#000b calc(100% - 140px),transparent)}
+@media(max-width:760px){.editorial-page .post-layout{padding-top:var(--public-nav-offset,64px)}.editorial-page .post-layout>.post-cinematic-hero{padding-bottom:200px;margin-bottom:-200px;mask-image:linear-gradient(to bottom,#000 calc(100% - 200px),transparent);-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 200px),transparent)}}
+</style>
+
+<style scoped>
+.editorial-page .post-layout{padding-top:var(--article-nav-height,var(--public-nav-offset,72px))}
+.article-reading-panel{display:grid;gap:24px;align-content:start;min-width:0;overflow-anchor:none}
+.editorial-page .article-reading-panel{min-height:100svh}
+.article-section-nav{top:var(--article-nav-height,var(--public-nav-offset,72px))}
+@media(max-width:760px){.editorial-page .post-layout{padding-top:var(--article-nav-height,var(--public-nav-offset,64px))}}
+</style>
+
+<style scoped>
+/* Explicit zero-minimum tracks prevent long navigation labels and media from widening the article. */
+.post-article,.article-reading-panel{grid-template-columns:minmax(0,1fr);min-width:0;max-width:100%}
+.article-reading-panel>*{min-width:0;max-width:100%;box-sizing:border-box}
+.article-section-nav{width:fit-content;min-width:0;max-width:100%}
+.editorial-page{--analysis-tail:clamp(180px,22vw,280px)}
+.editorial-page .post-content-section{min-width:0;max-width:100%}
+.editorial-page .post-content-section h2,.analysis-introduction,.editorial-page .post-paragraph{overflow-wrap:anywhere;min-width:0;max-width:100%}
+.editorial-page .post-section-media{width:100%;min-width:0;max-width:100%;overflow:hidden}
+.editorial-page .post-section-media :is(img,video,iframe){max-width:100%;box-sizing:border-box}
+.editorial-page .post-layout>.post-cinematic-hero{padding-bottom:var(--analysis-tail);margin-bottom:calc(-1 * var(--analysis-tail));mask-image:linear-gradient(to bottom,#000 calc(100% - var(--analysis-tail)),#000b calc(100% - var(--analysis-tail)/2),transparent);-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - var(--analysis-tail)),#000b calc(100% - var(--analysis-tail)/2),transparent)}
+@media(max-width:1199px){
+ .editorial-page .post-layout{width:100%;max-width:none;grid-template-columns:clamp(14px,3vw,28px) minmax(0,1fr) clamp(14px,3vw,28px);column-gap:0}
+ .editorial-page .post-layout>.post-cinematic-hero{grid-column:1/-1;grid-row:1}
+ .editorial-page .post-article{grid-column:2;grid-row:2;gap:22px;width:100%;max-width:860px;justify-self:center}
+ .editorial-page .post-sidebar{display:grid;grid-column:2;grid-row:3;width:100%;max-width:680px;justify-self:center;position:static;top:auto;min-width:0;align-content:start;gap:18px}
+ .editorial-page.section-focused .post-sidebar{display:none}
+ .editorial-page .post-sidebar>*{min-width:0;max-width:100%;box-sizing:border-box}
+ .editorial-page .post-content-section h2{font-size:clamp(24px,3.8vw,32px);line-height:1.25}
+ .editorial-page .post-paragraph,.analysis-introduction{font-size:clamp(15px,1.9vw,17px);line-height:1.8}
+}
+@media(min-width:1200px){
+ .editorial-page .post-layout{grid-template-columns:minmax(12px,1fr) minmax(0,962px) 330px minmax(12px,1fr);column-gap:28px}
+ .editorial-page .post-sidebar{display:grid;grid-column:3;grid-row:2;position:relative;top:auto}
+ .editorial-page .post-sidebar>.reader-actions{position:absolute;top:var(--reader-actions-top,-60px);left:0;width:100%;min-height:44px}
+}
+</style>
+
+<style scoped>
+.article-section-nav{background:color-mix(in srgb,var(--visual-surface,#11121e) 90%,var(--visual-primary,#8b5cf6));border-color:var(--visual-border,#a855f780)}
+.article-section-nav button[aria-selected="true"]{background:var(--visual-label-background,#7024dc);color:var(--visual-label-text,#ffffff)}
+.article-section-nav button:focus-visible{outline-color:var(--visual-accent,#a855f7)}
+.analysis-page .article-section-nav button[aria-selected="true"]{background:#facc15;color:#241800}
+</style>
+
+<style scoped>
+/* Use the article's centered column for the cover copy at single-column widths. */
+@media(min-width:761px) and (max-width:1199px){
+ .editorial-page .post-layout>.post-cinematic-hero :deep(.hero-content){margin-left:max(clamp(14px,3vw,28px),calc((100% - 860px)/2));margin-right:max(clamp(14px,3vw,28px),calc((100% - 860px)/2));max-width:none;width:auto;padding-left:0;padding-right:0}
+}
+@media(max-width:760px){
+ .editorial-page .post-layout>.post-cinematic-hero{min-height:0}
+ .editorial-page .post-layout>.post-cinematic-hero :deep(.hero-content){margin-left:clamp(14px,3vw,28px);margin-right:clamp(14px,3vw,28px);padding:20px 0 24px;min-height:0;max-width:none;width:auto;gap:16px}
+ .editorial-page .post-layout>.post-cinematic-hero :deep(.hero-breadcrumb){margin-bottom:72px}
+}
 </style>

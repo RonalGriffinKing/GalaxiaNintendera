@@ -272,6 +272,7 @@ import { notifyNewPost } from '@/services/notifications'
 import { useListNavigation } from '@/composables/useListNavigation'
 import { DEFAULT_POST_CATEGORIES, loadPostCategories, postCategoryLabels, postMatchesCategory, savePostCategories } from '@/services/postCategories'
 import { homePinnedPosts, homePinOverflow, MAX_HOME_PINS } from '@/services/homePins'
+import { clearPublicPageCache } from '@/services/publicPageCache'
 
 const route = useRoute()
 const router = useRouter()
@@ -303,6 +304,7 @@ async function togglePin(post) {
   try {
     const patch = { homePinned: next, homePinnedAt: next ? Date.now() : 0 }
     await updateDoc(doc(db, 'posts', post.id), patch)
+    clearPublicPageCache()
     Object.assign(post, patch)
     showToast(next ? 'Publicación pineada en Inicio' : 'Pin retirado de Inicio')
   } catch (error) { console.error(error); showToast('No se pudo guardar el pin', 'delete') }
@@ -594,6 +596,7 @@ const executeApprove = async (post) => {
     batch.update(doc(db, 'posts', post.id), patch)
     overflow.forEach(item => batch.update(doc(db, 'posts', item.id), { homePinned: false, homePinnedAt: 0 }))
     await batch.commit()
+    clearPublicPageCache()
     overflow.forEach(item => { const local = posts.value.find(p => p.id === item.id); if (local) Object.assign(local, { homePinned: false, homePinnedAt: 0 }) })
     post.status = 'approved'
     post.updatedAt = publishedAt
@@ -621,6 +624,7 @@ const triggerDelete = (id) => {
 
 const executeDelete = async (id) => {
   await deleteDoc(doc(db, 'posts', id))
+  clearPublicPageCache()
   posts.value = posts.value.filter(p => p.id !== id)
   confirmDialog.value.show = false
   showToast('Post eliminado', 'delete')

@@ -1,4 +1,5 @@
 <script setup>
+import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore'
@@ -12,14 +13,16 @@ import EventsHero from '@/components/events/EventsHero.vue'
 import EventsSidebar from '@/components/events/EventsSidebar.vue'
 import EventsTabs from '@/components/events/EventsTabs.vue'
 import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
+import { peekPublicPage, storePublicPage } from '@/services/publicPageCache'
 
 const route = useRoute()
 const router = useRouter()
 
-const events = ref([])
-const communities = ref([])
+const events = ref(peekPublicPage('events-live-list') || [])
+const communities = ref(peekPublicPage('events-live-communities') || [])
 const currentUser = ref(auth.currentUser)
 const currentRole = ref('user')
+const eventsReady = ref(false)
 const activeTab = ref('calendar')
 const detailEvent = ref(null)
 const editorOpen = ref(false)
@@ -87,6 +90,7 @@ const closeDetails = () => {
 }
 
 const toggleNotify = async (event) => {
+  if (!eventsReady.value) return
   if (!currentUser.value) {
     router.push('/login?mode=login')
     return
@@ -146,12 +150,14 @@ onMounted(() => {
     currentRole.value = 'user'
     if (user) {
       const snap = await getDoc(doc(db, 'users', user.uid)).catch(() => null)
-      currentRole.value = snap?.data()?.role || 'user'
+      if (currentUser.value?.uid === user.uid) currentRole.value = snap?.data()?.role || 'user'
     }
   })
 
   unsubscribeEvents = onSnapshot(query(collection(db, 'galaxyEvents'), orderBy('startsAt', 'asc')), (snap) => {
     events.value = snap.docs.map(item => ({ id: item.id, notifyBy: [], ...item.data(), startsAt: getMillis(item.data().startsAt) }))
+    eventsReady.value = true
+    storePublicPage('events-live-list', events.value.map(({ notifyBy, ...event }) => ({ ...event, notifyBy: [] })))
     if (route.query.id) {
       const found = events.value.find(event => event.id === route.query.id)
       if (found) detailEvent.value = found
@@ -160,6 +166,7 @@ onMounted(() => {
 
   unsubscribeCommunities = onSnapshot(query(collection(db, 'communities'), orderBy('createdAt', 'asc')), (snap) => {
     communities.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
+    storePublicPage('events-live-communities', communities.value)
   })
 })
 
@@ -174,7 +181,7 @@ watch(() => route.query.id, (id) => {
   }
   const found = events.value.find(event => event.id === id)
   if (found) detailEvent.value = found
-})
+}, { immediate: true })
 
 watch(calendarPanelOpen, (isOpen) => {
   if (isOpen) {
@@ -194,6 +201,7 @@ onUnmounted(() => {
 
 <template>
   <main class="events-page-premium">
+    <GalaxyAtmosphere />
     <div class="events-page-inner">
       <FloatingBackButton />
       <EventsHero :can-create="isAdmin" @create="openEditor()" />
@@ -698,4 +706,8 @@ onUnmounted(() => {
     max-width: 100%;
   }
 }
+</style>
+
+<style scoped>
+.events-page-premium{position:relative;isolation:isolate}
 </style>

@@ -1,15 +1,17 @@
 <script setup>
+import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { createOfficialCommunity } from '@/constants/community'
+import { peekPublicPage, requestPublicPage, storePublicPage } from '@/services/publicPageCache'
 import { defaultBannerUrl, defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
 defineProps({ embedded: Boolean })
 
-const communities = ref([])
+const communities = ref(peekPublicPage('communities-directory-display') || [])
 const search = ref('')
-const loading = ref(true)
+const loading = ref(peekPublicPage('communities-directory-display') === undefined)
 const error = ref('')
 const fallbackImage = (event, source) => {
   const image = event.currentTarget
@@ -20,14 +22,18 @@ const fallbackImage = (event, source) => {
 const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 const filtered = computed(() => communities.value.filter(item => normalize(`${item.name} ${item.description}`).includes(normalize(search.value.trim()))))
 const load = async () => {
-  loading.value = true
+  loading.value = !communities.value.length
   error.value = ''
   try {
-    const snap = await getDocs(collection(db, 'communities'))
-    const items = snap.docs.map(item => ({ ...item.data(), id: item.id }))
+    const items = await requestPublicPage('communities-directory', async () => {
+      const snap = await getDocs(collection(db, 'communities'))
+      return snap.docs.map(item => ({ ...item.data(), id: item.id }))
+    })
+    const sortedItems = [...items]
     const official = createOfficialCommunity()
-    if (!items.some(item => item.id === official.id)) items.unshift(official)
-    communities.value = items.sort((a,b) => Number(Boolean(b.isOfficial)) - Number(Boolean(a.isOfficial)) || Number(b.membersCount || 0) - Number(a.membersCount || 0) || String(a.name || '').localeCompare(String(b.name || ''), 'es'))
+    if (!sortedItems.some(item => item.id === official.id)) sortedItems.unshift(official)
+    communities.value = sortedItems.sort((a,b) => Number(Boolean(b.isOfficial)) - Number(Boolean(a.isOfficial)) || Number(b.membersCount || 0) - Number(a.membersCount || 0) || String(a.name || '').localeCompare(String(b.name || ''), 'es'))
+    storePublicPage('communities-directory-display', communities.value)
   } catch {
     error.value = 'No pudimos cargar las comunidades.'
   } finally { loading.value = false }
@@ -37,11 +43,12 @@ onMounted(load)
 
 <template>
   <component :is="embedded ? 'section' : 'main'" class="communities-page" :class="{ embedded }">
+    <GalaxyAtmosphere v-if="!embedded" />
     <header><component :is="embedded ? 'h2' : 'h1'"><i class="fas fa-users" aria-hidden="true"></i> {{ embedded ? 'Explora las comunidades' : 'Comunidades' }}</component><p v-if="!embedded">Encuentra tu comunidad y descubre qué comparten sus miembros.</p></header>
     <label class="community-search"><i class="fas fa-search" aria-hidden="true"></i><input v-model="search" type="search" aria-label="Buscar comunidades" placeholder="Buscar comunidad o saga…" /></label>
     <p v-if="loading" role="status">Cargando comunidades…</p>
-    <div v-else-if="error" role="alert"><p>{{ error }}</p><button type="button" @click="load">Reintentar</button></div>
-    <template v-else>
+    <div v-if="error" role="alert"><p>{{ error }}</p><button type="button" @click="load">Reintentar</button></div>
+    <template v-if="!loading && communities.length">
       <p class="result-count" role="status">{{ filtered.length }} comunidades</p>
       <div class="community-grid">
         <RouterLink v-for="item in filtered" :key="item.id" class="community-card" :to="{ path: '/comunidad', query: { id: item.id } }">
@@ -73,4 +80,8 @@ footer { grid-column: 1/-1; display: flex; flex-wrap: wrap; align-items: end; ju
 button { min-height: 44px; padding: 10px 16px; background: var(--accent); color: white; border-radius: 10px; }
 @media(max-width:1000px) { .community-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media(max-width:600px) { .communities-page { padding: var(--public-page-top-mobile,76px) 12px 100px; }.communities-page.embedded { padding: 24px 0; }.community-grid { grid-template-columns: minmax(0,1fr); }.community-banner { height: 140px; } }
+</style>
+
+<style scoped>
+.communities-page:not(.embedded){position:relative;isolation:isolate}
 </style>

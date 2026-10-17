@@ -1,0 +1,127 @@
+{
+  "title": "Ejemplo ficticio: análisis de un juego",
+  "subtitle": "Ejemplo de estructura del artículo completo; sustituir por información verificada.",
+  "summary": "Este documento muestra el formato del JSON. No describe un anuncio real y no está preparado para publicarse como noticia.",
+  "image": "",
+  "hero": {
+    "image": "",
+    "logoUrl": "",
+    "position": "center top",
+    "images": []
+  },
+  "category": "Analisis",
+  "categories": [
+    "Analisis"
+  ],
+  "sections": [
+    {
+      "label": "Exploración",
+      "navLabel": "Exploración",
+      "title": "Una sección del artículo completo",
+      "image": "",
+      "content": "Aquí va el desarrollo completo y verificado de la noticia. El carrusel tiene una redacción independiente dentro de social.",
+      "hidden": false
+    }
+  ],
+  "social": {
+    "schemaVersion": 2,
+    "title": "¡Pequeños cambios que marcan la diferencia!",
+    "titleHighlights": [
+      "marcan la diferencia"
+    ],
+    "eyebrow": "EJEMPLO DE DISEÑO",
+    "accent": "violet",
+    "summary": "Una portada breve presenta la idea principal. El artículo mantiene todo su desarrollo fuera del carrusel.",
+    "image": "",
+    "slides": [
+      {
+        "type": "content",
+        "eyebrow": "EXPLORACIÓN",
+        "accent": "gold",
+        "title": "¡Una idea clara en cada imagen!",
+        "titleHighlights": [
+          "cada imagen"
+        ],
+        "content": "Los puntos desarrollan la idea sin repetir el título. Este ejemplo sirve para comprobar la composición antes de usar noticias reales.",
+        "points": [
+          "Un titular breve que se entiende de un vistazo.",
+          "Un subtítulo que añade contexto a la imagen.",
+          "Puntos concretos dentro de una tarjeta de lectura."
+        ],
+        "image": "",
+        "sectionIndexes": [
+          0
+        ],
+        "cta": ""
+      },
+      {
+        "type": "closing",
+        "eyebrow": "TU OPINIÓN",
+        "accent": "gold",
+        "title": "¿Qué idea te llama más la atención?",
+        "titleHighlights": [
+          "más la atención"
+        ],
+        "content": "La última imagen abre la conversación con una pregunta relacionada con el contenido del artículo.",
+        "points": [
+          "La presentación de las novedades",
+          "Los detalles de cada imagen",
+          "La pregunta para compartir opiniones"
+        ],
+        "image": "",
+        "sectionIndexes": [
+          0
+        ],
+        "cta": "¡Cuéntanos en los comentarios!"
+      }
+    ]
+  },
+  "game": {
+    "nameEs": "",
+    "nameEn": "",
+    "cover": "",
+    "developer": "",
+    "genres": [],
+    "platforms": [],
+    "releaseDate": "",
+    "releaseNote": "",
+    "officialUrl": ""
+  },
+  "analysis": {
+    "score": 80,
+    "hypeTitle": "Ejemplo de valoración: sustituir por tu veredicto.",
+    "criteria": [
+      {
+        "key": "historia",
+        "label": "Historia",
+        "score": 8
+      },
+      {
+        "key": "gameplay",
+        "label": "Jugabilidad",
+        "score": 7
+      },
+      {
+        "key": "graficos",
+        "label": "Gráficos",
+        "score": 9
+      },
+      {
+        "key": "musica",
+        "label": "Música y sonido",
+        "score": 8
+      },
+      {
+        "key": "duracion",
+        "label": "Duración",
+        "score": 8
+      }
+    ],
+    "pros": [
+      "Sustituir por un aspecto positivo comprobado."
+    ],
+    "cons": [
+      "Sustituir por un aspecto mejorable comprobado."
+    ]
+  }
+}

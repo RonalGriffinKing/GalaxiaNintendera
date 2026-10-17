@@ -1,4 +1,4 @@
-import { socialSource } from './socialSummary'
+import { socialSource } from './socialPostPresentation'
 import { normalizeSocialContent } from './socialContent'
 
 const text = value => String(value ?? '').trim()

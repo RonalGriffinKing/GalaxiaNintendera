@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "id": "kirby-dreamland",
+  "name": "Kirby Dreamland",
+  "version": 1,
+  "archived": false,
+  "config": {
+    "general": {
+      "primary": "#9d2464",
+      "secondary": "#155e75",
+      "accent": "#ff94d1",
+      "background": "#200e24",
+      "surface": "#17141e",
+      "text": "#ffffff",
+      "muted": "#ede9fe",
+      "highlight": "#ff94d1"
+    },
+    "social": {
+      "title": "#ffffff",
+      "highlight": "#ff94d1",
+      "description": "#ede9fe",
+      "labelBackground": "#9d2464",
+      "labelEnd": "#155e75",
+      "labelText": "#ffffff",
+      "numberBackground": "#9d2464",
+      "numberEnd": "#155e75",
+      "numberText": "#ffffff",
+      "cardBackground": "#252230b8",
+      "cardEnd": "#17141e8c",
+      "cardBorder": "#ffffff16",
+      "progressActive": "#9d2464",
+      "progressMiddle": "#ff94d1",
+      "progressEnd": "#155e75",
+      "progressInactive": "#9a9dbb70",
+      "arrowBackground": "#9d2464",
+      "arrowEnd": "#155e75",
+      "arrowIcon": "#ffffff",
+      "arrowBorder": "#b65ddd",
+      "gradientStart": "#200e24",
+      "gradientEnd": "#200e24",
+      "gradientOpacity": 0.9,
+      "glowOpacity": 0.22,
+      "effect": "none"
+    },
+    "web": {
+      "accent": "#ff94d1",
+      "highlight": "#ff94d1",
+      "labelBackground": "#9d2464",
+      "labelText": "#ffffff",
+      "buttonBackground": "#9d2464",
+      "buttonText": "#ffffff",
+      "border": "#9d2464"
+    }
+  }
+}

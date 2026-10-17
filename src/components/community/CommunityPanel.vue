@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { peekPublicPage, storePublicPage } from '@/services/publicPageCache'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import {
   addDoc,
@@ -80,19 +81,19 @@ const liveGoalDraft = ref({
 })
 const replyDraft = ref('')
 const selectedTopic = ref('Inicio')
-const selectedCommunityId = ref('')
+const selectedCommunityId = ref(peekPublicPage('community-panel-directory')?.length ? (props.initialCommunityId || route.query.id || peekPublicPage('community-panel-directory')[0].id) : '')
 const openThreadId = ref(null)
 const defaultThreadTopics = DEFAULT_THREAD_TOPICS
 const contentTabIcons = CONTENT_TAB_ICONS
 const getTopicIcon = (topic) => contentTabIcons[topic] || 'fas fa-hashtag'
 const getTopicLabel = (topic) => (topic === 'Posts' ? 'Hilos' : topic)
-const communities = ref([])
+const communities = ref(peekPublicPage('community-panel-directory') || [])
 const joinedCommunityIds = ref([])
 const threads = ref([])
 const galaxyEvents = ref([])
 const liveGoals = ref([])
 const isLoading = ref(true)
-const isCommunitiesLoading = ref(true)
+const isCommunitiesLoading = ref(peekPublicPage('community-panel-directory') === undefined)
 const isDeleting = ref(false)
 const activeVideoMode = ref('live')
 const officialVideoFilter = ref('all')
@@ -2027,6 +2028,8 @@ const subscribeThreads = () => {
       comments: [],
       ...item.data()
     }))
+    threads.value = rawThreads
+    isLoading.value = false
     const profiles = await loadThreadAuthorProfiles(collectThreadAuthorIds(rawThreads))
     if (loadVersion !== threadsLoadVersion) return
     threads.value = rawThreads.map(thread => enrichThreadAuthorProfiles(thread, profiles))
@@ -2056,6 +2059,7 @@ const subscribeCommunities = () => {
         selectedCommunityId.value = communities.value[0].id
       }
     }
+    storePublicPage('community-panel-directory', communities.value)
     isCommunitiesLoading.value = false
   }, (error) => {
     console.error(error)
@@ -2310,6 +2314,7 @@ onBeforeRouteUpdate((to, from, next) => {
 })
 
 onUnmounted(() => {
+  threadsLoadVersion++
   window.removeEventListener('message', handleYoutubePlayerMessage)
   window.removeEventListener('galaxia-live-return-community', restoreHubPlayerToCommunity)
   window.clearInterval(liveClockTimer)
