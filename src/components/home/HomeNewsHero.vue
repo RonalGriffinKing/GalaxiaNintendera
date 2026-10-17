@@ -170,3 +170,14 @@ onUnmounted(() => {
 <style scoped>
 .home-news-hero{cursor:pointer}.home-news-hero.is-analysis .hero-read{background:linear-gradient(110deg,#e8b923,#ffdf64);color:#211804;border-color:#ffda64;box-shadow:0 3px 14px #d4a51c25}
 </style>
+
+<style scoped>
+.home-news-hero{box-shadow:none}
+@media(max-width:760px){
+ .home-news-hero{height:480px;min-height:480px;border-radius:16px}
+ .hero-copy{top:80px;bottom:58px;gap:9px}
+ .hero-ambient{display:none}
+ .hero-image-enter-active,.hero-image-leave-active{transition:opacity .3s ease}
+}
+@media(max-width:360px){.home-news-hero{height:500px;min-height:500px}.hero-copy{left:16px;right:16px}}
+</style>

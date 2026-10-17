@@ -1504,10 +1504,14 @@ onUnmounted(() => {
 
 <style scoped>
 .home2-loading{height:520px;min-height:520px;border-radius:16px;box-sizing:border-box}
-@media(max-width:760px){.home2-loading{height:550px;min-height:550px}}
+@media(max-width:760px){.home2-loading{height:480px;min-height:480px}}
 @media(prefers-reduced-motion:no-preference){.home2-hero-grid.home-cold-load{animation:home-content-arrive .18s ease-out}@keyframes home-content-arrive{from{opacity:.7}to{opacity:1}}}
 </style>
 
 <style scoped>
 .home2-page{position:relative;isolation:isolate}
+</style>
+
+<style scoped>
+@media(max-width:360px){.home2-loading{height:500px;min-height:500px}}
 </style>
