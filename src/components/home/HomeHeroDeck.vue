@@ -80,12 +80,14 @@ onUnmounted(()=>{motion?.removeEventListener('change',visibility);document.remov
 .deck-read{display:flex;align-items:center;justify-content:center;gap:12px;min-height:44px;border:1px solid var(--visual-border,#b185ff66);border-radius:999px;background:var(--visual-button-background,#7024dc);color:var(--visual-button-text,#fff);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .is-analysis .deck-read{background:linear-gradient(110deg,#e8b923,#ffdf64);color:#211804;border-color:#ffda64}
 .deck-read{position:relative;isolation:isolate;overflow:hidden}
-.deck-read>span{position:relative;z-index:1}
-.deck-read::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(100deg,#a91b47,#995000,#707000,#087349,#086b96,#354db0,#8033ad);transform:scaleX(0);transform-origin:left center;transition:transform .65s cubic-bezier(.22,.65,.3,1);pointer-events:none}
-@media(hover:hover) and (pointer:fine){.deck-read:hover::before{transform:scaleX(1)}.deck-read:hover{color:#fff;text-shadow:0 1px 3px #0008}}
-.deck-read:focus-visible::before{transform:scaleX(1)}
-.deck-read:focus-visible{color:#fff;text-shadow:0 1px 3px #0008}
-@media(prefers-reduced-motion:reduce){.deck-read::before{transition:none}}
+.deck-read>span{position:relative;z-index:2}
+.deck-read::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(105deg,#ff9ecb 0%,#ffc591 18%,#fff19a 34%,#a3f3bf 50%,#94eaff 66%,#b7b4ff 82%,#efb0ff 100%);clip-path:inset(0 100% 0 0 round 999px);transition:clip-path .85s cubic-bezier(.16,1,.3,1);pointer-events:none}
+.deck-read::after{content:'';position:absolute;inset:-50% -30%;z-index:1;background:linear-gradient(110deg,transparent 38%,#ffffff70 49%,#ffffff15 55%,transparent 66%);transform:translateX(-100%);pointer-events:none}
+@keyframes deck-button-glint{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+@media(hover:hover) and (pointer:fine){.deck-read:hover::before{clip-path:inset(0 0 0 0 round 999px)}.deck-read:hover{color:#18213d}.deck-read:hover::after{animation:deck-button-glint 1s .15s ease-out both}}
+.deck-read:focus-visible::before{clip-path:inset(0 0 0 0 round 999px)}
+.deck-read:focus-visible{color:#18213d}
+@media(prefers-reduced-motion:reduce){.deck-read::before{transition:none}.deck-read::after{display:none}}
 .deck-select{background:transparent;border:0;color:#d9c7ff;font:inherit;font-size:11px;text-align:left;padding:0;min-height:28px;cursor:pointer}
 .deck-previous .deck-copy,.deck-next .deck-copy{left:18px;right:18px}.deck-copy h1{min-height:3.45em}.deck-copy p{height:3.1em}
 .deck-controls{display:flex;align-items:center;justify-content:center;gap:4px;padding:10px 16px}.deck-controls button{width:36px;height:32px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;cursor:pointer}.deck-controls button span{width:26px;height:6px;border-radius:999px;background:#ffffff35}.deck-controls button[aria-current=true] span{background:linear-gradient(90deg,#7c3aed,#c084fc)}
