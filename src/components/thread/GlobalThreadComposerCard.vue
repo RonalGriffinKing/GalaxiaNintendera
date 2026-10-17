@@ -454,6 +454,8 @@ onUnmounted(() => {
 
       <h2 id="global-thread-title">Crear hilo</h2>
 
+      <button class="global-thread-publish-top" type="button" :disabled="!canPublish || mode !== 'compose'" @click="publish">{{ isPublishing ? 'Publicando…' : 'Publicar' }}</button>
+
       <button class="global-thread-close" type="button" aria-label="Cerrar Crear hilo" @click="emit('close')">
         <i class="fas fa-xmark"></i>
       </button>
@@ -560,6 +562,7 @@ onUnmounted(() => {
               <textarea
                 ref="textAreaRef"
                 v-model="body"
+                aria-label="Texto del hilo"
                 maxlength="240"
                 :placeholder="placeholder"
                 @click="syncCaret"
@@ -603,6 +606,7 @@ onUnmounted(() => {
       </div>
 
       <span class="global-thread-chip"><i :class="selectedTopicMeta.icon"></i>#{{ selectedTopicMeta.hashtag }}</span>
+      <span class="global-thread-mobile-count" aria-label="Caracteres usados de 240">{{ body.length }}/240</span>
 
       <button class="global-thread-publish" type="button" :disabled="!canPublish" @click="publish">
         <i class="fas fa-paper-plane"></i>
@@ -1407,4 +1411,37 @@ onUnmounted(() => {
   .global-thread-header { padding: 12px 14px 8px; }
   .global-thread-content { flex: 0 1 auto; padding-bottom: 14px; }
 }
+</style>
+
+<style scoped>
+.global-thread-publish-top,.global-thread-mobile-count{display:none}
+@media(max-width:768px){
+ .global-thread-card{width:100%;height:var(--global-thread-vvh,100dvh);max-height:var(--global-thread-vvh,100dvh);border:0;border-radius:0;box-shadow:none;background:var(--admin-bg,#080c1b);box-sizing:border-box}
+ .global-thread-header{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:8px 12px;padding:calc(8px + env(safe-area-inset-top,0px)) 16px 12px;flex-shrink:0}
+ .global-thread-close{grid-column:1;grid-row:1;width:44px;height:44px;background:transparent;border:0}
+ .global-thread-header h2{display:block;grid-column:2;grid-row:1;font-size:15px;font-weight:700;min-width:0}
+ .global-thread-publish-top{display:block;grid-column:3;grid-row:1;min-height:40px;padding:0 18px;border:0;border-radius:999px;background:linear-gradient(110deg,#7c3aed,#cf2fac);color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+ .global-thread-publish-top:disabled{opacity:.4;cursor:default}
+ .global-thread-community{grid-row:2;grid-column:1/-1;justify-self:start;max-width:100%;min-width:0;margin:4px 0 0 50px;padding:4px 10px;border:1px solid #a855f740;background:transparent;min-height:34px}
+ .global-thread-community>span{width:24px;height:24px;flex:0 0 24px}.global-thread-community strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .global-thread-content{flex:1 1 0;min-height:0;overflow-y:auto;padding:10px 16px 16px;overscroll-behavior:contain}
+ .global-thread-compose{min-height:100%;height:auto;display:flex;flex-direction:column;gap:12px;overflow:visible}
+ .global-thread-prompt,.global-thread-publish-mobile{display:none}
+ .global-thread-editor,.global-thread-editor:focus-within{flex:1 0 auto;border:0;border-radius:0;box-shadow:none;background:transparent;padding:0;gap:12px;align-items:start;transition:none}
+ .global-thread-avatar{width:38px;height:38px;flex:0 0 38px;box-shadow:none}
+ .global-thread-editor label{min-width:0;display:flex;flex-direction:column;gap:0}
+ .global-thread-editor textarea{min-height:150px;width:100%;padding:4px 0 0;box-sizing:border-box;font-size:18px;line-height:1.55;font-weight:400;resize:none;border:0;background:transparent;max-height:none}
+ .global-thread-editor textarea::placeholder{font-weight:400;color:#8794aa}
+ .global-thread-editor small{display:none}
+ .global-thread-footer{display:flex;flex-shrink:0;align-items:center;justify-content:space-between;gap:8px;min-height:62px;max-height:none;padding:8px 14px calc(8px + env(safe-area-inset-bottom,0px));border-top:1px solid #ffffff12;background:var(--admin-bg,#080c1b);transition:none;box-sizing:border-box}
+ .global-thread-footer.is-hidden{display:none}
+ .global-thread-tools{display:flex;flex-wrap:nowrap;gap:4px;min-width:0}
+ .global-thread-tools button{height:40px;width:40px;border:0;background:transparent;color:#bc92ff;box-shadow:none;font-size:18px}
+ .global-thread-footer>.global-thread-publish,.global-thread-footer>.global-thread-chip{display:none}
+ .global-thread-mobile-count{display:block;white-space:nowrap;font-size:11px;color:#9eabc0;font-variant-numeric:tabular-nums}
+ .global-thread-media{margin-left:50px;max-width:calc(100% - 50px)}
+ .global-thread-mode-panel{height:auto;max-height:none;min-height:100%}
+ .global-thread-header button:focus-visible,.global-thread-tools button:focus-visible{outline:2px solid #c084fc;outline-offset:2px}
+}
+@media(max-width:360px){.global-thread-header{padding-left:12px;padding-right:12px;gap:8px}.global-thread-header h2{font-size:14px}.global-thread-publish-top{padding:0 12px}.global-thread-tools{gap:0}.global-thread-tools button{width:36px}.global-thread-content{padding-inline:12px}}
 </style>

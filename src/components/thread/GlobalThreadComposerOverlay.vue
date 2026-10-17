@@ -17,6 +17,7 @@ const updateGlobalThreadVvh = () => {
   if (typeof window === 'undefined') return
   const height = window.visualViewport?.height || window.innerHeight
   document.documentElement.style.setProperty('--global-thread-vvh', `${Math.round(height)}px`)
+  document.documentElement.style.setProperty('--global-thread-vv-top', `${Math.round(window.visualViewport?.offsetTop || 0)}px`)
 }
 
 const setOpenClass = (isOpen) => {
@@ -90,6 +91,7 @@ onMounted(() => {
 onUnmounted(() => {
   setOpenClass(false)
   document.documentElement.style.removeProperty('--global-thread-vvh')
+  document.documentElement.style.removeProperty('--global-thread-vv-top')
   window.removeEventListener('resize', updateGlobalThreadVvh)
   window.removeEventListener('orientationchange', updateGlobalThreadVvh)
   window.removeEventListener('keydown', handleKeydown)
@@ -220,4 +222,12 @@ onUnmounted(() => {
     transform: translateY(18px);
   }
 }
+</style>
+
+<style scoped>
+@media(max-width:768px){
+ .global-thread-overlay{top:var(--global-thread-vv-top,0px);bottom:auto;backdrop-filter:none;background:var(--admin-bg,#080c1b)}
+ .global-thread-panel{position:absolute;inset:0;box-sizing:border-box;padding:0;width:100%;height:100%}
+}
+@media(prefers-reduced-motion:reduce){.global-thread-card-in-enter-active,.global-thread-card-in-leave-active,.global-thread-overlay-fade-enter-active,.global-thread-overlay-fade-leave-active{transition:none}}
 </style>
