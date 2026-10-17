@@ -54,7 +54,7 @@ onUnmounted(()=>{motion?.removeEventListener('change',visibility);document.remov
      <h2 v-else>{{ card.slide.title }}</h2>
      <p>{{ card.slide.text }}</p>
      <div class="deck-meta"><img v-if="authorIcon?.(card.slide.post)" :src="authorIcon(card.slide.post)" alt="" /><span>{{ card.slide.post?.authorName || 'Redacción' }}<small>{{ card.slide.meta }}</small></span></div>
-     <button v-if="card.position==='main'" class="deck-read" type="button" @click.stop="emit('read')">Leer noticia <span aria-hidden="true">→</span></button>
+     <button v-if="card.position==='main'" class="deck-read" type="button" @click.stop="emit('read')"><span>Leer noticia</span><span aria-hidden="true">→</span></button>
      <button v-else class="deck-select" type="button" :aria-label="`Destacar: ${card.slide.title}`" @click.stop="select(card.index)">Ver destacado</button>
     </div>
    </article></Transition></div>
@@ -79,6 +79,13 @@ onUnmounted(()=>{motion?.removeEventListener('change',visibility);document.remov
 .deck-meta{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;line-height:1.5}.deck-meta img{width:28px;height:28px;object-fit:cover;border-radius:50%}.deck-meta small{display:block;font-size:10px;color:#bac4d5;font-weight:400}
 .deck-read{display:flex;align-items:center;justify-content:center;gap:12px;min-height:44px;border:1px solid var(--visual-border,#b185ff66);border-radius:999px;background:var(--visual-button-background,#7024dc);color:var(--visual-button-text,#fff);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .is-analysis .deck-read{background:linear-gradient(110deg,#e8b923,#ffdf64);color:#211804;border-color:#ffda64}
+.deck-read{position:relative;isolation:isolate;overflow:hidden}
+.deck-read>span{position:relative;z-index:1}
+.deck-read::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(100deg,#a91b47,#995000,#707000,#087349,#086b96,#354db0,#8033ad);transform:scaleX(0);transform-origin:left center;transition:transform .65s cubic-bezier(.22,.65,.3,1);pointer-events:none}
+@media(hover:hover) and (pointer:fine){.deck-read:hover::before{transform:scaleX(1)}.deck-read:hover{color:#fff;text-shadow:0 1px 3px #0008}}
+.deck-read:focus-visible::before{transform:scaleX(1)}
+.deck-read:focus-visible{color:#fff;text-shadow:0 1px 3px #0008}
+@media(prefers-reduced-motion:reduce){.deck-read::before{transition:none}}
 .deck-select{background:transparent;border:0;color:#d9c7ff;font:inherit;font-size:11px;text-align:left;padding:0;min-height:28px;cursor:pointer}
 .deck-previous .deck-copy,.deck-next .deck-copy{left:18px;right:18px}.deck-copy h1{min-height:3.45em}.deck-copy p{height:3.1em}
 .deck-controls{display:flex;align-items:center;justify-content:center;gap:4px;padding:10px 16px}.deck-controls button{width:36px;height:32px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;cursor:pointer}.deck-controls button span{width:26px;height:6px;border-radius:999px;background:#ffffff35}.deck-controls button[aria-current=true] span{background:linear-gradient(90deg,#7c3aed,#c084fc)}
