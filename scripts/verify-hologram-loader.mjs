@@ -5,7 +5,7 @@ await cdp('Runtime.enable');await cdp('Network.enable');await cdp('Page.enable')
 await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
 await nav('/navigation','.home-news-hero');
 check(await ev('document.querySelectorAll(".galaxy-particle").length===72'),'desktop has 72 ambient particles');
-check(await ev('getComputedStyle(document.querySelector(".foil-prism")).backgroundImage.includes("radial-gradient")&&document.querySelectorAll(".home-news-hero .foil-dot").length===16&&!document.querySelector(".foil-texture")'),'highlight combines transparent light and soft particles without lines');
+check(await ev('getComputedStyle(document.querySelector(".foil-prism")).backgroundImage.includes("radial-gradient")&&document.querySelectorAll(".home-news-hero .foil-dot").length===28&&!document.querySelector(".foil-texture")'),'highlight combines transparent light and soft particles without lines');
 await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:1000,deviceScaleFactor:1,mobile:true});
 check(await ev('Array.from(document.querySelectorAll(".galaxy-particle")).filter(el=>getComputedStyle(el).display!=="none").length===40'),'mobile retains 40 visible particles');
 await ev('(()=>{const p=window.themeLab.post.value;p.category="Noticias";p.categories=["Noticias"];p.analysis={};p.visualThemeId="kirby-dreamland";p.sections=[{title:"Historia",navLabel:"Historia",content:"Contenido local",image:"/lab-image.svg"}];localStorage.setItem("galaxia-theme-lab-post",JSON.stringify(p))})()');

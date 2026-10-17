@@ -231,8 +231,10 @@
           <div class="category-manage-list">
             <article v-for="(category, index) in managedCategories" :key="category" class="category-manage-item">
               <span>{{ index + 1 }}</span>
-              <strong>{{ category }}</strong>
+              <form v-if="editingCategory === category" class="category-rename-form" @submit.prevent="renameCategory(category)"><input v-model="categoryRenameDraft" maxlength="60" aria-label="Nuevo nombre de la categoría" :disabled="savingCategories" autofocus /><button type="submit" :disabled="savingCategories || !categoryRenameDraft.trim()">Guardar</button><button type="button" :disabled="savingCategories" @click="editingCategory=''">Cancelar</button></form>
+              <strong v-else>{{ category }}</strong>
               <div>
+                <button type="button" :disabled="savingCategories" :aria-label="`Renombrar ${category}`" title="Cambiar nombre" @click="editingCategory=category;categoryRenameDraft=category"><i class="fas fa-pen"></i></button>
                 <button type="button" :disabled="index === 0 || savingCategories" title="Subir" @click="moveCategory(index, -1)">
                   <i class="fas fa-arrow-up"></i>
                 </button>
@@ -273,6 +275,8 @@ import { useListNavigation } from '@/composables/useListNavigation'
 import { DEFAULT_POST_CATEGORIES, loadPostCategories, postCategoryLabels, postMatchesCategory, savePostCategories } from '@/services/postCategories'
 import { homePinnedPosts, homePinOverflow, MAX_HOME_PINS } from '@/services/homePins'
 import { clearPublicPageCache } from '@/services/publicPageCache'
+import { renamedCategoryFields } from '@/services/categoryRename'
+import { normalizeCategory } from '@/services/postCategories'
 
 const route = useRoute()
 const router = useRouter()
@@ -320,6 +324,36 @@ const showCategoryManager = ref(false)
 const showToolsMenu = ref(false)
 const managedCategories = ref(DEFAULT_POST_CATEGORIES)
 const categoryDraft = ref('')
+const editingCategory = ref('')
+const categoryRenameDraft = ref('')
+async function renameCategory(oldName) {
+ if (!isAdmin.value || savingCategories.value) return
+ const newName=categoryRenameDraft.value.trim()
+ if (!newName) return
+ if (newName===oldName) {editingCategory.value='';return}
+ if (managedCategories.value.some(value=>value!==oldName && normalizeCategory(value)===normalizeCategory(newName))) return showToast('Ya existe una categoría con ese nombre','delete')
+ savingCategories.value=true
+ try {
+  const snapshot=await getDocs(collection(db,'posts'))
+  const changes=snapshot.docs.map(item=>({ref:doc(db,'posts',item.id),patch:renamedCategoryFields(item.data(),oldName,newName)})).filter(item=>Object.keys(item.patch).length)
+  const categories=managedCategories.value.map(value=>value===oldName?newName:value)
+  // Keep the settings change in the last batch; retries can finish a large rename.
+  for(let offset=0;offset<changes.length;offset+=400){
+   const batch=writeBatch(db)
+   changes.slice(offset,offset+400).forEach(item=>batch.update(item.ref,item.patch))
+   if(offset+400>=changes.length) batch.set(doc(db,'siteSettings','postCategories'),{items:categories,updatedAt:Date.now()},{merge:true})
+   await batch.commit()
+  }
+  if(!changes.length) await savePostCategories(categories)
+  posts.value=posts.value.map(post=>({...post,...renamedCategoryFields(post,oldName,newName)}))
+  managedCategories.value=categories
+  if(categoryFilter.value===oldName) categoryFilter.value=newName
+  editingCategory.value=''
+  clearPublicPageCache()
+  showToast('Categoría y publicaciones actualizadas')
+ } catch(error){console.error(error);showToast('No se completó el cambio. Puedes volver a intentarlo.','delete')}
+ finally{savingCategories.value=false}
+}
 const savingCategories = ref(false)
 const toast = ref({ show: false, message: '', type: 'success' })
 const confirmDialog = ref({ show: false, id: null, type: '', title: '', message: '', action: null })
@@ -1247,4 +1281,8 @@ const executeDelete = async (id) => {
  .post-mobile-actions{grid-column:2;max-width:none;justify-content:flex-start;flex-wrap:nowrap;gap:8px}
  .post-mobile-actions button{flex:0 0 34px;width:34px;height:34px}
 }
+</style>
+
+<style scoped>
+.category-rename-form{grid-column:2/-1;display:flex;gap:6px;flex-wrap:wrap;min-width:0}.category-rename-form input{flex:1 1 140px;min-width:0;min-height:40px;border:1px solid #a855f760;border-radius:8px;padding:8px 10px;background:var(--admin-bg,#0b1222);color:var(--text-primary,#fff);font:inherit;font-size:13px}.category-rename-form button{width:auto;padding:8px 10px;min-height:40px;font-size:11px}.category-rename-form+div{display:none}
 </style>

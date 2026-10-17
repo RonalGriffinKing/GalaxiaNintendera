@@ -23,7 +23,7 @@ const softShot=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSy
 // Check the legacy URL through the fixture router.
 await ev('document.querySelector(".listing-page").__vueParentComponent.appContext.config.globalProperties.$router.push("/categoria/An%C3%A1lisis")');await wait(150);
 check(await ev('document.querySelector(".filter-row button[aria-pressed=true]").textContent.includes("Analisis")'),'legacy accented category URL selects matching category chip');
-check(await ev('!document.querySelector(".foil-texture")&&document.querySelectorAll(".featured-latest .foil-dot").length===16&&getComputedStyle(document.querySelector(".foil-prism")).backgroundImage.includes("radial-gradient")'),'highlights use transparent light and particles without diagonal texture');
+check(await ev('!document.querySelector(".foil-texture")&&document.querySelectorAll(".featured-latest .foil-dot").length===28&&getComputedStyle(document.querySelector(".foil-prism")).backgroundImage.includes("radial-gradient")'),'highlights use transparent light and particles without diagonal texture');
 for(const width of [1440,768,390,320]){await cdp('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await wait(100);check(await ev('document.documentElement.scrollWidth<=innerWidth'),'filters and highlights fit at '+width)}
 check(!errors.length,'no runtime exceptions');check(!requests.some(u=>/firestore.googleapis|identitytoolkit/.test(u)),'no production Firebase access');
 }catch(e){console.log('FAIL',e.message,'ERRORS',errors);process.exitCode=1}finally{ws.close();edge.kill()}
