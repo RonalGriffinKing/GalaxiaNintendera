@@ -123,6 +123,7 @@ const showLoadMoreDots = computed(() => isLoadingMore.value || isShowingMoreLoad
 const sortLabel = computed(() => sortOptions.find(option => option.value === sortMode.value)?.label || 'Mas recientes')
 
 const popularPosts = computed(() => [...posts.value].sort((a, b) => postSortTime(b) - postSortTime(a)).slice(0, 4))
+const latestPublishedPosts = computed(() => [...posts.value].sort((a,b)=>(getTime(b.publishedAt)||getTime(b.createdAt))-(getTime(a.publishedAt)||getTime(a.createdAt))).slice(0,4))
 
 const moreLinks = computed(() => {
   const topic = pageConfig.value.eyebrow
@@ -517,20 +518,30 @@ watch(() => route.fullPath, () => {
         </div>
 
         <aside class="listing-sidebar">
-          <div class="side-card">
-            <h3>Noticias populares</h3>
+          <div class="side-card popular-card">
+            <h3><span aria-hidden="true">🔥</span> Noticias populares</h3>
             <button
-              v-for="post in popularPosts"
+              v-for="(post,index) in popularPosts"
               :key="post.id"
               class="popular-post"
               @click="goPost(post)"
             >
-              <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
+              <b class="popular-rank" :class="{'top-rank':index<2}" aria-label="Puesto">{{ index+1 }}</b>
+              <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" loading="lazy" decoding="async" />
               <div v-else class="popular-placeholder"></div>
               <span>
                 <strong>{{ post.title }}</strong>
                 <small>{{ formatAgo(postDisplayDate(post)) }}</small>
               </span>
+            </button>
+          </div>
+
+          <div class="side-card latest-published-card">
+            <h3><i class="far fa-clock" aria-hidden="true"></i> Últimas publicadas</h3>
+            <button v-for="post in latestPublishedPosts" :key="post.id" class="recent-post" type="button" @click="goPost(post)">
+              <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" loading="lazy" decoding="async" />
+              <div v-else class="popular-placeholder"></div>
+              <span><strong>{{ post.title }}</strong><small>{{ formatAgo(post.publishedAt || post.createdAt) }}</small></span>
             </button>
           </div>
 
@@ -3269,4 +3280,19 @@ watch(() => route.fullPath, () => {
 .listing-card-loading{display:grid;grid-template-columns:1fr 1fr;gap:16px;min-height:380px}.listing-card-loading span{border-radius:16px;background:linear-gradient(110deg,#8c97af10,#b0a4df24,#8c97af10);background-size:200% 100%;animation:listing-placeholder 1.8s ease-in-out infinite}.listing-card-loading span:first-child{grid-column:1/-1;min-height:240px}.news-row{animation:listing-card-reveal .16s ease-out}.filter-row button{transition:background-color .14s ease,border-color .14s ease,color .14s ease}
 @keyframes listing-card-reveal{from{opacity:.8}to{opacity:1}}@keyframes listing-placeholder{from{background-position:100% 0}to{background-position:-100% 0}}
 @media(prefers-reduced-motion:reduce){.listing-card-loading span,.news-row{animation:none}.filter-row button{transition:none}}
+</style>
+
+<style scoped>
+.popular-card h3,.latest-published-card h3{display:flex;align-items:center;gap:9px;font-size:16px;line-height:1.4;color:#f1f5f9;margin:0 0 4px}.popular-card h3>span{font-size:20px}.latest-published-card h3 i{color:#c4b5fd}
+.popular-card .popular-post{position:relative;grid-template-columns:68px minmax(0,1fr);gap:12px;padding:0 0 0 10px;min-width:0}
+.popular-rank{position:absolute;left:-9px;top:10px;z-index:1;display:grid;place-items:center;width:25px;height:25px;box-sizing:border-box;border:1px solid #c4b5fd88;border-radius:50%;background:#12152d;color:#fff;font-size:12px;font-weight:700;box-shadow:0 2px 6px #0004}.popular-rank.top-rank{background:linear-gradient(135deg,#7c3aed,#a529da);border-color:#d1aaff}
+.popular-card .popular-post img{width:68px;height:68px;border-radius:10px}.popular-card .popular-post strong{font-size:13px;line-height:1.4;font-weight:700}.popular-card .popular-post small{font-size:11px;font-weight:400;line-height:1.4;margin-top:5px}
+.side-card .recent-post{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;padding:0;align-items:center;min-width:0;text-align:left;color:#f1f5f9}
+.recent-post img,.recent-post .popular-placeholder{width:52px;height:52px;object-fit:cover;border-radius:8px}.recent-post>span{min-width:0}.recent-post strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;font-weight:650;line-height:1.45}.recent-post small{display:block;font-size:11px;font-weight:400;color:#aeb8cb;margin-top:4px}
+@media(min-width:761px){
+ .listing-shell .news-list .news-row.featured-latest .post-copy{width:70%;max-width:780px;gap:16px;min-height:400px}
+ .listing-shell .news-list .news-row.featured-latest .post-copy h2{font-size:clamp(30px,2.7vw,40px);font-weight:700;line-height:1.14;-webkit-line-clamp:3}
+ .listing-shell .news-list .news-row.featured-latest .post-copy p{font-size:16px;line-height:1.6;-webkit-line-clamp:4;font-weight:400}
+}
+@media(max-width:760px){.listing-shell .news-list .news-row.featured-latest .post-copy h2{font-size:26px;line-height:1.2;font-weight:700}.listing-shell .news-list .news-row.featured-latest .post-copy p{font-size:14px;line-height:1.55;-webkit-line-clamp:2;font-weight:400}}
 </style>
