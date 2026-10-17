@@ -40,3 +40,8 @@ El efecto de los destacados se revisa posteriormente para eliminar la textura de
 `scripts/verify-category-navigation.mjs` verifica una respuesta retrasada, selección antes de recibir datos, filtros sucesivos sin consultas repetidas ni reemplazo de cabecera, Atrás, «Ver todos», enlaces con acentos y ajuste de tarjetas/filtros a 320/390/768/1440 px.
 
 `ReaderLoadingShell.vue` sustituye el esqueleto antiguo y sus estilos. Reserva una portada completa de 540 px (640 px en móvil) seguida de navegación y columnas del lector, con una sola columna por debajo de 1200 px. Usa tonos neutros mientras no se conozcan los datos, sin mostrar el tema de otra publicación, y respeta la reducción de movimiento. `scripts/verify-hologram-loader.mjs` comprueba la carga con respuestas retrasadas, densidad de partículas y colores Kirby/Zelda/Análisis a 320/390/1100/1440 px.
+
+
+## Carrusel principal con profundidad
+
+El Inicio utiliza `HomeHeroDeck.vue`: una noticia principal y hasta tres secundarias distintas en escritorio. Conserva los seis pines, sus temas publicados, lectura directa, selector de barritas, teclado y deslizamiento. En móvil muestra la principal y parte de la siguiente; no se aplican giros 3D ni animación del borde. La rotación se pausa con foco, al interactuar, al ocultar la pestaña y con movimiento reducido. El antiguo `HomeNewsHero.vue` permanece como componente independiente de referencia. La verificación es `scripts/verify-home-hero-deck.mjs`.

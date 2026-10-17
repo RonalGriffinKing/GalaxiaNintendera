@@ -4,7 +4,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { homePinnedPosts } from '@/services/homePins'
 import { socialHeadline } from '@/services/socialPostPresentation'
 import HomeEditorialCard from '@/components/home/HomeEditorialCard.vue'
-import HomeNewsHero from '@/components/home/HomeNewsHero.vue'
+import HomeHeroDeck from '@/components/home/HomeHeroDeck.vue'
 import HomeContentCarousel from '@/components/home/HomeContentCarousel.vue'
 import { useRouter } from 'vue-router'
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
@@ -277,7 +277,6 @@ const authorIcon = (post) => post?.authorId ? resolveProfileIcon(authorProfile(p
 const authorIconMeta = (post) => post?.authorId ? resolveProfileIconMeta(authorProfile(post)) : {}
 const heroCarousel = useTimedCarousel(computed(() => heroSlides.value.length), HOME_HERO_SLIDE_DURATION)
 const heroSlideIndex = heroCarousel.index
-const heroProgressPercent = heroCarousel.progressPercent
 const heroPaused = ref(false)
 function startHeroIfAllowed() { if (!heroPaused.value) heroCarousel.start(); else heroCarousel.stop() }
 function pauseHero() { heroPaused.value=true; heroCarousel.stop() }
@@ -307,7 +306,7 @@ onMounted(() => {
   }
 
   window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
-  heroCarousel.start()
+  startHeroIfAllowed()
   communityCarousel.start()
   loadData()
 })
@@ -333,25 +332,7 @@ onUnmounted(() => {
 
       <template v-else>
         <section class="home2-hero-grid" :class="{'home-cold-load':!cachedHomePosts}">
-          <HomeNewsHero v-if="activeHeroSlide" :slide="activeHeroSlide" @read="openHeroSlide" @pause="pauseHero" @resume="resumeHero" @next="swipeHero(1)" @previous="swipeHero(-1)">
-            <div v-if="heroSlides.length > 1" class="home2-hero-controls" role="group" aria-label="Cambiar noticia destacada" @click.stop>
-              <span class="hero-news-label">Destacados {{ heroSlideIndex+1 }} / {{ heroSlides.length }}</span>
-              <div class="home2-hero-progress">
-                <span :style="{ width: `${heroProgressPercent}%` }"></span>
-              </div>
-              <div class="home2-hero-dots" aria-label="Noticias destacadas">
-                <button
-                  v-for="(slide, index) in heroSlides"
-                  :key="slide.id"
-                  type="button"
-                  :class="{ active: index === heroSlideIndex }"
-                  :aria-label="`Ver destacado ${index+1}: ${slide.title}`"
-                  :aria-current="index===heroSlideIndex ? 'true' : undefined"
-                  @click="selectHeroSlide(index)"
-                ></button>
-              </div>
-            </div>
-          </HomeNewsHero>
+          <HomeHeroDeck v-if="activeHeroSlide" :slides="heroSlides" :active-index="heroSlideIndex" :author-icon="authorIcon" @select="selectHeroSlide" @read="openHeroSlide" @pause="pauseHero" @resume="resumeHero" />
         </section>
 
         <section id="home2-next-section" class="home2-community-band">
