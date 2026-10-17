@@ -1,0 +1,32 @@
+/* Shared by the published reader and the editor preview. */
+.editorial-page .reading-prose,
+.post-live-preview .reading-prose {
+ width:100%;max-width:680px;margin-inline:auto;box-sizing:border-box;
+ font-family:var(--font-family-base,'Roboto',system-ui,sans-serif);
+ font-size:18px;font-weight:400;line-height:1.8;letter-spacing:normal;
+ color:#dce2eb;text-align:left;overflow-wrap:break-word;
+}
+.reading-prose :deep(p){margin:0 0 1.25em}
+.reading-prose :deep(p:last-child){margin-bottom:0}
+.editorial-page .reading-prose :deep(strong),
+.post-live-preview .reading-prose :deep(strong){color:#f8fafc;font-weight:700}
+.editorial-page .reading-prose :deep(a),
+.post-live-preview .reading-prose :deep(a){color:color-mix(in srgb,var(--visual-accent,#c084fc) 55%,#fff);font-weight:500;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px}
+.reading-prose :deep(a:focus-visible){outline:2px solid var(--visual-accent,#c084fc);outline-offset:3px;border-radius:2px}
+.editorial-page .reading-prose :deep(ul),.editorial-page .reading-prose :deep(ol),
+.post-live-preview .reading-prose :deep(ul),.post-live-preview .reading-prose :deep(ol){display:block;margin:1.25em 0;padding-left:1.5em;counter-reset:none}
+.editorial-page .reading-prose :deep(li),.post-live-preview .reading-prose :deep(li){padding:0;margin:.6em 0;list-style:inherit}
+.reading-prose :deep(ul){list-style:disc}
+.reading-prose :deep(ol){list-style:decimal}
+.editorial-page .reading-prose :deep(li::before),.editorial-page .reading-prose :deep(li::after),
+.post-live-preview .reading-prose :deep(li::before),.post-live-preview .reading-prose :deep(li::after){display:none;content:none}
+.reading-prose :deep(li::marker){color:var(--visual-accent,#c084fc)}
+.editorial-page .reading-prose :deep(blockquote),
+.post-live-preview .reading-prose :deep(blockquote){margin:1.5em 0;padding:4px 0 4px 20px;border-left:3px solid var(--visual-accent,#c084fc);border-radius:0;background:transparent;color:#eef0f6;font-size:1.08em;line-height:1.65}
+.reading-prose :deep(hr){margin:2em 0;border:0;border-top:1px solid #ffffff18}
+.editorial-page .post-content-section h2,
+.post-live-preview .preview-section h2{width:100%;max-width:680px;margin:18px auto 0;box-sizing:border-box;font-size:clamp(25px,2.3vw,32px);line-height:1.3;font-weight:750;letter-spacing:-.02em;text-wrap:pretty}
+@media(max-width:760px){
+ .editorial-page .reading-prose,.post-live-preview .reading-prose{font-size:17px;line-height:1.75}
+}
+.preview-mobile .reading-prose{font-size:17px;line-height:1.75}

@@ -575,7 +575,7 @@
             <div class="editorial-preview-layout">
             <main class="editorial-preview-article">
              <nav class="preview-reader-tabs" aria-label="Apartados de la vista previa"><button type="button" :aria-pressed="previewSection === -1" @click="previewSection=-1">{{isAnalysisPost?'Análisis':'Noticia'}}</button><button v-for="(section,index) in visibleSections" :key="index" type="button" :aria-pressed="previewSection === index" @click="previewSection=index">{{sectionNavLabel(section,index)}}</button></nav>
-             <div v-if="previewSection === -1" class="preview-introduction" v-html="richText(post.content)"></div>
+             <div v-if="previewSection === -1" class="preview-introduction reading-prose" v-html="richText(post.content)"></div>
             <section v-for="(section, index) in previewSections" :key="index" class="preview-section">
               <h2>{{ section.title || `Seccion ${index + 1}` }}</h2>
               <div v-if="section.image" class="preview-section-media">
@@ -591,7 +591,7 @@
                 <img v-else :src="mediaFor(section.image).url" :alt="section.title || `Seccion ${index + 1}`" loading="lazy" decoding="async" />
               </div>
               <p v-if="sectionSubtitle(section)" class="preview-section-subtitle">{{ sectionSubtitle(section) }}</p>
-              <div class="preview-section-copy rich-content" v-html="richText(section.content || 'El contenido de esta seccion se vera aqui cuando lo escribas.')"></div>
+              <div class="preview-section-copy rich-content reading-prose" v-html="richText(section.content || 'El contenido de esta seccion se vera aqui cuando lo escribas.')"></div>
             </section>
 
             </main>
@@ -4243,3 +4243,5 @@ const savePost = async (targetStatus = 'pending') => {
 .post-live-preview :deep(.is-editorial){border-radius:0;box-shadow:none;border:0}.post-live-preview :deep(.is-editorial .hero-content){min-height:0;padding:24px;grid-template-rows:auto;gap:16px}.post-live-preview :deep(.is-editorial .hero-copy h1){font-size:clamp(26px,3vw,38px)}
 .preview-mobile :deep(.is-editorial .hero-breadcrumb){margin-bottom:72px}.preview-mobile :deep(.is-editorial .hero-content){padding:18px}.preview-mobile :deep(.is-editorial .hero-copy h1){font-size:28px}.preview-mobile .editorial-preview-layout{padding:16px}
 </style>
+
+<style scoped src="@/assets/styles/editorial-reading.css"></style>

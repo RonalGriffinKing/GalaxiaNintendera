@@ -677,7 +677,7 @@ onUnmounted(() => {
           <button v-for="(section,index) in postSections" :id="'article-tab-'+index" :key="index" type="button" role="tab" aria-controls="article-reading-panel" :aria-selected="activeSection===index" :tabindex="activeSection===index ? 0 : -1" :title="section.title" @click="selectArticleSection(index)">{{ sectionNavLabel(section,index) }}</button>
         </nav>
         <div id="article-reading-panel" class="article-reading-panel" :role="postSections.length ? 'tabpanel' : undefined" :aria-labelledby="postSections.length ? (activeSection===-1 ? 'article-tab-all' : 'article-tab-'+activeSection) : undefined" tabindex="-1">
-        <div v-if="activeSection===-1 && post.content && !isUpcomingPost" class="analysis-introduction rich-content" v-html="richText(post.content)"></div>
+        <div v-if="activeSection===-1 && post.content && !isUpcomingPost" class="analysis-introduction rich-content reading-prose" v-html="richText(post.content)"></div>
 
 
 
@@ -722,7 +722,7 @@ onUnmounted(() => {
               {{ sectionSubtitle(section) }}
             </p>
 
-            <div class="post-paragraph rich-content" v-html="richText(section.content)"></div>
+            <div class="post-paragraph rich-content reading-prose" v-html="richText(section.content)"></div>
           </section>
         </template>
 
@@ -1281,3 +1281,5 @@ onUnmounted(() => {
  .editorial-page .post-layout>.post-cinematic-hero :deep(.hero-breadcrumb){margin-bottom:72px}
 }
 </style>
+
+<style scoped src="@/assets/styles/editorial-reading.css"></style>
