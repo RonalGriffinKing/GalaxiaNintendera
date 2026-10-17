@@ -2,17 +2,21 @@
 import { analysisRating } from '@/services/articlePresentation'
 import FeaturedSheen from '@/components/shared/FeaturedSheen.vue'
 import { computed } from 'vue'
+import { useVisualThemes } from '@/composables/useVisualThemes'
+import { postWebThemeCss } from '@/services/visualThemes'
 import { resolveAssetUrl, defaultBannerUrl } from '@/constants/assets'
 import { socialHeadline } from '@/services/socialPostPresentation'
 import { titleRuns } from '@/services/socialContent'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
 const props = defineProps({ post: Object, to: String, category: String, date: String, analysis: Boolean, featured: Boolean, compact: Boolean, authorIcon: String })
+const {theme,enabled}=useVisualThemes(()=>props.post)
+const cardTheme=computed(()=>enabled.value.web?postWebThemeCss(props.analysis?{...props.post,category:'Analisis'}:props.post,theme.value):{})
 const headline = computed(() => socialHeadline(props.post))
 </script>
 
 <template>
- <RouterLink :to="to" class="home-editorial-card" :class="{ featured, compact, 'is-analysis':analysis }">
+ <RouterLink :to="to" class="home-editorial-card" :style="cardTheme" :class="{ featured, compact, 'is-analysis':analysis }">
   <img class="card-cover" :src="resolveAssetUrl(post.image,defaultBannerUrl)" alt="" loading="lazy" decoding="async" />
   <div class="card-shade"></div>
   <FeaturedSheen v-if="featured" :gold="analysis" />
@@ -54,4 +58,13 @@ const headline = computed(() => socialHeadline(props.post))
 
 <style scoped>
 .card-copy,.card-category,.card-score{z-index:3}.home-editorial-card.featured.is-analysis .card-shade{background:linear-gradient(180deg,transparent 10%,#120f08dd 100%),linear-gradient(110deg,#ffda6430,transparent 40%,#ffda6420)}
+</style>
+
+<style scoped>
+.home-editorial-card,.home-editorial-card.compact{background:var(--visual-surface,#090d1b);border-color:var(--visual-border,#a78bfa55)}
+.home-editorial-card:hover{border-color:var(--visual-accent,#c084fc)}
+.home-editorial-card .card-category,.home-editorial-card.compact .card-category,.home-editorial-card.featured .card-category{background:var(--visual-label-background,#7024dc);color:var(--visual-label-text,#fff);border-color:var(--visual-border,#ffffff25)}
+.home-editorial-card .card-copy mark{color:var(--visual-highlight,#facc15)}
+.home-editorial-card.compact .card-shade{background:linear-gradient(90deg,transparent 30%,color-mix(in srgb,var(--visual-surface,#090d1b) 55%,transparent) 40%,var(--visual-surface,#090d1b) 45%)}
+.home-editorial-card.featured{border-color:var(--visual-border,#facc15);box-shadow:0 0 18px color-mix(in srgb,var(--visual-accent,#facc15) 12%,transparent)}
 </style>
