@@ -13,15 +13,15 @@ const {themes,enabled}=useVisualThemes()
 const root=ref(null)
 let motion, startTouch, lastSwipe=0
 const isAnalysis=slide=>[slide.post?.category,...(slide.post?.categories||[])].some(v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes('analisis'))
-function position(index){
+const cards=computed(()=>{
  const count=props.slides.length
- if(index===props.activeIndex)return 'main'
- if(index===(props.activeIndex+1)%count)return 'next'
- if(count>2 && index===(props.activeIndex-1+count)%count)return 'previous'
- if(count>3 && index===(props.activeIndex+2)%count)return 'far'
- return 'hidden'
-}
-const cards=computed(()=>props.slides.map((slide,index)=>({slide,index,position:position(index),theme:enabled.value.web?postWebThemeCss(slide.post,resolvePostVisualTheme(slide.post,themes.value)):{},hero:normalizeHomeHero(slide.post?.hero)})))
+ const slots=count>2?['previous','main','next']:count===2?['main','next']:count===1?['main']:[]
+ return slots.map(position=>{
+  const index=(props.activeIndex+(position==='previous'?-1:position==='next'?1:0)+count)%count
+  const slide=props.slides[index]
+  return {slide,index,position,theme:enabled.value.web?postWebThemeCss(slide.post,resolvePostVisualTheme(slide.post,themes.value)):{},hero:normalizeHomeHero(slide.post?.hero)}
+ })
+})
 function select(index){emit('select',index)}
 function step(delta){if(props.slides.length>1)select((props.activeIndex+delta+props.slides.length)%props.slides.length)}
 function activate(card,event){
@@ -42,9 +42,9 @@ onMounted(()=>{motion=window.matchMedia('(prefers-reduced-motion:reduce)');motio
 onUnmounted(()=>{motion?.removeEventListener('change',visibility);document.removeEventListener('visibilitychange',visibility)})
 </script>
 <template>
- <section ref="root" class="hero-deck" :class="{'is-single':slides.length===1}" role="region" aria-label="Noticias destacadas" aria-roledescription="carrusel" @mouseenter="emit('pause')" @mouseleave="resume" @focusin="emit('pause')" @focusout="!root.contains($event.relatedTarget) && resume()" @keydown.left.prevent="step(-1)" @keydown.right.prevent="step(1)">
+ <section ref="root" class="hero-deck" :class="{'is-single':slides.length===1,'is-pair':slides.length===2}" role="region" aria-label="Noticias destacadas" aria-roledescription="carrusel" @mouseenter="emit('pause')" @mouseleave="resume" @focusin="emit('pause')" @focusout="!root.contains($event.relatedTarget) && resume()" @keydown.left.prevent="step(-1)" @keydown.right.prevent="step(1)">
   <div class="hero-deck-scene" @touchstart.passive="touchStart" @touchend.passive="touchEnd" @touchcancel.passive="startTouch=null;resume()">
-   <article v-for="card in cards" :key="card.slide.id" class="hero-deck-card" :class="['deck-'+card.position,{'is-analysis':isAnalysis(card.slide)}]" :style="card.theme" :inert="card.position==='hidden'" :aria-hidden="card.position==='hidden'" :aria-label="card.position==='main'?card.slide.title:undefined" @click="activate(card,$event)">
+   <div v-for="card in cards" :key="card.position" class="deck-slot" :class="'slot-'+card.position"><Transition name="deck-fade" type="transition"><article :key="card.slide.id" class="hero-deck-card" :class="['deck-'+card.position,{'is-analysis':isAnalysis(card.slide)}]" :style="card.theme" :inert="card.position==='hidden'" :aria-hidden="card.position==='hidden'" :aria-label="card.position==='main'?card.slide.title:undefined" @click="activate(card,$event)">
     <img class="deck-cover" :src="resolveAssetUrl(card.hero.image || card.slide.image,defaultBannerUrl)" :style="{objectPosition:card.hero.position}" alt="" :loading="card.position==='main'?'eager':'lazy'" :fetchpriority="card.position==='main'?'high':'auto'" decoding="async" />
     <div class="deck-shade"></div>
     <FeaturedSheen v-if="card.position==='main'" :gold="isAnalysis(card.slide)" />
@@ -57,21 +57,19 @@ onUnmounted(()=>{motion?.removeEventListener('change',visibility);document.remov
      <button v-if="card.position==='main'" class="deck-read" type="button" @click.stop="emit('read')">Leer noticia <span aria-hidden="true">→</span></button>
      <button v-else class="deck-select" type="button" :aria-label="`Destacar: ${card.slide.title}`" @click.stop="select(card.index)">Ver destacado</button>
     </div>
-   </article>
+   </article></Transition></div>
   </div>
   <nav v-if="slides.length>1" class="deck-controls" aria-label="Elegir noticia destacada"><button v-for="(slide,index) in slides" :key="slide.id" type="button" :aria-label="`Ver destacado: ${slide.title}`" :aria-current="index===activeIndex?'true':undefined" @click="select(index)"><span></span></button></nav>
  </section>
 </template>
 <style scoped>
 .hero-deck{min-width:0;width:100%;overflow:hidden;padding:8px 0 0;color:#fff}
-.hero-deck-scene{position:relative;height:520px;perspective:1400px;isolation:isolate;touch-action:pan-y}
-.hero-deck-card{position:absolute;top:30px;bottom:30px;left:23%;width:49%;border:2px solid var(--visual-border,#a78bfa99);border-radius:20px;background:var(--visual-background,#080c1b);overflow:hidden;box-sizing:border-box;transform-origin:center;transition:transform .45s cubic-bezier(.22,.7,.25,1),left .45s cubic-bezier(.22,.7,.25,1),width .45s cubic-bezier(.22,.7,.25,1),opacity .3s ease;cursor:pointer;backface-visibility:hidden}
-.deck-main{top:0;bottom:0;z-index:4;transform:translateZ(0);border-width:3px;border-color:var(--visual-accent,#b185ff);box-shadow:0 12px 30px #0004;animation:deck-edge 8s ease-in-out infinite}
+.hero-deck-scene{position:relative;height:520px;isolation:isolate;touch-action:pan-y;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.1fr) minmax(0,1fr);gap:16px;align-items:center}
+.deck-slot{position:relative;min-width:0;height:440px}.slot-main{height:520px;grid-column:2;grid-row:1}.slot-previous{grid-column:1;grid-row:1}.slot-next{grid-column:3;grid-row:1}
+.hero-deck-card{position:absolute;inset:0;width:100%;border:2px solid var(--visual-border,#a78bfa99);border-radius:20px;background:var(--visual-background,#080c1b);overflow:hidden;box-sizing:border-box;cursor:pointer}
+.deck-main{z-index:2;border-width:3px;border-color:var(--visual-accent,#b185ff);box-shadow:0 12px 30px #0004;animation:deck-edge 8s ease-in-out infinite}
 @keyframes deck-edge{0%,100%{border-color:var(--visual-accent,#b185ff)}50%{border-color:color-mix(in srgb,var(--visual-accent,#b185ff) 60%,#fff)}}
-.deck-previous{left:0;width:27%;z-index:3;transform:translateZ(-90px) rotateY(10deg);opacity:.88}
-.deck-next{left:72%;width:25%;z-index:2;transform:translateZ(-100px) rotateY(-10deg);opacity:.88}
-.deck-far{left:89%;width:22%;top:58px;bottom:58px;z-index:1;transform:translateZ(-160px) rotateY(-15deg);opacity:.6}
-.deck-hidden{left:100%;transform:translateZ(-200px) scale(.8);opacity:0;pointer-events:none}
+.deck-fade-enter-active,.deck-fade-leave-active{transition:opacity .24s ease}.deck-fade-enter-from,.deck-fade-leave-to{opacity:0}.deck-fade-leave-active{pointer-events:none}
 .deck-cover,.deck-shade{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.deck-cover{object-fit:cover}.deck-shade{background:linear-gradient(180deg,#05081600 12%,#05081655 35%,color-mix(in srgb,var(--visual-background,#080c1b) 94%,transparent) 78%,var(--visual-background,#080c1b));z-index:1}
 .deck-category{position:absolute;z-index:3;top:20px;left:22px;max-width:calc(100% - 44px);background:var(--visual-label-background,#7024dc);color:var(--visual-label-text,#fff);padding:7px 12px;border-radius:999px;font-size:10px;font-weight:800;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .deck-copy{position:absolute;z-index:3;left:26px;right:26px;bottom:24px;display:grid;gap:13px;min-width:0}
@@ -82,12 +80,12 @@ onUnmounted(()=>{motion?.removeEventListener('change',visibility);document.remov
 .deck-read{display:flex;align-items:center;justify-content:center;gap:12px;min-height:44px;border:1px solid var(--visual-border,#b185ff66);border-radius:999px;background:var(--visual-button-background,#7024dc);color:var(--visual-button-text,#fff);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .is-analysis .deck-read{background:linear-gradient(110deg,#e8b923,#ffdf64);color:#211804;border-color:#ffda64}
 .deck-select{background:transparent;border:0;color:#d9c7ff;font:inherit;font-size:11px;text-align:left;padding:0;min-height:28px;cursor:pointer}
-.deck-previous .deck-copy{left:20px;right:65px}.deck-next .deck-copy{left:42px;right:18px}.deck-far .deck-copy,.deck-far .deck-category{display:none}
+.deck-previous .deck-copy,.deck-next .deck-copy{left:18px;right:18px}.deck-copy h1{min-height:3.45em}.deck-copy p{height:3.1em}
 .deck-controls{display:flex;align-items:center;justify-content:center;gap:4px;padding:10px 16px}.deck-controls button{width:36px;height:32px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;cursor:pointer}.deck-controls button span{width:26px;height:6px;border-radius:999px;background:#ffffff35}.deck-controls button[aria-current=true] span{background:linear-gradient(90deg,#7c3aed,#c084fc)}
-.hero-deck button:focus-visible{outline:2px solid #d8b4fe;outline-offset:2px}.is-single .deck-main{left:0;width:100%}
-@media(min-width:761px) and (max-width:1100px){.hero-deck-scene{height:500px}.deck-copy h1{font-size:26px}.deck-copy h2{font-size:19px}.deck-copy{left:20px;right:20px}.deck-copy p{font-size:13px}.deck-meta{font-size:10px}}
-@media(max-width:760px){.hero-deck-scene{height:480px;perspective:none}.hero-deck-card{transition:transform .28s ease,opacity .2s ease;left:0;top:0;bottom:0;width:94%;border-radius:16px}.deck-main{transform:none}.deck-next{left:0;width:94%;transform:translateX(102%);opacity:.75}.deck-previous,.deck-far,.deck-hidden{visibility:hidden;pointer-events:none;transform:translateX(-105%);opacity:0}.deck-copy{left:20px;right:20px;bottom:20px;gap:12px}.deck-copy h1{font-size:27px}.deck-copy p{font-size:13px}.deck-category{top:18px;left:20px}.is-single .deck-main{width:100%}}
-@media(max-width:360px){.hero-deck-scene{height:500px}.deck-copy h1{font-size:24px}}
+.hero-deck button:focus-visible{outline:2px solid #d8b4fe;outline-offset:2px}.is-single .hero-deck-scene{grid-template-columns:1fr}.is-single .slot-main{grid-column:1}.is-pair .hero-deck-scene{grid-template-columns:minmax(0,2.1fr) minmax(0,1fr)}.is-pair .slot-main{grid-column:1}.is-pair .slot-next{grid-column:2}
+@media(min-width:761px) and (max-width:1100px){.hero-deck-scene,.slot-main{height:500px}.deck-copy h1{font-size:26px}.deck-copy h2{font-size:19px}.deck-copy{left:20px;right:20px}.deck-copy p{font-size:13px}.deck-meta{font-size:10px}}
+@media(max-width:760px){.hero-deck-scene,.is-pair .hero-deck-scene{height:460px;display:block}.deck-slot,.slot-main{height:460px;width:100%}.slot-previous,.slot-next{display:none}.hero-deck-card{border-radius:16px}.deck-copy{left:20px;right:20px;bottom:20px;gap:12px}.deck-copy h1{font-size:27px}.deck-copy p{font-size:13px}.deck-category{top:18px;left:20px}}
+@media(max-width:360px){.hero-deck-scene,.deck-slot,.slot-main{height:480px}.deck-copy h1{font-size:24px}}
 @media(max-width:760px),(hover:none) and (pointer:coarse){.deck-main{animation:none}}
-@media(prefers-reduced-motion:reduce){.hero-deck-card{transition:none;animation:none}}
+@media(prefers-reduced-motion:reduce){.hero-deck-card{transition:none;animation:none}.deck-fade-enter-active,.deck-fade-leave-active{transition:none}}
 </style>

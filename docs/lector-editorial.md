@@ -45,3 +45,6 @@ El efecto de los destacados se revisa posteriormente para eliminar la textura de
 ## Carrusel principal con profundidad
 
 El Inicio utiliza `HomeHeroDeck.vue`: una noticia principal y hasta tres secundarias distintas en escritorio. Conserva los seis pines, sus temas publicados, lectura directa, selector de barritas, teclado y deslizamiento. En móvil muestra la principal y parte de la siguiente; no se aplican giros 3D ni animación del borde. La rotación se pausa con foco, al interactuar, al ocultar la pestaña y con movimiento reducido. El antiguo `HomeNewsHero.vue` permanece como componente independiente de referencia. La verificación es `scripts/verify-home-hero-deck.mjs`.
+
+
+El hero utiliza ahora tres espacios fijos y simétricos: principal central y dos laterales completos. Se eliminan perspectiva, giros y cuarta tarjeta recortada. Cada espacio mantiene su ancho durante un fundido de 240 ms, sin animar la geometría del texto. En móvil se muestra una tarjeta completa; se conservan barritas, teclado y gestos.
