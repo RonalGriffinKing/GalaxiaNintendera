@@ -1,4 +1,5 @@
 <script setup>
+import { createReadingNavigation } from '@/services/readingNavigation'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth'
@@ -100,6 +101,7 @@ const quickUserDraft = ref({
 })
 let unsubscribeAuth = null
 let unsubscribeNotifications = null
+const readingNavigation=createReadingNavigation()
 let lastScrollY = 0
 let scrollTicking = false
 let searchDebounceTimer = null
@@ -505,7 +507,17 @@ const updateScrollNavigation = () => {
     return
   }
 
-  navCompact.value = nextY > (isReadingRoute.value ? 8 : 28)
+  const mobile=isMobileNav()
+  const readingMobile=mobile && isReadingRoute.value
+  const controlsOpen=menuOpen.value || accountMenuOpen.value || searchOpen.value || notificationsOpen.value || createMenuOpen.value
+  // Keep the measured article offset fixed throughout hide/reveal.
+  navCompact.value = !readingMobile && nextY > 28
+  if(readingMobile){
+    navHidden.value=readingNavigation.update(nextY,{maxScroll:doc.scrollHeight-window.innerHeight,locked:controlsOpen})
+    lastScrollY=nextY
+    scrollTicking=false
+    return
+  }
 
   if (isMobileNav() && !menuOpen.value && !accountMenuOpen.value && !searchOpen.value && !notificationsOpen.value) {
     const hideThreshold = isReadingRoute.value ? 72 : 150
@@ -964,6 +976,8 @@ watch([menuOpen, createMenuOpen, accountMenuOpen, quickCommunityOpen, quickUserO
 watch(() => route.fullPath, () => {
   navHidden.value = false
   lastScrollY = 0
+  readingNavigation.reset()
+  navCompact.value=false
   if (typeof window !== 'undefined') {
     window.requestAnimationFrame(updateScrollNavigation)
   }
@@ -3058,4 +3072,11 @@ onUnmounted(() => {
 <style scoped>
 .public-account-panel{z-index:1450;font-family:inherit}
 @media(min-width:860px){.public-account-panel{margin:0;transform:none}.public-account-card{margin:0}}
+</style>
+
+<style scoped>
+@media(max-width:859px){
+ .public-nav.reading{background:#080c1af5;backdrop-filter:none;box-shadow:none;transition:transform .22s ease-out}
+ .public-nav.reading .public-nav-inner,.public-nav.reading .public-brand-logo,.public-nav.reading .public-icon{transition:none}
+}
 </style>
