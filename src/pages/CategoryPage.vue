@@ -12,7 +12,7 @@ import { categoryIcon, DEFAULT_POST_CATEGORIES, uniqueCategories, loadPostCatego
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
 import { useVisualThemes } from '@/composables/useVisualThemes'
-import { resolveVisualTheme, postWebThemeCss } from '@/services/visualThemes'
+import { resolvePostVisualTheme, postWebThemeCss } from '@/services/visualThemes'
 import { peekPublicPage, isPublicPageFresh, storePublicPage } from '@/services/publicPageCache'
 
 const route = useRoute()
@@ -303,7 +303,7 @@ const readState = (postId) => {
 const cardTitle = (post) => post.analysis?.hypeTitle || post.title
 const cardActionIcon = (post) => categoryIcon(post.category)
 const cardSurfaceStyle = (post, index) => {
-  if (index === 0) return themeEnabled.value.web ? postWebThemeCss(post,resolveVisualTheme(post.visualThemeId,visualThemes.value)) : null
+  if (index === 0) return themeEnabled.value.web ? postWebThemeCss(post,resolvePostVisualTheme(post,visualThemes.value)) : null
   if (!post.image) return null
   const image = resolveAssetUrl(post.image)
   if (!image) return null

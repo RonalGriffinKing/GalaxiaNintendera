@@ -1,3 +1,5 @@
+> Actualización de publicación: la biblioteca continúa siendo local, pero el editor guarda `visualThemeSnapshot` validado junto a `visualThemeId` dentro de cada post. El lector, la home, el listado y el generador social usan esa copia sin necesitar la biblioteca del navegador. Las publicaciones anteriores necesitan guardarse una vez desde el navegador que conserva el tema. En el editor prevalecen las modificaciones locales; fuera de él prevalece la versión publicada. No se crea una colección global de temas.
+
 # Temas Visuales — implementación y prueba local
 
 Estado: piloto local, sin commits, despliegues ni escrituras de prueba en Firebase. La biblioteca se guarda en el navegador y no se sincroniza entre dispositivos. No está preparada todavía para publicar temas globales en producción.

@@ -2,11 +2,25 @@ import { describe, it, expect } from 'vitest'
 import { DEFAULT_VISUAL_THEME, INITIAL_VISUAL_THEMES, VISUAL_THEME_KEY, validateVisualTheme, parseVisualThemeJson, resolveVisualTheme, socialThemeSettings, socialThemeCss, webThemeCss, postWebThemeCss, persistVisualThemes, loadVisualThemes, removeVisualTheme, visualThemeExportManifest } from './visualThemes'
 import { titleRuns } from './socialContent'
 import { mergeSocialSettings } from './socialTemplateState'
+import { resolvePostVisualTheme } from './visualThemes'
 const clone=value=>JSON.parse(JSON.stringify(value))
 const kirby=INITIAL_VISUAL_THEMES.find(t=>t.id==='kirby-dreamland')
 const zelda=INITIAL_VISUAL_THEMES.find(t=>t.id==='zelda-hyrule')
 const storage=()=>{const map=new Map();return {setItem:(k,v)=>map.set(k,v),getItem:k=>map.get(k)??null}}
 describe('visual themes local pilot',()=>{
+ it('renders a published custom theme in a browser without the local library',()=>{
+  const custom={...clone(kirby),id:'custom-published',name:'Custom published'}
+  const post={visualThemeId:custom.id,visualThemeSnapshot:custom}
+  expect(resolvePostVisualTheme(post,INITIAL_VISUAL_THEMES)).toEqual(custom)
+  expect(resolvePostVisualTheme({...post,visualThemeSnapshot:{...custom,id:'other'}},INITIAL_VISUAL_THEMES)).toEqual(DEFAULT_VISUAL_THEME)
+  expect(resolvePostVisualTheme({...post,visualThemeSnapshot:{id:custom.id}},[])).toEqual(DEFAULT_VISUAL_THEME)
+ })
+ it('uses the saved version publicly and local edits only in the editor',()=>{
+  const edited={...clone(kirby),version:2}
+  const post={visualThemeId:kirby.id,visualThemeSnapshot:kirby}
+  expect(resolvePostVisualTheme(post,[edited]).version).toBe(1)
+  expect(resolvePostVisualTheme(post,[edited],{preferLocal:true}).version).toBe(2)
+ })
  it('validates every initial configuration',()=>{INITIAL_VISUAL_THEMES.forEach(t=>expect(validateVisualTheme(t)).toEqual(t))})
  it('keeps legacy and default output exactly unchanged',()=>{
   const theme=resolveVisualTheme(undefined,INITIAL_VISUAL_THEMES)

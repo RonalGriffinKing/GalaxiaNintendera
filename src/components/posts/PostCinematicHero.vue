@@ -70,7 +70,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['favorite', 'profile', 'share', 'copy', 'home', 'news'])
-const {theme:visualTheme,enabled:themeEnabled}=useVisualThemes(()=>props.post)
+const {theme:visualTheme,enabled:themeEnabled}=useVisualThemes(()=>props.post,{preferLocal:props.preview})
 const visualCss=computed(()=>themeEnabled.value.web?postWebThemeCss(props.post,visualTheme.value):{})
 
 const coverMedia = computed(() => mediaFromUrl(props.post.image))

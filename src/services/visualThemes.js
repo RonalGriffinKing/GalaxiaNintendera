@@ -1,4 +1,4 @@
-// Local-only pilot. No Firebase reads/writes and no implicit category matching.
+// The theme library is local. Validated snapshots travel inside saved posts.
 export const VISUAL_THEME_KEY = 'galaxia-visual-themes-v1'
 export const DEFAULT_THEME_ID = 'galaxia-general'
 const copy = value => JSON.parse(JSON.stringify(value))
@@ -111,6 +111,17 @@ export function persistVisualThemes(themes,role,storage=globalThis.localStorage)
 export function resolveVisualTheme(id,themes=[]) {
   if(!id) return copy(DEFAULT_VISUAL_THEME)
   try {const theme=themes.find(t=>t.id===id&&!t.archived);return theme?validateVisualTheme(theme):copy(DEFAULT_VISUAL_THEME)} catch {return copy(DEFAULT_VISUAL_THEME)}
+}
+// A published snapshot travels with the post, including to clean browsers.
+export function resolvePostVisualTheme(post={},themes=[],{preferLocal=false}={}) {
+ const id=post?.visualThemeId
+ const local=themes.find(theme=>theme.id===id&&!theme.archived)
+ if(preferLocal && local) return resolveVisualTheme(id,themes)
+ try {
+  const snapshot=post?.visualThemeSnapshot
+  if(snapshot && snapshot.id===id && !snapshot.archived) return validateVisualTheme(snapshot)
+ } catch {}
+ return resolveVisualTheme(id,themes)
 }
 export function isLegacyTheme(theme) { return !theme || Object.entries(DEFAULT_VISUAL_THEME.config).every(([group,values])=>Object.entries(values).every(([key,value])=>theme.config?.[group]?.[key]===value)) }
 export function removeVisualTheme(themes,id,{role,posts=[],usageComplete=false}={}) {

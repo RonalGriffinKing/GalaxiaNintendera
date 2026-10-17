@@ -764,7 +764,7 @@ import { normalizeSocialContent } from '@/services/socialContent'
 import { normalizeHomeHero } from '@/services/homeHero'
 import { gameEditorialFields } from '@/services/articlePresentation'
 import { useVisualThemes } from '@/composables/useVisualThemes'
-import { postWebThemeCss } from '@/services/visualThemes'
+import { postWebThemeCss, validateVisualTheme } from '@/services/visualThemes'
 import ReaderActions from './ReaderActions.vue'
 import { sectionNavLabel } from '@/services/articlePresentation'
 import CriterionStarPicker from './CriterionStarPicker.vue'
@@ -973,7 +973,7 @@ const mediaLabel = (media) => {
   return 'Pendiente'
 }
 const richText = (value) => renderRichText(value)
-const {theme:previewTheme,enabled:previewThemeEnabled}=useVisualThemes(()=>post.value)
+const {theme:previewTheme,enabled:previewThemeEnabled}=useVisualThemes(()=>post.value,{preferLocal:true})
 const previewThemeStyle=computed(()=>previewThemeEnabled.value.web?postWebThemeCss(post.value,previewTheme.value):{})
 const analysisScore = computed(() => analysisRating(post.value.analysis))
 const previewStars = computed(() => {
@@ -1390,6 +1390,7 @@ const parseAiJsonPost = (value) => {
   return {
     title,
     subtitle,
+    ...(data.visualThemeSnapshot ? {visualThemeSnapshot:validateVisualTheme(data.visualThemeSnapshot)} : {}),
     ...(typeof data.visualThemeId === 'string' && /^[a-z0-9][a-z0-9-]{1,63}$/.test(data.visualThemeId) ? { visualThemeId:data.visualThemeId } : {}),
     ...(Array.isArray(data.titleHighlights) ? { titleHighlights:data.titleHighlights.filter(value=>typeof value==='string').slice(0,30) } : {}),
     content: summary,
@@ -1422,6 +1423,7 @@ const pasteJsonIntoPost = async () => {
     const parsed = parseAiJsonPost(text)
     post.value.title = parsed.title
     if (parsed.visualThemeId) post.value.visualThemeId = parsed.visualThemeId
+    if (parsed.visualThemeSnapshot) post.value.visualThemeSnapshot = parsed.visualThemeSnapshot
     if (parsed.titleHighlights) post.value.titleHighlights = parsed.titleHighlights
     if (parsed.hero) post.value.hero = parsed.hero
     post.value.subtitle = parsed.subtitle
@@ -1545,6 +1547,10 @@ const savePost = async (targetStatus = 'pending') => {
   try {
     const user = auth.currentUser
     const cleanPost = JSON.parse(JSON.stringify(post.value))
+    if (!cleanPost.visualThemeId || cleanPost.visualThemeId === previewTheme.value.id) {
+      cleanPost.visualThemeId = previewTheme.value.id
+      cleanPost.visualThemeSnapshot = validateVisualTheme(previewTheme.value)
+    }
     delete cleanPost.stickers
     cleanPost.sections = normalizeSections(cleanPost.sections, { dropEmpty: !isHeroMode.value })
     cleanPost.hero = normalizeHomeHero(cleanPost.hero)
