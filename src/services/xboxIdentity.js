@@ -8,7 +8,15 @@ export function cleanGamertag(value) {
 export const validXuid=value=>typeof value==='string' && value===value.trim() && /^\d{10,20}$/.test(value)
 const text=value=>typeof value==='string'?value.trim().slice(0,200):''
 const date=value=>typeof value==='string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value))?new Date(value).toISOString():null
-const image=value=>{try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:''}catch{return ''}}
+const image=value=>{
+ try{
+  const url=new URL(value)
+  if(url.username||url.password)return ''
+  // OpenXBL returns legacy HTTP cover links for this Microsoft image host.
+  if(url.protocol==='http:'&&url.hostname==='store-images.s-microsoft.com'&&!url.port)url.protocol='https:'
+  return url.protocol==='https:'?url.href:''
+ }catch{return ''}
+}
 export const xblContent=value=>value?.content??value
 export function xboxProfilePerson(payload,xuid) {
  const content=xblContent(payload)

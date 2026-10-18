@@ -9,4 +9,16 @@ describe('Xbox public identity',()=>{
  it('uses real presence and public history without inventing playtime',()=>{const value=normalizeXboxIdentity(person,{content:{xuid:person.xuid,state:'Online',devices:[{titles:[{id:'1',name:'Game',state:'Active'}]}]}},history);expect(value.presence.currentGame.title).toBe('Game');expect(value.presence.updatedAt).toBeNull();expect(value.history).toHaveLength(1);expect(value.history[0].game.title).toBe('Game');expect(value.playtime).toBeNull();expect(value.library).toBeNull();expect(value.achievements).toBeNull();expect(value.realName).toBeUndefined();expect(value.gamerscore).toBe(123)})
  it('does not call an offline or ambiguous title current',()=>{expect(normalizeXboxIdentity(person,{state:'Offline'},history).presence.currentGame).toBeNull();expect(normalizeXboxIdentity(person,{state:'Online',devices:[{titles:[{id:'1',name:'A',state:'Active'},{id:'2',name:'B',state:'Active'}]}]},null).presence.currentGame).toBeNull();expect(normalizeXboxIdentity(person,null,null).presence.state).toBe('unknown')})
  it('rejects responses for another account',()=>{expect(()=>normalizeXboxIdentity(person,{xuid:'2533274792093123'},null)).toThrow();expect(()=>normalizeXboxIdentity(person,null,{xuid:'2533274792093123'})).toThrow()})
+ it('upgrades legacy Microsoft covers in history, highlights and current presence',()=>{
+  const source=structuredClone(history);source.content.titles[0].displayImage='http://store-images.s-microsoft.com/image/apps.cover'
+  const value=normalizeXboxIdentity(person,{state:'Online',devices:[{titles:[{id:'1',name:'Game',state:'Active'}]}]},source)
+  for(const game of [value.history[0].game,value.featuredGames[0],value.presence.currentGame])expect(game.imageUrl).toBe('https://store-images.s-microsoft.com/image/apps.cover')
+ })
+ it('does not upgrade arbitrary HTTP hosts or credential-bearing URLs',()=>{
+  for(const url of ['http://example.com/cover','http://store-images.s-microsoft.com.evil.test/image','http://user:pass@store-images.s-microsoft.com/image','http://store-images.s-microsoft.com:8080/image','javascript:alert(1)']){
+   const source=structuredClone(history);source.content.titles[0].displayImage=url
+   expect(normalizeXboxIdentity(person,null,source).history[0].game.imageUrl).toBe('')
+  }
+ })
+
 })
