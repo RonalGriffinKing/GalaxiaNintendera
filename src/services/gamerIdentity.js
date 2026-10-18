@@ -12,6 +12,7 @@
  * @property {GamerGame[]|null} featuredGames Partial public highlights, never a full library.
  * @property {GamerGame[]|null} library
  * @property {Array<{gameId:string, minutes:number, source:string}>|null} playtime
+ * @property {Array<{game:GamerGame,unlocked:number|null,total:number|null,remaining:number|null,gamerscore:number|null,totalGamerscore:number|null,remainingGamerscore:number|null,progress:number|null,at:string|null}>|null} gameAchievements Per-game provider summaries, independent from site rewards.
  * @property {Array<{id:string, platform:string, gameId?:string, label:string}>|null} achievements
  */
 /** @typedef {{id:string, title:string, imageUrl?:string}} GamerGame */

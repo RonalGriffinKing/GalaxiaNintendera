@@ -26,7 +26,7 @@ async function openxbl(path){
  if(Number(data.code)>=400)throw new ApiError(Number(data.code)===429?429:502,'OpenXBL no pudo devolver estos datos.')
  return data
 }
-async function identity(person){return cached('xuid:'+person.xuid,async()=>{
+async function identity(person){return cached('xuid:game-achievements-v1:'+person.xuid,async()=>{
  const results=await Promise.allSettled([openxbl('/presence/'+person.xuid),cached('titles:'+person.xuid,()=>openxbl('/titles/'+person.xuid))])
  const authFailure=results.find(result=>result.status==='rejected'&&result.reason.status===503)
  if(authFailure)throw authFailure.reason

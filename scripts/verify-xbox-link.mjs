@@ -19,17 +19,20 @@ try{
  check(await ev('window.profileWrites.length===0 && document.querySelector(".xbox-confirm").textContent.includes("Xbox de prueba#1234")'),'preview and consent precede persistence');
  await ev('document.querySelector(".xbox-confirm button").click()');await until('!!window.profileMockUsers.owner?.socialLinks.xbox');
  check(await ev('Object.keys(window.profileWrites[0].patch).join(",")==="socialLinks.xbox"'),'only Xbox link is written');
- await ev('document.querySelector(".profile-edit-card .icon-modal-close").click()');await wait(150);
+ await ev('document.querySelector(".profile-edit-card .icon-modal-close").click()');await until('document.querySelector(".featured-info")?.textContent.includes("Juego Xbox de prueba")');
  check(await ev('document.querySelector(".gamer-connected").textContent.includes("Xbox") && document.querySelector(".featured-info").textContent.includes("Juego Xbox de prueba")'),'Xbox data appears on main profile');
- check(await ev('document.querySelectorAll(".gamer-most-played .empty-game").length===3 && !document.querySelector(".played-hours")'),'no invented Xbox hours');
+ check(await ev('document.querySelectorAll(".gamer-game-achievements li").length===3 && !document.querySelector(".played-hours")'),'no invented Xbox hours');
  await ev('window.profileGamerFixtures.value=[{platform:"nintendo",connectionState:"connected",visibility:"public",presence:{state:"offline",lastGame:{id:"n",title:"Nintendo de prueba"}},history:[],playtime:[]}]');await wait(150);
  check(await ev('document.querySelectorAll(".gamer-system-selector button").length===2'),'linked systems have separate selectors');
  await ev('[...document.querySelectorAll(".gamer-system-selector button")].find(b=>b.textContent==="Nintendo").click()');await wait(80);
  check(await ev('document.querySelector(".featured-info").textContent.includes("Nintendo de prueba")&&!document.querySelector(".featured-info").textContent.includes("Juego Xbox")'),'Nintendo selection isolates activity');
  for(const width of [1440,390,320]){await cdp('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await wait(80);check(await ev('document.documentElement.scrollWidth<=innerWidth'),'system selector fits '+width)}
  await ev('[...document.querySelectorAll(".gamer-system-selector button")].find(b=>b.textContent==="Xbox").click()');await wait(80);
- check(await ev('document.querySelector(".featured-info").textContent.includes("Juego Xbox de prueba")&&document.querySelectorAll(".gamer-most-played .empty-game").length===3'),'Xbox selection keeps its own data and missing-hour slots');
+ check(await ev('document.querySelector(".featured-info").textContent.includes("Juego Xbox de prueba")&&document.querySelectorAll(".gamer-game-achievements li").length===3'),'Xbox selection keeps its own data and missing-hour slots');
  await ev('window.profileGamerFixtures.value=[]');await wait(100);
+ check(await ev('document.querySelector(".gamer-game-achievements").textContent.includes("6 logros desbloqueados")&&document.querySelector(".gamer-game-achievements").textContent.includes("730 G")&&!document.querySelector(".gamer-most-played")'),'Xbox replaces most-played with real achievement progress');
+ check(await ev('document.querySelector(".gamer-game-achievements li").textContent.includes("Total de logros no disponible")&&!document.querySelector(".gamer-game-achievements li").textContent.includes("Faltan 0 logros")'),'unknown achievement total stays unknown');
+ for(const width of [1440,768,390,320]){await cdp('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await wait(80);check(await ev('document.documentElement.scrollWidth<=innerWidth'),'achievement cards fit '+width);check(await ev('(()=>{const heights=[...document.querySelectorAll(".gamer-game-achievements li")].map(e=>e.getBoundingClientRect().height);return Math.max(...heights)-Math.min(...heights)<2})()'),'achievement cards align with missing data '+width);if([1440,390].includes(width)){const capture=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync(process.env.TEMP+'/galaxia-xbox-achievements-'+width+'.png',Buffer.from(capture.result.data,'base64'))}}
  await ev('window.profileChangeViewer({uid:"visitor"})');await wait(400);
  check(await ev('!document.querySelector(".profile-gamer-preview .gamer-connect-button") && document.querySelector(".gamer-connected").textContent.includes("Xbox")'),'visitor sees public data with no editing controls');
  await ev('window.profileChangeViewer({uid:"owner"})');await wait(350);

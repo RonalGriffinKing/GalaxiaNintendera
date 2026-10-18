@@ -43,6 +43,19 @@ export function normalizeXboxIdentity(person,presencePayload,titlesPayload) {
  if(titles?.xuid && titles.xuid!==person.xuid)throw Error('El historial no corresponde al perfil Xbox.')
  const games=(Array.isArray(titles?.titles)?titles.titles:[]).filter(game=>game.type==='Game' && game.titleHistory?.visible!==false && text(game.name) && /^\d{1,12}$/.test(String(game.titleId))).slice(0,100)
  const gameData=game=>({id:String(game.titleId),title:text(game.name),imageUrl:image(game.displayImage)})
+ // Per-game summaries are separate from individual achievement definitions.
+ const count=value=>Number.isSafeInteger(value)&&value>=0?value:null
+ const gameAchievements=games.flatMap(game=>{
+  const raw=game.achievement
+  if(!raw||typeof raw!=='object')return []
+  const unlocked=count(raw.currentAchievements),earned=count(raw.currentGamerscore)
+  const total=count(raw.totalAchievements),scoreTotal=count(raw.totalGamerscore)
+  const validTotal=total>0&&unlocked!==null&&total>=unlocked?total:null
+  const validScoreTotal=scoreTotal>0&&earned!==null&&scoreTotal>=earned?scoreTotal:null
+  const progress=typeof raw.progressPercentage==='number'&&Number.isFinite(raw.progressPercentage)&&raw.progressPercentage>=0&&raw.progressPercentage<=100?raw.progressPercentage:null
+  if(unlocked===null&&earned===null&&progress===null)return []
+  return [{game:gameData(game),unlocked,total:validTotal,remaining:validTotal!==null?validTotal-unlocked:null,gamerscore:earned,totalGamerscore:validScoreTotal,remainingGamerscore:validScoreTotal!==null?validScoreTotal-earned:null,progress,at:date(game.titleHistory?.lastTimePlayed)}]
+ }).sort((a,b)=>(Date.parse(b.at)||0)-(Date.parse(a.at)||0)).slice(0,3)
  const history=games.flatMap(game=>{const at=date(game.titleHistory?.lastTimePlayed);return at?[{game:gameData(game),at}]:[]}).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at)).slice(0,3)
  const state=presence?.state==='Online'?'online':presence?.state==='Offline'?'offline':'unknown'
  const active=(presence?.devices||[]).flatMap(device=>device.titles||[]).filter(title=>title.state==='Active'&&text(title.name)&&/^\d{1,12}$/.test(String(title.id)))
@@ -52,5 +65,5 @@ export function normalizeXboxIdentity(person,presencePayload,titlesPayload) {
  const currentGame=current?{id:String(current.id),title:text(current.name),imageUrl:games.find(game=>String(game.titleId)===String(current.id))?.displayImage?image(games.find(game=>String(game.titleId)===String(current.id)).displayImage):''}:null
  const score=String(person.gamerScore??'')
  return {platform:'xbox',connectionState:'connected',visibility:'public',xuid:person.xuid,displayName:text(person.uniqueModernGamertag||person.gamertag),avatarUrl:image(person.displayPicRaw),gamerscore:/^\d{1,10}$/.test(score)?Number(score):null,
- presence:{state,currentGame,lastGame:history[0]?.game||null,updatedAt:state==='online'?null:date(presence?.lastSeen?.timestamp)||history[0]?.at||null,logoutAt:date(presence?.lastSeen?.timestamp)},history,featuredGames:games.map(gameData),library:null,playtime:null,achievements:null}
+ presence:{state,currentGame,lastGame:history[0]?.game||null,updatedAt:state==='online'?null:date(presence?.lastSeen?.timestamp)||history[0]?.at||null,logoutAt:date(presence?.lastSeen?.timestamp)},history,featuredGames:games.map(gameData),library:null,playtime:null,achievements:null,gameAchievements}
 }

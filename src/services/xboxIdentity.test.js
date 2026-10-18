@@ -21,4 +21,16 @@ describe('Xbox public identity',()=>{
   }
  })
 
+ it('keeps per-game achievement summaries without inventing totals or individual awards',()=>{
+  const source=structuredClone(history);source.content.titles[0].achievement={currentAchievements:6,totalAchievements:0,currentGamerscore:270,totalGamerscore:1000,progressPercentage:27}
+  let value=normalizeXboxIdentity(person,null,source)
+  expect(value.gameAchievements[0]).toMatchObject({unlocked:6,total:null,remaining:null,gamerscore:270,totalGamerscore:1000,remainingGamerscore:730,progress:27})
+  expect(value.achievements).toBeNull();expect(value.playtime).toBeNull()
+  source.content.titles[0].achievement={currentAchievements:6,totalAchievements:10,currentGamerscore:270,totalGamerscore:100,progressPercentage:101}
+  value=normalizeXboxIdentity(person,null,source)
+  expect(value.gameAchievements[0]).toMatchObject({remaining:4,totalGamerscore:null,remainingGamerscore:null,progress:null})
+  source.content.titles[0].achievement={currentAchievements:-1,currentGamerscore:'270',progressPercentage:null}
+  expect(normalizeXboxIdentity(person,null,source).gameAchievements).toEqual([])
+ })
+
 })
