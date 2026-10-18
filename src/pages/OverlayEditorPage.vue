@@ -60,6 +60,8 @@
         <i class="fas fa-stopwatch"></i> Temporizador
       </button>
 
+      <button class="btn-widget now-playing-button" @click="addNowPlayingWidget"><i class="fas fa-gamepad"></i> Jugando ahora</button>
+
       <div class="format-summary">
         <i :class="format === 'horizontal' ? 'fas fa-display' : 'fas fa-mobile-screen-button'"></i>
         <div><strong>{{ format === 'horizontal' ? 'PC / OBS' : 'Vertical / TikTok' }}</strong><span>{{ canvasWidth }} x {{ canvasHeight }} px</span></div>
@@ -88,7 +90,7 @@
               x
             </button>
 
-            <WidgetRenderer :widget="widget" />
+            <WidgetRenderer :widget="widget" :owner-id="auth.currentUser?.uid" preview />
           </div>
         </div>
       </div>
@@ -138,6 +140,7 @@ import { auth, db } from '@/firebase'
 
 import WidgetRenderer from '@/components/widgets/WidgetRenderer.vue'
 import WidgetEditor from '@/components/widgets/WidgetEditor.vue'
+import { NOW_PLAYING_DEFAULTS, nowPlayingSettings } from '@/services/nowPlaying'
 
 const route = useRoute()
 const overlayId = route.query.id
@@ -214,6 +217,7 @@ const setFormat = (preset) => {
 
 const widgetSize = (widget) => {
   const data = widget?.data || {}
+  if (widget?.type === 'nowPlaying') return nowPlayingSettings(data)
   if (widget?.type === 'todo' && data.minimized) return { width: Number(data.bubbleSize) || 70, height: Number(data.bubbleSize) || 70 }
   const defaults = { goal: [430, 170], todo: [340, 230], chat: [400, 115], timer: [420, 190] }
   const fallback = defaults[widget?.type] || [200, 100]
@@ -314,8 +318,16 @@ const addTimerWidget = () => {
   selected.value = timer
 }
 
+const addNowPlayingWidget = () => {
+  const data = { ...NOW_PLAYING_DEFAULTS }
+  const widget = { id: Date.now(), type: 'nowPlaying', x: Math.round((canvasWidth.value - data.width) / 2), y: Math.max(40, canvasHeight.value - data.height - 60), data }
+  widgets.value.push(widget)
+  selected.value = widget
+}
+
 const removeWidget = (id) => {
   widgets.value = widgets.value.filter(w => w.id !== id)
+  if (selected.value?.id === id) selected.value = null
 }
 
 let dragging = null
@@ -337,8 +349,7 @@ const startDrag = (widget, e) => {
 
 const onDrag = (e) => {
   if (!dragging) return
-  const width = Number(dragging.data?.width) || 100
-  const height = Number(dragging.data?.height) || 100
+  const { width, height } = widgetSize(dragging)
   dragging.x = Math.max(0, Math.min(canvasWidth.value - width, (e.clientX - canvasRect.left) / scale.value - offsetX))
   dragging.y = Math.max(0, Math.min(canvasHeight.value - height, (e.clientY - canvasRect.top) / scale.value - offsetY))
 }
@@ -409,6 +420,7 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
+.now-playing-button { background:linear-gradient(120deg,#7c3aed,#2563eb); }
 .timer-button { background: linear-gradient(135deg, #6d28d9, #db2777); box-shadow: 0 8px 20px rgba(126,34,206,.2); }
 .format-switch { display: flex; gap: 4px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; }
 .format-switch button { min-width: 112px; padding: 5px 9px; border-radius: 7px; color: #64748b; display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 6px; text-align: left; font-size: 11px; font-weight: 900; }

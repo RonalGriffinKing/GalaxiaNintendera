@@ -6,7 +6,7 @@
       class="absolute"
       :style="{ top: widget.y + 'px', left: widget.x + 'px' }"
     >
-      <WidgetRenderer :widget="widget" />
+      <WidgetRenderer :widget="widget" :owner-id="ownerId" />
     </div>
   </div>
 </template>
@@ -20,6 +20,7 @@ import WidgetRenderer from '@/components/widgets/WidgetRenderer.vue'
 
 const route = useRoute()
 const widgets = ref([])
+const ownerId = ref('')
 const width = ref(1080)
 const height = ref(1920)
 let unsubscribe
@@ -33,6 +34,7 @@ onMounted(() => {
   const [userId, overlayId] = fullId.split('_')
 
   if (!userId || !overlayId) return
+  ownerId.value = userId
 
   unsubscribe = onSnapshot(
     doc(db, 'overlays', userId, 'items', overlayId),
