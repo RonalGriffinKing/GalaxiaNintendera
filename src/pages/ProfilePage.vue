@@ -208,6 +208,10 @@ watch(() => [profileId.value,profile.value?.id,xboxLink.value?.xuid,xboxRefresh.
  catch(error){if(requestId===xboxRequestId)xboxError.value=error.message}
  finally{if(requestId===xboxRequestId)xboxLoading.value=false}
 })
+function refreshXboxProfile(){
+ clearXboxProfileCache(profileId.value)
+ xboxRefresh.value++
+}
 async function saveXboxLink(value){
  const uid=profileId.value
  if(!isOwnProfile.value || auth.currentUser?.uid!==uid)throw Error('Solo el propietario puede vincular Xbox.')
@@ -1459,7 +1463,7 @@ onUnmounted(() => {
       <AppNotice :message="message" :type="message.startsWith('No se') ? 'error' : 'success'" />
       <GachaponDemoModal v-if="gachaponOpen && isOwnProfile" :stars="stars" :icons="allProfileIcons" :owned="unlockedIcons" :prices="gachaponPrices" :save-prices="saveGachaponPrices" :admin="isAdminOwnProfile" :prepare-mirror="prepareGachaponMirror" @preview="publishGachaponMirror" :initial-saga="gachaponSaga" @collection="viewGachaponCollection" @close="gachaponOpen = false" />
       <ProfileIconEditor :start-systems="connectionsRequested" :systems-busy="systemsBusy" v-if="iconPanelOpen || iconUploadOpen" v-model:profile-draft="profileDraft" v-model:upload-icon-draft="uploadIconDraft" :profile="profile" :profile-icon="profileIcon" :profile-icon-meta="profileIconMeta" :panel-open="iconPanelOpen" :upload-open="iconUploadOpen" :edit-message="editMessage" :is-saving-profile="isSavingProfile" :is-uploading-icon="isUploadingIcon" :editing-icon-id="editingIconId" :upload-icon-preview="uploadIconPreview" :upload-icon-message="uploadIconMessage" :icon-filters="iconFilters" @close-panel="closeIconPanel" @close-upload="closeIconUpload" @save-profile="saveProfile" @open-rewards="openRewards('collection')" @save-uploaded-icon="saveUploadedIcon">
-        <template #systems><ProfileSystemsPanel :xbox-link="xboxLink" :xbox-identity="xboxIdentity" :xbox-loading="xboxLoading" :xbox-error="xboxError" :save-xbox-link="saveXboxLink" :refresh-xbox="() => xboxRefresh++" :own="isOwnProfile" :url="nintendoUrl" :profile-url="nintendoProfileUrl" :identity="nintendoIdentity" :loading="nintendoLoading" :error="nintendoError" :save-link="saveNintendoLinks" :refresh="() => nintendoRefresh++" @busy="systemsBusy=$event" /></template>
+        <template #systems><ProfileSystemsPanel :xbox-link="xboxLink" :xbox-identity="xboxIdentity" :xbox-loading="xboxLoading" :xbox-error="xboxError" :save-xbox-link="saveXboxLink" :refresh-xbox="refreshXboxProfile" :own="isOwnProfile" :url="nintendoUrl" :profile-url="nintendoProfileUrl" :identity="nintendoIdentity" :loading="nintendoLoading" :error="nintendoError" :save-link="saveNintendoLinks" :refresh="() => nintendoRefresh++" @busy="systemsBusy=$event" /></template>
       </ProfileIconEditor>
 
 
