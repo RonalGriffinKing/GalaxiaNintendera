@@ -19,7 +19,8 @@ export function nowPlayingCard(identities, settings) {
     if (minutes !== undefined) { const hours = Math.floor(minutes / 60), rest = Math.floor(minutes % 60); stats.push({ icon: 'far fa-clock', text: hours ? `${hours} h${rest ? ` ${rest} min` : ''}` : `${rest} min` }) }
     if (achievement?.unlocked !== null && Number.isSafeInteger(achievement?.unlocked) && achievement.unlocked >= 0) stats.push({ icon: 'fas fa-trophy', text: `${achievement.unlocked}${achievement.total > 0 && achievement.total >= achievement.unlocked ? '/' + achievement.total : ''} logros` })
     if (achievement?.gamerscore !== null && Number.isSafeInteger(achievement?.gamerscore) && achievement.gamerscore >= 0) stats.push({ icon: 'fas fa-star', text: `${achievement.gamerscore}${achievement.totalGamerscore > 0 && achievement.totalGamerscore >= achievement.gamerscore ? '/' + achievement.totalGamerscore : ''} G` })
-    return [{ game, platform: identity.platform, platformLabel: GAMER_PLATFORMS[identity.platform], playing, stats: stats.slice(0, 2), at: Date.parse(identity.presence?.updatedAt) || 0 }]
+    const platformLabel = identity.platform === 'nintendo' && playing && ['Nintendo Switch', 'Nintendo Switch 2'].includes(identity.presence?.platformLabel) ? identity.presence.platformLabel : GAMER_PLATFORMS[identity.platform]
+    return [{ game, platform: identity.platform, platformLabel, playing, stats: stats.slice(0, 2), at: Date.parse(identity.presence?.updatedAt) || 0 }]
   }).sort((a, b) => Number(b.playing) - Number(a.playing) || b.at - a.at)
   return candidates[0] || null
 }

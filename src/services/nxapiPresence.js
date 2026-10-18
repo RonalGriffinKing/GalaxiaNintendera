@@ -15,6 +15,15 @@ function timestamp(value) {
   const date = new Date(value * 1000)
   return Number.isFinite(date.getTime()) ? date.toISOString() : null
 }
+function nintendoGameId(value) {
+  if (typeof value !== 'string') return ''
+  if (/^[a-f0-9]{16}$/.test(value)) return value
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:' || url.hostname !== 'ec.nintendo.com' || url.username || url.password || url.port) return ''
+    return url.pathname.match(/^\/apps\/([a-f0-9]{16})(?:\/|$)/)?.[1] || ''
+  } catch { return '' }
+}
 /** Normalize only capabilities actually returned by the public presence endpoint. */
 export function normalizeNxapiPresence(data) {
   const friend = data?.friend
@@ -22,12 +31,15 @@ export function normalizeNxapiPresence(data) {
   if (!text(friend?.name) || !raw || typeof raw.state !== 'string') throw new Error('Respuesta de presencia no válida.')
   const state = ['ONLINE', 'PLAYING'].includes(raw.state) ? 'online' : ['OFFLINE', 'INACTIVE'].includes(raw.state) ? 'offline' : 'unknown'
   const name = text(raw.game?.name)
-  const game = name ? { id: text(raw.game.shopUri, 2048) || name, title: name, imageUrl: imageUrl(raw.game.imageUri) } : null
+  const id = nintendoGameId(raw.game?.shopUri) || (text(data.title?.name) === name ? nintendoGameId(data.title?.id) : '') || text(raw.game?.shopUri, 2048) || name
+  const game = name ? { id, title: name, imageUrl: imageUrl(raw.game.imageUri) } : null
+  const platformLabel = raw.platform === 2 ? 'Nintendo Switch 2' : raw.platform === 1 ? 'Nintendo Switch' : null
+  const minutes = raw.game?.totalPlayTime
   return {
     platform: 'nintendo', connectionState: 'connected', visibility: 'public',
     displayName: text(friend.name), avatarUrl: imageUrl(friend.imageUri),
-    presence: { state, currentGame: state === 'online' ? game : null, lastGame: state !== 'online' ? game : null, updatedAt: timestamp(raw.updatedAt), logoutAt: timestamp(raw.logoutAt) },
-    history: null, library: null, playtime: null, achievements: null
+    presence: { state, currentGame: state === 'online' ? game : null, lastGame: state !== 'online' ? game : null, updatedAt: timestamp(raw.updatedAt), logoutAt: timestamp(raw.logoutAt), ...(platformLabel ? { platformLabel } : {}) },
+    history: null, library: null, playtime: game && Number.isFinite(minutes) && minutes >= 0 ? [{ gameId: id, minutes, source: 'nxapi-presence' }] : null, achievements: null
   }
 }
 export const NXAPI_PROFILE_BASE = 'https://nxapi-auth.fancy.org.uk/profile/'
@@ -64,8 +76,10 @@ export function parseNxapiPublicProfile(html, id) {
 /** Presence and public game history remain separate capabilities, with no invented library. */
 export function combineNintendoSources(presence, publicProfile) {
   if (!presence && !publicProfile) return null
+  const canonicalGame = game => game ? { ...game, id: nintendoGameId(game.id) || game.id } : null
+  const playtime = publicProfile?.playtime || presence?.playtime ? [...new Map([...(publicProfile?.playtime || []), ...(presence?.playtime || [])].map(entry => [nintendoGameId(entry.gameId) || entry.gameId, { ...entry, gameId: nintendoGameId(entry.gameId) || entry.gameId }])).values()] : null
   return { ...(publicProfile || {}), ...(presence || {}),
-    presence: presence?.presence ? { ...presence.presence, lastGame: presence.presence.lastGame || publicProfile?.presence?.lastGame || null } : publicProfile?.presence || null,
+    presence: presence?.presence ? { ...presence.presence, currentGame: canonicalGame(presence.presence.currentGame), lastGame: canonicalGame(presence.presence.lastGame || publicProfile?.presence?.lastGame) } : publicProfile?.presence || null,
     history: publicProfile?.history || null, featuredGames: publicProfile?.featuredGames || null,
-    library: null, playtime: publicProfile?.playtime || null, achievements: null }
+    library: null, playtime, achievements: null }
 }

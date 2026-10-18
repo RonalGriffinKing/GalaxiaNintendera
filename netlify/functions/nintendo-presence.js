@@ -9,7 +9,7 @@ export async function handler(event) {
   const validSource = params.source === undefined || params.source === 'presence' || profile
   if (typeof params.id !== 'string' || params.id.length !== (profile ? 22 : 16) || Object.keys(params).some(key => !['id', 'source'].includes(key)) || !validSource || !(profile ? /^[A-Za-z0-9_-]{22}$/ : /^[a-f0-9]{16}$/).test(params.id || '')) return json(400, { error: 'Identificador o fuente de nxapi no válido.' })
   const id = params.id
-  const key = (profile ? 'profile:' : 'presence:') + id
+  const key = 'console-playtime-v2:' + (profile ? 'profile:' : 'presence:') + id
   const hit = cache.get(key)
   if (hit && hit.until > Date.now()) return json(200, hit.value, true)
   try {

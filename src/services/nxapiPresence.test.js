@@ -1,10 +1,39 @@
 ﻿import { describe, it, expect } from 'vitest'
 import { nxapiPresenceId, nxapiProfileId, normalizeNxapiPresence, normalizeNxapiPublicProfile, parseNxapiPublicProfile, combineNintendoSources } from './nxapiPresence'
+import { nowPlayingCard, nowPlayingSettings } from './nowPlaying'
 const presenceUrl = 'https://nxapi-presence.fancy.org.uk/api/presence/d392169fdeb68a8e'
 const profileId = 'de97_DbiogMuJB5WFpmvKA'
 const profileUrl = 'https://nxapi-auth.fancy.org.uk/profile/' + profileId
 const game = { id: '01006f8002326000', name: 'Juego de prueba', total_play_time: 79029, last_played_at: '2026-10-17T14:47:36.849Z', first_played_at: '2020-03-20T01:37:09.000Z' }
 describe('nxapi public links and capabilities', () => {
+ it('preserves Switch 2 presence minutes and matches the public profile by canonical title ID', () => {
+  const live = normalizeNxapiPresence({friend:{name:'Prueba',presence:{state:'ONLINE',platform:2,game:{name:game.name,shopUri:'https://ec.nintendo.com/apps/'+game.id+'/GB?acdIndex=1',totalPlayTime:993}}}})
+  expect(live.presence.platformLabel).toBe('Nintendo Switch 2')
+  expect(live.presence.currentGame.id).toBe(game.id)
+  const profile = normalizeNxapiPublicProfile({name:'Perfil',recent_titles:[{...game,total_play_time:900}]})
+  const combined = combineNintendoSources(live,profile)
+  expect(combined.playtime).toEqual([{gameId:game.id,minutes:993,source:'nxapi-presence'}])
+  const card = nowPlayingCard([combined],nowPlayingSettings())
+  expect(card.platformLabel).toBe('Nintendo Switch 2')
+  expect(card.stats[0].text).toBe('16 h 33 min')
+  expect(nowPlayingCard([combineNintendoSources(live,null)],nowPlayingSettings()).stats[0].text).toBe('16 h 33 min')
+ })
+ it('reconciles legacy shop URL IDs without matching games by similar names', () => {
+  const profile = normalizeNxapiPublicProfile({name:'Perfil',recent_titles:[game]})
+  const live = normalizeNxapiPresence({friend:{name:'Prueba',presence:{state:'ONLINE',game:{name:game.name,shopUri:'https://ec.nintendo.com/apps/'+game.id+'/GB'}}}})
+  live.presence.currentGame.id='https://ec.nintendo.com/apps/'+game.id+'/GB'
+  expect(nowPlayingCard([combineNintendoSources(live,profile)],nowPlayingSettings()).stats[0].text).toBe('1317 h 9 min')
+  live.presence.currentGame.id='https://ec.nintendo.com/apps/0100000000000000/GB'
+  expect(nowPlayingCard([combineNintendoSources(live,profile)],nowPlayingSettings()).stats).toEqual([])
+ })
+ it('does not infer consoles from names or invent missing/invalid minutes', () => {
+  for(const minutes of [undefined,null,'993',-1,Infinity]){
+   const value=normalizeNxapiPresence({friend:{name:'Prueba',presence:{state:'ONLINE',platform:99,game:{name:'Nintendo Switch 2 Edition',totalPlayTime:minutes}}}})
+   expect(value.playtime).toBeNull();expect(value.presence.platformLabel).toBeUndefined()
+  }
+  const value=normalizeNxapiPresence({friend:{name:'Prueba',presence:{state:'ONLINE',platform:1,game:{name:'Juego',totalPlayTime:0}}}})
+  expect(value.presence.platformLabel).toBe('Nintendo Switch');expect(value.playtime[0].minutes).toBe(0)
+ })
  it('accepts only exact supported public endpoints', () => {
   expect(nxapiPresenceId(presenceUrl)).toBe('d392169fdeb68a8e'); expect(nxapiProfileId(profileUrl)).toBe(profileId)
   for (const url of [presenceUrl+'?token=secret', presenceUrl+'#x', presenceUrl+'/', presenceUrl.replace('https:', 'http:'), presenceUrl.replace('.uk/', '.uk.evil.test/'), presenceUrl.replace('https://', 'https://user:pass@'), presenceUrl.replace('/api/presence/', ':443/api/presence/'), presenceUrl.replace('d392169fdeb68a8e', '../resources')]) expect(() => nxapiPresenceId(url)).toThrow()

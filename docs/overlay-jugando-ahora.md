@@ -21,3 +21,5 @@ Comprobaciones:
 El laboratorio usa datos de prueba explícitos y escrituras en memoria, sin modificar Firebase. Verifica guardar, renderizar OBS, transparencia, ciclo de entrada/salida, ausencia de consultas por animación, estados offline, último juego, estadísticas de Nintendo/Xbox y tamaño compacto de 320 px.
 
 Tipografia: controles independientes A-/A+ y deslizador para etiqueta, titulo, plataforma y estadisticas. Los tamanos se guardan en el widget. La altura efectiva aumenta si hace falta para alojar el texto; tambien se usa al alinear y arrastrar. Los overlays existentes usan los tamanos predeterminados.
+
+Nintendo: la consola de la partida activa se toma de friend.presence.platform (1 = Switch, 2 = Switch 2), segun los tipos oficiales de nxapi: https://github.com/samuelthomas2774/nxapi/blob/main/src/api/coral-types.ts. No se deduce de la edicion del juego. totalPlayTime se conserva en minutos y el ID de la URL ec.nintendo.com/apps se normaliza al ID hexadecimal del perfil. Al combinar fuentes, el dato de presencia del mismo juego prevalece sin sumar tiempos duplicados.
