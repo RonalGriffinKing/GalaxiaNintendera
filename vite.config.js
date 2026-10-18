@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
+import { handler as xboxProfileHandler } from './netlify/functions/xbox-profile.js'
+import { handler as nintendoPresenceHandler } from './netlify/functions/nintendo-presence.js'
 import { handler as igdbHandler } from './netlify/functions/igdb.js'
 import { handler as imageProxyHandler } from './netlify/functions/image-proxy.js'
 import { handler as youtubeFeedHandler } from './netlify/functions/youtube-feed.js'
@@ -46,6 +48,15 @@ const netlifyFunctionsDev = () => ({
 
       res.end(result.body || '')
     }
+
+    server.middlewares.use('/.netlify/functions/xbox-profile', async (req,res) => {
+      try { await runFunction(xboxProfileHandler,req,res) } catch { res.statusCode=502;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({error:'No se pudo consultar Xbox.'})) }
+    })
+
+    server.middlewares.use('/.netlify/functions/nintendo-presence', async (req, res) => {
+      try { await runFunction(nintendoPresenceHandler, req, res) }
+      catch { res.statusCode = 502; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({error:'No se pudo consultar nxapi.'})) }
+    })
 
     server.middlewares.use('/.netlify/functions/igdb', async (req, res) => {
       try {

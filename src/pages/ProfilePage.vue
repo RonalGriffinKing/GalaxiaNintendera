@@ -2,9 +2,15 @@
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { onAuthStateChanged, updateProfile } from 'firebase/auth'
-import { collection, deleteDoc, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc, where, onSnapshot } from 'firebase/firestore'
+import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc, where, onSnapshot } from 'firebase/firestore'
 import { DEFAULT_GACHAPON_PRICES, validateGachaponPrices } from '@/components/profile/gachapon/prices'
 import { auth, db } from '@/firebase'
+import { fetchXboxProfile, clearXboxProfileCache } from '@/services/xboxProfileClient'
+import { cleanGamertag, validXuid } from '@/services/xboxIdentity'
+import { fetchNintendoSource } from '@/services/nintendoPresenceClient'
+import { nxapiPresenceId, nxapiProfileId, NXAPI_BASE, NXAPI_PROFILE_BASE, combineNintendoSources } from '@/services/nxapiPresence'
+import ProfileGamerPreview from '@/components/profile/ProfileGamerPreview.vue'
+import ProfileSystemsPanel from '@/components/profile/ProfileSystemsPanel.vue'
 import ProfileRewardsHub from '@/components/profile/ProfileRewardsHub.vue'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import ProfileAchievementsPanel from '@/components/profile/ProfileAchievementsPanel.vue'
@@ -12,7 +18,6 @@ import ProfileHeaderCard from '@/components/profile/ProfileHeaderCard.vue'
 import { achievementTarget, achievementValue } from '@/services/achievementProgress'
 const ProfileIconEditor = defineAsyncComponent(() => import('@/components/profile/ProfileIconEditor.vue'))
 import ProfileRelationModal from '@/components/profile/ProfileRelationModal.vue'
-import ProfileStatsPanel from '@/components/profile/ProfileStatsPanel.vue'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import ProfileFavoritesPreview from '@/components/shared/ProfileFavoritesPreview.vue'
 import { resolveAssetUrl } from '@/constants/assets'
@@ -29,6 +34,8 @@ import {
 } from '@/services/profileProgress'
 import { ACHIEVEMENT_TYPES, PROFILE_ICON_FILTERS } from '@/constants/profile'
 
+// Supplied by a future consent-aware adapter; never inferred from profile fields.
+const gamerData = defineProps({ gamerIdentities: { type: Array, default: () => [] } })
 const route = useRoute()
 const router = useRouter()
 const profile = ref(null)
@@ -75,7 +82,46 @@ const publicProfiles = ref([])
 const followersList = ref([])
 const followingList = ref([])
 const relationModal = ref('')
-const activityTab = ref('posts')
+const activityTab = computed({get:()=>['posts','threads',...(isOwnProfile.value?['saved','reads']:[])].includes(route.query.activity)?route.query.activity:'posts',set:activity=>router.replace({query:{...route.query,activity}})})
+const publicationsExpanded = ref(route.query.section === 'publications' || Boolean(route.query.activity))
+const communitiesExpanded = ref(false)
+const connectionsRequested = ref(false)
+const systemsBusy = ref(false)
+function openSystems() {
+ if (!isOwnProfile.value) return
+ connectionsRequested.value = true
+ editMessage.value = ''
+ iconPanelOpen.value = true
+}
+async function toggleAllPosts() {
+ publicationsExpanded.value = true
+ showAllRecentPosts.value = !showAllRecentPosts.value
+ await loadPublications()
+}
+const publicationsLoaded = ref('')
+const publicationsLoading = ref(false)
+async function loadPublications() {
+ if (!profile.value || !publicationsExpanded.value || isRewardsPage.value) return
+ const key=profileId.value+':'+viewerUid.value
+ if(publicationsLoaded.value===key)return
+ publicationsLoaded.value=key
+ publicationsLoading.value=true
+ const requestId=profileLoadRequestId
+ try {
+ const [postSnap,threadSnap,savedSnap,readsSnap]=await Promise.all([
+ getDocs(query(collection(db,'posts'),where('authorId','==',profileId.value),limit(120))),
+ getDocs(query(collection(db,'communityThreads'),where('authorId','==',profileId.value),limit(80))),
+ isOwnProfile.value?getDocs(query(collection(db,'users',profileId.value,'favorites'),limit(6))):Promise.resolve({docs:[]}),
+ getDocs(query(collection(db,'users',profileId.value,'readPosts'),orderBy('readAt','desc'),limit(12))).catch(()=>({docs:[]}))])
+ if(requestId!==profileLoadRequestId)return
+ posts.value=postSnap.docs.map(item=>({id:item.id,...item.data()})).filter(post=>post.status==='approved'&&!['private','unlisted'].includes(post.visibility)&&post.placement!=='hero'&&!post.isMainEntry).sort((a,b)=>getTime(b.createdAt)-getTime(a.createdAt))
+ threads.value=threadSnap.docs.map(item=>({id:item.id,...item.data()})).sort((a,b)=>getTime(b.updatedAt||b.createdAt)-getTime(a.updatedAt||a.createdAt))
+ favorites.value=savedSnap.docs.map(item=>({id:item.id,...item.data()}))
+ const history=await Promise.all(readsSnap.docs.map(async item=>{const read=item.data();const snap=await getDoc(doc(db,'posts',read.postId||item.id));if(!snap.exists())return null;const post={id:snap.id,...snap.data()};return post.status==='approved'&&!['private','unlisted'].includes(post.visibility)?{...post,readAt:read.readAt}:null}))
+ if(requestId===profileLoadRequestId)readPosts.value=history.filter(Boolean)
+ } catch {publicationsLoaded.value='';message.value='No se pudieron cargar las publicaciones. Pulsa Ver todos para reintentar.'}
+ finally {if(requestId===profileLoadRequestId)publicationsLoading.value=false}
+}
 const recentPostIndex = ref(0)
 const showAllRecentPosts = ref(false)
 const favoritesExpanded = ref(false)
@@ -143,6 +189,67 @@ const openRewards = (tab = 'achievements') => {
 const changeRewardsTab = (tab) => router.replace({ query: { ...route.query, tab } })
 const profileId = computed(() => String(route.params.uid || ''))
 const isOwnProfile = computed(() => viewerUid.value === profileId.value)
+const nintendoUrl = computed(() => profile.value?.socialLinks?.nintendoPresence || '')
+const nintendoProfileUrl = computed(() => profile.value?.socialLinks?.nintendoProfile || '')
+const nintendoIdentity = ref(null)
+const nintendoLoading = ref(false)
+const nintendoError = ref('')
+const nintendoRefresh = ref(0)
+let nintendoRequestId = 0
+const xboxLink = computed(() => profile.value?.socialLinks?.xbox || null)
+const xboxIdentity = ref(null), xboxLoading = ref(false), xboxError = ref(''), xboxRefresh = ref(0)
+let xboxRequestId = 0
+watch(() => [profileId.value,profile.value?.id,xboxLink.value?.xuid,xboxRefresh.value,isRewardsPage.value,viewerUid.value], async () => {
+ const requestId = ++xboxRequestId
+ xboxIdentity.value=null; xboxLoading.value=false; xboxError.value=''
+ if(profile.value?.id!==profileId.value || !xboxLink.value || isRewardsPage.value)return
+ xboxLoading.value=true
+ try{const value=await fetchXboxProfile({uid:profileId.value});if(requestId===xboxRequestId)xboxIdentity.value=value}
+ catch(error){if(requestId===xboxRequestId)xboxError.value=error.message}
+ finally{if(requestId===xboxRequestId)xboxLoading.value=false}
+})
+async function saveXboxLink(value){
+ const uid=profileId.value
+ if(!isOwnProfile.value || auth.currentUser?.uid!==uid)throw Error('Solo el propietario puede vincular Xbox.')
+ if(value && !validXuid(value.xuid))throw Error('Identificador Xbox no válido.')
+ const link=value?{xuid:value.xuid,gamertag:cleanGamertag(value.gamertag)}:null
+ await updateDoc(doc(db,'users',uid),{'socialLinks.xbox':link || deleteField()})
+ clearXboxProfileCache(uid)
+ if(profileId.value!==uid || profile.value?.id!==uid)return
+ const socialLinks={...profile.value.socialLinks}
+ if(link)socialLinks.xbox=link;else delete socialLinks.xbox
+ profile.value={...profile.value,socialLinks}
+}
+const gamerIdentities = computed(() => {
+ const external = gamerData.gamerIdentities.filter(identity => (identity.platform !== 'nintendo' || (!nintendoUrl.value && !nintendoProfileUrl.value)) && (identity.platform!=='xbox' || !xboxLink.value))
+ if(xboxLink.value)external.push(xboxIdentity.value || {platform:'xbox',connectionState:'connected',visibility:'public',presence:null})
+ if (!nintendoUrl.value && !nintendoProfileUrl.value) return external
+ return [...external, nintendoIdentity.value || {platform:'nintendo',connectionState:'connected',visibility:'public',presence:null}]
+})
+watch(() => [profileId.value, profile.value?.id, nintendoUrl.value, nintendoProfileUrl.value, nintendoRefresh.value, !isRewardsPage.value], async () => {
+ const requestId = ++nintendoRequestId
+ nintendoIdentity.value = null; nintendoError.value = ''; nintendoLoading.value = false
+ if (profile.value?.id !== profileId.value || isRewardsPage.value || (!nintendoUrl.value && !nintendoProfileUrl.value)) return
+ nintendoLoading.value = true
+ const sources = [[nintendoUrl.value, 'presence'], [nintendoProfileUrl.value, 'profile']]
+ const results = await Promise.allSettled(sources.map(([url, source]) => url ? Promise.resolve().then(() => fetchNintendoSource(url, source)) : Promise.resolve(null)))
+ if (requestId !== nintendoRequestId) return
+ nintendoIdentity.value = combineNintendoSources(results[0].status === 'fulfilled' ? results[0].value : null, results[1].status === 'fulfilled' ? results[1].value : null)
+ nintendoError.value = results.filter(result => result.status === 'rejected').map(result => result.reason.message).join(' ')
+ nintendoLoading.value = false
+})
+async function saveNintendoLinks({presenceUrl, profileUrl}) {
+ const uid = profileId.value
+ if (!isOwnProfile.value || auth.currentUser?.uid !== uid) throw new Error('Solo el propietario puede cambiar los enlaces.')
+ const presence = presenceUrl ? NXAPI_BASE + nxapiPresenceId(presenceUrl) : ''
+ const publicProfile = profileUrl ? NXAPI_PROFILE_BASE + nxapiProfileId(profileUrl) : ''
+ await updateDoc(doc(db, 'users', uid), { 'socialLinks.nintendoPresence': presence || deleteField(), 'socialLinks.nintendoProfile': publicProfile || deleteField() })
+ if (profileId.value !== uid || profile.value?.id !== uid) return
+ const links = {...profile.value.socialLinks}
+ if (presence) links.nintendoPresence = presence; else delete links.nintendoPresence
+ if (publicProfile) links.nintendoProfile = publicProfile; else delete links.nintendoProfile
+ profile.value = {...profile.value, socialLinks:links}
+}
 const readCount = computed(() => Number(profile.value?.readPostsCount || 0))
 const stars = computed(() => Number(profile.value?.stars || 0))
 const unlockedIcons = computed(() => profile.value?.unlockedIcons?.length ? profile.value.unlockedIcons : ['kirby-01'])
@@ -181,7 +288,7 @@ const achievementTypeCounts = computed(() => {
   })).filter(type => type.count)
 })
 const achievementMetricValue = (achievement) => achievementValue(achievement, {
-  reads: readCount.value, posts: posts.value.length, communities: userCommunities.value.length,
+  reads: readCount.value, posts: Math.min(6, posts.value.length), communities: userCommunities.value.length,
   months: profileActiveMonths.value, icons: unlockedIcons.value.length, followers: followersTotal.value
 })
 const achievementTypeMeta = (achievement) => achievementTypeMap[achievement?.type || 'reads'] || achievementTypeMap.reads
@@ -246,19 +353,13 @@ const socialItems = computed(() => [
   { id: 'youtube', label: 'YouTube', icon: 'fab fa-youtube', url: profile.value?.socialLinks?.youtube || '' },
   { id: 'twitch', label: 'Twitch', icon: 'fab fa-twitch', url: profile.value?.socialLinks?.twitch || '' }
 ])
-const heroStats = computed(() => [
-  { id: 'followers', icon: 'fas fa-user-group', value: followersTotal.value, label: 'Seguidores' },
-  { id: 'icons', icon: 'fas fa-icons', value: redeemedProfileIcons.value.length, label: 'Iconos' },
-  { id: 'achievements', icon: 'fas fa-trophy', value: earnedAchievements.value.length, label: 'Logros' },
-  { id: 'communities', icon: 'fas fa-people-roof', value: userCommunities.value.length, label: 'Comunidades' }
-])
 const canUseDirectChat = computed(() => {
   return Boolean(auth.currentUser) && !isOwnProfile.value && isFollowing.value && (
     ['admin', 'publisher'].includes(viewerProfile.value.role) || viewerProfile.value.canChat
   )
 })
-const communityCards = computed(() => userCommunities.value)
-const showingReadPosts = computed(() => !posts.value.length)
+const communityCards = computed(() => communitiesExpanded.value ? userCommunities.value : userCommunities.value.slice(0,3))
+const showingReadPosts = computed(() => activityTab.value === 'reads')
 const postActivityItems = computed(() => (showingReadPosts.value ? readPosts.value : posts.value).map(post => ({
   icon: 'fas fa-newspaper',
   id: post.id,
@@ -269,7 +370,8 @@ const postActivityItems = computed(() => (showingReadPosts.value ? readPosts.val
   rawAt: post.readAt || post.updatedAt || post.createdAt,
   action: () => openPost(post)
 })).sort((a, b) => getTime(b.rawAt) - getTime(a.rawAt)))
-const currentRecentPost = computed(() => postActivityItems.value[recentPostIndex.value] || null)
+const displayedPosts = computed(() => publicationsExpanded.value ? postActivityItems.value : postActivityItems.value.slice(0,3))
+const currentRecentPost = computed(() => displayedPosts.value[recentPostIndex.value % (displayedPosts.value.length || 1)] || null)
 const threadActivityItems = computed(() => threads.value.map(thread => ({
   icon: 'fas fa-comment-dots',
   title: thread.title || thread.body || 'Hilo de comunidad',
@@ -280,7 +382,7 @@ const threadActivityItems = computed(() => threads.value.map(thread => ({
 })).sort((a, b) => getTime(b.rawAt) - getTime(a.rawAt)))
 const visibleActivityItems = computed(() => (
   activityTab.value === 'threads' ? threadActivityItems.value : postActivityItems.value
-).slice(0, 4))
+).slice(0, publicationsExpanded.value ? 80 : 4))
 const activityItems = computed(() => [
   ...threads.value.map(thread => ({
     icon: 'fas fa-comment-dots',
@@ -434,6 +536,7 @@ const loadProfile = async () => {
   iconPanelOpen.value = false
   relationModal.value = ''
   isFollowing.value = false
+  publicationsLoaded.value = ''
   favorites.value = []
   threads.value = []
   posts.value = []
@@ -455,6 +558,7 @@ const loadProfile = async () => {
     applyProfileData(userSnap.data())
     if (!isRewardsPage.value) isLoading.value = false
     await loadProfileExtras(requestId).catch(console.error)
+    if(requestId===profileLoadRequestId) await loadPublications()
   } finally {
     if (requestId === profileLoadRequestId) {
       isLoading.value = false
@@ -465,9 +569,9 @@ const loadProfile = async () => {
 
 const loadProfileExtras = async (requestId) => {
   const [favoritesSnap, threadsSnap, postsSnap, usersSnap, communitiesSnap, followersSnap, followingSnap, followSnap, viewerSnap, uploadedIcons, achievementsSnap, readsSnap] = await Promise.all([
-    getDocs(query(collection(db, 'users', profileId.value, 'favorites'), limit(6))).catch(() => ({ docs: [] })),
-    getDocs(query(collection(db, 'communityThreads'), limit(80))).catch(() => ({ docs: [] })),
-    getDocs(query(collection(db, 'posts'), limit(120))).catch(() => ({ docs: [] })),
+    Promise.resolve({ docs: [] }),
+    Promise.resolve({ docs: [] }),
+    getDocs(query(collection(db, 'posts'), where('authorId', '==', profileId.value), limit(6))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'users'), limit(120))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'users', profileId.value, 'communities'), limit(12))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'users', profileId.value, 'followers'), limit(500))).catch(() => ({ docs: [] })),
@@ -480,7 +584,7 @@ const loadProfileExtras = async (requestId) => {
       : Promise.resolve({ exists: () => false, data: () => ({}) }),
     loadUploadedProfileIcons({ includeHidden: true }).catch(() => []),
     getDoc(doc(db, 'siteConfig', 'profileAchievements')).catch(() => ({ exists: () => false, data: () => ({}) })),
-    getDocs(query(collection(db, 'users', profileId.value, 'readPosts'), orderBy('readAt', 'desc'), limit(12))).catch(() => ({ docs: [] }))
+    Promise.resolve({ docs: [] })
   ])
 
   if (requestId !== profileLoadRequestId || !profile.value) return
@@ -671,6 +775,7 @@ const normalizeSocialUrl = (value) => {
 
 
 const toggleIconPanel = async () => {
+  connectionsRequested.value = false
   iconPanelOpen.value = !iconPanelOpen.value
   if (iconPanelOpen.value) {
     editMessage.value = ''
@@ -809,7 +914,9 @@ const saveProfile = async () => {
     await updateDoc(doc(db, 'users', profileId.value), {
       name: cleanName,
       description: cleanDescription,
-      socialLinks: cleanSocialLinks,
+      'socialLinks.tiktok': cleanSocialLinks.tiktok,
+      'socialLinks.youtube': cleanSocialLinks.youtube,
+      'socialLinks.twitch': cleanSocialLinks.twitch,
       updatedAt: Date.now()
     })
     await updateProfile(user, {
@@ -819,7 +926,7 @@ const saveProfile = async () => {
       ...profile.value,
       name: cleanName,
       description: cleanDescription,
-      socialLinks: cleanSocialLinks,
+      socialLinks: { ...profile.value.socialLinks, ...cleanSocialLinks },
       updatedAt: Date.now()
     }
     editMessage.value = 'Perfil actualizado.'
@@ -1069,6 +1176,8 @@ watch(postActivityItems, (items) => {
   if (recentPostIndex.value >= items.length) recentPostIndex.value = 0
 })
 watch(activityTab, () => {
+  publicationsExpanded.value = true
+  loadPublications()
   showAllRecentPosts.value = false
 })
 watch([iconPanelOpen, iconUploadOpen, relationModal], values => {
@@ -1086,6 +1195,8 @@ onMounted(() => {
   loadProfile()
 })
 onUnmounted(() => {
+  xboxRequestId++
+  nintendoRequestId++
   profileLoadRequestId++
   unsubscribeViewer?.()
   clearTimeout(noticeTimer)
@@ -1182,107 +1293,38 @@ onUnmounted(() => {
         @share="shareProfile"
       />
 
-      <section v-if="extrasLoading" role="status" class="profile-extras-loading" aria-label="Cargando actividad y colección">
-        <span class="profile-loading-label">Cargando actividad y colección…</span>
-        <div v-for="index in 4" :key="index" class="profile-stat-placeholder" aria-hidden="true"><span></span><span></span></div>
-      </section>
-      <ProfileStatsPanel v-else :stats="heroStats" @open="openRewards($event === 'icons' ? 'collection' : 'achievements')" />
+      <section class="profile-tab-content" aria-label="Actividad y comunidad del perfil">
+<section class="profile-dashboard section-summary">
+        <div class="profile-primary">
 
 
-      <section class="profile-dashboard">
-        <aside class="profile-middle">
-          <div class="profile-section profile-about"><div class="section-head"><h2>Sobre mí</h2><button v-if="isOwnProfile" type="button" aria-label="Editar información del perfil" @click="toggleIconPanel"><i class="fas fa-pen"></i></button></div><p>{{ profile.description || 'Miembro de la comunidad de Galaxia Nintendera.' }}</p><p v-if="profile.location"><i class="fas fa-location-dot"></i> {{ profile.location }}</p><p v-if="memberSince"><i class="fas fa-calendar"></i> Miembro desde {{ memberSince }}</p></div>
-      <section class="profile-highlights" aria-label="Colección y logros destacados">
-        <div class="profile-section collection-preview">
-          <div class="section-head"><div><span>Tu identidad en la galaxia</span><h2>Colección de iconos</h2></div><button type="button" @click="openRewards('collection')">Ver colección →</button></div>
-          <div class="collection-preview-icons"><button v-for="icon in visibleProfileIcons" :key="icon.id" type="button" :aria-label="`Ver colección: ${icon.name}`" @click="openRewards('collection')"><ProfileAvatar :src="icon.src" :alt="icon.name" :effect="icon" /><small>{{ icon.name }}</small></button></div>
-        </div>
-        <div class="profile-section achievement-preview">
-          <div class="section-head"><div><span>Progreso del perfil</span><h2>Vitrina de logros</h2></div><button type="button" @click="openRewards('achievements')">Ver todos →</button></div>
-          <div class="achievement-preview-items"><button v-for="item in achievementRoadmap.filter(item => item.unlocked || item.isNext).slice(0,3)" :key="item.id" type="button" :class="{ earned: item.unlocked }" @click="openRewards('achievements')"><span><img v-if="item.iconUrl" :src="item.iconUrl" alt="" /><i v-else class="fas fa-trophy" aria-hidden="true"></i></span><strong>{{ item.label }}</strong><small>{{ item.unlocked ? 'Completado' : `${item.currentValue} / ${item.target}` }}</small><progress :value="item.progress" max="100" :aria-label="item.label"></progress></button></div>
-        </div>
-      </section>
+        <ProfileGamerPreview :loading="nintendoLoading || xboxLoading" :error="[nintendoError,xboxError].filter(Boolean).join(' ')" :own="isOwnProfile" :identities="gamerIdentities" :show-link="isOwnProfile" action-label="Conectar sistemas" show-recent @open="openSystems" />
 
 
-
-
-        </aside>
-        <aside class="profile-right">
-        <div class="profile-section profile-communities">
-          <div class="section-head">
-            <div>
-              <span>Galaxias / Comunidades</span>
-              <h2>Comunidades activas</h2>
-            </div>
-            <button type="button" @click="router.push('/comunidad')">Ver todas</button>
-          </div>
-
-          <div class="community-card-row">
-            <button
-              v-for="community in communityCards"
-              :key="community.name"
-              type="button"
-              @click="router.push(`/comunidad?id=${community.id}`)"
-            >
-              <img v-if="community.iconUrl || community.bannerUrl" :src="resolveAssetUrl(community.iconUrl || community.bannerUrl)" alt="" />
-              <span v-else class="community-letter">{{ community.name?.slice(0, 2).toUpperCase() }}</span>
-              <span class="community-overlay"></span>
-              <strong>{{ community.name }}</strong>
-              <small>{{ community.role || 'Miembro' }}</small>
-              <em>{{ formatAgo(community.joinedAt) }}</em>
-            </button>
-          </div>
-          <p v-if="!communityCards.length" class="mini-empty">Todavia no pertenece a ninguna comunidad.</p>
-        </div>
-
-      <section v-if="!isRewardsPage && publicProfiles.length" class="profile-section profile-directory">
-        <div class="section-head">
-          <div>
-            <span>Comunidad</span>
-            <h2>Otros perfiles</h2>
-          </div>
-        </div>
-
-        <div class="profile-directory-grid">
-          <button
-            v-for="user in publicProfiles"
-            :key="user.id"
-            type="button"
-            @click="router.push(`/perfil/${user.id}`)"
-          >
-            <ProfileAvatar
-              class="directory-profile-avatar"
-              :src="resolveProfileIcon(user)"
-              :alt="user.name || user.email || 'Usuario'"
-              :label="user.name || user.email || 'Usuario'"
-              :effect="user.iconMeta"
-            />
-            <strong>{{ user.name || user.email || 'Usuario' }}</strong>
-            <small>{{ user.relationLabel }}</small>
-          </button>
-        </div>
-      </section>
-
-        </aside>
-        <div class="profile-section profile-activity">
+        <div class="profile-section profile-activity"><p v-if="publicationsLoading" role="status">Cargando publicaciones…</p>
           <div class="section-head">
             <div>
               <span>Actividad reciente</span>
               <h2>{{ activityTab === 'threads' ? 'Hilos publicados' : showingReadPosts ? 'Posts leídos' : 'Posts recientes' }}</h2>
             </div>
-            <div class="activity-tabs">
-              <button type="button" :class="{ active: activityTab === 'posts' }" @click="activityTab = 'posts'">
-                {{ showingReadPosts ? 'Lecturas' : 'Posts' }}
-              </button>
-              <button type="button" :class="{ active: activityTab === 'threads' }" @click="activityTab = 'threads'">
-                Hilos
-              </button>
+            <div class="activity-tabs" aria-label="Publicaciones del perfil">
+              <button type="button" :class="{active:activityTab==='posts'}" :aria-pressed="activityTab==='posts'" @click="activityTab='posts'">Posts</button>
+              <button type="button" :class="{active:activityTab==='threads'}" :aria-pressed="activityTab==='threads'" @click="activityTab='threads'">Hilos</button>
+              <button v-if="isOwnProfile" type="button" :class="{active:activityTab==='reads'}" :aria-pressed="activityTab==='reads'" @click="activityTab='reads'">Lecturas</button>
+              <button v-if="isOwnProfile" type="button" :class="{active:activityTab==='saved'}" :aria-pressed="activityTab==='saved'" @click="activityTab='saved'">Guardados</button>
             </div>
           </div>
 
-          <div class="profile-activity-body">
+
+                <ProfileFavoritesPreview
+        v-if="activityTab==='saved' && isOwnProfile"
+        v-model:expanded="favoritesExpanded"
+        :favorites="favorites"
+        @open-post="openPost"
+      />
+          <div v-if="activityTab!=='saved'" class="profile-activity-body">
           <Transition name="activity-swap" mode="out-in">
-            <div v-if="activityTab === 'posts'" key="posts" class="recent-post-showcase">
+            <div v-if="activityTab === 'posts' || activityTab === 'reads'" key="posts" class="recent-post-showcase">
               <button
                 v-if="currentRecentPost"
                 class="recent-post-card"
@@ -1303,18 +1345,18 @@ onUnmounted(() => {
                 <button type="button" aria-label="Post anterior" @click="changeRecentPost(-1)">
                   <i class="fas fa-chevron-left"></i>
                 </button>
-                <span>{{ recentPostIndex + 1 }} / {{ postActivityItems.length }}</span>
+                <span>{{ (recentPostIndex % (displayedPosts.length || 1)) + 1 }} / {{ displayedPosts.length }}</span>
                 <button type="button" aria-label="Post siguiente" @click="changeRecentPost(1)">
                   <i class="fas fa-chevron-right"></i>
                 </button>
-                <button type="button" class="view-all-posts" @click="showAllRecentPosts = !showAllRecentPosts">
+                <button type="button" class="view-all-posts" @click="toggleAllPosts">
                   {{ showAllRecentPosts ? 'Ocultar' : 'Ver todos' }}
                 </button>
               </div>
 
-              <div v-if="postActivityItems.length > 1" class="activity-preview-pair"><button v-for="item in postActivityItems.filter(item => item.id !== currentRecentPost?.id).slice(0,2)" :key="item.id" type="button" @click="item.action"><img v-if="item.image" :src="item.image" alt="" /><div><small>{{ item.label }}</small><strong>{{ item.title }}</strong><em>{{ item.time }}</em></div></button></div>
+              <div v-if="postActivityItems.length > 1" class="activity-preview-pair"><button v-for="item in displayedPosts.filter(item => item.id !== currentRecentPost?.id).slice(0,2)" :key="item.id" type="button" @click="item.action"><img v-if="item.image" :src="item.image" alt="" /><div><small>{{ item.label }}</small><strong>{{ item.title }}</strong><em>{{ item.time }}</em></div></button></div>
               <div v-if="showAllRecentPosts" class="recent-post-list">
-                <button v-for="item in postActivityItems" :key="item.id" type="button" @click="item.action">
+                <button v-for="item in displayedPosts" :key="item.id" type="button" @click="item.action">
                   <span v-if="item.image"><img :src="item.image" alt="" /></span>
                   <i v-else class="fas fa-newspaper"></i>
                   <strong>{{ item.title }}</strong>
@@ -1336,35 +1378,91 @@ onUnmounted(() => {
           <p v-if="!visibleActivityItems.length" class="mini-empty">{{ activityTab === 'threads' ? 'Todavía no hay hilos publicados.' : showingReadPosts ? 'Todavía no hay lecturas disponibles.' : 'Todavía no hay publicaciones.' }}</p>
           </div>
         </div>
+      </div>
+        <aside class="profile-right">
+        <div class="profile-section profile-communities">
+          <div class="section-head">
+            <div>
+              <span>Galaxias / Comunidades</span>
+              <h2>Comunidades activas</h2>
+            </div>
+            <button v-if="userCommunities.length>3" type="button" @click="communitiesExpanded=!communitiesExpanded">{{ communitiesExpanded ? 'Ver menos' : 'Ver todas' }}</button>
+          </div>
+
+          <div class="community-card-row">
+            <button
+              v-for="community in communityCards"
+              :key="community.name"
+              type="button"
+              @click="router.push(`/comunidad?id=${community.id}`)"
+            >
+              <img v-if="community.iconUrl || community.bannerUrl" :src="resolveAssetUrl(community.iconUrl || community.bannerUrl)" alt="" />
+              <span v-else class="community-letter">{{ community.name?.slice(0, 2).toUpperCase() }}</span>
+              <span class="community-overlay"></span>
+              <strong>{{ community.name }}</strong>
+              <small>{{ community.role || 'Miembro' }}</small>
+              <em>{{ formatAgo(community.joinedAt) }}</em>
+            </button>
+          </div>
+          <div class="community-relations"><button type="button" @click="relationModal='followers'">{{followersTotal}} seguidores</button><button type="button" @click="relationModal='following'">{{followingTotal}} seguidos</button></div>
+          <p v-if="!communityCards.length" class="mini-empty">Todavia no pertenece a ninguna comunidad.</p>
+        </div>
+
+      <section class="profile-highlights" aria-label="Colección y logros destacados">
+        <div class="profile-section collection-preview">
+          <div class="section-head"><div><span>Tu identidad en la galaxia</span><h2>Colección de iconos</h2></div><button type="button" @click="openRewards('collection')">Ver colección →</button></div>
+          <p v-if="!visibleProfileIcons.length" class="mini-empty">Aún no hay iconos desbloqueados.</p><div class="collection-preview-icons"><button v-for="icon in visibleProfileIcons" :key="icon.id" type="button" :aria-label="`Ver colección: ${icon.name}`" @click="openRewards('collection')"><ProfileAvatar :src="icon.src" :alt="icon.name" :effect="icon" /><small>{{ icon.name }}</small></button></div>
+        </div>
+        <div class="profile-section achievement-preview">
+          <div class="section-head"><div><span>Progreso del perfil</span><h2>Vitrina de logros</h2></div><button type="button" @click="openRewards('achievements')">Ver todos →</button></div>
+          <p v-if="!earnedAchievements.length" class="mini-empty">Aún no hay logros completados. Descubre tu próximo objetivo.</p><div class="achievement-preview-items"><button v-for="item in achievementRoadmap.filter(item => item.unlocked || item.isNext).slice(0,3)" :key="item.id" type="button" :class="{ earned: item.unlocked }" @click="openRewards('achievements')"><span><img v-if="item.iconUrl" :src="item.iconUrl" alt="" /><i v-else class="fas fa-trophy" aria-hidden="true"></i></span><strong>{{ item.label }}</strong><small>{{ item.unlocked ? 'Completado' : `${item.currentValue} / ${item.target}` }}</small><progress :value="item.progress" max="100" :aria-label="item.label"></progress></button></div>
+        </div>
       </section>
 
-      <ProfileFavoritesPreview
-        v-model:expanded="favoritesExpanded"
-        :favorites="favorites"
-        @open-post="openPost"
-      />
 
-      </template>
-      <AppNotice :message="message" :type="message.startsWith('No se') ? 'error' : 'success'" />
-      <GachaponDemoModal v-if="gachaponOpen && isOwnProfile" :stars="stars" :icons="allProfileIcons" :owned="unlockedIcons" :prices="gachaponPrices" :save-prices="saveGachaponPrices" :admin="isAdminOwnProfile" :prepare-mirror="prepareGachaponMirror" @preview="publishGachaponMirror" :initial-saga="gachaponSaga" @collection="viewGachaponCollection" @close="gachaponOpen = false" />
-      <ProfileIconEditor v-if="iconPanelOpen || iconUploadOpen" v-model:profile-draft="profileDraft" v-model:upload-icon-draft="uploadIconDraft" :profile="profile" :profile-icon="profileIcon" :profile-icon-meta="profileIconMeta" :panel-open="iconPanelOpen" :upload-open="iconUploadOpen" :edit-message="editMessage" :is-saving-profile="isSavingProfile" :is-uploading-icon="isUploadingIcon" :editing-icon-id="editingIconId" :upload-icon-preview="uploadIconPreview" :upload-icon-message="uploadIconMessage" :icon-filters="iconFilters" @close-panel="closeIconPanel" @close-upload="closeIconUpload" @save-profile="saveProfile" @open-rewards="openRewards('collection')" @save-uploaded-icon="saveUploadedIcon" />
 
-      <section v-if="!isRewardsPage && posts.length && !isCreatorProfile" class="profile-section">
+      <section v-if="!isRewardsPage && publicProfiles.length" class="profile-section profile-directory">
         <div class="section-head">
           <div>
-            <span>Publicaciones</span>
-            <h2>Posts creados</h2>
+            <span>Comunidad</span>
+            <h2>Otros perfiles</h2>
           </div>
         </div>
 
-        <div class="post-strip">
-          <button v-for="item in posts" :key="item.id" @click="openPost(item)">
-            <img v-if="item.image" :src="item.image" alt="" />
-            <span v-else></span>
-            <strong>{{ item.title }}</strong>
+        <div class="profile-directory-grid">
+          <button
+            v-for="user in publicProfiles.slice(0,3)"
+            :key="user.id"
+            type="button"
+            @click="router.push(`/perfil/${user.id}`)"
+          >
+            <ProfileAvatar
+              class="directory-profile-avatar"
+              :src="resolveProfileIcon(user)"
+              :alt="user.name || user.email || 'Usuario'"
+              :label="user.name || user.email || 'Usuario'"
+              :effect="user.iconMeta"
+            />
+            <strong>{{ user.name || user.email || 'Usuario' }}</strong>
+            <small>{{ user.relationLabel }}</small>
           </button>
         </div>
       </section>
+
+        </aside>
+      </section>
+
+
+
+      </section>
+      </template>
+      <AppNotice :message="message" :type="message.startsWith('No se') ? 'error' : 'success'" />
+      <GachaponDemoModal v-if="gachaponOpen && isOwnProfile" :stars="stars" :icons="allProfileIcons" :owned="unlockedIcons" :prices="gachaponPrices" :save-prices="saveGachaponPrices" :admin="isAdminOwnProfile" :prepare-mirror="prepareGachaponMirror" @preview="publishGachaponMirror" :initial-saga="gachaponSaga" @collection="viewGachaponCollection" @close="gachaponOpen = false" />
+      <ProfileIconEditor :start-systems="connectionsRequested" :systems-busy="systemsBusy" v-if="iconPanelOpen || iconUploadOpen" v-model:profile-draft="profileDraft" v-model:upload-icon-draft="uploadIconDraft" :profile="profile" :profile-icon="profileIcon" :profile-icon-meta="profileIconMeta" :panel-open="iconPanelOpen" :upload-open="iconUploadOpen" :edit-message="editMessage" :is-saving-profile="isSavingProfile" :is-uploading-icon="isUploadingIcon" :editing-icon-id="editingIconId" :upload-icon-preview="uploadIconPreview" :upload-icon-message="uploadIconMessage" :icon-filters="iconFilters" @close-panel="closeIconPanel" @close-upload="closeIconUpload" @save-profile="saveProfile" @open-rewards="openRewards('collection')" @save-uploaded-icon="saveUploadedIcon">
+        <template #systems><ProfileSystemsPanel :xbox-link="xboxLink" :xbox-identity="xboxIdentity" :xbox-loading="xboxLoading" :xbox-error="xboxError" :save-xbox-link="saveXboxLink" :refresh-xbox="() => xboxRefresh++" :own="isOwnProfile" :url="nintendoUrl" :profile-url="nintendoProfileUrl" :identity="nintendoIdentity" :loading="nintendoLoading" :error="nintendoError" :save-link="saveNintendoLinks" :refresh="() => nintendoRefresh++" @busy="systemsBusy=$event" /></template>
+      </ProfileIconEditor>
+
+
 
       <ProfileRelationModal
         v-if="relationModal"
@@ -2302,15 +2400,63 @@ onUnmounted(() => {
 }
 
 @media(min-width:761px) { .profile-page { width:var(--public-content-width); max-width:100%; margin-inline:auto; padding-inline:0; } }
-</style>
 
-<style scoped>
-.profile-extras-loading{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;height:82px;box-sizing:border-box;padding:14px 18px;border:1px solid #a855f726;border-radius:16px;background:#0b1020;margin:0}
-.profile-stat-placeholder{display:grid;justify-items:center;align-content:center;gap:8px;min-width:0}
-.profile-stat-placeholder span{display:block;border-radius:6px;background:linear-gradient(100deg,#94a3b81a,#c4b5fd30,#94a3b81a);background-size:220% 100%;animation:profileStatShimmer 2s ease-in-out infinite}
-.profile-stat-placeholder span:first-child{height:20px;width:36px}.profile-stat-placeholder span:last-child{height:8px;width:min(72px,80%)}
-@keyframes profileStatShimmer{0%,100%{background-position:100% 0}50%{background-position:0 0}}
-@media(max-width:680px){.profile-extras-loading{height:76px;gap:8px;padding:12px}}
-@media(min-width:761px) and (max-width:1440px),(min-width:761px) and (max-height:900px){.profile-extras-loading{height:64px;padding:10px}}
-@media(prefers-reduced-motion:reduce){.profile-stat-placeholder span{animation:none}}
+
+
+
+
+.profile-tab-content{max-width:var(--profile-content-width);margin:auto}
+.profile-tab-content .profile-dashboard{display:grid;grid-template-columns:minmax(0,1.85fr) minmax(0,1fr);align-items:start;gap:16px;margin:0}
+.profile-tab-content .profile-about{grid-column:1;grid-row:1;width:100%}
+.profile-tab-content .profile-highlights{grid-column:2;grid-row:2;display:grid;height:auto;gap:16px}
+.profile-tab-content .profile-right{grid-column:2;grid-row:1;min-height:0;grid-template-rows:auto;gap:16px}
+.profile-tab-content .profile-dashboard>.profile-activity{grid-column:1;grid-row:2;min-height:0;height:auto;width:100%}
+.profile-tab-content .profile-activity-body{position:static;overflow:visible}
+.profile-tab-content .section-publications,.profile-tab-content .section-community,.profile-tab-content .section-collection{display:block}
+.profile-tab-content .section-collection .profile-highlights{display:grid;grid-template-columns:1fr 1fr}
+.gamer-summary,.community-relations{margin-top:16px;padding:20px}.gamer-summary p{line-height:1.6}.gamer-summary button,.community-relations button{padding:10px 14px;border:1px solid #a855f755;border-radius:10px;background:#7c3aed22;color:inherit}.community-relations{display:flex;gap:12px}
+@media(max-width:760px){.profile-tab-content .profile-dashboard{display:flex;flex-direction:column}.profile-tab-content .profile-right,.profile-tab-content .profile-highlights{width:100%}.profile-tab-content .profile-about{order:0}.profile-tab-content .profile-activity{order:1}.profile-tab-content .profile-right{order:2}.profile-tab-content .profile-highlights{order:3}.profile-tab-content .section-collection .profile-highlights{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.profile-tab-content *{animation:none!important;transition:none!important}}
+
+.profile-tab-content .profile-right .profile-highlights{display:grid;grid-template-columns:minmax(0,1fr);grid-column:auto;grid-row:auto;height:auto}
+.profile-tab-content .profile-communities{min-height:0}
+.profile-tab-content .profile-highlights .profile-section{width:100%;min-width:0;min-height:0;height:auto;flex:none}
+.profile-tab-content .profile-highlights .section-head{flex-wrap:wrap;gap:8px}
+.profile-tab-content .section-head button,.profile-tab-content .collection-preview-icons button{background:transparent;border:1px solid #a855f733;border-radius:8px;color:inherit;padding:7px}
+.profile-tab-content .achievement-preview-items{grid-template-columns:minmax(0,1fr)}
+.profile-tab-content .achievement-preview-items button{display:grid;grid-template-columns:42px minmax(0,1fr);align-items:center;gap:6px 12px;text-align:left}
+.profile-tab-content .achievement-preview-items button>span{grid-row:1 / span 3;width:42px;height:42px;margin:0}
+.profile-tab-content .achievement-preview-items progress{grid-column:2}
+
+/* Independent column stacks prevent sidebar height from stretching the introduction. */
+.profile-tab-content .section-summary{grid-template-rows:auto}
+.profile-tab-content .profile-primary{display:flex;flex-direction:column;gap:16px;min-width:0;grid-column:1;grid-row:1}
+.profile-tab-content .profile-primary>.profile-section{width:100%;height:auto;min-height:0;margin:0;flex:none}
+.profile-tab-content .profile-primary>.profile-activity{position:static}
+.profile-tab-content .section-summary .profile-right{grid-column:2;grid-row:1;align-self:start;min-height:0}
+@media(max-width:760px){.profile-tab-content .profile-primary{width:100%;order:0}.profile-tab-content .section-summary .profile-right{order:1}}
+
+/* One profile, two naturally sized independent stacks. */
+.profile-tab-content{margin-top:20px}
+.profile-tab-content .profile-dashboard{grid-template-columns:minmax(0,1.8fr) minmax(300px,1fr);gap:18px}
+.profile-tab-content .profile-primary{gap:18px}
+.profile-tab-content .profile-right{gap:18px}
+.profile-tab-content .profile-activity .section-head{flex-wrap:wrap;gap:12px}
+.profile-tab-content .activity-tabs{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.profile-tab-content .activity-tabs button{padding:7px 10px;font-size:12px}
+.profile-tab-content .profile-activity-body{position:static;overflow:visible}
+.profile-tab-content .profile-activity :deep(.favorite-preview-section){margin:0;min-height:0}
+.profile-tab-content .community-relations{margin:12px 0 0;padding:12px 0 0;border-top:1px solid #a855f722;flex-wrap:wrap;gap:8px}
+.profile-tab-content .community-relations button{font-size:11px;padding:7px 10px}
+.profile-tab-content .recent-post-card{min-height:250px}
+.profile-tab-content .activity-preview-pair button{min-height:160px}
+@media(max-width:900px){.profile-tab-content .profile-dashboard{grid-template-columns:minmax(0,1.5fr) minmax(270px,1fr);gap:14px}}
+@media(max-width:760px){.profile-tab-content .profile-dashboard{display:flex;gap:14px}.profile-tab-content .profile-primary,.profile-tab-content .profile-right{gap:14px}.profile-tab-content .recent-post-card{min-height:220px}}
+.profile-tab-content{font-family:var(--font-family-base,'Roboto',system-ui,sans-serif);font-weight:400;text-shadow:none}
+.profile-tab-content :deep(h2),.profile-tab-content :deep(h3){font-family:inherit;font-weight:700;letter-spacing:-.015em;line-height:1.35;text-shadow:none}
+.profile-tab-content :deep(button){font-family:inherit;font-weight:500;text-shadow:none}
+.profile-tab-content .activity-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px;width:min(100%,320px);max-width:100%;box-sizing:border-box;padding:3px;border:1px solid var(--border,#a855f733);border-radius:10px;background:#7c3aed08;overflow:visible}
+.profile-tab-content .activity-tabs button{min-width:0;margin:0;padding:8px 6px;border:0;border-radius:7px;background:transparent;font-size:11px;line-height:18px;text-align:center;white-space:nowrap;color:var(--text-secondary,#cbd5e1)}
+.profile-tab-content .activity-tabs button[aria-pressed=true]{background:var(--accent,#7c3aed);color:#fff}.profile-tab-content .activity-tabs button:focus-visible{outline:2px solid var(--accent,#c084fc);outline-offset:2px}
+@media(max-width:500px){.profile-tab-content .activity-tabs{width:100%}.profile-tab-content .profile-activity .section-head{align-items:start}}
 </style>
