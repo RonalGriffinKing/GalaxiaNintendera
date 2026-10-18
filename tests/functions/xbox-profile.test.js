@@ -15,4 +15,21 @@ describe('Xbox server proxy',()=>{
  it('does not call OpenXBL when the profile has no saved link',async()=>{fetchMock.mockResolvedValueOnce(reply({fields:{}}));expect((await handler(event({uid:'owner'}))).statusCode).toBe(404);expect(calls()).toHaveLength(0)})
  it('honors provider throttling and never returns raw provider errors',async()=>{fetchMock.mockImplementation(async(url)=>url.includes('accounts:lookup')?reply({users:[{localId:'owner'}]}):reply({secret:'test-server-key'},429,{'Retry-After':'600'}));const first=await handler(event({gamertag:'Player'}));expect(first.statusCode).toBe(429);expect(first.body).not.toContain('test-server-key');await handler(event({gamertag:'Other'}));expect(calls()).toHaveLength(1)})
  it('keeps profile available when history or presence is private',async()=>{const base=fetchMock.getMockImplementation();fetchMock.mockImplementation((url,options)=>url.includes('/titles/')?Promise.resolve(reply({},403)):base(url,options));const result=await handler(event({gamertag:'Player'}));expect(result.statusCode).toBe(200);expect(JSON.parse(result.body).unavailable).toEqual(['history'])})
+ it('restricts title diagnostics to the authenticated owner before any provider call',async()=>{
+  expect((await handler({...event({uid:'owner',diagnostic:'images'}),headers:{}})).statusCode).toBe(401)
+  expect((await handler(event({uid:'other',diagnostic:'images'}))).statusCode).toBe(403)
+  expect((await handler(event({gamertag:'Player',diagnostic:'images'}))).statusCode).toBe(400)
+  expect(calls()).toHaveLength(0)
+ })
+ it('returns original title samples only, strips credentials and reuses title cache',async()=>{
+  const base=fetchMock.getMockImplementation()
+  fetchMock.mockImplementation((url,options)=>url.includes('/titles/')?Promise.resolve(reply({content:{xuid,titles:[{type:'Game',titleId:1,name:'Missing',displayImage:'',images:[{url:'https://example.com/cover.jpg'}],token:'hidden'},{type:'Game',titleId:2,name:'Covered',displayImage:'https://example.com/2.jpg'},{type:'Game',titleId:3,name:'Private',titleHistory:{visible:false}}]}})):base(url,options))
+  const result=await handler(event({uid:'owner',diagnostic:'images'}))
+  expect(result.statusCode).toBe(200)
+  const data=JSON.parse(result.body)
+  expect(data.titleCount).toBe(2);expect(data.withImage.name).toBe('Covered');expect(data.withoutImage.images[0].url).toContain('cover.jpg')
+  expect(result.body).not.toContain('hidden');expect(result.body).not.toContain('test-server-key');expect(result.body).not.toContain('Private')
+  await handler(event({uid:'owner',diagnostic:'images'}));expect(calls()).toHaveLength(1)
+ })
+
 })

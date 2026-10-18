@@ -38,3 +38,5 @@ Para una configuración Firebase distinta se pueden definir `FIREBASE_API_KEY` (
 El laboratorio reemplaza Firebase y OpenXBL por fixtures explícitos; las escrituras solo existen en memoria del navegador. Comprueba validación, errores, confirmación antes de persistir, cambio de gamertag, eliminación, permisos de visitante, conservación de recompensas y otros enlaces, y tamaños de 320–1440 px. No sustituye una comprobación con la clave real ni con las reglas desplegadas de Firebase.
 
 El encabezado de "Mi universo gamer" permite cambiar entre los sistemas vinculados. Cada sistema muestra solo su actividad y sus datos disponibles, sin nuevas consultas al proveedor. El selector respeta la visibilidad del perfil.
+
+Diagnostico temporal: Editar perfil > Conectar sistemas > Xbox > Diagnostico temporal de portadas. El modo uid + diagnostic=images exige una sesion Firebase cuyo UID coincida con el perfil y devuelve dos muestras de objetos de titulo originales (con/sin displayImage HTTPS), sin cabeceras ni campos de credenciales. Reutiliza la cache de historial de cinco minutos. No modifica Firebase.

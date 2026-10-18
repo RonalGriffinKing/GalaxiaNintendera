@@ -27,7 +27,7 @@ async function openxbl(path){
  return data
 }
 async function identity(person){return cached('xuid:'+person.xuid,async()=>{
- const results=await Promise.allSettled([openxbl('/presence/'+person.xuid),openxbl('/titles/'+person.xuid)])
+ const results=await Promise.allSettled([openxbl('/presence/'+person.xuid),cached('titles:'+person.xuid,()=>openxbl('/titles/'+person.xuid))])
  const authFailure=results.find(result=>result.status==='rejected'&&result.reason.status===503)
  if(authFailure)throw authFailure.reason
  const value=normalizeXboxIdentity(person,...results.map(result=>result.status==='fulfilled'?result.value:null))
@@ -38,7 +38,8 @@ export async function handler(event){
  if(event.httpMethod==='OPTIONS')return json(204,{})
  if(event.httpMethod!=='GET')return json(405,{error:'Método no permitido.'})
  const params=event.queryStringParameters||{}
- if(Object.keys(params).some(key=>!['gamertag','uid'].includes(key))||Boolean(params.gamertag)===Boolean(params.uid))return json(400,{error:'Consulta Xbox no válida.'})
+ if(Object.keys(params).some(key=>!['gamertag','uid','diagnostic'].includes(key))||Boolean(params.gamertag)===Boolean(params.uid))return json(400,{error:'Consulta Xbox no válida.'})
+ if(params.diagnostic!==undefined&&(params.diagnostic!=='images'||!params.uid||params.gamertag))return json(400,{error:'Diagnostico no valido.'})
  if(!process.env.OPENXBL_API_KEY)return json(503,{error:'La conexión de Xbox todavía no está disponible.'})
  const token=(event.headers?.authorization||event.headers?.Authorization||'').match(/^Bearer ([A-Za-z0-9_.-]{20,5000})$/)?.[1]
  try{
@@ -60,11 +61,27 @@ export async function handler(event){
    return json(200,result)
   }
   if(typeof params.uid!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(params.uid))return json(400,{error:'Perfil no válido.'})
+  if(params.diagnostic){
+   if(!token)throw new ApiError(401,'Inicia sesion para revisar tu Xbox.')
+   const response=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key='+FIREBASE_KEY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idToken:token}),redirect:'error',signal:AbortSignal.timeout(8000)})
+   if(!response.ok)throw new ApiError(401,'Tu sesion ha caducado.')
+   const user=(await readJson(response)).users?.[0]
+   if(!user?.localId||user.disabled||user.localId!==params.uid)throw new ApiError(403,'Solo puedes revisar tu propia vinculacion.')
+  }
   const result=await (async()=>{
    const response=await fetch('https://firestore.googleapis.com/v1/projects/'+encodeURIComponent(PROJECT)+'/databases/(default)/documents/users/'+encodeURIComponent(params.uid)+'?key='+FIREBASE_KEY,{headers:token?{Authorization:'Bearer '+token}:{},redirect:'error',signal:AbortSignal.timeout(8000)})
    if(!response.ok)throw new ApiError(response.status===403?403:404,'No se puede acceder a la vinculación pública de Xbox.')
    const document=await readJson(response),xuid=document.fields?.socialLinks?.mapValue?.fields?.xbox?.mapValue?.fields?.xuid?.stringValue
    if(!validXuid(xuid))throw new ApiError(404,'Este perfil no tiene Xbox vinculado.')
+   if(params.diagnostic){
+    const payload=await cached('titles:'+xuid,()=>openxbl('/titles/'+xuid))
+    const content=payload?.content??payload
+    if(content?.xuid&&content.xuid!==xuid)throw new ApiError(502,'El historial no corresponde al perfil.')
+    const titles=(Array.isArray(content?.titles)?content.titles:[]).filter(title=>title.type==='Game'&&title.titleHistory?.visible!==false)
+    const hasImage=title=>{try{return new URL(title.displayImage).protocol==='https:'}catch{return false}}
+    const sanitize=(value,depth=0)=>{if(depth>8)return '[truncated]';if(Array.isArray(value))return value.slice(0,30).map(item=>sanitize(item,depth+1));if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).slice(0,100).filter(([key])=>!/(token|secret|authorization|password|api.?key)/i.test(key)).map(([key,item])=>[key,sanitize(item,depth+1)]));return typeof value==='string'?value.slice(0,4000):value}
+    return {diagnostic:'images',titleCount:titles.length,responseFields:Object.keys(content||{}),withImage:titles.find(hasImage)?sanitize(titles.find(hasImage)):null,withoutImage:titles.find(title=>!hasImage(title))?sanitize(titles.find(title=>!hasImage(title))):null}
+   }
    const hit=cache.get('xuid:'+xuid);if(hit?.until>Date.now())return hit.value
    const person=await cached('person:'+xuid,async()=>{
     const value=xboxProfilePerson(await openxbl('/account/'+xuid),xuid)

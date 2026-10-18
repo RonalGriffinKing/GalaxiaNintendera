@@ -21,3 +21,14 @@ export async function fetchXboxProfile({gamertag,uid}){
  cache.set(key,{request,until:Date.now()+300000})
  return request
 }
+
+// Temporary owner-only inspection of title fields; no provider headers are exposed.
+export async function fetchXboxImageDiagnostic(){
+ const user=auth.currentUser
+ if(!user)throw Error('Inicia sesion para revisar tu Xbox.')
+ const token=await user.getIdToken()
+ const response=await fetch(apiUrl('/.netlify/functions/xbox-profile?uid='+encodeURIComponent(user.uid)+'&diagnostic=images'),{headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(25000)})
+ const data=await response.json()
+ if(!response.ok)throw Error(data.error||'No se pudo revisar Xbox.')
+ return data
+}

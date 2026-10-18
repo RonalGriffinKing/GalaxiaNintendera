@@ -32,6 +32,7 @@ const modules={'/__profile_firebase.js':mockFirebase,'/__profile_auth.js':mockAu
 let xboxFixtureTag='Xbox de prueba#1234';
 const server=await createServer({root,configFile:false,optimizeDeps:{noDiscovery:true,include:['vue','vue-router']},plugins:[{name:'profile-fixtures',enforce:'pre',resolveId(id){if(id==='@/firebase'||id==='../firebase'||id==='./firebase'||id.endsWith('/firebase.js')||id===root+'/src/firebase.js'||id===root+'/src/firebase')return '/__profile_firebase.js';if(id==='firebase/auth')return '/__profile_auth.js';if(id==='firebase/firestore')return '/__profile_store.js';if(modules[id])return id},load(id){return modules[id]},configureServer(server){server.middlewares.use((req,res,next)=>{if(req.url.startsWith('/.netlify/functions/xbox-profile')){
  const query=new URL(req.url,'http://localhost').searchParams;
+ if(query.get('diagnostic')==='images'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({diagnostic:'images',titleCount:2,withImage:{name:'Fixture covered',displayImage:'https://example.com/cover.jpg'},withoutImage:{name:'Fixture missing',images:[]}}));return}
  if(query.get('gamertag')==='NoExiste'){res.statusCode=404;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({error:'No se encontró una coincidencia exacta.'}));return}
  if(query.get('gamertag'))xboxFixtureTag=query.get('gamertag');
  const game={id:'123456',title:'Juego Xbox de prueba',imageUrl:'/src/iconos/iconosKirby/01.png'};

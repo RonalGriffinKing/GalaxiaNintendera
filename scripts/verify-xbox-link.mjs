@@ -35,6 +35,9 @@ try{
  await ev('window.profileChangeViewer({uid:"owner"})');await wait(350);
  await ev('document.querySelector(".profile-gamer-preview .gamer-connect-button").click()');await until('!!document.querySelector(".xbox-link")');
  for(const width of [1440,768,390,320]){await cdp('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await wait(80);check(await ev('(()=>{const card=document.querySelector(".profile-edit-card");return card.scrollWidth<=card.clientWidth+1&&document.documentElement.scrollWidth<=innerWidth})()'),'Xbox connection fits '+width);if([1440,390].includes(width)){const capture=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync(process.env.TEMP+'/galaxia-xbox-'+width+'.png',Buffer.from(capture.result.data,'base64'));}}
+ await ev('document.querySelector(".xbox-diagnostic").open=true;document.querySelector(".xbox-diagnostic button").click()');await until('!!document.querySelector(".xbox-diagnostic pre")');
+ check(await ev('document.querySelector(".xbox-diagnostic pre").textContent.includes("Fixture missing")'),'owner can inspect original title samples');
+ check(await ev('document.documentElement.scrollWidth<=innerWidth'),'diagnostic output fits narrow screen');
  await ev('[...document.querySelectorAll(".xbox-actions button")].find(button=>button.textContent==="Cambiar gamertag").click()');await wait(80);
  await ev('window.fillXbox("Xbox Nuevo#2222")');await wait(50);await ev('document.querySelector(".xbox-link form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}))');await until('!!document.querySelector(".xbox-confirm")');
  await ev('document.querySelector(".xbox-confirm button").click()');await until('window.profileMockUsers.owner.socialLinks.xbox.xuid==="2533274792093123"');
