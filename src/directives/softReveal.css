@@ -1,0 +1,6 @@
+/* Only opted-in content waits for a viewport entry; layout and hit areas stay stable. */
+.gn-reveal-pending { opacity: 0; }
+.gn-reveal-pending:focus-within { opacity: 1 !important; }
+@media (prefers-reduced-motion: reduce) { .gn-reveal-pending { opacity: 1 !important; } }
+
+.page-load-status{padding:24px 0;color:var(--text-muted,#aab3c5);font-size:13px;}

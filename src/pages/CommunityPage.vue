@@ -31,7 +31,6 @@ const loadRole = async (user) => {
 }
 
 onMounted(() => {
-  window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: true } }))
   unsubscribeAuth = onAuthStateChanged(auth, (user) => {
     isCheckingAuth.value = true
     currentUser.value = user
@@ -42,7 +41,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   unsubscribeAuth?.()
-  window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
 })
 </script>
 

@@ -1,4 +1,7 @@
 <script setup>
+import { eventGameNames } from '@/services/eventGame'
+import EventJsonImport from '@/components/events/EventJsonImport.vue'
+import { EVENT_TYPES } from '@/services/eventJson'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { peekPublicPage, storePublicPage } from '@/services/publicPageCache'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
@@ -70,6 +73,7 @@ const eventDraft = ref({
   description: '',
   startsAt: '',
   type: 'Evento',
+  durationMinutes:60, backgroundUrl:'',game:{nameEs:'',nameEn:''},
   url: ''
 })
 const liveGoalDraft = ref({
@@ -125,8 +129,6 @@ const communityDraft = ref({
   bannerUrl: '',
   iconUrl: '',
   threadBackgroundUrl: '',
-  musicPlaylistUrl: '',
-  musicVolume: 35,
   threadTopics: [...defaultThreadTopics],
   newTopic: ''
 })
@@ -474,8 +476,6 @@ const canCreateThreadInSelectedCommunity = computed(() => {
 })
 const communityBannerPreview = computed(() => resolveAssetUrl(communityDraft.value.bannerUrl.trim()))
 const communityIconPreview = computed(() => resolveAssetUrl(communityDraft.value.iconUrl.trim()))
-const communityMusicPreview = computed(() => communityDraft.value.musicPlaylistUrl.trim())
-const communityMusicVolumePreview = computed(() => Number(communityDraft.value.musicVolume || 35))
 const communityThreadBackgroundPreview = computed(() => communityDraft.value.threadBackgroundUrl.trim())
 const draftImagePreview = computed(() => draftImageUrl.value.trim())
 const isEditingCommunity = computed(() => Boolean(editingCommunityId.value))
@@ -923,8 +923,6 @@ const resetCommunityDraft = () => {
     bannerUrl: '',
     iconUrl: '',
     threadBackgroundUrl: '',
-    musicPlaylistUrl: '',
-    musicVolume: 35,
     threadTopics: [...defaultThreadTopics],
     newTopic: ''
   }
@@ -1013,8 +1011,6 @@ const startEditCommunity = (community) => {
     bannerUrl: community.bannerUrl || '',
     iconUrl: community.iconUrl || '',
     threadBackgroundUrl: community.threadBackgroundUrl || '',
-    musicPlaylistUrl: community.musicPlaylistUrl || '',
-    musicVolume: Number.isFinite(Number(community.musicVolume)) ? Number(community.musicVolume) : 35,
     threadTopics: normalizeThreadTopics(community.threadTopics || defaultThreadTopics),
     newTopic: ''
   }
@@ -1046,7 +1042,6 @@ const saveCommunity = async () => {
   if (!isAdmin.value || isSavingCommunity.value) return
   const name = communityDraft.value.name.trim()
   const description = communityDraft.value.description.trim()
-  const musicVolume = Math.min(100, Math.max(0, Number(communityDraft.value.musicVolume || 35)))
   const threadTopics = normalizeThreadTopics(communityDraft.value.threadTopics)
   if (!name || !description) return
 
@@ -1060,8 +1055,6 @@ const saveCommunity = async () => {
         bannerUrl: communityDraft.value.bannerUrl.trim(),
         iconUrl: communityDraft.value.iconUrl.trim(),
         threadBackgroundUrl: communityDraft.value.threadBackgroundUrl.trim(),
-        musicPlaylistUrl: communityDraft.value.musicPlaylistUrl.trim(),
-        musicVolume,
         threadTopics,
         isOfficial: editingCommunityId.value === OFFICIAL_COMMUNITY_ID,
         lockedMembership: editingCommunityId.value === OFFICIAL_COMMUNITY_ID,
@@ -1084,8 +1077,6 @@ const saveCommunity = async () => {
       bannerUrl: communityDraft.value.bannerUrl.trim(),
       iconUrl: communityDraft.value.iconUrl.trim(),
       threadBackgroundUrl: communityDraft.value.threadBackgroundUrl.trim(),
-      musicPlaylistUrl: communityDraft.value.musicPlaylistUrl.trim(),
-      musicVolume,
       threadTopics,
       membersCount: 0,
       createdBy: currentUserId.value,
@@ -1335,7 +1326,6 @@ const playYoutubeVideo = (video) => {
     ...video,
     startedAt: resumeAt
   }
-  window.dispatchEvent(new CustomEvent('galaxy-media-stop'))
   selectedYoutubeVideo.value = nextVideo
   disableFloatingPlayback()
   playerViewMode.value = 'default'
@@ -1359,7 +1349,6 @@ const openLiveChat = () => {
 
 const moveYoutubeVideoToFloating = (video) => {
   if (!video?.id) return
-  window.dispatchEvent(new CustomEvent('galaxy-media-stop'))
   const handoffSecond = Math.max(0, Math.floor(Number(activeVideoSecond.value || playerState.currentTime || video.startedAt || 0)))
   setCurrentVideo({
     ...video,
@@ -1423,7 +1412,6 @@ const returnPlayerToCommunity = () => {
 const restoreHubPlayerToCommunity = async (event = null) => {
   const video = playerState.currentVideo
   if (!video?.id) return
-  window.dispatchEvent(new CustomEvent('galaxy-media-stop'))
   const handoffSecond = Math.max(0, Math.floor(Number(playerState.currentTime || video.startedAt || 0)))
 
   selectedYoutubeVideo.value = {
@@ -1523,7 +1511,6 @@ const deleteVideoMessage = async (message) => {
 
 const openVideoTheater = () => {
   if (!featuredYoutubeVideo.value?.id) return
-  window.dispatchEvent(new CustomEvent('galaxy-media-stop'))
   if (playerState.currentVideo?.id !== featuredYoutubeVideo.value.id) {
     playYoutubeVideo(featuredYoutubeVideo.value)
   }
@@ -1555,7 +1542,6 @@ const handleYoutubePlayerMessage = (event) => {
   }
   const state = payload.info?.playerState
   if (state === 1) {
-    window.dispatchEvent(new CustomEvent('galaxy-media-stop'))
     setPlaybackStatus('playing')
   }
   if (state === 2) setPlaybackStatus('paused')
@@ -1734,9 +1720,12 @@ const saveGalaxyEvent = async () => {
   const now = Date.now()
   const payload = {
     title,
+    game: eventGameNames(eventDraft.value),
     description: eventDraft.value.description.trim(),
     type: eventDraft.value.type || 'Evento',
     url: eventDraft.value.url.trim(),
+    durationMinutes: Math.max(0,Number(eventDraft.value.durationMinutes)||0),
+    backgroundUrl: String(eventDraft.value.backgroundUrl||'').trim(),
     communityId: OFFICIAL_COMMUNITY_ID,
     communityName: officialCommunity.name,
     updatedAt: now,
@@ -1764,6 +1753,7 @@ const resetGalaxyEventDraft = () => {
     description: '',
     startsAt: '',
     type: 'Evento',
+    durationMinutes:60, backgroundUrl:'',game:{nameEs:'',nameEn:''},
     url: ''
   }
 }
@@ -1794,6 +1784,9 @@ const editGalaxyEvent = (event) => {
     description: event.description || '',
     startsAt: formatDateTimeInput(event.startsAt),
     type: event.type || 'Evento',
+    durationMinutes: event.durationMinutes ?? 60,
+    backgroundUrl: event.backgroundUrl || '',
+    game: eventGameNames(event),
     url: event.url || ''
   }
 }
@@ -2283,14 +2276,7 @@ watch(selectedCommunity, (community) => {
   if (selectedTopic.value !== 'Inicio' && !selectedCommunityTopics.value.includes(selectedTopic.value)) {
     selectedTopic.value = 'Inicio'
   }
-  window.dispatchEvent(new CustomEvent('community-music-context', {
-    detail: {
-      id: community.id,
-      name: community.name || '',
-      playlistUrl: community.musicPlaylistUrl || '',
-      volume: Number.isFinite(Number(community.musicVolume)) ? Number(community.musicVolume) : 35
-    }
-  }))
+
 })
 
 onBeforeRouteLeave((to, from, next) => {
@@ -2528,14 +2514,8 @@ onUnmounted(() => {
                   Fondo cuando no hay publicaciones
                   <input v-model="communityDraft.threadBackgroundUrl" placeholder="https://..." />
                 </label>
-                <label>
-                  Playlist musica (opcional)
-                  <input v-model="communityDraft.musicPlaylistUrl" placeholder="https://soundcloud.com/.../sets/..." />
-                </label>
-                <label>
-                  Volumen musica (0-100)
-                  <input v-model.number="communityDraft.musicVolume" type="number" min="0" max="100" placeholder="35" />
-                </label>
+
+
                 <div class="community-topic-editor">
                   <div class="community-topic-editor-head">
                     <strong>Categorias de hilos</strong>
@@ -2596,8 +2576,8 @@ onUnmounted(() => {
                 <strong>{{ communityDraft.name || 'Nueva comunidad' }}</strong>
                 <p>{{ communityDraft.description || 'Descripcion corta para presentar el espacio.' }}</p>
                 <small v-if="communityThreadBackgroundPreview">Fondo de hilos configurado</small>
-                <small v-if="communityMusicPreview">Playlist vinculada</small>
-                <small>Volumen: {{ communityMusicVolumePreview }}%</small>
+
+
                 <div class="community-topic-preview">
                   <span v-for="topic in normalizeThreadTopics(communityDraft.threadTopics)" :key="topic">
                     <i :class="getTopicIcon(topic)"></i>
@@ -2675,6 +2655,7 @@ onUnmounted(() => {
             <h2>{{ editingEventId ? 'Editar evento' : 'Crear evento' }}</h2>
           </div>
 
+          <EventJsonImport :communities="[{id: OFFICIAL_COMMUNITY_ID, name: officialCommunity.name}]" @apply="values => Object.assign(eventDraft, values)" />
           <form class="event-admin-form" @submit.prevent="saveGalaxyEvent">
             <input v-model="eventDraft.title" placeholder="Titulo del evento" />
             <div class="event-date-picker">
@@ -2700,14 +2681,11 @@ onUnmounted(() => {
                 <input v-model="eventTimeValue" type="time" />
               </label>
             </div>
-            <select v-model="eventDraft.type">
-              <option>Evento</option>
-              <option>Live</option>
-              <option>Podcast</option>
-              <option>Lanzamiento post</option>
-            </select>
+            <select v-model="eventDraft.type"><option v-for="type in EVENT_TYPES" :key="type">{{ type }}</option></select>
             <textarea v-model="eventDraft.description" placeholder="Descripcion corta opcional"></textarea>
             <input v-model="eventDraft.url" placeholder="Link opcional" />
+            <label>Duracion (minutos)<input v-model.number="eventDraft.durationMinutes" type="number" min="0" max="10080" /></label>
+            <input v-model="eventDraft.backgroundUrl" placeholder="URL del fondo del evento" /><input v-model="eventDraft.game.nameEs" placeholder="Juego en español (opcional)" maxlength="180"/><input v-model="eventDraft.game.nameEn" placeholder="Juego en inglés / IGDB" maxlength="180"/>
             <div class="event-form-actions" :class="{ single: !editingEventId }">
               <button v-if="editingEventId" type="button" class="event-secondary-btn" @click="resetGalaxyEventDraft">
                 Nuevo
@@ -2907,8 +2885,6 @@ onUnmounted(() => {
 :global(body.community-player-expanded .public-bottom-nav),
 :global(body.community-player-expanded .direct-chat-fab),
 :global(body.community-player-expanded .direct-chat-panel),
-:global(body.community-player-expanded .music-bubble-fab),
-:global(body.community-player-expanded .music-bubble-panel),
 :global(body.community-player-expanded .community-rail-nav),
 :global(body.community-player-expanded .community-switcher-shell),
 :global(body.community-player-expanded .community-quick-shell),

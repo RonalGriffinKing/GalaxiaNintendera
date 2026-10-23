@@ -1,4 +1,5 @@
 <script setup>
+import { vSoftReveal } from '@/directives/softReveal'
 import { computed, onMounted, ref, watch } from 'vue'
 import { proxiedImageUrl } from '@/constants/assets'
 import { useTimedCarousel } from '@/composables/useTimedCarousel'
@@ -267,7 +268,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="community-stories-panel media-center-panel">
+  <section v-soft-reveal="'.media-hero-card,.media-row'" class="community-stories-panel media-center-panel">
     <div class="panel-heading">
       <h2>
         <span></span>

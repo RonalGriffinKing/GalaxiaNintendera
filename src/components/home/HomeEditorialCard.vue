@@ -1,4 +1,5 @@
 <script setup>
+import { vSoftReveal } from '@/directives/softReveal'
 import { analysisRating } from '@/services/articlePresentation'
 import FeaturedSheen from '@/components/shared/FeaturedSheen.vue'
 import { computed } from 'vue'
@@ -16,7 +17,7 @@ const headline = computed(() => socialHeadline(props.post))
 </script>
 
 <template>
- <RouterLink :to="to" class="home-editorial-card" :style="cardTheme" :class="{ featured, compact, 'is-analysis':analysis }">
+ <RouterLink v-soft-reveal :to="to" class="home-editorial-card" :style="cardTheme" :class="{ featured, compact, 'is-analysis':analysis }">
   <img class="card-cover" :src="resolveAssetUrl(post.image,defaultBannerUrl)" alt="" loading="lazy" decoding="async" />
   <div class="card-shade"></div>
   <FeaturedSheen v-if="featured" :gold="analysis" />

@@ -1,4 +1,5 @@
 <script setup>
+import { vSoftReveal } from '@/directives/softReveal'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from "firebase/firestore"
@@ -606,7 +607,6 @@ watch(() => route.params.id, loadPost, { immediate: true })
 watch(post, applyPostSeo, { deep: true })
 onMounted(() => {
   previousTitle = document.title
-  window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
   window.addEventListener('scroll', checkEndReached, { passive: true })
   const navbar=document.querySelector('.public-nav')
   if(navbar){
@@ -648,7 +648,7 @@ onUnmounted(() => {
       <span></span>
     </div>
 
-    <main class="post-layout">
+    <main v-soft-reveal="'.post-content-section,.post-sidebar > *'" class="post-layout">
       <FloatingBackButton fallback="/noticias" />
         <PostCinematicHero
           :post="post"

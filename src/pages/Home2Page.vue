@@ -1,4 +1,6 @@
 <script setup>
+import { compactPostCategory } from '@/services/postCategoryDisplay'
+import { vSoftReveal } from '@/directives/softReveal'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { homePinnedPosts } from '@/services/homePins'
@@ -97,7 +99,7 @@ const visibleCommunityCards = computed(() => {
   return [...page, ...cards.slice(0, 3 - page.length)]
 })
 const heroSlides = computed(() => homePinnedPosts(posts.value).map(post => ({
-  id: post.id, eyebrow: post.category || 'Noticias',
+  id: post.id, eyebrow: compactPostCategory(post),
   title: socialHeadline(post).title, highlights: socialHeadline(post).highlights,
   post, text: post.summary || post.content || '', image: post.image || bannerImage,
   label: cardCategory(post), meta: formatAgo(postDisplayDate(post)),
@@ -305,7 +307,6 @@ onMounted(() => {
     }, HOME_WELCOME_MAX_WAIT)
   }
 
-  window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
   startHeroIfAllowed()
   communityCarousel.start()
   loadData()
@@ -319,16 +320,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="home2-page">
+  <div v-soft-reveal="'.home2-hero-grid,.home2-community-card,.home2-panel-head'" class="home2-page">
     <GalaxyAtmosphere />
     <HomeWelcomeLoader :visible="isInitialHomeLoading" />
 
     <main class="home2-shell">
-      <section v-if="isLoading" class="home2-loading">
-        <span></span>
-        <strong></strong>
-        <p></p>
-      </section>
+      <p v-if="isLoading" class="page-load-status" role="status">Cargando publicaciones...</p>
 
       <template v-else>
         <section class="home2-hero-grid" :class="{'home-cold-load':!cachedHomePosts}">
@@ -413,8 +410,7 @@ onUnmounted(() => {
 }
 
 /* Ambient background layer: remove this block and .home2-shell z-index to disable it cleanly. */
-.home2-page::before,
-.home2-page::after {
+.home2-page::before,.home2-page::after {
   content: '';
   inset: 0;
   pointer-events: none;
@@ -448,34 +444,10 @@ onUnmounted(() => {
   z-index: 1;
 }
 
-.home2-loading,
-.home2-panel,
-.home2-community-band,
-.home2-main-hero {
+.home2-panel,.home2-community-band,.home2-main-hero {
   border: 1px solid rgba(168, 85, 247, 0.42);
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.24), 0 0 34px rgba(168, 85, 247, 0.12);
 }
-
-.home2-loading {
-  background: rgba(8, 13, 29, 0.82);
-  border-radius: 14px;
-  display: grid;
-  gap: 18px;
-  min-height: 520px;
-  padding: 48px;
-}
-
-.home2-loading span,
-.home2-loading strong,
-.home2-loading p {
-  animation: home2Pulse 1.15s ease-in-out infinite alternate;
-  background: linear-gradient(90deg, rgba(255,255,255,0.12), rgba(216,180,254,0.28), rgba(255,255,255,0.12));
-  border-radius: 999px;
-}
-
-.home2-loading span { height: 36px; width: 160px; }
-.home2-loading strong { height: 88px; max-width: 720px; width: 76%; }
-.home2-loading p { height: 24px; max-width: 620px; width: 64%; }
 
 .home2-hero-grid {
   display: grid;
@@ -546,10 +518,7 @@ onUnmounted(() => {
   -webkit-line-clamp: 4;
 }
 
-.home2-pill,
-.home2-analysis-card span,
-.home2-all-card span,
-.home2-community-band > div > span {
+.home2-pill,.home2-analysis-card span,.home2-all-card span,.home2-community-band > div > span {
   align-items: center;
   background: rgba(124, 58, 237, 0.78);
   border-radius: 999px;
@@ -670,8 +639,7 @@ onUnmounted(() => {
   color: #facc15;
 }
 
-.home2-panel-head button,
-.home2-community-band button {
+.home2-panel-head button,.home2-community-band button {
   align-items: center;
   background: rgba(124, 58, 237, 0.72);
   border-radius: 999px;
@@ -690,8 +658,7 @@ onUnmounted(() => {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.analysis-page-enter-active,
-.analysis-page-leave-active {
+.analysis-page-enter-active,.analysis-page-leave-active {
   transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -705,23 +672,16 @@ onUnmounted(() => {
   transform: translateX(-14px);
 }
 
-.home2-analysis-featured,
-.home2-analysis-card,
-.home2-all-card,
-.home2-community-card {
+.home2-analysis-featured,.home2-analysis-card,.home2-all-card,.home2-community-card {
   text-align: left;
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.home2-analysis-featured:hover,
-.home2-analysis-card:hover,
-.home2-all-card:hover,
-.home2-community-card:hover {
+.home2-analysis-featured:hover,.home2-analysis-card:hover,.home2-all-card:hover,.home2-community-card:hover {
   transform: translateY(-2px);
 }
 
-.home2-analysis-featured,
-.home2-analysis-card {
+.home2-analysis-featured,.home2-analysis-card {
   background: rgba(15, 23, 42, 0.78);
   border: 1px solid rgba(168, 85, 247, 0.42);
   border-radius: 10px;
@@ -891,8 +851,7 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.home2-analysis-card strong,
-.home2-all-card strong {
+.home2-analysis-card strong,.home2-all-card strong {
   color: #fff;
   display: -webkit-box;
   font-size: 15px;
@@ -909,8 +868,7 @@ onUnmounted(() => {
   font-weight: 850;
 }
 
-.analysis-panel,
-.home2-analysis-card {
+.analysis-panel,.home2-analysis-card {
   border-color: rgba(250, 204, 21, 0.7);
   box-shadow:
     0 0 0 1px rgba(245, 158, 11, 0.18),
@@ -1077,8 +1035,7 @@ onUnmounted(() => {
   box-shadow: 0 0 24px rgba(168, 85, 247, 0.18);
 }
 
-.home2-community-grid img,
-.home2-community-grid span {
+.home2-community-grid img,.home2-community-grid span {
   border-radius: 16px;
   height: 54px;
   object-fit: cover;
@@ -1105,8 +1062,7 @@ onUnmounted(() => {
   -webkit-line-clamp: 2;
 }
 
-.home2-community-dots,
-.home2-analysis-dots {
+.home2-community-dots,.home2-analysis-dots {
   align-items: center;
   display: flex;
   gap: 7px;
@@ -1114,8 +1070,7 @@ onUnmounted(() => {
   min-height: 16px;
 }
 
-.home2-community-dots button,
-.home2-analysis-dots button {
+.home2-community-dots button,.home2-analysis-dots button {
   background: rgba(216, 180, 254, 0.34);
   border: 0;
   border-radius: 999px;
@@ -1129,8 +1084,7 @@ onUnmounted(() => {
   width: 22px;
 }
 
-.home2-community-dots button.active,
-.home2-analysis-dots button.active {
+.home2-community-dots button.active,.home2-analysis-dots button.active {
   background: linear-gradient(90deg, #a855f7, #ec4899);
   box-shadow: 0 0 16px rgba(236, 72, 153, 0.44);
   width: 34px;
@@ -1157,8 +1111,7 @@ onUnmounted(() => {
 }
 
 @media (max-width: 980px) {
-  .home2-hero-grid,
-  .home2-community-band {
+  .home2-hero-grid,.home2-community-band {
     grid-template-columns: 1fr;
   }
 
@@ -1321,9 +1274,7 @@ onUnmounted(() => {
     line-height: 1.2;
   }
 
-  .home2-analysis-grid,
-  .home2-all-grid,
-  .home2-community-grid {
+  .home2-analysis-grid,.home2-all-grid,.home2-community-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1337,8 +1288,7 @@ onUnmounted(() => {
     justify-self: center;
   }
 
-  .home2-community-grid img,
-  .home2-community-grid span {
+  .home2-community-grid img,.home2-community-grid span {
     height: 64px;
     width: 64px;
   }
@@ -1349,8 +1299,7 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .analysis-page-enter-active,
-  .analysis-page-leave-active {
+  .analysis-page-enter-active,.analysis-page-leave-active {
     transition-duration: 0.01ms;
   }
 }
@@ -1361,7 +1310,6 @@ onUnmounted(() => {
   .home2-main-hero { min-height: 260px; gap: 10px; padding: 22px; box-sizing: border-box; }
   .home2-main-hero h1 { font-size: clamp(26px, 2.8vw, 36px); line-height: 1.12; -webkit-line-clamp: 3; margin: 0; }
   .home2-main-hero p { font-size: 14px; line-height: 1.45; font-weight: 600; -webkit-line-clamp: 2; margin: 0; }
-  .home2-loading { min-height: 260px; padding: 22px; }
   .home2-panel { padding: 16px; }
   .home2-community-band { gap: 14px; padding: 18px; }
   .home2-community-band h2 { font-size: clamp(24px, 2.4vw, 30px); line-height: 1.12; }
@@ -1369,7 +1317,7 @@ onUnmounted(() => {
   .home2-community-carousel { gap: 8px; }
   .home2-community-grid { gap: 8px; }
   .home2-community-card { min-height: 58px; padding: 8px; gap: 8px; grid-template-columns: 40px minmax(0, 1fr); }
-  .home2-community-grid img, .home2-community-grid span { width: 40px; height: 40px; }
+  .home2-community-grid img,.home2-community-grid span { width: 40px; height: 40px; }
   .home2-analysis-featured { min-height: 320px; padding: 20px; box-sizing: border-box; }
   .home2-analysis-featured h3 { font-size: clamp(26px, 2.8vw, 36px); line-height: 1.12; }
   .home2-analysis-featured p { font-size: 14px; font-weight: 600; margin-top: 8px; -webkit-line-clamp: 2; }
@@ -1382,7 +1330,7 @@ onUnmounted(() => {
   box-sizing: border-box;
   grid-template-rows: auto auto auto auto auto;
 }
-.home2-main-hero h1, .home2-main-hero p { margin: 0; }
+.home2-main-hero h1,.home2-main-hero p { margin: 0; }
 .home2-main-hero h1 { -webkit-line-clamp: 3; }
 .home2-main-hero p { -webkit-line-clamp: 2; }
 @media (min-width: 641px) and (max-width: 1440px), (min-width: 641px) and (max-height: 900px) {
@@ -1484,9 +1432,8 @@ onUnmounted(() => {
 </style>
 
 <style scoped>
-.home2-loading{height:520px;min-height:520px;border-radius:16px;box-sizing:border-box}
-@media(max-width:760px){.home2-loading{height:480px;min-height:480px}}
-@media(prefers-reduced-motion:no-preference){.home2-hero-grid.home-cold-load{animation:home-content-arrive .18s ease-out}@keyframes home-content-arrive{from{opacity:.7}to{opacity:1}}}
+@media(max-width:760px){}
+
 </style>
 
 <style scoped>
@@ -1494,5 +1441,5 @@ onUnmounted(() => {
 </style>
 
 <style scoped>
-@media(max-width:360px){.home2-loading{height:500px;min-height:500px}}
+@media(max-width:360px){}
 </style>

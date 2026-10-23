@@ -34,7 +34,7 @@ onUnmounted(() => { document.body.style.overflow = ''; document.removeEventListe
         <p v-if="simulated" class="simulation">Simulación · saldo de prueba</p>
         <h2 id="reward-title">{{ icon.name }}</h2>
         <p>{{ saga }} · {{ { normal: 'Normal', rare: 'Raro', epic: 'Épico', legendary: 'Legendario' }[icon.rarity] || (icon.special ? 'Épico' : 'Normal') }}</p>
-        <p>{{ equipped ? 'Este es tu icono actual.' : obtained ? 'Obtenido · Disponible en tu colección' : 'Pendiente · Puedes buscarlo en el gachapon de su saga. El resultado no está garantizado.' }}</p>
+        <p>{{ equipped ? 'Este es tu icono actual.' : obtained ? 'Obtenido · Disponible en tu colección' : 'Pendiente · Puede salir en una tirada aleatoria del gachapón.' }}</p>
         <button v-if="own && obtained && !equipped" class="primary" type="button" :disabled="saving" @click="emit('use', icon.id)">{{ saving ? 'Guardando…' : 'Usar icono' }}</button>
         <button v-if="own && !obtained" class="primary" type="button" @click="emit('gachapon')">Buscar en el gachapon</button>
         <button type="button" :disabled="saving" @click="emit('close')">Volver a la colección</button>
@@ -47,9 +47,9 @@ onUnmounted(() => { document.body.style.overflow = ''; document.removeEventListe
 <style scoped>
 .reward-backdrop { position: fixed; inset: 0; z-index: 3600; display: grid; place-items: center; padding: 16px; background: #040612b8; backdrop-filter: blur(8px); }
 .reward-dialog { position: relative; width: min(100%, 440px); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 32px 24px 24px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface-elevated, #181329); color: var(--text-primary, white); text-align: center; display: grid; gap: 12px; }
-.reward-dialog h2 { font-size: 24px; line-height: 1.3; }.reward-dialog p { line-height: 1.6; color: var(--text-secondary); }
+.reward-dialog h2 { font-size: 20px; line-height: 1.3; }.reward-dialog p { line-height: 1.6; color: var(--text-secondary); }
 .reward-dialog button { min-height: 44px; padding: 10px 16px; border-radius: 10px; background: var(--surface); color: var(--text-primary); }.reward-dialog .primary { background: var(--accent); color: white; }.reward-dialog .close { position: absolute; right: 8px; top: 8px; font-size: 24px; }.reward-dialog button:disabled { opacity: .55; }
-.reward-art { position: relative; display: grid; place-items: center; padding: 28px; }.reward-art :deep(.profile-avatar-ui) { --avatar-size: 104px; }
+.reward-art { position: relative; display: grid; place-items: center; padding: 12px; }.reward-art :deep(.profile-avatar-ui) { --avatar-size: 72px; }
 .celebration { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }.celebration i { position: absolute; color: #facc15; font-size: 20px; animation: reward-star 1.1s ease-out var(--delay) both; }
 .reward-dialog .simulation { color: #facc15; }.reward-dialog .error { color: #fca5a5; }
 @keyframes reward-star { from { opacity: 0; transform: rotate(var(--angle)) translateY(20px) scale(.2); } 20% { opacity: 1; } to { opacity: 0; transform: rotate(var(--angle)) translateY(95px) scale(1.1); } }

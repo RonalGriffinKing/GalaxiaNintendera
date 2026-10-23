@@ -13,6 +13,11 @@ import { doc, getDoc } from 'firebase/firestore'
 
 const routes = [
   {
+    path: '/ruzafa-impresora/vacaciones/:local?',
+    name: 'ruzafa-vacations',
+    component: () => import('@/pages/RuzafaVacationsPage.vue')
+  },
+  {
     path: '/admin/posts/new',
     name: 'post-create',
     component: () => import('@/pages/PostEditorPage.vue'),
@@ -123,6 +128,11 @@ const routes = [
         meta: { publisherOnly: true, workspace: true }
       },
       {
+        path: 'admin/event-share/:id',
+        component: () => import('@/pages/EventSharePage.vue'),
+        meta: { publisherOnly: true }
+      },
+      {
         path: 'admin/post-share/:id',
         component: () => import('@/pages/PostSharePage.vue'),
         meta: { publisherOnly: true }
@@ -142,7 +152,6 @@ const routes = [
 
   { path: '/dashboard', redirect: '/admin/dashboard', meta: { publisherOnly: true } },
   { path: '/editor', component: Editor, meta: { adminOnly: true } },
-  { path: '/overlay/gachapon-demo', component: () => import('@/pages/GachaponObsDemoPage.vue') },
   { path: '/overlay/:id', component: OverlayView },
   { path: '/login', component: Login },
 ]

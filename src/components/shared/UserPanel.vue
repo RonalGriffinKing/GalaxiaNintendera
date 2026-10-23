@@ -1,5 +1,5 @@
 <template>
-  <div class="relative min-h-full">
+  <div v-soft-reveal="'.user-card'" class="relative min-h-full">
     <div v-if="!embedded" class="panel-header">
       <div>
         <h1 class="panel-title">Usuarios</h1>
@@ -269,6 +269,7 @@
 </template>
 
 <script setup>
+import { vSoftReveal } from '@/directives/softReveal'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

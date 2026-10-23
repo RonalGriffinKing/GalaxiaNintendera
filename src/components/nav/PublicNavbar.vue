@@ -85,8 +85,6 @@ const quickCommunityDraft = ref({
   bannerUrl: '',
   iconUrl: '',
   threadBackgroundUrl: '',
-  musicPlaylistUrl: '',
-  musicVolume: 35,
   threadTopics: [...DEFAULT_QUICK_THREAD_TOPICS],
   newTopic: ''
 })
@@ -172,27 +170,9 @@ const createOptions = computed(() => {
 
   return [{ label: 'Crear hilo', icon: 'fas fa-comments', action: 'thread' }]
 })
-const manageOptions = computed(() => {
-  if (!currentUser.value) return []
-
-  const options = []
-
-  if (canPublish.value) {
-    options.push(
-      { label: 'Gestor global', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' },
-      { label: 'Ver posts', icon: 'fas fa-newspaper', to: '/admin/dashboard?view=posts' }
-    )
-  }
-
-  if (isAdmin.value) {
-    options.push(
-      { label: 'Ver usuarios', icon: 'fas fa-users', to: '/admin/dashboard?view=users' },
-      { label: 'Ver overlays', icon: 'fas fa-layer-group', to: '/admin/dashboard?view=overlays' }
-    )
-  }
-
-  return options
-})
+const manageOptions = computed(() => currentUser.value && canPublish.value
+  ? [{ label: 'Gestor global', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' }]
+  : [])
 const accountMenuItems = computed(() => {
   return [
     { label: 'Mi perfil', icon: 'far fa-user', to: currentUser.value ? `/perfil/${currentUser.value.uid}` : '/login?mode=register' },
@@ -200,27 +180,9 @@ const accountMenuItems = computed(() => {
     { label: 'Comunidades', icon: 'fas fa-users', to: '/comunidades' }
   ]
 })
-const accountAdminItems = computed(() => {
-  if (!currentUser.value || !canPublish.value) return []
-
-  const items = []
-  if (isAdmin.value) {
-    items.push(
-      { label: 'Gestor global', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' },
-      { label: 'Crear post', icon: 'fas fa-pen-nib', action: 'post' },
-      { label: 'Crear pagina', icon: 'fas fa-file-circle-plus', to: '/admin/dashboard?view=pages&create=page' },
-      { label: 'Crear usuario', icon: 'fas fa-user-gear', action: 'user' },
-      { label: 'Crear overlay', icon: 'fas fa-layer-group', to: '/admin/dashboard?view=overlays&create=overlay' }
-    )
-  } else if (canPublish.value) {
-    items.push(
-      { label: 'Crear post', icon: 'fas fa-pen-nib', action: 'post' },
-      { label: 'Mis publicaciones', icon: 'far fa-newspaper', to: '/admin/dashboard?view=posts' }
-    )
-  }
-
-  return items
-})
+const accountAdminItems = computed(() => currentUser.value && canPublish.value
+  ? [{ label: 'Gestor global', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' }]
+  : [])
 const accountAdminLabel = computed(() => (isAdmin.value ? 'PANEL ADMIN' : canPublish.value ? 'PUBLISHER' : ''))
 
 const searchPreview = computed(() => {
@@ -740,8 +702,6 @@ const resetQuickCommunityDraft = () => {
     bannerUrl: '',
     iconUrl: '',
     threadBackgroundUrl: '',
-    musicPlaylistUrl: '',
-    musicVolume: 35,
     threadTopics: [...defaultQuickThreadTopics],
     newTopic: ''
   }
@@ -851,8 +811,6 @@ const saveQuickCommunity = async () => {
       bannerUrl: quickCommunityDraft.value.bannerUrl.trim(),
       iconUrl: quickCommunityDraft.value.iconUrl.trim(),
       threadBackgroundUrl: quickCommunityDraft.value.threadBackgroundUrl.trim(),
-      musicPlaylistUrl: quickCommunityDraft.value.musicPlaylistUrl.trim(),
-      musicVolume: Math.min(100, Math.max(0, Number(quickCommunityDraft.value.musicVolume || 35))),
       threadTopics,
       membersCount: 0,
       createdBy: currentUser.value?.uid || '',
@@ -3063,6 +3021,7 @@ onUnmounted(() => {
   .public-brand span { display: none; }
 }
 @media(min-width:860px) { .public-nav-inner { width:var(--public-content-width); max-width:100%; margin-inline:auto; grid-template-columns:minmax(140px,1fr) auto minmax(140px,1fr); gap:12px; } }
+@media(max-width:859px){.public-account-card{align-content:start;grid-auto-rows:max-content}.public-account-list{align-content:start;grid-auto-rows:max-content}.public-account-list button{min-height:48px}}
 </style>
 
 <style scoped>

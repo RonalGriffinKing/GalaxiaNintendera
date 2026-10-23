@@ -147,7 +147,7 @@ const closeChat = () => {
 }
 
 const handleExternalPanelOpen = (event) => {
-  if (['music', 'community'].includes(event.detail?.source)) {
+  if (event.detail?.source === 'community') {
     open.value = false
   }
 }

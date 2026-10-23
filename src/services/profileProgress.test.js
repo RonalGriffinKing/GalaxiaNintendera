@@ -4,19 +4,19 @@ const store = vi.hoisted(() => ({ documents: {}, writes: [] }))
 vi.mock('@/firebase', () => ({ db: {} }))
 vi.mock('firebase/firestore', () => ({
   doc: (_db, ...path) => path.join('/'),
-  collection: vi.fn(), getDoc: vi.fn(), getDocs: vi.fn(), orderBy: vi.fn(), query: vi.fn(), setDoc: vi.fn(), updateDoc: vi.fn(),
+  collection: (_db,...path)=>path.join('/'), getDoc: vi.fn(), getDocs: async()=>({docs:Object.entries(store.documents).filter(([path])=>path.startsWith('profileIcons/')).map(([path,data])=>({id:path.split('/')[1],data:()=>data}))}), orderBy: vi.fn(), query: ref=>ref, setDoc: vi.fn(), updateDoc: vi.fn(),
   runTransaction: async (_db, action) => action({
     get: async (path) => ({ exists: () => path in store.documents, data: () => store.documents[path] }),
     update: (path, value) => { store.writes.push({ path, value }); Object.assign(store.documents[path], value) }
   })
 }))
-import { redeemIcon, unlockedAchievements, normalizeProfileIcon } from './profileProgress'
+import { redeemIcon, drawProfileIcon, kirbyIcons, unlockedAchievements, normalizeProfileIcon } from './profileProgress'
 import { earnedAchievements } from './achievementProgress'
 
 beforeEach(() => {
   store.documents = {
     'users/u': { stars: 70, unlockedIcons: ['kirby-01'], selectedIcon: 'kirby-01' },
-    'profileIcons/reward': { cost: 25, visible: true }
+    'profileIcons/reward': { cost: 25, visible: true, src:'https://example.com/reward.png' }
   }
   store.writes = []
 })
@@ -65,4 +65,31 @@ describe('achievement rules', () => {
     expect(unlockedAchievements(28, items).map(item => item.id)).toEqual(['legacy', 'custom'])
     expect(earnedAchievements(items, { reads: 28, followers: 2 }).map(item => item.id)).toEqual(['legacy', 'custom', 'social'])
   })
+})
+
+describe('random icon redemption',()=>{
+ it('commits the authoritative price and a new entitlement together without equipping',async()=>{
+  store.documents['users/u'].unlockedIcons=kirbyIcons.map(icon=>icon.id)
+  store.documents['siteSettings/gachaponPrices']={normal:20,epic:50}
+  const result=await drawProfileIcon({userId:'u',expectedCost:20})
+  expect(result.icon.id).toBe('reward');expect(result.stars).toBe(50);expect(result.unlockedIcons).toContain('reward')
+  expect(store.writes).toHaveLength(1);expect(Object.keys(store.writes[0].value).sort()).toEqual(['stars','unlockedIcons','updatedAt'])
+  expect(store.documents['users/u'].selectedIcon).toBe('kirby-01')
+  await expect(drawProfileIcon({userId:'u',expectedCost:20})).rejects.toThrow('collection-complete')
+  expect(store.writes).toHaveLength(1)
+ })
+ it('does not grant or charge with insufficient balance or a changed price',async()=>{
+  store.documents['users/u'].stars=10
+  await expect(drawProfileIcon({userId:'u',expectedCost:20})).rejects.toThrow('not-enough-stars')
+  store.documents['users/u'].stars=70
+  store.documents['siteSettings/gachaponPrices']={normal:30}
+  await expect(drawProfileIcon({userId:'u',expectedCost:20})).rejects.toThrow('price-changed')
+  expect(store.writes).toHaveLength(0)
+ })
+ it('excludes archived and hidden prizes even if their images exist',async()=>{
+  store.documents['users/u'].unlockedIcons=kirbyIcons.map(icon=>icon.id)
+  store.documents['profileIcons/reward'].archived=true
+  await expect(drawProfileIcon({userId:'u',expectedCost:20})).rejects.toThrow('collection-complete')
+  expect(store.writes).toHaveLength(0)
+ })
 })

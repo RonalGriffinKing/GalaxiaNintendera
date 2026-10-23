@@ -1,9 +1,9 @@
 <script setup>
+import { vSoftReveal } from '@/directives/softReveal'
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { onAuthStateChanged, updateProfile } from 'firebase/auth'
 import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc, where, onSnapshot } from 'firebase/firestore'
-import { DEFAULT_GACHAPON_PRICES, validateGachaponPrices } from '@/components/profile/gachapon/prices'
 import { auth, db } from '@/firebase'
 import { fetchXboxProfile, clearXboxProfileCache } from '@/services/xboxProfileClient'
 import { cleanGamertag, validXuid } from '@/services/xboxIdentity'
@@ -19,11 +19,14 @@ import { achievementTarget, achievementValue } from '@/services/achievementProgr
 const ProfileIconEditor = defineAsyncComponent(() => import('@/components/profile/ProfileIconEditor.vue'))
 import ProfileRelationModal from '@/components/profile/ProfileRelationModal.vue'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
+import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
 import ProfileFavoritesPreview from '@/components/shared/ProfileFavoritesPreview.vue'
 import { resolveAssetUrl } from '@/constants/assets'
 import { notifyNewFollower } from '@/services/notifications'
 import {
   ICON_COST,
+  GACHAPON_COST,
+  drawProfileIcon,
   achievements,
   fallbackProfileIcon,
   kirbyIcons,
@@ -39,40 +42,27 @@ const gamerData = defineProps({ gamerIdentities: { type: Array, default: () => [
 const route = useRoute()
 const router = useRouter()
 const profile = ref(null)
-const gachaponPrices=ref({...DEFAULT_GACHAPON_PRICES})
+const gachaponPrice=ref(GACHAPON_COST)
 let unsubscribeGachaponPrices
-onMounted(()=>{unsubscribeGachaponPrices=onSnapshot(doc(db,'siteSettings','gachaponPrices'),snapshot=>{if(snapshot.exists()){try{gachaponPrices.value=validateGachaponPrices(snapshot.data())}catch{}}},()=>{})})
+onMounted(()=>{unsubscribeGachaponPrices=onSnapshot(doc(db,'siteSettings','gachaponPrices'),snapshot=>{const value=Number(snapshot.data?.()?.normal);gachaponPrice.value=Number.isSafeInteger(value)&&value>=1&&value<=1000000?value:GACHAPON_COST},()=>{})})
 onUnmounted(()=>unsubscribeGachaponPrices?.())
-async function saveGachaponPrices(value){
- if(!isAdminOwnProfile.value || !auth.currentUser)throw Error('Solo administradores.')
- const prices=validateGachaponPrices(value)
- await setDoc(doc(db,'siteSettings','gachaponPrices'),{...prices,updatedAt:Date.now()})
- gachaponPrices.value=prices
-}
 const gachaponOpen = ref(false)
-const gachaponSaga = ref('all')
-const openGachapon = (saga = 'all') => { if (!isOwnProfile.value) return; gachaponSaga.value = saga; gachaponOpen.value = true }
+const openGachapon = () => { if (isOwnProfile.value) gachaponOpen.value = true }
 const viewGachaponCollection = () => { gachaponOpen.value = false; openRewards('collection') }
-const mirrorSceneId = ref('')
-async function prepareGachaponMirror() {
- if(!isAdminOwnProfile.value || !auth.currentUser) throw Error('Solo administradores.')
- if(!mirrorSceneId.value) {
- const existing=await getDocs(query(collection(db,'overlays',auth.currentUser.uid,'items'),where('kind','==','gachapon-mirror'),limit(1)))
- if(!existing.empty)mirrorSceneId.value=existing.docs[0].id
+const GachaponModal = defineAsyncComponent(() => import('@/components/profile/gachapon/GachaponModal.vue'))
+const gachaponRemaining = computed(() => allProfileIcons.value.filter(icon => icon.visible !== false && !icon.archived && !unlockedIcons.value.includes(icon.id)).length)
+async function drawGachapon(){
+ const uid=profileId.value
+ if(!isOwnProfile.value||auth.currentUser?.uid!==uid)throw Error('Inicia sesión en tu perfil.')
+ try{
+  const result=await drawProfileIcon({userId:uid,expectedCost:gachaponPrice.value})
+  if(profileId.value===uid&&profile.value?.id===uid)profile.value={...profile.value,stars:result.stars,unlockedIcons:result.unlockedIcons}
+  return result
+ }catch(error){
+  const messages={'not-enough-stars':'No tienes suficientes estrellas.','collection-complete':'Ya tienes todos los iconos disponibles.','price-changed':'El precio ha cambiado. Vuelve a abrir el gachapón.','catalog-changed':'El catálogo ha cambiado. Vuelve a intentarlo.'}
+  throw Error(messages[error.message]||'No se pudo confirmar el canje. Revisa tu saldo y tu conexión.')
  }
- if(!mirrorSceneId.value) {
- const scene = doc(collection(db,'overlays',auth.currentUser.uid,'items'))
- await setDoc(scene,{name:'Gachapon Estelar',width:580,height:530,widgets:[],kind:'gachapon-mirror',createdAt:Date.now()})
- mirrorSceneId.value=scene.id
- }
- return new URL('/overlay/gachapon-demo?owner='+encodeURIComponent(auth.currentUser.uid)+'&scene='+encodeURIComponent(mirrorSceneId.value),window.location.origin).toString()
 }
-async function publishGachaponMirror(event) {
- if(!isAdminOwnProfile.value || !auth.currentUser || !mirrorSceneId.value)return
- const icon=event.icon
- try{await updateDoc(doc(db,'overlays',auth.currentUser.uid,'items',mirrorSceneId.value),{gachaponEvent:{id:crypto.randomUUID(),createdAt:Date.now(),mode:event.mode,prices:gachaponPrices.value,icon:{name:icon.name||'Icono',saga:icon.saga||'Especiales',rarity:icon.rarity||event.mode,src:new URL(icon.src,window.location.origin).toString(),special:Boolean(icon.special),effectColor:icon.effectColor||'#a855f7'}}})}catch{message.value='No se pudo enviar la animacion a OBS.'}
-}
-const GachaponDemoModal = defineAsyncComponent(() => import('@/components/profile/gachapon/GachaponDemoModal.vue'))
 const favorites = ref([])
 const threads = ref([])
 const posts = ref([])
@@ -1195,7 +1185,6 @@ onMounted(() => {
     viewerProfile.value = { role: 'user', canChat: false }
     loadProfile()
   })
-  window.dispatchEvent(new CustomEvent('music-page-context', { detail: { inCommunity: false } }))
   loadProfile()
 })
 onUnmounted(() => {
@@ -1209,25 +1198,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="profile-page" :class="{ 'profile-ready': !isLoading && profile }" :aria-busy="isLoading">
-    <section v-if="isLoading && isRewardsPage" class="rewards-loading" :class="{ 'loading-achievements': rewardsTab === 'achievements' }" role="status" aria-label="Cargando logros y recompensas">
-      <span class="profile-loading-label">Cargando logros y recompensas…</span>
-      <div class="rewards-loading-back" aria-hidden="true"></div>
-      <div class="rewards-loading-title" aria-hidden="true"></div>
-      <div class="rewards-loading-tabs" aria-hidden="true"><span v-for="index in 3" :key="index"></span></div>
-      <div class="rewards-loading-summary" aria-hidden="true"></div>
-      <div class="rewards-loading-grid" aria-hidden="true"><div v-for="index in (rewardsTab === 'achievements' ? 4 : 10)" :key="index"><span></span><span></span></div></div>
-    </section>
-    <section v-else-if="isLoading" class="profile-loading" role="status" aria-label="Cargando perfil">
-      <span class="profile-loading-label">Cargando perfil…</span>
-      <div class="profile-loading-hero" aria-hidden="true">
-        <div class="profile-loading-avatar"></div>
-        <div class="profile-loading-info"><span></span><strong></strong><span></span><span></span></div>
-        <div class="profile-loading-summary"></div>
-      </div>
-      <div class="profile-loading-stats" aria-hidden="true"><span v-for="index in 4" :key="index"></span></div>
-      <div class="profile-loading-columns" aria-hidden="true"><div v-for="index in 3" :key="index"><span></span><span></span><span></span></div></div>
-    </section>
+  <main v-soft-reveal="'.profile-hero,.profile-right > .profile-section,.recent-post-card,.recent-post-list > button,.profile-directory-grid > button'" class="profile-page" :class="{ 'profile-ready': !isLoading && profile, 'rewards-mode': isRewardsPage }" :aria-busy="isLoading">
+    <GalaxyAtmosphere />
+    <p v-if="isLoading" class="profile-loading-status" role="status">{{ isRewardsPage ? "Cargando logros y colección..." : "Cargando perfil..." }}</p>
     <div v-if="!isLoading && !profile" class="profile-empty">
       Este perfil no existe.
     </div>
@@ -1461,7 +1434,7 @@ onUnmounted(() => {
       </section>
       </template>
       <AppNotice :message="message" :type="message.startsWith('No se') ? 'error' : 'success'" />
-      <GachaponDemoModal v-if="gachaponOpen && isOwnProfile" :stars="stars" :icons="allProfileIcons" :owned="unlockedIcons" :prices="gachaponPrices" :save-prices="saveGachaponPrices" :admin="isAdminOwnProfile" :prepare-mirror="prepareGachaponMirror" @preview="publishGachaponMirror" :initial-saga="gachaponSaga" @collection="viewGachaponCollection" @close="gachaponOpen = false" />
+      <GachaponModal v-if="gachaponOpen && isOwnProfile" :stars="stars" :cost="gachaponPrice" :remaining="gachaponRemaining" :draw="drawGachapon" :equip="selectIcon" @collection="viewGachaponCollection" @close="gachaponOpen = false" />
       <ProfileIconEditor :start-systems="connectionsRequested" :systems-busy="systemsBusy" v-if="iconPanelOpen || iconUploadOpen" v-model:profile-draft="profileDraft" v-model:upload-icon-draft="uploadIconDraft" :profile="profile" :profile-icon="profileIcon" :profile-icon-meta="profileIconMeta" :panel-open="iconPanelOpen" :upload-open="iconUploadOpen" :edit-message="editMessage" :is-saving-profile="isSavingProfile" :is-uploading-icon="isUploadingIcon" :editing-icon-id="editingIconId" :upload-icon-preview="uploadIconPreview" :upload-icon-message="uploadIconMessage" :icon-filters="iconFilters" @close-panel="closeIconPanel" @close-upload="closeIconUpload" @save-profile="saveProfile" @open-rewards="openRewards('collection')" @save-uploaded-icon="saveUploadedIcon">
         <template #systems><ProfileSystemsPanel :xbox-link="xboxLink" :xbox-identity="xboxIdentity" :xbox-loading="xboxLoading" :xbox-error="xboxError" :save-xbox-link="saveXboxLink" :refresh-xbox="refreshXboxProfile" :own="isOwnProfile" :url="nintendoUrl" :profile-url="nintendoProfileUrl" :identity="nintendoIdentity" :loading="nintendoLoading" :error="nintendoError" :save-link="saveNintendoLinks" :refresh="() => nintendoRefresh++" @busy="systemsBusy=$event" /></template>
       </ProfileIconEditor>
@@ -1484,10 +1457,6 @@ onUnmounted(() => {
 <style scoped>
 .profile-page {
   --profile-content-width: min(1500px, calc(100vw - 48px));
-  background:
-    radial-gradient(circle at 12% 4%, rgba(236, 72, 153, 0.14), transparent 28%),
-    radial-gradient(circle at 90% 12%, rgba(124, 58, 237, 0.12), transparent 30%),
-    #f8fafc;
   color: #111827;
   min-height: 100vh;
   overflow-x: hidden;
@@ -1502,8 +1471,7 @@ onUnmounted(() => {
   }
 }
 
-.profile-empty,
-.profile-section {
+.profile-empty,.profile-section {
   margin: 0 auto;
   max-width: var(--profile-content-width);
 }
@@ -1681,8 +1649,7 @@ onUnmounted(() => {
   text-align: left;
 }
 
-.post-strip img,
-.post-strip span {
+.post-strip img,.post-strip span {
   aspect-ratio: 16 / 9;
   background: #e5e7eb;
   border-radius: 12px;
@@ -1708,10 +1675,6 @@ onUnmounted(() => {
 }
 
 .profile-page {
-  background:
-    radial-gradient(circle at 14% 0%, rgba(168, 85, 247, 0.18), transparent 30%),
-    radial-gradient(circle at 82% 10%, rgba(236, 72, 153, 0.14), transparent 28%),
-    #070a16;
   color: #f8fafc;
 }
 
@@ -1724,9 +1687,7 @@ onUnmounted(() => {
 }
 
 
-.section-head h2,
-.activity-list strong,
-.community-card-row strong {
+.section-head h2,.activity-list strong,.community-card-row strong {
   color: #ffffff;
 }
 
@@ -1745,19 +1706,16 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.profile-communities,
-.profile-activity {
+.profile-communities,.profile-activity {
   min-height: 0;
 }
 
-.profile-communities:has(.mini-empty),
-.profile-activity:has(.mini-empty) {
+.profile-communities:has(.mini-empty),.profile-activity:has(.mini-empty) {
   align-content: start;
   min-height: 230px;
 }
 
-.profile-communities .mini-empty,
-.profile-activity .mini-empty {
+.profile-communities .mini-empty,.profile-activity .mini-empty {
   background: rgba(255, 255, 255, 0.04);
   border: 1px dashed rgba(148, 163, 184, 0.24);
   border-radius: 14px;
@@ -1814,9 +1772,7 @@ onUnmounted(() => {
   text-align: left;
 }
 
-.community-card-row img,
-.community-card-row .community-overlay,
-.community-card-row .community-letter {
+.community-card-row img,.community-card-row .community-overlay,.community-card-row .community-letter {
   height: 100%;
   inset: 0;
   object-fit: cover;
@@ -1824,8 +1780,7 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.community-card-row img,
-.community-card-row .community-letter {
+.community-card-row img,.community-card-row .community-letter {
   opacity: 0.62;
 }
 
@@ -1844,9 +1799,7 @@ onUnmounted(() => {
   opacity: 1;
 }
 
-.community-card-row strong,
-.community-card-row small,
-.community-card-row em {
+.community-card-row strong,.community-card-row small,.community-card-row em {
   display: block;
   position: relative;
   z-index: 1;
@@ -1897,9 +1850,7 @@ onUnmounted(() => {
   text-align: left;
 }
 
-.recent-post-card img,
-.recent-post-fallback,
-.recent-post-shade {
+.recent-post-card img,.recent-post-fallback,.recent-post-shade {
   height: 100%;
   inset: 0;
   position: absolute;
@@ -2006,8 +1957,7 @@ onUnmounted(() => {
   text-align: left;
 }
 
-.recent-post-list span,
-.recent-post-list i {
+.recent-post-list span,.recent-post-list i {
   align-items: center;
   background: rgba(168, 85, 247, 0.18);
   border-radius: 10px;
@@ -2076,9 +2026,7 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
-.activity-list p,
-.activity-list time,
-.section-head p {
+.activity-list p,.activity-list time,.section-head p {
   color: #cbd5e1;
 }
 
@@ -2133,8 +2081,7 @@ onUnmounted(() => {
     margin-top: 12px;
   }
 
-  .profile-communities,
-  .profile-activity {
+  .profile-communities,.profile-activity {
     min-height: 0;
   }
 
@@ -2277,8 +2224,7 @@ onUnmounted(() => {
     width: 50px;
   }
 
-  .profile-directory-grid strong,
-  .profile-directory-grid small {
+  .profile-directory-grid strong,.profile-directory-grid small {
     color: #ffffff;
     margin: 0;
   }
@@ -2324,7 +2270,7 @@ onUnmounted(() => {
 
 /* Activity content scrolls within its column; tabs never resize the dashboard. */
 .profile-dashboard { align-items: stretch; }
-.profile-middle, .profile-right { align-content: start; }
+.profile-middle,.profile-right { align-content: start; }
 .profile-right { min-height: 640px; }
 .profile-dashboard > .profile-activity { position: relative; min-height: 640px; }
 .profile-activity > .section-head { min-height: 40px; }
@@ -2336,63 +2282,15 @@ onUnmounted(() => {
 .profile-middle .profile-highlights { height: 100%; }
 .profile-middle .collection-preview { flex: 1; }
 .profile-right { grid-template-rows: minmax(230px,1fr) auto; }
-.profile-ready > .profile-hero,
-.profile-ready > .profile-hero-stats,
-.profile-ready > .profile-dashboard,
-.profile-ready > .favorite-preview-section { animation: profileReveal 320ms ease-out both; }
-@keyframes profileReveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-.profile-loading-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.profile-loading-hero,.profile-loading-stats,.profile-loading-columns > div { border: 1px solid #a78bfa26; border-radius: 16px; background: #0b1020; }
-.profile-loading-hero { min-height: 300px; display: grid; grid-template-columns: 150px minmax(0,1fr) 260px; align-items: center; gap: 28px; padding: 28px; }
-.profile-loading-avatar,.profile-loading-info > *, .profile-loading-summary,.profile-loading-stats span,.profile-loading-columns span { display: block; background: linear-gradient(90deg,#94a3b82e,#d8b4fe42,#94a3b82e); animation: profileLoadingPulse 1.5s ease-in-out infinite alternate; border-radius: 12px; }
-.profile-loading-avatar { width: 150px; height: 150px; border-radius: 50%; }
-.profile-loading-info { display: grid; gap: 18px; }
-.profile-loading-info span { height: 18px; width: 75%; }
-.profile-loading-info strong { height: 42px; width: 85%; }
-.profile-loading-summary { height: 180px; }
-.profile-loading-stats { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 28px; margin-top: 14px; padding: 20px; }
-.profile-loading-stats span { height: 40px; }
-.profile-loading-columns { display: grid; grid-template-columns: 2fr 1.05fr 1fr; gap: 16px; margin-top: 16px; }
-.profile-loading-columns > div { min-height: 640px; padding: 16px; }
-.profile-loading-columns span { height: 140px; margin-bottom: 16px; }
-.profile-loading-columns span:first-child { width: 60%; height: 24px; }
-@keyframes profileLoadingPulse { from { opacity: .55; } to { opacity: .9; } }
 @media(max-width:1100px) {
   .profile-middle,.profile-right { grid-template-rows: auto; }
   .profile-middle .collection-preview { flex: none; }
-  .profile-loading-hero { grid-template-columns: 100px minmax(0,1fr); }
-  .profile-loading-avatar { width: 100px; height: 100px; }
-  .profile-loading-summary { display: none; }
-  .profile-loading-columns { grid-template-columns: 1.6fr 1fr; }
-  .profile-loading-columns > div:last-child { display: none; }
 }
 @media(max-width:760px) {
   .profile-dashboard > .profile-activity { height: 600px; min-height: 600px; }
   .profile-right { min-height: 0; }
   .profile-middle .profile-highlights { height: auto; }
-  .profile-loading-hero { padding: 20px; gap: 16px; min-height: 300px; }
-  .profile-loading-stats { gap: 12px; padding: 16px; }
-  .profile-loading-columns { grid-template-columns: minmax(0,1fr); }
-  .profile-loading-columns > div { min-height: 600px; }
-  .profile-loading-columns > div:nth-child(n+2) { display: none; }
 }
-@media(prefers-reduced-motion:reduce) { .profile-ready > *, .profile-loading * { animation: none !important; } }
-.rewards-loading { max-width: var(--content-max,1280px); margin: 0 auto; }
-.rewards-loading-back,.rewards-loading-title,.rewards-loading-tabs span,.rewards-loading-summary,.rewards-loading-grid span { background: linear-gradient(90deg,#94a3b82e,#d8b4fe42,#94a3b82e); border-radius: 10px; animation: profileLoadingPulse 1.5s ease-in-out infinite alternate; }
-.rewards-loading-back { width: 120px; height: 20px; margin: 12px 0 20px; }
-.rewards-loading-title { width: min(300px,75%); height: 28px; margin-bottom: 12px; }
-.rewards-loading-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-.rewards-loading-tabs span { flex: 1; max-width: 140px; height: 44px; }
-.rewards-loading-summary { height: 64px; margin-bottom: 16px; }
-.rewards-loading-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 14px; }
-.rewards-loading-grid > div { display: grid; justify-items: center; align-content: center; gap: 14px; min-height: 180px; padding: 16px; border: 1px solid #a78bfa26; border-radius: 14px; background: #0b1020; }
-.rewards-loading-grid span:first-child { width: 76px; height: 76px; border-radius: 50%; }
-.rewards-loading-grid span:last-child { width: 75%; height: 16px; }
-.loading-achievements .rewards-loading-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
-.loading-achievements .rewards-loading-grid > div { min-height: 140px; }
-@media(max-width:900px) { .rewards-loading-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
-@media(max-width:600px) { .rewards-loading-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }.loading-achievements .rewards-loading-grid { grid-template-columns: minmax(0,1fr); } }
-@media(prefers-reduced-motion:reduce) { .rewards-loading * { animation: none !important; } }
 
 @media(min-width:761px) and (max-width:1440px),(min-width:761px) and (max-height:900px) {
  .profile-page { max-width:1280px; padding-left:18px; padding-right:18px; }
@@ -2463,4 +2361,6 @@ onUnmounted(() => {
 .profile-tab-content .activity-tabs button{min-width:0;margin:0;padding:8px 6px;border:0;border-radius:7px;background:transparent;font-size:11px;line-height:18px;text-align:center;white-space:nowrap;color:var(--text-secondary,#cbd5e1)}
 .profile-tab-content .activity-tabs button[aria-pressed=true]{background:var(--accent,#7c3aed);color:#fff}.profile-tab-content .activity-tabs button:focus-visible{outline:2px solid var(--accent,#c084fc);outline-offset:2px}
 @media(max-width:500px){.profile-tab-content .activity-tabs{width:100%}.profile-tab-content .profile-activity .section-head{align-items:start}}
+.profile-page{background:transparent;position:relative;isolation:isolate}
+.profile-loading-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 </style>

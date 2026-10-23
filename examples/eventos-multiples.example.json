@@ -1,0 +1,34 @@
+{
+  "events": [
+    {
+      "title": "Los Pitufos: Dreams | Una joya oculta",
+      "type": "Directo",
+      "fecha": "2026-11-01",
+      "hora": "18:30",
+      "description": "Descubrimos una aventura de plataformas llena de magia y creatividad.",
+      "durationMinutes": 90,
+      "url": "",
+      "backgroundUrl": "",
+      "communityIds": [],
+      "game": {
+        "nameEs": "Los Pitufos: Dreams",
+        "nameEn": "The Smurfs: Dreams"
+      }
+    },
+    {
+      "title": "Los Pitufos: Dreams | Seguimos soñando",
+      "type": "Directo",
+      "fecha": "2026-11-03",
+      "hora": "18:30",
+      "description": "Seguimos explorando el mundo de los Pitufos con la comunidad.",
+      "durationMinutes": 90,
+      "url": "",
+      "backgroundUrl": "",
+      "communityIds": [],
+      "game": {
+        "nameEs": "Los Pitufos: Dreams",
+        "nameEn": "The Smurfs: Dreams"
+      }
+    }
+  ]
+}

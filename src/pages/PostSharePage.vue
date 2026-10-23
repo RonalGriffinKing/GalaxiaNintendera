@@ -7,6 +7,7 @@ import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { mergeSocialSettings, updateSocialSetting } from '@/services/socialTemplateState'
 import { normalizeSocialContent, titleRuns } from '@/services/socialContent'
+import PublicationAnimationModal from '@/components/posts/PublicationAnimationModal.vue'
 import SocialVisualInspector from '@/components/posts/SocialVisualInspector.vue'
 import { resolveProfileIcon } from '@/services/profileProgress'
 import { apiUrl } from '@/services/appEnvironment'
@@ -19,6 +20,8 @@ import { DEFAULT_VISUAL_THEME, isLegacyTheme, socialThemeSettings, socialThemeCs
 
 const route = useRoute()
 const router = useRouter()
+const animationOpen = ref(false)
+const animationElement = () => cardRefs.value[selectedSlideIndex.value]
 const post = ref(null)
 const {theme:assignedTheme,enabled:themeEnabled}=useVisualThemes(()=>post.value)
 const renderedTheme=ref(DEFAULT_VISUAL_THEME)
@@ -27,7 +30,10 @@ const isLoading = ref(true)
 const isDownloading = ref(false)
 const error = ref('')
 const cardRefs = ref([])
+const sharePreview = ref(null)
+const renderedCards = () => [...(sharePreview.value?.querySelectorAll('.social-card') || [])]
 const selectedFormat = ref('story')
+const socialMargins = ref(true)
 const brokenImages = ref({})
 const imageCacheNonce = ref(Date.now())
 const exportProgress = ref({ current: 0, total: 0, label: '' })
@@ -59,8 +65,6 @@ const slideCtaOverrides = ref({})
 const slideDescriptionOverrides = ref({})
 const slidePointsOverrides = ref({})
 const fitNotice = ref('')
-const sourceType = computed(() => route.query.type === 'event' ? 'event' : 'post')
-
 const fontOptions = [
   { label: 'Galaxia', value: 'Inter, system-ui, sans-serif' },
   { label: 'Impacto', value: 'Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif' },
@@ -361,7 +365,7 @@ const carouselSlides = computed(() => {
 
 onMounted(() => { loadPost(); loadTemplateLibrary(); window.addEventListener('resize', updateEditorViewport) })
 onUnmounted(() => window.removeEventListener('resize', updateEditorViewport))
-watch([() => route.params.id, () => route.query.type], loadPost)
+watch([() => route.params.id, () => route.query.type, () => route.query.ids], loadPost)
 watch(() => carouselSlides.value.length, (length) => {
   if (!length) {
     selectedSlideIndex.value = 0
@@ -375,13 +379,13 @@ onBeforeUpdate(() => {
 })
 
 
-function designSnapshot() { return cloneSettings({ global: globalTemplateSettings.value, overrides: slideTemplateOverrides.value, texts: slideTextOverrides.value, highlights: slideHighlightOverrides.value, ctas: slideCtaOverrides.value, descriptions: slideDescriptionOverrides.value, points: slidePointsOverrides.value, images: slideImageOverrides.value, globalImage: globalImageOverride.value, format: selectedFormat.value, style: selectedStyle.value }) }
+function designSnapshot() { return cloneSettings({ global: globalTemplateSettings.value, overrides: slideTemplateOverrides.value, texts: slideTextOverrides.value, highlights: slideHighlightOverrides.value, ctas: slideCtaOverrides.value, descriptions: slideDescriptionOverrides.value, points: slidePointsOverrides.value, images: slideImageOverrides.value, globalImage: globalImageOverride.value, format: selectedFormat.value, socialMargins: socialMargins.value, style: selectedStyle.value }) }
 function rememberDesign() { undoStack.value = [...undoStack.value.slice(-49), designSnapshot()]; redoStack.value = [] }
 function restoreHistory(redo) {
  const from = redo ? redoStack : undoStack; const to = redo ? undoStack : redoStack
  if (!from.value.length) return
  to.value.push(designSnapshot()); const state = from.value.pop()
- selectedStyle.value = state.style || selectedStyle.value; globalTemplateSettings.value = state.global; slideTemplateOverrides.value = state.overrides; slideTextOverrides.value = state.texts; slideHighlightOverrides.value = state.highlights || {}; slideCtaOverrides.value = state.ctas || {}; slideDescriptionOverrides.value = state.descriptions || {}; slidePointsOverrides.value = state.points || {}; slideImageOverrides.value = state.images || {}; globalImageOverride.value = state.globalImage || ''; selectedFormat.value = state.format || selectedFormat.value
+ socialMargins.value = state.socialMargins !== false; selectedStyle.value = state.style || selectedStyle.value; globalTemplateSettings.value = state.global; slideTemplateOverrides.value = state.overrides; slideTextOverrides.value = state.texts; slideHighlightOverrides.value = state.highlights || {}; slideCtaOverrides.value = state.ctas || {}; slideDescriptionOverrides.value = state.descriptions || {}; slidePointsOverrides.value = state.points || {}; slideImageOverrides.value = state.images || {}; globalImageOverride.value = state.globalImage || ''; selectedFormat.value = state.format || selectedFormat.value
 }
 function resetSingleDesign() { rememberDesign(); const next = { ...slideTemplateOverrides.value }; delete next[selectedSlideIndex.value]; slideTemplateOverrides.value = next }
 function visualElementStyle(index, key) {
@@ -428,7 +432,7 @@ function moveVisualDrag(event) {
  setSetting('visual_' + d.key + '.x', d.x + x / d.card.width * 100); setSetting('visual_' + d.key + '.y', d.y + y / d.card.height * 100)
 }
 function stopVisualDrag() { visualDrag = null; centerGuide.value = false }
-watch([globalTemplateSettings, slideTemplateOverrides, slideTextOverrides, slideHighlightOverrides, slideCtaOverrides, slideDescriptionOverrides, slidePointsOverrides, selectedSlideIndex, selectedElement, selectedFormat, editorOpen, editorViewport], async () => {
+watch([globalTemplateSettings, slideTemplateOverrides, slideTextOverrides, slideHighlightOverrides, slideCtaOverrides, slideDescriptionOverrides, slidePointsOverrides, selectedSlideIndex, selectedElement, selectedFormat, socialMargins, editorOpen, editorViewport], async () => {
  await nextTick()
  const card = cardRefs.value[selectedSlideIndex.value]; const element = card?.querySelector('[data-edit="' + selectedElement.value + '"]'); const viewport = card?.closest('.share-card-viewport')
  const copy = card?.querySelector('.social-card-copy')
@@ -492,13 +496,13 @@ async function loadTemplateLibrary() {
 }
 async function saveNamedTemplate(name) {
  if (!name.trim()) return
- const item = { id: 'template-' + Date.now(), name: name.trim(), style: selectedStyle.value, format: selectedFormat.value, settings: cloneSettings(globalTemplateSettings.value), overrides: cloneSettings(slideTemplateOverrides.value) }
+ const item = { id: 'template-' + Date.now(), name: name.trim(), style: selectedStyle.value, format: selectedFormat.value, socialMargins: socialMargins.value, settings: cloneSettings(globalTemplateSettings.value), overrides: cloneSettings(slideTemplateOverrides.value) }
  try { localStorage.setItem('galaxia-social-library', JSON.stringify([...savedTemplates.value, item])); savedTemplates.value.push(item); templateNotice.value = 'Plantilla guardada en este navegador.' } catch { templateNotice.value = 'No hay espacio para guardar la plantilla.'; return }
  if (auth.currentUser) { try { await setDoc(doc(db, 'users', auth.currentUser.uid, 'socialTemplates', item.id), item); templateNotice.value = 'Plantilla guardada en tu cuenta.' } catch { templateNotice.value = 'Guardada en este navegador; la cuenta no permite sincronizarla.' } }
 }
 function loadNamedTemplate(id) {
  const item = savedTemplates.value.find(template => template.id === id); if (!item || !styleDefinitions[item.style] || !formats[item.format]) return
- rememberDesign(); selectedStyle.value = item.style; selectedFormat.value = item.format; globalTemplateSettings.value = mergeSettings(styleDefinitions[item.style].settings, item.settings); slideTemplateOverrides.value = cloneSettings(item.overrides || {})
+ rememberDesign(); socialMargins.value = item.socialMargins !== false; selectedStyle.value = item.style; selectedFormat.value = item.format; globalTemplateSettings.value = mergeSettings(styleDefinitions[item.style].settings, item.settings); slideTemplateOverrides.value = cloneSettings(item.overrides || {})
  templateNotice.value = 'Plantilla aplicada: colores, posiciones y ajustes restaurados.'
 }
 function selectSlide(index) {
@@ -864,48 +868,28 @@ function hexToRgba(hex, alpha) {
 }
 
 async function loadPost() {
+  if(['event','events'].includes(route.query.type)){
+    await router.replace({path:'/admin/event-share/'+route.params.id,query:route.query.ids?{ids:route.query.ids}:{}})
+    return
+  }
   isLoading.value = true
   error.value = ''
 
   try {
-    const snap = await getDoc(doc(db, sourceType.value === 'event' ? 'galaxyEvents' : 'posts', route.params.id))
+    const snap = await getDoc(doc(db, 'posts', route.params.id))
     if (!snap.exists()) {
-      error.value = sourceType.value === 'event' ? 'No se encontro el evento.' : 'No se encontro el post.'
+      error.value = 'No se encontro el post.'
       return
     }
 
-    post.value = normalizeShareSource({ id: snap.id, ...snap.data() })
+    post.value = { id: snap.id, ...snap.data() }
     brokenImages.value = {}
     imageCacheNonce.value = Date.now()
     await loadAuthorProfile()
   } catch (err) {
-    error.value = sourceType.value === 'event' ? 'No se pudo cargar el evento.' : 'No se pudo cargar el post.'
+    error.value = 'No se pudo cargar el post.'
   } finally {
     isLoading.value = false
-  }
-}
-
-function normalizeShareSource(data) {
-  if (sourceType.value !== 'event') return data
-
-  const startsAt = getTime(data.startsAt)
-  const dateLabel = startsAt
-    ? new Intl.DateTimeFormat('es-ES', {
-        day: '2-digit',
-        month: 'long',
-        hour: '2-digit',
-        minute: '2-digit'
-      }).format(new Date(startsAt))
-    : ''
-
-  return {
-    ...data,
-    category: data.type || 'Evento',
-    image: data.backgroundUrl || data.imageUrl || fallbackCover,
-    coverImage: data.backgroundUrl || data.imageUrl || fallbackCover,
-    subtitle: dateLabel ? `${dateLabel} | Galaxia Nintendera` : 'Evento de Galaxia Nintendera',
-    content: data.description || 'No te pierdas este evento de Galaxia Nintendera.',
-    author: 'Galaxia Nintendera'
   }
 }
 
@@ -962,7 +946,7 @@ function exportThemeManifest() {
     design:designSnapshot()}
 }
 async function downloadPng(index = 0) {
-  const target = cardRefs.value[index]
+  const target = renderedCards()[index]
   if (!target || isDownloading.value) return
   const themeManifest=exportThemeManifest()
   isDownloading.value = true
@@ -979,7 +963,8 @@ async function downloadPng(index = 0) {
 }
 
 async function downloadCarousel() {
-  if (!cardRefs.value.length || isDownloading.value) return
+  const targets = renderedCards()
+  if (!targets.length || isDownloading.value) return
   const themeManifest=exportThemeManifest()
   isDownloading.value = true
   error.value = ''
@@ -995,7 +980,7 @@ async function downloadCarousel() {
     const zip = new JSZip()
     zip.file('visual-theme.json', JSON.stringify(themeManifest,null,2))
 
-    for (const [index, target] of cardRefs.value.entries()) {
+    for (const [index, target] of targets.entries()) {
       if (!target) continue
       exportProgress.value = {
         current: index + 1,
@@ -1023,7 +1008,7 @@ async function downloadCarousel() {
 }
 
 async function exportFontCSS(target) {
-  const text = [...new Set(cardRefs.value.map(card => card?.textContent || '').join(''))].join('')
+  const text = [...new Set(renderedCards().map(card => card?.textContent || '').join(''))].join('')
   if (exportFontCache?.text === text) return exportFontCache.css
   // Embed the exact faces used by the preview, including its icon font.
   // Fetching another weight range here changes text metrics only in the PNG.
@@ -1144,7 +1129,7 @@ function slugify(value) {
         <h1>Generar imagen social</h1>
       </div>
 
-      <div class="share-toolbar-actions">
+      <div class="share-toolbar-actions"><button type="button" class="share-secondary" :disabled="!post || isDownloading" @click="animationOpen=true">✦ Animar publicación</button>
         <button type="button" class="share-secondary" @click="router.push('/admin/dashboard?view=posts')">
           <i class="fas fa-arrow-left"></i>
           Volver
@@ -1153,7 +1138,7 @@ function slugify(value) {
           <i class="fas fa-sliders"></i>
           Editar imagen
         </button>
-        <button type="button" class="share-primary" :disabled="!post || isDownloading" @click="downloadCarousel">
+        <button type="button" class="share-primary" :disabled="!post || !carouselSlides.length || isDownloading" @click="downloadCarousel">
           <i :class="isDownloading ? 'fas fa-circle-notch fa-spin' : 'fas fa-download'"></i>
           {{ isDownloading ? `Generando ${exportProgress.current || 1}/${exportProgress.total || carouselSlides.length}` : `Descargar ZIP (${carouselSlides.length} imagenes)` }}
         </button>
@@ -1171,6 +1156,7 @@ function slugify(value) {
     </section>
 
     <section v-else class="share-workbench">
+<div class="social-margin-picker" role="group" aria-label="Márgenes de publicación"><strong>Márgenes</strong><button type="button" :aria-pressed="socialMargins" :disabled="isDownloading" @click="rememberDesign(); socialMargins=true">Con márgenes · TikTok</button><button type="button" :aria-pressed="!socialMargins" :disabled="isDownloading" @click="rememberDesign(); socialMargins=false">Sin márgenes</button><small>{{ socialMargins ? 'Reserva espacio para el buscador, las reacciones y la descripción.' : 'El contenido aprovecha toda la composición.' }}</small></div>
       <p v-if="error" class="share-error">{{ error }}</p>
       <p v-if="imageIssueMessage" class="share-warning">{{ imageIssueMessage }}</p>
 
@@ -1187,7 +1173,7 @@ function slugify(value) {
         </button>
       </div>
 
-      <div class="share-preview">
+      <div ref="sharePreview" class="share-preview">
         <div
           v-for="(slide, index) in carouselSlides"
           :key="`${post?.id || 'post'}-${selectedStyle}-${selectedFormat}-${slide.id}-${slide.image}`"
@@ -1198,7 +1184,7 @@ function slugify(value) {
             <div class="share-card-scale" :style="previewScaleStyle">
               <article
                 :ref="(el) => setCardRef(el, index)"
-                class="social-card social-network-layout" :data-visual-themed="!isLegacyTheme(renderedTheme) ? 'true' : null" :data-slide-type="slide.type" :data-accent="slide.accent" :data-format="selectedFormat" @pointerdown="startVisualDrag($event, index)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag"
+                class="social-card social-network-layout" :data-social-margins="socialMargins ? 'true' : null" :data-visual-themed="!isLegacyTheme(renderedTheme) ? 'true' : null" :data-slide-type="slide.type" :data-accent="slide.accent" :data-format="selectedFormat" @pointerdown="startVisualDrag($event, index)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag"
                 :class="[activeStyle.className, {
                   analysis: isAnalysisPost,
                   'impact-cover': selectedStyle === 'impact' && index === 0,
@@ -1300,6 +1286,7 @@ function slugify(value) {
       </div>
     </section>
 
+    <PublicationAnimationModal v-if="animationOpen" :get-element="animationElement" @close="animationOpen=false"/>
     <SocialVisualInspector v-if="editorOpen" :templates="savedTemplates" :template-notice="templateNotice" @save-template="saveNamedTemplate" @load-template="loadNamedTemplate" @reset="resetVisualElement" :element="selectedElement" :scope="applyScope" :number="selectedSlide?.number || 1" :settings="settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :slide-type="selectedSlide?.type" :slide-accent="selectedSlide?.accent" :cta="selectedSlide ? displaySlideCta(selectedSlide) : ''" :title-highlights="selectedSlide ? displayTitleHighlights(selectedSlide) : []" :points="selectedSlide ? displaySlidePoints(selectedSlide) : []" :image="selectedSlide ? slideImage(selectedSlide) : fallbackCover" :image-url="selectedTemporaryImage()" :fonts="fontOptions" :overflow="textOverflow" :notice="fitNotice" :inert="isDownloading" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectedElement = $event" @scope="applyScope = $event" @setting="setVisualInspectorSetting" @cta="setSlideCta" @title-highlights="setTitleHighlights" @title="updateTextContent('title', $event)" @description="updateTextContent('subtitle', $event)" @points="updateTextContent('points', $event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @fit="fitSlideText" @download="downloadCarousel" @center="centerVisualElement" @image-url="handleTemporaryImageUrl" @upload="handleTemporaryImageUpload" @original="clearTemporaryImage" @close="editorOpen = false" />
   </main>
 </template>
@@ -2637,4 +2624,27 @@ function slugify(value) {
 .social-network-layout[data-visual-themed=true][data-slide-type=closing] .social-points li{background:var(--theme-card-bg);border-color:var(--theme-card-border)}
 .social-network-layout[data-visual-themed=true] .social-next-cue{background:var(--theme-arrow-bg);border-color:var(--theme-arrow-border)}
 .social-network-layout[data-visual-themed=true] .social-card-glow{opacity:var(--theme-glow-opacity)}
+</style>
+
+<style scoped>
+/* Keep essential content away from search, reactions and captions in social apps.
+   Values are deliberately conservative; platform overlays vary by device. */
+.social-network-layout[data-social-margins=true]{--social-left:120px;--social-right:180px;--social-top:140px;--social-bottom:180px}
+.social-network-layout[data-social-margins=true][data-format=story]{--social-top:240px;--social-bottom:360px}
+.social-network-layout[data-social-margins=true][data-format=square]{--social-top:110px;--social-bottom:150px}
+.social-network-layout[data-social-margins=true] .network-header{top:var(--social-top);left:var(--social-left);right:var(--social-right);grid-template-columns:210px minmax(0,1fr) 80px;gap:20px}
+.social-network-layout[data-social-margins=true] .social-card-top{top:calc(var(--social-top) + 100px);left:var(--social-left);right:var(--social-right)}
+.social-network-layout[data-social-margins=true] .social-card-copy{left:var(--social-left);right:var(--social-right);bottom:calc(var(--social-bottom) + 150px)}
+.social-network-layout[data-social-margins=true] .social-card-copy h2,.social-network-layout[data-social-margins=true] .social-card-copy p,.social-network-layout[data-social-margins=true] .social-points{max-width:100%;overflow-wrap:anywhere}
+.social-network-layout[data-social-margins=true] .social-next-cue{right:var(--social-right);bottom:var(--social-bottom)}
+.social-network-layout[data-social-margins=true] .social-card-footer{left:var(--social-left);right:var(--social-right);bottom:var(--social-bottom)}
+.social-network-layout[data-social-margins=true] .network-closing-cta{left:var(--social-left);right:var(--social-right);bottom:var(--social-bottom)}
+.social-network-layout[data-social-margins=true] .social-brand-logo{left:calc(100% - var(--social-right) - var(--logo-size)/2);bottom:calc(var(--social-bottom) + 120px)}
+.social-network-layout[data-social-margins=true] .social-game-logo{left:46%;bottom:calc(var(--social-bottom) + 120px);max-width:calc(100% - var(--social-left) - var(--social-right))}
+.social-network-layout[data-social-margins=true] .social-score-independent{top:calc(var(--social-top) + 100px);right:var(--social-right)}
+
+</style>
+
+<style scoped>
+.social-margin-picker{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px;margin-bottom:16px;border:1px solid #a78bfa44;border-radius:14px;background:#12182b;color:#f1f5f9}.social-margin-picker button{border:1px solid #ffffff30;border-radius:10px;padding:10px 14px;background:#20263b;color:#f1f5f9;cursor:pointer;font-weight:700}.social-margin-picker button[aria-pressed=true]{background:#6d28d9;border-color:#c4b5fd;box-shadow:0 0 0 2px #a78bfa33}.social-margin-picker small{flex-basis:100%;color:#bdc6db;line-height:1.5}
 </style>

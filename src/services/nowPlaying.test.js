@@ -35,6 +35,17 @@ describe('OBS now-playing presentation', () => {
     expect(value.height).toBeGreaterThan(250)
     expect(nowPlayingSettings({ labelSize: 999 }).labelSize).toBe(24)
   })
+  it('keeps the chosen Xbox console separate from provider data and bounds cover size', () => {
+    const value = identity('xbox', { state: 'online', currentGame: game })
+    expect(nowPlayingCard([value], nowPlayingSettings({ xboxPlatform: 'Xbox Series' })).platformLabel).toBe('Xbox Series')
+    expect(nowPlayingSettings({ xboxPlatform: 'anything' }).xboxPlatform).toBe('Xbox')
+    const nintendo = identity('nintendo', { state: 'online', currentGame: game, platformLabel: 'Nintendo Switch 2' })
+    expect(nowPlayingCard([nintendo], nowPlayingSettings()).platformLabel).toBe('Nintendo Switch 2')
+    expect(nowPlayingCard([nintendo], nowPlayingSettings({ nintendoPlatform: 'Nintendo Switch' })).platformLabel).toBe('Nintendo Switch')
+    expect(nowPlayingCard([nintendo], nowPlayingSettings({ nintendoPlatform: 'Nintendo Switch 2' })).platformLabel).toBe('Nintendo Switch 2')
+    expect(nowPlayingSettings({ coverWidth: 120 }).height).toBeGreaterThan(nowPlayingSettings().height)
+    expect(nowPlayingSettings({ width: 320, coverWidth: 120 }).coverWidth).toBeLessThan(80)
+  })
   it('bounds animation settings and sizes even for malformed saved input', () => {
     const value = nowPlayingSettings({ visibleSeconds: 1000, repeatSeconds: 1, width: -30, height: Infinity, direction: 'bad', platform: 'steam' })
     expect(value).toMatchObject({ visibleSeconds: 60, repeatSeconds: 65, width: 320, height: 172, direction: 'left', platform: 'auto' })

@@ -578,7 +578,7 @@
              <div v-if="previewSection === -1" class="preview-introduction reading-prose" v-html="richText(post.content)"></div>
             <section v-for="(section, index) in previewSections" :key="index" class="preview-section">
               <h2>{{ section.title || `Seccion ${index + 1}` }}</h2>
-              <div v-if="section.image" class="preview-section-media">
+              <div v-if="section.image" class="preview-section-media" :class="{ video: isVideoMedia(mediaFor(section.image)) }">
                 <iframe
                   v-if="mediaFor(section.image).type === 'youtube'"
                   :src="mediaFor(section.image).embedUrl"

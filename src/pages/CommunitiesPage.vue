@@ -1,6 +1,7 @@
 <script setup>
+import { vSoftReveal } from '@/directives/softReveal'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '@/firebase'
@@ -11,6 +12,8 @@ defineProps({ embedded: Boolean })
 
 const communities = ref(peekPublicPage('communities-directory-display') || [])
 const search = ref('')
+const page = ref(1)
+watch(search, () => { page.value = 1 })
 const loading = ref(peekPublicPage('communities-directory-display') === undefined)
 const error = ref('')
 const fallbackImage = (event, source) => {
@@ -21,6 +24,9 @@ const fallbackImage = (event, source) => {
 }
 const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 const filtered = computed(() => communities.value.filter(item => normalize(`${item.name} ${item.description}`).includes(normalize(search.value.trim()))))
+const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / 10)))
+const visibleCommunities = computed(() => filtered.value.slice((page.value - 1) * 10, page.value * 10))
+watch(pageCount, count => { page.value = Math.min(page.value, count) })
 const load = async () => {
   loading.value = !communities.value.length
   error.value = ''
@@ -50,12 +56,13 @@ onMounted(load)
     <div v-if="error" role="alert"><p>{{ error }}</p><button type="button" @click="load">Reintentar</button></div>
     <template v-if="!loading && communities.length">
       <p class="result-count" role="status">{{ filtered.length }} comunidades</p>
-      <div class="community-grid">
-        <RouterLink v-for="item in filtered" :key="item.id" class="community-card" :to="{ path: '/comunidad', query: { id: item.id } }">
-          <img class="community-banner" :src="resolveAssetUrl(item.bannerUrl, defaultBannerUrl)" alt="" loading="lazy" @error="fallbackImage($event, defaultBannerUrl)" />
+      <div v-soft-reveal="'.community-card'" class="community-grid">
+        <RouterLink v-for="item in visibleCommunities" :key="page + ':' + item.id" class="community-card" :to="{ path: '/comunidad', query: { id: item.id } }">
+          <img class="community-banner" @load="$event.currentTarget.classList.add('ready')" :src="resolveAssetUrl(item.bannerUrl, defaultBannerUrl)" alt="" loading="lazy" @error="fallbackImage($event, defaultBannerUrl)" />
           <div class="community-card-body"><img class="community-icon" :src="resolveAssetUrl(item.iconUrl, defaultLogoUrl)" alt="" loading="lazy" /><div><h2>{{ item.name || 'Comunidad' }}</h2><span v-if="item.isOfficial" class="official">Oficial</span></div><p>{{ item.description || 'Descubre sus publicaciones y conversa con la comunidad.' }}</p><footer><span><i class="fas fa-users" aria-hidden="true"></i> {{ Number(item.membersCount || 0) }} miembros</span><strong>Explorar <i class="fas fa-arrow-right" aria-hidden="true"></i></strong></footer></div>
         </RouterLink>
       </div>
+      <nav v-if="pageCount > 1" class="community-pagination" aria-label="Páginas de comunidades"><button type="button" :disabled="page === 1" @click="page--">← Anterior</button><span aria-live="polite">{{ page }} / {{ pageCount }}</span><button type="button" :disabled="page === pageCount" @click="page++">Siguiente →</button></nav>
       <p v-if="!filtered.length" class="empty">No hay comunidades que coincidan con «{{ search }}».</p>
     </template>
   </component>
@@ -80,8 +87,6 @@ footer { grid-column: 1/-1; display: flex; flex-wrap: wrap; align-items: end; ju
 button { min-height: 44px; padding: 10px 16px; background: var(--accent); color: white; border-radius: 10px; }
 @media(max-width:1000px) { .community-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media(max-width:600px) { .communities-page { padding: var(--public-page-top-mobile,76px) 12px 100px; }.communities-page.embedded { padding: 24px 0; }.community-grid { grid-template-columns: minmax(0,1fr); }.community-banner { height: 140px; } }
-</style>
-
-<style scoped>
+.community-search:focus-within{border-color:#a78bfa88;box-shadow:0 0 0 3px #a78bfa12}.community-search input:focus,.community-search input:focus-visible{outline:none!important;box-shadow:none!important}.community-card{transition:border-color .2s,transform .2s}.community-card:hover{transform:translateY(-2px);border-color:#a78bfa77}.community-banner{opacity:0;transition:opacity .35s ease}.community-banner.ready{opacity:1}.community-pagination{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:24px;font-size:13px}.community-pagination button{font:inherit;font-size:12px;min-height:40px;padding:8px 12px;border:1px solid var(--border);background:var(--surface);color:inherit}.community-pagination button:disabled{opacity:.4;cursor:default}@media(prefers-reduced-motion:reduce){.community-card{animation:none;transition:none}.community-banner{transition:none}}
 .communities-page:not(.embedded){position:relative;isolation:isolate}
 </style>

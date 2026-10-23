@@ -4,6 +4,7 @@ import { earnedAchievements } from './achievementProgress'
 
 export const READ_REWARD_STARS = 10
 export const READ_REWARD_DELAY_MS = 30000
+export const GACHAPON_COST = 20
 export const ICON_COST = 25
 export const STARTER_ICON_LIMIT = 5
 
@@ -108,7 +109,9 @@ export const loadUploadedProfileIcons = async ({ includeHidden = false } = {}) =
     })
   })
 
-  return localIcons.filter(icon => icon.src && (includeHidden || (icon.visible && !icon.archived)))
+  const localIds = new Set(localIcons.map(icon => icon.id))
+  const uploadedIcons = [...savedById.values()].filter(icon => !localIds.has(icon.id))
+  return [...localIcons, ...uploadedIcons].filter(icon => icon.src && (includeHidden || (icon.visible && !icon.archived)))
 }
 
 export const updateProfileIcon = async ({ iconId, name, saga, cost, visible = true, sourcePath = '', src = '', special = false, effectColor = '#a855f7', rarity = 'normal' }) => {
@@ -258,6 +261,39 @@ export const redeemIcon = async ({ userId, iconId, expectedCost }) => {
     if (expectedCost !== undefined && cost !== Number(expectedCost)) throw new Error('price-changed')
     if (balance < cost) throw new Error('not-enough-stars')
     const result = { stars: balance - cost, unlockedIcons: [...currentUnlocked, iconId], redeemed: true }
+    transaction.update(userRef, { stars: result.stars, unlockedIcons: result.unlockedIcons, updatedAt: Date.now() })
+    return result
+  })
+}
+
+// Uses the existing entitlement transaction: balance and icon ownership commit together.
+// Excludes already owned icons, including when another tab won one concurrently.
+export async function drawProfileIcon({ userId, expectedCost }) {
+  if (!userId) throw new Error('missing-user')
+  const catalog = await loadUploadedProfileIcons()
+  return runTransaction(db, async transaction => {
+    const userRef = doc(db, 'users', userId)
+    const userSnap = await transaction.get(userRef)
+    const priceSnap = await transaction.get(doc(db, 'siteSettings', 'gachaponPrices'))
+    if (!userSnap.exists()) throw new Error('missing-user')
+    const user = userSnap.data()
+    const balance = Number(user.stars || 0)
+    const cost = priceSnap.exists() ? Number(priceSnap.data().normal) : GACHAPON_COST
+    if (!Number.isSafeInteger(cost) || cost < 1 || cost > 1000000 || !Number.isSafeInteger(balance) || balance < 0) throw new Error('invalid-cost')
+    if (expectedCost !== undefined && cost !== expectedCost) throw new Error('price-changed')
+    if (balance < cost) throw new Error('not-enough-stars')
+    const owned = user.unlockedIcons?.length ? user.unlockedIcons : ['kirby-01']
+    const pool = catalog.filter(icon => icon.visible !== false && !icon.archived && !owned.includes(icon.id))
+    if (!pool.length) throw new Error('collection-complete')
+    const limit = 2 ** 32 - (2 ** 32 % pool.length)
+    const random = new Uint32Array(1)
+    do { globalThis.crypto.getRandomValues(random) } while (random[0] >= limit)
+    const chosen = pool[random[0] % pool.length]
+    const current = await transaction.get(doc(db, 'profileIcons', chosen.id))
+    if (current.exists() && (current.data().visible === false || current.data().archived)) throw new Error('catalog-changed')
+    if (!current.exists() && !kirbyIcons.some(icon => icon.id === chosen.id)) throw new Error('catalog-changed')
+    const icon = current.exists() ? normalizeProfileIcon(chosen.id, { ...current.data(), ...(chosen.local ? { src: chosen.src } : {}) }) : chosen
+    const result = { icon, stars: balance - cost, unlockedIcons: [...owned, chosen.id], cost }
     transaction.update(userRef, { stars: result.stars, unlockedIcons: result.unlockedIcons, updatedAt: Date.now() })
     return result
   })

@@ -154,13 +154,11 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
 :global(body) {
   --galaxy-dock-bottom: 22px;
   --galaxy-dock-chat-right: 22px;
-  --galaxy-dock-music-right: 84px;
   --galaxy-dock-community-right: 146px;
   --galaxy-dock-panel-bottom: 88px;
 }
 
 :global(body.direct-chat-available) {
-  --galaxy-dock-music-right: 84px;
   --galaxy-dock-community-right: 146px;
 }
 
@@ -172,13 +170,11 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
   :global(body) {
     --galaxy-dock-bottom: calc(94px + var(--safe-bottom, 0px));
     --galaxy-dock-chat-right: max(18px, var(--safe-right, 0px));
-    --galaxy-dock-music-right: calc(max(18px, var(--safe-right, 0px)) + 68px);
     --galaxy-dock-community-right: calc(max(18px, var(--safe-right, 0px)) + 136px);
     --galaxy-dock-panel-bottom: calc(164px + var(--safe-bottom, 0px));
   }
 
   :global(body.direct-chat-available) {
-    --galaxy-dock-music-right: calc(max(18px, var(--safe-right, 0px)) + 68px);
     --galaxy-dock-community-right: calc(max(18px, var(--safe-right, 0px)) + 136px);
   }
 }
@@ -187,7 +183,6 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
   :global(body) {
     --galaxy-dock-bottom: calc(98px + var(--safe-bottom, 0px));
     --galaxy-dock-chat-right: max(14px, var(--safe-right, 0px));
-    --galaxy-dock-music-right: calc(max(14px, var(--safe-right, 0px)) + 62px);
     --galaxy-dock-community-right: calc(max(14px, var(--safe-right, 0px)) + 124px);
   }
 }

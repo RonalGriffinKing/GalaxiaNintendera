@@ -27,32 +27,6 @@ const props = defineProps({
 const emit = defineEmits(['open-community', 'toggle-favorite', 'open-explore'])
 
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
-const SOUNDCLOUD_API = 'https://w.soundcloud.com/player/api.js'
-const DEFAULT_VOLUME = 35
-const PLAYLISTS = {
-  nintendo: {
-    key: 'nintendo',
-    name: 'Nintendo Power!',
-    subtitle: 'Video Game Remixes',
-    url: 'https://soundcloud.com/videogameremixes/sets/nintendo-power',
-    cover: 'https://i1.sndcdn.com/artworks-000067594049-1pgk4k-t500x500.jpg'
-  },
-  zelda: {
-    key: 'zelda',
-    name: 'Lo-fi Hyrule',
-    subtitle: 'Aventuras de Hyrule',
-    url: 'https://soundcloud.com/videogameremixes/sets/the-legend-of-zelda-remixes',
-    cover: 'https://i1.sndcdn.com/artworks-000050849323-e0sbfw-t500x500.jpg'
-  },
-  mario: {
-    key: 'mario',
-    name: 'Remixes Mario',
-    subtitle: 'Clásicos del Reino Champiñón',
-    url: 'https://soundcloud.com/videogameremixes/sets/super-mario-remixes',
-    cover: 'https://i1.sndcdn.com/artworks-000054372707-urujxv-t500x500.jpg'
-  }
-}
-
 const router = useRouter()
 const open = ref(false)
 const activeTab = ref('communities')
@@ -71,14 +45,6 @@ const chatGiphyOpen = ref(false)
 const chatMenuOpen = ref(false)
 const pendingChatAction = ref('')
 const localClearedAtByChat = ref({})
-const isPlaying = ref(false)
-const currentPlaylist = ref(PLAYLISTS.nintendo)
-const currentTrackTitle = ref('Nintendo Power!')
-const currentTrackArtist = ref('Video Game Remixes')
-const currentTrackCover = ref(PLAYLISTS.nintendo.cover)
-const expandedMusic = ref(false)
-const miniPlayerVisible = ref(false)
-const iframeRef = ref(null)
 const chatMessagesRef = ref(null)
 const chatInputRef = ref(null)
 const hubContentRef = ref(null)
@@ -102,9 +68,7 @@ let unsubscribeFollowing = null
 let unsubscribeInbox = null
 let unsubscribeHubMessages = null
 let unsubscribeLiveMessages = null
-let soundcloudWidget = null
 let iconTimer = null
-let miniPlayerTimer = null
 let previousBodyOverflow = ''
 let previousHtmlOverflow = ''
 let hubResizeObserver = null
@@ -119,7 +83,6 @@ const hasLivePlayer = computed(() => Boolean(playerState.currentVideo?.id && pla
 const hubTabs = computed(() => [
   { key: 'communities', label: 'Comunidades' },
   { key: 'chat', label: 'Chat' },
-  { key: 'music', label: 'Música' },
   ...(hasLivePlayer.value ? [{ key: 'live', label: 'Live' }] : [])
 ])
 const activeHubTabIndex = computed(() => Math.max(0, hubTabs.value.findIndex(tab => tab.key === activeTab.value)))
@@ -193,15 +156,10 @@ const iconCycle = computed(() => {
   const icons = [
     { key: 'communities', icon: 'fas fa-users', label: 'Comunidades' },
     { key: 'chat', icon: 'fas fa-comment-dots', label: 'Chat' },
-    { key: 'music', icon: 'fas fa-music', label: 'Música' },
     ...(hasLivePlayer.value ? [{ key: 'live', icon: 'fas fa-circle-play', label: 'Live' }] : [])
   ]
   return icons[iconIndex.value % icons.length]
 })
-
-const embedSrc = computed(() => (
-  `https://w.soundcloud.com/player/?url=${encodeURIComponent(currentPlaylist.value.url)}&color=%23a855f7&auto_play=false&hide_related=false&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false`
-))
 
 const formatMembers = (value) => {
   const count = Number(value || 0)
@@ -270,13 +228,12 @@ const messageReadLabel = (message) => {
 }
 
 const openHub = (tab = iconCycle.value.key) => {
-  activeTab.value = ['communities', 'chat', 'music', 'live'].includes(tab) ? tab : 'communities'
+  activeTab.value = ['communities', 'chat', 'live'].includes(tab) ? tab : 'communities'
   open.value = true
 }
 
 const closeHub = () => {
   open.value = false
-  expandedMusic.value = false
   activeChatUser.value = null
   rawHubMessages.value = []
   chatDraft.value = ''
@@ -573,112 +530,6 @@ const handleLiveChatScroll = () => {
   if (liveChatPinnedToBottom.value) liveUnreadCount.value = 0
 }
 
-const loadSoundCloudApi = () => new Promise((resolve) => {
-  if (window.SC?.Widget) {
-    resolve()
-    return
-  }
-  const existing = document.querySelector(`script[src="${SOUNDCLOUD_API}"]`)
-  if (existing) {
-    existing.addEventListener('load', resolve, { once: true })
-    return
-  }
-  const script = document.createElement('script')
-  script.src = SOUNDCLOUD_API
-  script.onload = resolve
-  document.body.appendChild(script)
-})
-
-const showMiniPlayerPreview = () => {
-  miniPlayerVisible.value = true
-  window.clearTimeout(miniPlayerTimer)
-  miniPlayerTimer = window.setTimeout(() => {
-    miniPlayerVisible.value = false
-  }, 5200)
-}
-
-const setupWidget = async () => {
-  await loadSoundCloudApi()
-  await nextTick()
-  if (!iframeRef.value || !window.SC?.Widget) return
-  soundcloudWidget = window.SC.Widget(iframeRef.value)
-  soundcloudWidget.bind(window.SC.Widget.Events.READY, () => {
-    soundcloudWidget.setVolume(DEFAULT_VOLUME)
-    const updateCurrentTrack = () => {
-      soundcloudWidget.getCurrentSound((sound) => {
-        if (!sound) return
-        currentTrackTitle.value = sound.title || currentPlaylist.value.name
-        currentTrackArtist.value = sound.user?.username || currentPlaylist.value.subtitle
-        currentTrackCover.value = sound.artwork_url?.replace('-large.', '-t500x500.') || currentPlaylist.value.cover || officialLogo
-      })
-    }
-    soundcloudWidget.bind(window.SC.Widget.Events.PLAY, () => {
-      isPlaying.value = true
-      showMiniPlayerPreview()
-      updateCurrentTrack()
-    })
-    soundcloudWidget.bind(window.SC.Widget.Events.PAUSE, () => {
-      isPlaying.value = false
-      miniPlayerVisible.value = false
-    })
-    soundcloudWidget.bind(window.SC.Widget.Events.FINISH, () => {
-      isPlaying.value = false
-      miniPlayerVisible.value = false
-      updateCurrentTrack()
-    })
-    soundcloudWidget.bind(window.SC.Widget.Events.PLAY_PROGRESS, updateCurrentTrack)
-    updateCurrentTrack()
-  })
-}
-
-const togglePlay = () => {
-  if (!soundcloudWidget) return
-  if (isPlaying.value) soundcloudWidget.pause()
-  else soundcloudWidget.play()
-}
-
-const stopMusicPlayback = () => {
-  soundcloudWidget?.pause?.()
-  isPlaying.value = false
-  miniPlayerVisible.value = false
-}
-
-const nextTrack = () => soundcloudWidget?.next?.()
-const previousTrack = () => soundcloudWidget?.prev?.()
-
-const applyPlaylist = (playlist) => {
-  if (!playlist?.url) return
-  currentPlaylist.value = playlist
-  currentTrackTitle.value = playlist.name
-  currentTrackArtist.value = playlist.subtitle
-  currentTrackCover.value = playlist.cover || officialLogo
-  showMiniPlayerPreview()
-  soundcloudWidget?.load?.(playlist.url, {
-    auto_play: true,
-    show_comments: false,
-    show_user: true,
-    show_reposts: false,
-    visual: false
-  })
-  window.setTimeout(() => {
-    soundcloudWidget?.setVolume?.(playlist.volume || DEFAULT_VOLUME)
-    soundcloudWidget?.play?.()
-  }, 360)
-}
-
-const handleCommunityMusic = (event) => {
-  const playlistUrl = String(event.detail?.playlistUrl || '').trim()
-  if (!playlistUrl) return
-  applyPlaylist({
-    key: `community-${event.detail?.id || 'selected'}`,
-    name: `Playlist ${event.detail?.name || 'Comunidad'}`,
-    subtitle: 'Música de la comunidad',
-    url: playlistUrl,
-    cover: event.detail?.iconUrl || officialLogo,
-    volume: Number(event.detail?.volume || DEFAULT_VOLUME)
-  })
-}
-
 const formatLiveTime = (seconds) => {
   const safe = Math.max(0, Math.floor(Number(seconds || 0)))
   const minutes = Math.floor(safe / 60)
@@ -717,7 +568,6 @@ const syncLivePlayerAfterLoad = () => {
 
 const openLiveTheater = () => {
   if (!playerState.currentVideo?.id) return
-  stopMusicPlayback()
   postLiveCommand('pauseVideo')
   closeHub()
   window.dispatchEvent(new CustomEvent('galaxia-live-return-community', {
@@ -728,7 +578,6 @@ const openLiveTheater = () => {
 
 const returnToLiveCommunity = () => {
   if (!playerState.currentVideo?.id) return
-  stopMusicPlayback()
   postLiveCommand('pauseVideo')
   closeHub()
   window.dispatchEvent(new CustomEvent('galaxia-live-return-community'))
@@ -818,7 +667,6 @@ const handleYoutubePlayerMessage = (event) => {
   }
   const state = payload.info?.playerState
   if (state === 1) {
-    stopMusicPlayback()
     setPlaybackStatus('playing')
   }
   if (state === 2) setPlaybackStatus('paused')
@@ -924,7 +772,7 @@ watch(open, (isOpen) => {
 })
 
 watch(chatDraft, resizeChatInput)
-watch([activeTab, expandedMusic, activeChatUser, hasLivePlayer], measureHubContent)
+watch([activeTab, activeChatUser, hasLivePlayer], measureHubContent)
 
 watch(activeChatUser, (user) => {
   showJumpToBottom.value = false
@@ -952,9 +800,6 @@ onMounted(() => {
   iconTimer = window.setInterval(() => {
     iconIndex.value += 1
   }, 3200)
-  setupWidget()
-  window.addEventListener('community-music-context', handleCommunityMusic)
-  window.addEventListener('galaxy-media-stop', stopMusicPlayback)
   window.addEventListener('open-galaxia-hub-live', handleOpenLiveHub)
   window.addEventListener('message', handleYoutubePlayerMessage)
   window.visualViewport?.addEventListener('resize', updateKeyboardOffset)
@@ -979,9 +824,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.clearInterval(iconTimer)
-  window.clearTimeout(miniPlayerTimer)
-  window.removeEventListener('community-music-context', handleCommunityMusic)
-  window.removeEventListener('galaxy-media-stop', stopMusicPlayback)
   window.removeEventListener('open-galaxia-hub-live', handleOpenLiveHub)
   window.removeEventListener('message', handleYoutubePlayerMessage)
   window.visualViewport?.removeEventListener('resize', updateKeyboardOffset)
@@ -1005,26 +847,13 @@ onUnmounted(() => {
 
 <template>
   <div class="galaxia-hub-root" :class="{ open }" :style="{ '--hub-keyboard-offset': `${keyboardOffset}px` }">
-    <iframe ref="iframeRef" class="hub-audio-frame" :src="embedSrc" title="Galaxia música" allow="autoplay"></iframe>
-
-    <button class="galaxia-hub-orb" :class="[`mode-${iconCycle.key}`, { playing: isPlaying, unread: unreadCount }]" type="button" @click="openHub()">
+    <button class="galaxia-hub-orb" :class="[`mode-${iconCycle.key}`, { unread: unreadCount }]" type="button" @click="openHub()">
       <span class="hub-orb-glow"></span>
       <Transition name="hub-icon" mode="out-in">
         <i :key="iconCycle.key" :class="iconCycle.icon"></i>
       </Transition>
       <strong v-if="unreadCount">{{ unreadCount }}</strong>
     </button>
-
-    <Transition name="hub-mini-player">
-    <button v-if="isPlaying && miniPlayerVisible && !open" class="hub-mini-player" type="button" @click="openHub('music')">
-      <img :src="currentTrackCover || currentPlaylist.cover || officialLogo" alt="" @error="fallbackImage" />
-      <span>
-        <b>{{ currentTrackTitle }}</b>
-        <small>SoundCloud · {{ currentTrackArtist }}</small>
-      </span>
-      <i class="fas fa-pause"></i>
-    </button>
-    </Transition>
 
     <Transition name="hub-backdrop">
       <button v-if="open" class="hub-backdrop" type="button" aria-label="Cerrar Galaxia Hub" @click="closeHub"></button>
@@ -1037,7 +866,6 @@ onUnmounted(() => {
           'hub-hidden': !open,
           'communities-active': activeTab === 'communities',
           'chat-active': activeTab === 'chat' && activeChatUser,
-          'music-active': activeTab === 'music',
           'live-active': activeTab === 'live',
           'keyboard-open': keyboardOpen
         }"
@@ -1244,35 +1072,6 @@ onUnmounted(() => {
             </div>
           </section>
 
-          <section v-else-if="activeTab === 'music'" class="hub-section music">
-            <button class="hub-now-playing" type="button" @click="expandedMusic = !expandedMusic">
-              <img :src="currentTrackCover || currentPlaylist.cover || officialLogo" alt="" @error="fallbackImage" />
-              <span>
-                <strong>{{ currentTrackTitle }}</strong>
-                <small>{{ currentTrackArtist }}</small>
-                <small class="hub-source">Sonando desde SoundCloud</small>
-              </span>
-              <i class="fas fa-chevron-right"></i>
-            </button>
-            <div class="hub-progress"><span :class="{ playing: isPlaying }"></span></div>
-            <div class="hub-player-controls">
-              <button type="button" @click="previousTrack"><i class="fas fa-backward-step"></i></button>
-              <button class="primary" type="button" @click="togglePlay"><i :class="isPlaying ? 'fas fa-pause' : 'fas fa-play'"></i></button>
-              <button type="button" @click="nextTrack"><i class="fas fa-forward-step"></i></button>
-              <button type="button" @click="expandedMusic = !expandedMusic"><i class="fas fa-list"></i></button>
-            </div>
-            <div v-if="expandedMusic" class="hub-playlists">
-              <button v-for="playlist in PLAYLISTS" :key="playlist.key" type="button" @click="applyPlaylist(playlist)">
-                <img :src="playlist.cover || officialLogo" alt="" @error="fallbackImage" />
-                <span>
-                  <strong>{{ playlist.name }}</strong>
-                  <small>{{ playlist.subtitle }}</small>
-                </span>
-                <i class="fas fa-chevron-right"></i>
-              </button>
-            </div>
-          </section>
-
           <section class="hub-section live" :class="{ 'tab-hidden': activeTab !== 'live' }">
             <template v-if="hasLivePlayer">
               <div class="hub-live-player">
@@ -1377,18 +1176,9 @@ onUnmounted(() => {
   --hub-orb-size: 58px;
   --hub-orb-bottom: 34px;
   --hub-orb-right: 28px;
-  --hub-mini-gap: 14px;
   pointer-events: none;
   position: fixed;
   z-index: 520;
-}
-
-.hub-audio-frame {
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-  position: fixed;
-  width: 1px;
 }
 
 .galaxia-hub-orb {
@@ -1442,94 +1232,17 @@ onUnmounted(() => {
   z-index: 3;
 }
 
-.hub-mini-player {
-  align-items: center;
-  background: rgba(8, 12, 30, 0.82);
-  backdrop-filter: blur(18px);
-  border: 1px solid rgba(168, 85, 247, 0.32);
-  border-radius: 999px;
-  bottom: var(--hub-orb-bottom);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.32), 0 0 20px rgba(168, 85, 247, 0.18);
-  color: #ffffff;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: calc(var(--hub-orb-size) - 18px) minmax(0, 1fr) 32px;
-  height: var(--hub-orb-size);
-  max-width: min(310px, calc(100vw - 82px));
-  min-height: var(--hub-orb-size);
-  padding: 8px;
-  pointer-events: auto;
-  position: fixed;
-  right: calc(var(--hub-orb-right) + var(--hub-orb-size) + var(--hub-mini-gap));
-  transform-origin: right center;
-  transition:
-    opacity var(--motion-normal) ease,
-    transform var(--motion-normal) var(--ease-standard),
-    border-color var(--motion-fast) ease,
-    box-shadow var(--motion-fast) ease;
-  width: 260px;
-}
-
-.hub-mini-player:hover {
-  border-color: rgba(216, 180, 254, 0.42);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.34), 0 0 24px rgba(168, 85, 247, 0.24);
-}
-
-.hub-mini-player img,
-.hub-now-playing img,
-.hub-playlists img {
-  border-radius: 12px;
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.hub-mini-player span,
-.hub-now-playing span,
-.hub-list span,
-.hub-playlists span {
+.hub-list span {
   min-width: 0;
   text-align: left;
 }
 
-.hub-mini-player b,
-.hub-mini-player small,
 .hub-list strong,
-.hub-list small,
-.hub-now-playing strong,
-.hub-now-playing small,
-.hub-playlists strong,
-.hub-playlists small {
+.hub-list small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.hub-mini-player b {
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.hub-mini-player small {
-  color: #aeb8d3;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.hub-mini-player-enter-active,
-.hub-mini-player-leave-active {
-  transition:
-    opacity var(--motion-normal) ease,
-    transform var(--motion-normal) var(--ease-standard),
-    filter var(--motion-normal) ease;
-}
-
-.hub-mini-player-enter-from,
-.hub-mini-player-leave-to {
-  filter: blur(4px);
-  opacity: 0;
-  transform: translateX(10px) scale(0.98);
 }
 
 .hub-backdrop {
@@ -2048,9 +1761,7 @@ onUnmounted(() => {
 }
 
 .hub-community-grid button:hover,
-.hub-list button:hover,
-.hub-now-playing:hover,
-.hub-playlists button:hover {
+.hub-list button:hover {
   background: rgba(255, 255, 255, 0.075);
   border-color: rgba(192, 132, 252, 0.28);
   transform: translateY(-1px);
@@ -2084,9 +1795,7 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.hub-list button,
-.hub-now-playing,
-.hub-playlists button {
+.hub-list button {
   align-items: center;
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2475,79 +2184,9 @@ onUnmounted(() => {
   font-size: 24px;
 }
 
-.hub-now-playing {
-  grid-template-columns: 64px minmax(0, 1fr) 24px;
-  min-height: 82px;
-}
-
-.hub-source {
-  color: #c084fc !important;
-  margin-top: 3px;
-  text-transform: uppercase;
-}
-
-.hub-progress {
-  background: rgba(148, 163, 184, 0.18);
-  border-radius: 999px;
-  height: 4px;
-  overflow: hidden;
-}
-
-.hub-progress span {
-  background: linear-gradient(90deg, #a855f7, #ec4899);
-  display: block;
-  height: 100%;
-  width: 38%;
-}
-
-.hub-progress span.playing {
-  animation: musicProgress 9s linear infinite;
-}
-
-.hub-player-controls {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(4, 1fr);
-}
-
-.hub-player-controls button {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  color: #ffffff;
-  font-size: var(--icon-size-md);
-  min-height: 42px;
-  transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, transform var(--motion-fast) var(--ease-standard);
-}
-
-.hub-player-controls .primary {
-  background: linear-gradient(135deg, #7c3aed, #c026d3);
-  box-shadow: 0 12px 26px rgba(139, 92, 246, 0.24);
-}
-
-.hub-player-controls button:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(192, 132, 252, 0.28);
-  transform: translateY(-1px);
-}
-
-.hub-player-controls button:active {
-  transform: scale(0.97);
-}
-
-.hub-playlists {
-  display: grid;
-  gap: 8px;
-}
-
 @keyframes hubBorderFlow {
   0%, 100% { filter: hue-rotate(0deg) saturate(1); }
   50% { filter: hue-rotate(28deg) saturate(1.25); }
-}
-
-@keyframes musicProgress {
-  0% { width: 16%; }
-  100% { width: 82%; }
 }
 
 .hub-icon-enter-active,
@@ -2584,16 +2223,10 @@ onUnmounted(() => {
   .galaxia-hub-root {
     --hub-orb-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     --hub-orb-right: max(14px, env(safe-area-inset-right, 0px));
-    --hub-mini-gap: 10px;
   }
 
   .galaxia-hub-orb {
     bottom: var(--hub-orb-bottom);
-    right: var(--hub-orb-right);
-  }
-
-  .hub-mini-player {
-    bottom: calc(var(--hub-orb-bottom) + var(--hub-orb-size) + var(--hub-mini-gap));
     right: var(--hub-orb-right);
   }
 

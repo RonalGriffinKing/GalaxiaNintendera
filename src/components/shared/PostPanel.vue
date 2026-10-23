@@ -1,5 +1,5 @@
 <template>
-  <div class="post-manager">
+  <div v-soft-reveal="'.post-table tbody > tr,.post-mobile-card'" class="post-manager">
     <SitePagesPanel
       v-if="showSitePages"
       :user-role="userRole"
@@ -261,6 +261,7 @@
 </template>
 
 <script setup>
+import { vSoftReveal } from '@/directives/softReveal'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

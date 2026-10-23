@@ -1,4 +1,5 @@
 <script setup>
+import { vSoftReveal } from '@/directives/softReveal'
 import { ref } from 'vue'
 import EventCountdown from './EventCountdown.vue'
 import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
@@ -37,7 +38,7 @@ const run = (eventName) => {
 </script>
 
 <template>
-  <article class="event-news-card" :class="{ options: optionsOpen }">
+  <article v-soft-reveal class="event-news-card" :class="{ options: optionsOpen }">
     <img :src="resolveAssetUrl(event.backgroundUrl || event.imageUrl, defaultBannerUrl)" alt="" />
     <div class="event-news-shade"></div>
 

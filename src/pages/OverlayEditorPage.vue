@@ -112,7 +112,7 @@
             <button @click="alignAxis('vertical')"><i class="fas fa-arrows-up-down-to-line"></i> Centrar vertical</button>
           </div>
         </div>
-        <WidgetEditor :widget="selected" />
+        <WidgetEditor :widget="selected" :persist="saveOverlay" />
       </div>
 
       <div v-else class="text-gray-400 text-sm">

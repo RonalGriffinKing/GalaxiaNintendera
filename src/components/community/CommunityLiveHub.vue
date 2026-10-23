@@ -1463,8 +1463,6 @@ const returnToCommunityPlayer = () => {
 @media (max-width: 720px) {
   :global(body.community-player-expanded .direct-chat-fab),
   :global(body.community-player-expanded .direct-chat-panel),
-  :global(body.community-player-expanded .music-bubble-fab),
-  :global(body.community-player-expanded .music-bubble-panel),
   :global(body.community-player-expanded .community-rail-nav),
   :global(body.community-player-expanded .community-switcher-shell),
   :global(body.community-player-expanded .community-quick-shell),

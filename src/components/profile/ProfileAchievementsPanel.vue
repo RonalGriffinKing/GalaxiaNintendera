@@ -1,4 +1,5 @@
 <script setup>
+import { vSoftReveal } from '@/directives/softReveal'
 import { computed, ref } from 'vue'
 const draft = defineModel('draft', {
   type: Object,
@@ -136,7 +137,7 @@ const emit = defineEmits([
           </div>
         </form>
 
-        <div class="achievement-roadmap-grid">
+        <div v-soft-reveal="'.achievement-roadmap-card'" class="achievement-roadmap-grid">
           <article
             v-for="achievement in filteredRoadmap"
             :key="achievement.id"

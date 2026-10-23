@@ -1,0 +1,15 @@
+{
+  "title": "Los Pitufos: Dreams | En directo",
+  "description": "Nos reunimos para comentar las novedades.",
+  "type": "Direct",
+  "fecha": "2026-11-01",
+  "hora": "21:00",
+  "durationMinutes": 60,
+  "url": "https://www.youtube.com/",
+  "backgroundUrl": "",
+  "communityIds": [],
+  "game": {
+    "nameEs": "Los Pitufos: Dreams",
+    "nameEn": "The Smurfs: Dreams"
+  }
+}

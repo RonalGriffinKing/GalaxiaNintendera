@@ -1,5 +1,5 @@
 <template>
-  <div class="relative min-h-full">
+  <div v-soft-reveal="'.overlay-card'" class="relative min-h-full">
     <div class="panel-header">
       <div>
         <h1 class="panel-title">Gestion de Overlays</h1>
@@ -174,6 +174,7 @@
 </template>
 
 <script setup>
+import { vSoftReveal } from '@/directives/softReveal'
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, getDocs, deleteDoc, doc, setDoc, updateDoc } from "firebase/firestore"

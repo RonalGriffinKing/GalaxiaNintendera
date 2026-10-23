@@ -1,4 +1,15 @@
 /* Shared by the published reader and the editor preview. */
+/* Article photos keep their full composition, including portrait product shots. */
+.post-section-media:not(.video),
+.post-live-preview .preview-section-media:not(.video) {
+ display:flex;justify-content:center;align-items:center;
+ aspect-ratio:auto;height:auto;max-height:none;background:transparent;
+}
+.post-section-media:not(.video) img,
+.post-live-preview .preview-section-media:not(.video) img {
+ display:block;width:auto;height:auto;max-width:100%;max-height:640px;
+ margin-inline:auto;object-fit:contain;border-radius:inherit;
+}
 .editorial-page .reading-prose,
 .post-live-preview .reading-prose {
  width:100%;max-width:100%;margin-inline:0;box-sizing:border-box;

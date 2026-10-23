@@ -1,6 +1,10 @@
 ﻿import { apiUrl } from './appEnvironment'
 import { nxapiPresenceId, nxapiProfileId, NXAPI_CACHE_MS } from './nxapiPresence'
 const cache = new Map()
+export function clearNintendoSourceCache(url, source = 'presence') {
+  const id = source === 'profile' ? nxapiProfileId(url) : nxapiPresenceId(url)
+  cache.delete(source + ':' + id)
+}
 export function fetchNintendoSource(url, source = 'presence') {
   if (!['presence','profile'].includes(source)) throw new Error('Fuente de nxapi no válida.')
   const id = source === 'profile' ? nxapiProfileId(url) : nxapiPresenceId(url)

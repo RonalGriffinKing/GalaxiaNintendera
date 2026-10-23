@@ -1,4 +1,5 @@
 <script setup>
+import { compactPostCategory } from '@/services/postCategoryDisplay'
 import { computed } from 'vue'
 import { useVisualThemes } from '@/composables/useVisualThemes'
 import { postWebThemeCss } from '@/services/visualThemes'
@@ -74,7 +75,7 @@ const {theme:visualTheme,enabled:themeEnabled}=useVisualThemes(()=>props.post,{p
 const visualCss=computed(()=>themeEnabled.value.web?postWebThemeCss(props.post,visualTheme.value):{})
 
 const coverMedia = computed(() => mediaFromUrl(props.post.image))
-const categoryLabel = computed(() => props.post.category || props.post.categories?.[0] || 'General')
+const categoryLabel = computed(() => compactPostCategory(props.post))
 const authorName = computed(() => props.post.authorName || props.authorProfile?.name || 'Redactor')
 const badgeLabel = computed(() => props.isAnalysis ? 'Analisis Premium' : categoryLabel.value)
 const gameDetails = computed(() => props.post.game || {})

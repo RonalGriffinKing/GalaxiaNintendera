@@ -31,7 +31,7 @@ watch(() => [props.src, props.fallback], () => {
     <span class="profile-avatar-ui-frame">
       <span class="profile-avatar-ui-clip">
         <span v-if="loading" class="profile-avatar-ui-loader" aria-hidden="true">
-          <i></i><i></i><i></i>
+          <span></span>
         </span>
         <img
           v-else-if="imageSrc"
@@ -61,34 +61,6 @@ watch(() => [props.src, props.fallback], () => {
 }
 
 .profile-avatar-ui.special::before,
-.profile-avatar-ui.special::after {
-  border-radius: 999px;
-  content: '';
-  pointer-events: none;
-  position: absolute;
-}
-
-.profile-avatar-ui.special::before {
-  animation: profileAvatarHalo 2.9s ease-in-out infinite;
-  background: radial-gradient(circle, color-mix(in srgb, var(--avatar-effect), transparent 52%) 0 42%, transparent 72%);
-  filter: blur(calc(var(--avatar-size) * 0.08));
-  inset: calc(var(--avatar-size) * -0.08);
-  opacity: 0.88;
-}
-
-.profile-avatar-ui.special::after {
-  animation: profileAvatarSpark 2.7s linear infinite;
-  background:
-    radial-gradient(circle, #ffffff 0 16%, transparent 18%),
-    radial-gradient(circle, var(--avatar-effect) 0 18%, transparent 20%);
-  background-size:
-    calc(var(--avatar-size) * 0.22) calc(var(--avatar-size) * 0.22),
-    calc(var(--avatar-size) * 0.31) calc(var(--avatar-size) * 0.31);
-  inset: calc(var(--avatar-border) * -3.4);
-  opacity: 0.82;
-  z-index: 0;
-}
-
 .profile-avatar-ui-frame {
   align-items: center;
   background:
@@ -151,28 +123,7 @@ watch(() => [props.src, props.fallback], () => {
   z-index: 1;
 }
 
-.profile-avatar-ui-loader {
-  animation: profileAvatarLoadingSpin 0.9s linear infinite;
-  display: flex;
-  height: 52%;
-  position: relative;
-  width: 52%;
-}
-
-.profile-avatar-ui-loader i {
-  left: 40%;
-  position: absolute;
-  top: 0;
-  background: #a855f7;
-  border-radius: 999px;
-  box-shadow: 0 0 7px rgba(168, 85, 247, 0.72);
-  height: 20%;
-  width: 20%;
-}
-
-.profile-avatar-ui-loader i:nth-child(2) { left: 6%; top: 66%; }
-.profile-avatar-ui-loader i:nth-child(3) { left: 74%; top: 66%; }
-
+.profile-avatar-ui-loader{position:absolute;inset:0;overflow:hidden;border-radius:inherit;background:#251449}.profile-avatar-ui-loader span{position:absolute;inset:-30%;background:radial-gradient(ellipse at 25% 65%,#c084fc,transparent 58%),radial-gradient(ellipse at 75% 30%,#22d3ee,transparent 60%),radial-gradient(ellipse at 65% 80%,#ec4899,transparent 60%);background-size:140% 140%;animation:profileAvatarAurora 1.8s ease-in-out infinite alternate}.profile-avatar-ui img{animation:profileAvatarReveal .25s ease-out}
 .profile-avatar-ui-role {
   background: rgba(7, 11, 28, 0.96);
   border: 2px solid #ffffff;
@@ -195,12 +146,6 @@ watch(() => [props.src, props.fallback], () => {
   z-index: 3;
 }
 
-@keyframes profileAvatarSpark {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @keyframes profileAvatarHalo {
   0%,
   100% {
@@ -214,12 +159,11 @@ watch(() => [props.src, props.fallback], () => {
   }
 }
 
-@keyframes profileAvatarLoadingSpin {
-  to { transform: rotate(360deg); }
-}
+@keyframes profileAvatarAurora { from { transform:translate(-5%,3%);opacity:.65 } to { transform:translate(5%,-3%);opacity:1 } }
+@keyframes profileAvatarReveal { from { opacity:0 } to { opacity:1 } }
 
 @media (prefers-reduced-motion: reduce) {
-  .profile-avatar-ui-loader {
+  .profile-avatar-ui-loader span,.profile-avatar-ui img,.profile-avatar-ui.special::before {
     animation: none;
   }
 }

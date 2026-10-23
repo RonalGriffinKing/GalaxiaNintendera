@@ -42,3 +42,9 @@ El encabezado de "Mi universo gamer" permite cambiar entre los sistemas vinculad
 Diagnostico temporal: Editar perfil > Conectar sistemas > Xbox > Diagnostico temporal de portadas. El modo uid + diagnostic=images exige una sesion Firebase cuyo UID coincida con el perfil y devuelve dos muestras de objetos de titulo originales (con/sin displayImage HTTPS), sin cabeceras ni campos de credenciales. Reutiliza la cache de historial de cinco minutos. No modifica Firebase.
 
 Xbox muestra ahora Logros por juego en lugar de Mas jugados: hasta tres resumenes por ultima actividad, portadas, logros desbloqueados, gamerscore y porcentaje publicado por Xbox. Los totales cero, ausentes o incoherentes se tratan como desconocidos; solo se calculan restantes con totales validos. gameAchievements es independiente de achievements y de las recompensas de Galaxia. No se realizan consultas adicionales al proveedor. El fondo del juego destacado se extiende a toda la tarjeta con blur y degradado continuo.
+
+## Prueba local y OBS
+
+Configura OPENXBL_API_KEY en .env.local (ignorado por Git) y reinicia npm run dev. Vite carga la clave solo en el servidor del proxy local, sin prefijo VITE_ ni exposicion al navegador. .env.example contiene un campo vacio. La clave no debe compartirse por chat ni pegarse como gamertag.
+
+Abre el perfil desde localhost, vincula Xbox y guarda el widget Jugando ahora en el editor de overlays. Copia el enlace desde la web local y usalo en OBS, conservando el puerto indicado por Vite y manteniendo npm run dev abierto. El enlace publico sigue necesitando la variable de Netlify. Firebase sigue siendo el proyecto actual: el servidor local no crea un entorno de datos aislado.

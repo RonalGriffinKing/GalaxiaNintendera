@@ -1,4 +1,7 @@
 <script setup>
+import { isEventActive } from '@/services/eventInvitation'
+import { useEventClock } from '@/composables/useEventClock'
+import EventsBulkImport from '@/components/events/EventsBulkImport.vue'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -15,6 +18,7 @@ import EventsTabs from '@/components/events/EventsTabs.vue'
 import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
 import { peekPublicPage, storePublicPage } from '@/services/publicPageCache'
 
+const eventNow = useEventClock()
 const route = useRoute()
 const router = useRouter()
 
@@ -25,6 +29,7 @@ const currentRole = ref('user')
 const eventsReady = ref(false)
 const activeTab = ref('calendar')
 const detailEvent = ref(null)
+const bulkOpen = ref(false)
 const editorOpen = ref(false)
 const editingEvent = ref(null)
 const calendarPanelOpen = ref(false)
@@ -36,7 +41,7 @@ let previousBodyOverflow = ''
 let previousHtmlOverflow = ''
 
 const isAdmin = computed(() => currentRole.value === 'admin')
-const upcomingEvents = computed(() => events.value.filter(event => event.startsAt >= Date.now()).slice(0, 20))
+const upcomingEvents = computed(() => events.value.filter(event => isEventActive(event,eventNow.value)).slice(0, 20))
 const visibleEvents = computed(() => {
   if (activeTab.value === 'featured') return upcomingEvents.value.filter(event => event.featured || ['Live', 'Direct', 'Torneo'].includes(event.type))
   return upcomingEvents.value
@@ -127,9 +132,14 @@ const shareEvent = async (event) => {
   await navigator.clipboard?.writeText(url)
 }
 
+const openEventsCarousel = (ids=[]) => {
+ if(!isAdmin.value)return
+ bulkOpen.value=false
+ router.push({path:'/admin/event-share/agenda',query:ids.length?{ids:ids.join(',')}:{}})
+}
 const openSocialImage = (event) => {
   if (!isAdmin.value || !event?.id) return
-  router.push(`/admin/post-share/${event.id}?type=event`)
+  router.push(`/admin/event-share/${event.id}`)
 }
 
 const lockCalendarScroll = () => {
@@ -204,7 +214,7 @@ onUnmounted(() => {
     <GalaxyAtmosphere />
     <div class="events-page-inner">
       <FloatingBackButton />
-      <EventsHero :can-create="isAdmin" @create="openEditor()" />
+      <EventsHero :can-create="isAdmin" @create="openEditor()" @bulk="bulkOpen=true" @carousel="openEventsCarousel()" />
       <EventsTabs v-model="activeTab" />
 
       <section class="events-premium-layout">
@@ -272,6 +282,7 @@ onUnmounted(() => {
       @delete="deleteEvent(detailEvent)"
     />
 
+    <EventsBulkImport v-if="bulkOpen && isAdmin" :communities="communities" @close="bulkOpen=false" @carousel="openEventsCarousel" />
     <EventEditorModal
       v-if="editorOpen"
       :event="editingEvent"

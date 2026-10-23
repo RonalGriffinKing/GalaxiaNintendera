@@ -1,4 +1,5 @@
 <script setup>
+import { vSoftReveal } from '@/directives/softReveal'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -188,7 +189,7 @@ onMounted(() => loadPages({ signal: true }))
 </script>
 
 <template>
-  <section class="site-pages-panel">
+  <section v-soft-reveal="'.site-page-card'" class="site-pages-panel">
     <header v-if="!embedded" class="site-pages-head">
       <div>
         <span>CMS Galaxia</span>

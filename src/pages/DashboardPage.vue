@@ -485,4 +485,7 @@ onMounted(loadRole)
     justify-content: center;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+ .manager-fade-enter-active,.manager-fade-leave-active,.content-loading-fade-enter-active,.content-loading-fade-leave-active { transition:none; }
+}
 </style>

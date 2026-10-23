@@ -3,6 +3,7 @@
     v-if="component"
     :is="component"
     :widget="widget"
+    v-bind="widget.type === 'nowPlaying' ? { persist } : {}"
   />
 </template>
 
@@ -15,7 +16,8 @@ import TimerEditor from '@/components/widgets/editors/TimerEditor.vue'
 import NowPlayingEditor from '@/components/widgets/editors/NowPlayingEditor.vue'
 
 const props = defineProps({
-  widget: Object
+  widget: Object,
+  persist: Function
 })
 
 const map = {

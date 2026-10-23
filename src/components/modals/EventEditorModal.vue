@@ -1,4 +1,7 @@
 <script setup>
+import { eventGameNames } from '@/services/eventGame'
+import EventJsonImport from '@/components/events/EventJsonImport.vue'
+import { EVENT_TYPES } from '@/services/eventJson'
 import { computed, ref, watch } from 'vue'
 import { addDoc, collection, doc, updateDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
@@ -25,6 +28,7 @@ const emptyForm = () => ({
   durationMinutes: 60,
   url: '',
   backgroundUrl: '',
+  game: {nameEs:'',nameEn:''},
   communityIds: []
 })
 
@@ -32,7 +36,7 @@ const form = ref(emptyForm())
 const isSaving = ref(false)
 const showAllCommunities = ref(false)
 
-const eventTypes = ['Direct', 'Live', 'Torneo', 'Anuncio', 'Comunidad', 'Podcast']
+const eventTypes = EVENT_TYPES
 const isEditing = computed(() => Boolean(props.event?.id))
 const visibleCommunities = computed(() => showAllCommunities.value ? props.communities : props.communities.slice(0, 5))
 const hasMoreCommunities = computed(() => props.communities.length > 5)
@@ -48,6 +52,7 @@ const toInputDateTime = (value) => {
 watch(() => props.event, (event) => {
   form.value = event ? {
     title: event.title || '',
+    game: eventGameNames(event),
     description: event.description || '',
     type: event.type || 'Direct',
     startsAt: toInputDateTime(event.startsAt),
@@ -72,6 +77,7 @@ const saveEvent = async () => {
   const now = Date.now()
   const payload = {
     title,
+    game: eventGameNames(form.value),
     description: form.value.description.trim(),
     type: form.value.type || 'Evento',
     startsAt,
@@ -117,6 +123,7 @@ const saveEvent = async () => {
             </button>
           </header>
 
+          <EventJsonImport :communities="communities" @apply="values => Object.assign(form, values)" />
           <form @submit.prevent="saveEvent">
             <label>
               <span>Titulo</span>
@@ -155,6 +162,7 @@ const saveEvent = async () => {
               <input v-model="form.backgroundUrl" placeholder="URL de imagen para el banner" />
             </label>
 
+            <div class="event-game-fields"><label><span>Juego en español (opcional)</span><input v-model="form.game.nameEs" maxlength="180" placeholder="Los Pitufos: Dreams"/></label><label><span>Juego en inglés / IGDB</span><input v-model="form.game.nameEn" maxlength="180" placeholder="The Smurfs: Dreams"/></label></div>
             <div class="event-community-picker">
               <span>Comunidades relacionadas</span>
               <div>
@@ -459,4 +467,5 @@ const saveEvent = async () => {
     padding-right: 4px;
   }
 }
+.event-game-fields{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}@media(max-width:500px){.event-game-fields{grid-template-columns:1fr}}
 </style>

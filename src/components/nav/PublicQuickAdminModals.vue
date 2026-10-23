@@ -73,14 +73,8 @@ const emit = defineEmits([
             Fondo cuando no hay publicaciones
             <input v-model="communityDraft.threadBackgroundUrl" placeholder="https://..." />
           </label>
-          <label>
-            Playlist (URL)
-            <input v-model="communityDraft.musicPlaylistUrl" placeholder="https://..." />
-          </label>
-          <label>
-            Volumen
-            <input v-model.number="communityDraft.musicVolume" type="number" min="0" max="100" />
-          </label>
+
+
           <div class="quick-topic-editor">
             <div class="quick-topic-head">
               <strong>Categorias de hilos</strong>
@@ -136,8 +130,8 @@ const emit = defineEmits([
             <strong>{{ communityDraft.name || 'Nueva comunidad' }}</strong>
             <p>{{ communityDraft.description || 'Descripcion corta para presentar el espacio.' }}</p>
             <small v-if="communityDraft.threadBackgroundUrl">Fondo de hilos configurado</small>
-            <small v-if="communityDraft.musicPlaylistUrl">Playlist vinculada</small>
-            <small>Volumen: {{ Number(communityDraft.musicVolume || 35) }}%</small>
+
+
             <div>
               <span v-for="topic in communityDraft.threadTopics" :key="topic">
                 <i :class="getTopicIcon(topic)"></i>

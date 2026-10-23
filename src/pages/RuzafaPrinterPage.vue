@@ -699,6 +699,7 @@ const goHome = () => {
         <h1>Impresora de etiquetas</h1>
       </div>
       <div class="header-actions">
+        <RouterLink class="creative-entry-button" to="/ruzafa-impresora/vacaciones">Calendarios de Vacaciones</RouterLink>
         <button class="creative-entry-button" type="button" @click="mode = 'creative'">Impresión creativa</button>
         <div class="printer-status"><span></span> Seleccionar TD-4550 al imprimir</div>
       </div>
