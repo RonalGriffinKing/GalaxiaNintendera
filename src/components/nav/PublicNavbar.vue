@@ -1,6 +1,6 @@
 <script setup>
 import { createReadingNavigation } from '@/services/readingNavigation'
-import { publicChromeLoading } from '@/composables/usePublicChromeLoading'
+import { publicChromeLoading, publicNavigationOverlayOpen, publicReadingControlsHidden, publicReadingHeaderHidden } from '@/composables/usePublicChromeLoading'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth'
@@ -30,6 +30,7 @@ const menuOpen = ref(false)
 const mobileAccountOpen = ref(false)
 const createMenuOpen = ref(false)
 const searchOpen = ref(false)
+const searchTrigger = ref(null)
 const searchQuery = ref('')
 const searchPosts = ref([])
 const searchCommunities = ref([])
@@ -55,9 +56,11 @@ function positionAccountMenu() {
  accountPanelPosition.value={'--account-menu-right':Math.max(12,window.innerWidth-rect.right)+'px','--account-menu-top':(Math.max(rect.bottom,navBottom)+10)+'px'}
 }
 function closeAccountOnOutside(event) {
+ if(notificationsOpen.value)return
  if(accountMenuOpen.value && !event.target.closest('.public-account-panel') && !accountButton.value?.contains(event.target) && !bottomAccountButton.value?.contains(event.target)) accountMenuOpen.value=false
 }
 function closeAccountOnEscape(event) {
+ if(event.key==='Escape' && notificationsOpen.value){closeNotifications();return}
  if(event.key==='Escape' && accountMenuOpen.value){accountMenuOpen.value=false;nextTick(() => (isMobileNav()?bottomAccountButton.value:accountButton.value)?.focus())}
 
 }
@@ -90,13 +93,15 @@ const confirmLogoutOpen = ref(false)
 const isLoggingOut = ref(false)
 const currentProfile = ref({})
 const notificationButton = ref(null)
+const profileNotificationButton = ref(null)
+const notificationFromProfile = ref(false)
+const notificationAnchor = computed(() => notificationFromProfile.value ? profileNotificationButton.value : notificationButton.value)
 const globalThreadLauncher = ref(null)
 const quickCommunityOpen = ref(false)
 const quickUserOpen = ref(false)
 const quickCreateSaving = ref(false)
-const scrollY = ref(0)
 const navHidden = ref(false)
-const navExpanded = ref(false)
+const headerHidden = ref(false)
 const bottomAccountButton = ref(null)
 const navCompact = ref(false)
 const readingProgress = ref(0)
@@ -121,6 +126,7 @@ const quickUserDraft = ref({
 let unsubscribeAuth = null
 let unsubscribeNotifications = null
 const readingNavigation=createReadingNavigation()
+const headerReadingNavigation=createReadingNavigation()
 let scrollTicking = false
 let scrollFrame = null
 let searchDebounceTimer = null
@@ -157,10 +163,9 @@ const bottomNavItems = computed(() => PUBLIC_NAV_LINKS.filter(item => item.to !=
 const bottomNavColumns = computed(() => bottomNavItems.value.length + 2)
 const isReadingRoute = computed(() => route.path.startsWith('/post/'))
 const mobileNavClass = computed(() => ({
-  pill: scrollY.value > 120 && !navExpanded.value && !searchOpen.value && !notificationsOpen.value && !accountMenuOpen.value,
   compact: navCompact.value,
-  hidden: navHidden.value,
   reading: isReadingRoute.value,
+  'reading-hidden': isReadingRoute.value && headerHidden.value,
   'account-open': accountMenuOpen.value
 }))
 const bottomNavClass = computed(() => ({
@@ -199,7 +204,8 @@ const accountMenuItems = computed(() => {
   return [
     { label: 'Mi perfil', icon: 'far fa-user', to: currentUser.value ? `/perfil/${currentUser.value.uid}` : '/login?mode=register' },
     { label: 'Guardados', icon: 'fas fa-bookmark', to: '/mis-favoritos' },
-    { label: 'Comunidades', icon: 'fas fa-users', to: '/comunidades' }
+    { label: 'Comunidades', icon: 'fas fa-users', to: '/comunidades' },
+    ...(currentUser.value ? [{ label: 'Crear hilo', icon: 'fas fa-comment-dots', action: 'thread' }] : [])
   ]
 })
 const accountAdminItems = computed(() => currentUser.value && canPublish.value
@@ -360,7 +366,8 @@ const loadSearchIndex = async () => {
   }
 }
 
-const toggleSearch = async () => {
+const toggleSearch = async (event) => {
+  if(event?.currentTarget)searchTrigger.value=event.currentTarget
   searchOpen.value = !searchOpen.value
   menuOpen.value = false
   createMenuOpen.value = false
@@ -377,6 +384,7 @@ const closeSearch = () => {
   debouncedSearchQuery.value = ''
   searchFilter.value = 'all'
   searchExpanded.value = false
+  nextTick(()=>requestAnimationFrame(()=>searchTrigger.value?.focus({preventScroll:true})))
 }
 
 const goSearchResult = ({ type, id }) => {
@@ -477,23 +485,21 @@ const updateScrollNavigation = () => {
   const doc = document.documentElement
   const maxScroll = Math.max(1, doc.scrollHeight - window.innerHeight)
 
-  scrollY.value = nextY
   readingProgress.value = isReadingRoute.value ? Math.min(100, Math.max(0, (nextY / maxScroll) * 100)) : 0
 
   const mobile=isMobileNav()
   const controlsOpen=menuOpen.value || accountMenuOpen.value || searchOpen.value || notificationsOpen.value || createMenuOpen.value || quickCommunityOpen.value || quickUserOpen.value
   // Keep the measured article offset fixed throughout hide/reveal.
   navCompact.value = !mobile && nextY > 28
-  if(mobile){
-    const wasHidden=navHidden.value
+  if(isReadingRoute.value){
     navHidden.value=readingNavigation.update(nextY,{maxScroll:doc.scrollHeight-window.innerHeight,locked:controlsOpen})
-    if(navHidden.value && !wasHidden) navExpanded.value=false
-    if(nextY<24) navExpanded.value=false
+    headerHidden.value=headerReadingNavigation.update(nextY,{maxScroll:doc.scrollHeight-window.innerHeight,locked:controlsOpen,revealNearTopOnly:true})
     scrollTicking=false
     return
   }
 
   navHidden.value = false
+  headerHidden.value = false
 
   scrollTicking = false
 }
@@ -521,7 +527,6 @@ const goAccount = () => {
   accountMenuOpen.value = !accountMenuOpen.value
 }
 
-function expandNavigation(){navExpanded.value=true;navHidden.value=false;readingNavigation.reset(window.scrollY)}
 
 const goAccountItem = (to) => {
   menuOpen.value = false
@@ -642,6 +647,7 @@ const subscribeNotifications = (user) => {
 
 const toggleNotifications = () => {
   if (!currentUser.value) { router.push('/login?mode=login'); return }
+  notificationFromProfile.value=false
   notificationsOpen.value = !notificationsOpen.value
   searchOpen.value = false
   menuOpen.value = false
@@ -649,6 +655,9 @@ const toggleNotifications = () => {
   accountMenuOpen.value = false
 }
 
+function openProfileNotifications(){notificationFromProfile.value=true;notificationsOpen.value=!notificationsOpen.value}
+function closeNotifications(){notificationsOpen.value=false;nextTick(()=>notificationAnchor.value?.focus({preventScroll:true}))}
+watch([searchOpen,accountMenuOpen,notificationsOpen],values=>{publicNavigationOverlayOpen.value=values.some(Boolean)},{flush:'sync'})
 const clearNotifications = async () => {
   const user = currentUser.value
   if (!user || isClearingNotifications.value) return
@@ -935,8 +944,8 @@ onMounted(() => {
   updateScrollNavigation()
 })
 
-watch([menuOpen, createMenuOpen, accountMenuOpen, quickCommunityOpen, quickUserOpen], ([isMenuOpen, isCreateOpen, isAccountOpen, isQuickCommunityOpen, isQuickUserOpen]) => {
-  document.body.style.overflow = isMenuOpen || isCreateOpen || (isAccountOpen && isMobileNav()) || isQuickCommunityOpen || isQuickUserOpen ? 'hidden' : ''
+watch([menuOpen, createMenuOpen, accountMenuOpen, quickCommunityOpen, quickUserOpen, searchOpen, notificationsOpen], ([isMenuOpen, isCreateOpen, isAccountOpen, isQuickCommunityOpen, isQuickUserOpen, isSearchOpen, isNotificationsOpen]) => {
+  document.body.style.overflow = isMenuOpen || isCreateOpen || (isAccountOpen && isMobileNav()) || isQuickCommunityOpen || isQuickUserOpen || isSearchOpen || isNotificationsOpen ? 'hidden' : ''
 })
 watch([menuOpen, createMenuOpen, accountMenuOpen, searchOpen, notificationsOpen, quickCommunityOpen, quickUserOpen], () => {
   updateScrollNavigation()
@@ -948,9 +957,10 @@ watch(() => route.fullPath, () => {
   accountMenuOpen.value=false
   menuOpen.value=false
   createMenuOpen.value=false
-  navExpanded.value=false
   navHidden.value = false
+  headerHidden.value = false
   readingNavigation.reset()
+  headerReadingNavigation.reset()
   navCompact.value=false
   if (typeof window !== 'undefined') {
     window.requestAnimationFrame(updateScrollNavigation)
@@ -974,7 +984,15 @@ watch(currentUser, () => {
   searchCache.clear()
 })
 
+watch([navHidden, headerHidden, isReadingRoute], ([hidden, header, reading]) => {
+  publicReadingControlsHidden.value = hidden && reading
+  publicReadingHeaderHidden.value = header && reading
+}, { flush: 'sync' })
+
 onUnmounted(() => {
+  publicReadingControlsHidden.value=false
+  publicReadingHeaderHidden.value=false
+  publicNavigationOverlayOpen.value=false
   if (scrollFrame !== null) window.cancelAnimationFrame(scrollFrame)
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
   searchRequestId += 1
@@ -989,7 +1007,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <nav v-show="!publicChromeLoading" :inert="publicChromeLoading || (navHidden && isMobileNav()) || undefined" class="public-nav" :class="mobileNavClass" :style="{ '--read-progress': `${readingProgress}%` }">
+  <nav v-show="!publicChromeLoading" :inert="publicChromeLoading || publicReadingHeaderHidden || undefined" class="public-nav" :class="mobileNavClass" :style="{ '--read-progress': `${readingProgress}%` }">
     <div v-if="isReadingRoute" class="mobile-reading-progress" aria-hidden="true"></div>
     <div class="public-nav-inner">
       <div class="public-brand-zone">
@@ -1024,10 +1042,6 @@ onUnmounted(() => {
       </div>
 
       <div class="public-actions">
-        <button class="public-icon public-mobile-search-btn" aria-label="Buscar" @click="toggleSearch">
-          <i class="fas fa-search"></i>
-        </button>
-
         <div class="public-profile-nav">
           <button
             v-if="currentUser"
@@ -1046,7 +1060,7 @@ onUnmounted(() => {
             :aria-expanded="notificationsOpen"
             @click="toggleNotifications"
           >
-            <i class="fas fa-bell"></i>
+            <svg class="notification-icon" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="mobile-notification-label">Avisos</span>
             <strong v-if="unreadCount">{{ unreadCount }}</strong>
           </button>
 
@@ -1075,7 +1089,6 @@ onUnmounted(() => {
 
         </div>
 
-        <button class="public-nav-expand public-icon" type="button" aria-label="Expandir navegación" @click="expandNavigation"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
       </div>
     </div>
 
@@ -1102,13 +1115,13 @@ onUnmounted(() => {
 
     <NotificationDropdown
       :open="notificationsOpen"
-      :anchor-el="notificationButton"
+      :anchor-el="notificationAnchor"
       :notifications="notifications"
       :unread-count="unreadCount"
       :clearing="isClearingNotifications"
       :format-date="formatNotificationDate"
       @clear="clearNotifications"
-      @close="notificationsOpen = false"
+      @close="closeNotifications"
       @open-notification="openNotification"
     />
 
@@ -1116,9 +1129,10 @@ onUnmounted(() => {
     <Transition name="account-drawer">
     <div v-if="accountMenuOpen" class="public-account-panel" :style="accountPanelPosition" @click.self="accountMenuOpen = false">
         <div ref="accountCard" class="public-account-card" role="dialog" :aria-modal="isMobileNav() ? 'true' : undefined" aria-label="Menú de perfil" @keydown="trapAccountFocus">
+        <div class="public-account-tools"><span>Mi cuenta</span><div class="account-tool-buttons"><button ref="profileNotificationButton" class="profile-notifications-btn" type="button" aria-label="Notificaciones" :aria-expanded="notificationsOpen" @click="openProfileNotifications"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span>Avisos</span><strong v-if="unreadCount">{{ unreadCount }}</strong></button>
         <button class="public-account-close" type="button" aria-label="Cerrar menu de cuenta" @click="accountMenuOpen = false">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
-        </button>
+        </button></div></div>
         <button class="public-account-head" type="button" @click="goOwnProfile">
           <span>
             <ProfileAvatar
@@ -1140,6 +1154,8 @@ onUnmounted(() => {
           <button
             v-for="item in accountMenuItems"
             :key="item.label"
+            :class="{'thread-action':item.action==='thread'}"
+            :disabled="item.action==='thread' && isCurrentUserBlocked"
             @click="openAccountOption(item)"
           >
             <i :class="item.icon"></i>
@@ -1306,10 +1322,7 @@ onUnmounted(() => {
           <span>{{ item.label }}</span>
         </button>
 
-        <button class="bottom-create-btn" type="button" aria-label="Crear hilo" @click="openGlobalThreadComposer">
-          <i class="fas fa-plus"></i>
-          <span>Hilo</span>
-        </button>
+        <button class="bottom-search-btn" type="button" aria-label="Buscar noticias" :aria-expanded="searchOpen" @click="toggleSearch"><span class="bottom-search-orb"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></span><span>Buscar</span></button>
 
         <button
           v-for="item in bottomNavItems.slice(2)"
@@ -1551,10 +1564,6 @@ onUnmounted(() => {
 .public-mobile-link:active,
 .public-bottom-nav button:active {
   transform: scale(0.94);
-}
-
-.public-mobile-search-btn {
-  display: none;
 }
 
 .public-create-quick-btn {
@@ -2237,10 +2246,6 @@ onUnmounted(() => {
     box-shadow: 0 12px 34px rgba(0, 0, 0, 0.18);
   }
 
-  .public-nav.hidden {
-    transform: translate3d(0, calc(-100% - 8px), 0);
-  }
-
   .public-nav.reading.compact {
     background: rgba(5, 8, 22, 0.56);
   }
@@ -2291,10 +2296,6 @@ onUnmounted(() => {
 
   .public-create-thread-desktop {
     display: none;
-  }
-
-  .public-mobile-search-btn {
-    display: inline-flex;
   }
 
   .public-create-quick-btn {
@@ -2531,12 +2532,12 @@ onUnmounted(() => {
     filter: drop-shadow(0 0 12px rgba(192, 132, 252, 0.5));
   }
 
-  .public-bottom-nav .bottom-create-btn {
+  .public-bottom-nav .bottom-search-btn {
     color: #ffffff;
     margin-top: -24px;
   }
 
-  .bottom-create-btn i {
+  .bottom-search-btn .bottom-search-orb {
     align-items: center;
     background: linear-gradient(135deg, #7c3aed, #ec4899);
     border: 4px solid #050816;
@@ -2548,38 +2549,17 @@ onUnmounted(() => {
     font-size: 22px;
     height: 54px;
     justify-content: center;
-    animation: bottom-fab-pulse 4.2s ease-in-out infinite;
     transition: box-shadow 0.22s ease, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), background 0.22s ease;
     width: 54px;
   }
 
-  .bottom-create-btn.open i {
-    animation: none;
-    background: linear-gradient(135deg, #9333ea, #d946ef);
-    box-shadow:
-      0 16px 38px rgba(168, 85, 247, 0.55),
-      0 0 0 9px rgba(216, 180, 254, 0.1);
-    transform: rotate(90deg) scale(1.04);
-  }
 
-  .bottom-create-btn:active i {
+
+  .bottom-search-btn:active .bottom-search-orb {
     transform: scale(0.9);
   }
 
-  @keyframes bottom-fab-pulse {
-    0%,
-    100% {
-      box-shadow:
-        0 14px 30px rgba(124, 58, 237, 0.38),
-        0 0 0 0 rgba(236, 72, 153, 0.2);
-    }
 
-    50% {
-      box-shadow:
-        0 18px 36px rgba(124, 58, 237, 0.5),
-        0 0 0 8px rgba(236, 72, 153, 0.08);
-    }
-  }
 }
 
 .public-bottom-nav {
@@ -2946,7 +2926,7 @@ onUnmounted(() => {
   .public-bottom-nav,
   .public-bottom-nav button,
   .bottom-nav-indicator,
-  .bottom-create-btn i,
+  .bottom-search-btn .bottom-search-orb,
   .mobile-reading-progress {
     animation: none !important;
     transition: none !important;
@@ -2990,19 +2970,11 @@ onUnmounted(() => {
 </style>
 
 <style scoped>
-.public-nav-expand{display:none}
 @media(max-width:859px){
  .public-icon{background:transparent;border:0;cursor:pointer;width:44px;height:44px}
  .public-bottom-nav button{border:0;cursor:pointer}
  .public-mobile-join-top{display:none}
  .public-nav{transition:transform .35s cubic-bezier(.22,1,.36,1),opacity .35s ease,background .35s ease}
- .public-nav.hidden{pointer-events:none;opacity:0}
- .public-nav.pill{left:auto;right:max(12px,env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));width:auto;border:1px solid #a78bfa44;border-radius:999px;background:#080b20d9;backdrop-filter:blur(18px);box-shadow:0 8px 24px #02061744}
- .public-nav.pill .public-brand-zone{display:none}
- .public-nav.pill .public-nav-inner{min-height:0;padding:6px 10px}
- .public-nav.pill .public-nav-expand{display:inline-flex}
- .public-nav.pill .public-actions{gap:6px}
- .public-nav.pill.hidden{transform:translate3d(0,calc(-100% - 40px - env(safe-area-inset-top)),0)}
  .bottom-profile-avatar{width:28px;height:28px;min-width:28px;flex-shrink:0}
  .public-bottom-nav{transition:transform .35s cubic-bezier(.22,1,.36,1),opacity .35s ease}
 }
@@ -3022,4 +2994,41 @@ onUnmounted(() => {
  .public-account-actions{align-self:stretch}
 }
 @media(prefers-reduced-motion:reduce){.account-drawer-enter-active,.account-drawer-leave-active,.account-drawer-enter-active .public-account-card,.account-drawer-leave-active .public-account-card{transition:none!important}}
+</style>
+
+<style scoped>
+.public-account-tools,.mobile-notification-label{display:none}
+@media(max-width:859px){
+ .public-brand-zone{flex:1;min-width:0}
+ .public-nav-inner{gap:14px}
+ .public-actions{flex:none}
+ .notification-nav-btn{width:auto;height:40px;gap:7px;padding:0 12px;border:1px solid #a78bfa40;border-radius:13px;background:linear-gradient(135deg,#7024dc30,#a855f714);opacity:1;position:relative}
+ .notification-nav-btn strong{position:static;min-width:18px;padding:3px;border-radius:999px;font-size:10px;line-height:1;background:#c026d9;color:white}
+ .public-bottom-nav .bottom-search-btn{margin-top:-18px}
+ .bottom-search-btn .bottom-search-orb{width:50px;height:50px;background:linear-gradient(140deg,#7c3aed,#b02ac9);box-shadow:0 6px 18px #7c3aed40}
+ .public-account-list .thread-action{background:linear-gradient(110deg,#7c3aed70,#a855f735);border:1px solid #a78bfa40;color:#f3e8ff}
+ .public-account-list .thread-action:hover{background:#7c3aed80}
+}
+</style>
+
+<style scoped>
+@media(max-width:859px){
+ .public-brand{gap:9px}
+ .public-brand-logo{display:block;width:40px;height:40px;max-width:40px}
+ .public-brand span{display:block;max-width:150px;font-size:15px;line-height:1.05;letter-spacing:.02em}
+ .public-nav .notification-nav-btn{display:none}
+ .public-account-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+ .public-account-tools>span{font-size:11px;color:#aeb4cc;font-weight:600}
+ .account-tool-buttons{display:flex;align-items:center;gap:14px}
+ .profile-notifications-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:90px;min-height:44px;padding:8px 10px;border:1px solid #a78bfa44;border-radius:12px;background:#7c3aed22;color:#ede9fe;font-size:12px;font-weight:600;cursor:pointer}
+ .profile-notifications-btn strong{display:grid;place-items:center;min-width:18px;height:18px;border-radius:99px;background:#b52ade;font-size:10px;color:#fff}
+ .public-account-tools .public-account-close{position:static;display:flex;width:44px;height:44px;flex:none}
+ .public-account-head{padding-right:0}
+}
+</style>
+
+<style scoped>
+.public-nav.reading-hidden { transform: translateY(-110%); opacity: 0; pointer-events: none; }
+.public-nav.reading { transition: transform .25s ease, opacity .25s ease; }
+@media (prefers-reduced-motion: reduce) { .public-nav.reading { transition: none; } }
 </style>

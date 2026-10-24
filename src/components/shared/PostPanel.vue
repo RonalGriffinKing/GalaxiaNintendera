@@ -79,11 +79,7 @@
     </div>
 
     <p v-if="isAdmin" class="pin-help">Pineados en Inicio: {{ pinnedPosts.length }} / 6. La última publicación entra automáticamente; puedes quitarle el pin. Una nueva publicación sustituye al pin más antiguo si se llena el carrusel.</p>
-    <div v-if="isLoadingPosts" class="post-empty-results">
-      <i class="fas fa-circle-notch fa-spin"></i>
-      <strong>Cargando publicaciones</strong>
-      <span>Conectando con la base de datos...</span>
-    </div>
+    <ContentLoading v-if="isLoadingPosts" variant="cards" />
 
     <div v-else-if="loadError" class="post-empty-results">
       <i class="fas fa-triangle-exclamation"></i>
@@ -261,6 +257,7 @@
 </template>
 
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'

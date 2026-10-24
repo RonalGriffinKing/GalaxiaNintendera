@@ -8,7 +8,7 @@ const downloadDir=process.env.TEMP+'\\galaxia-image-search-'+Date.now();fs.mkdir
 try{
  await cdp('Runtime.enable');await cdp('Page.enable');await cdp('Page.addScriptToEvaluateOnNewDocument',{source:'window.__labAllowPresence=true'});await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:true});
  await nav('/public-navigation','.public-nav');
- await ev('window.themeLab.post.value.sections=Array.from({length:7},(_,i)=>({title:["Estamos dentro","Que es","Nuestra aventura","Todo lo que podemos hacer","Ya triunfa en China","Nos vemos el 27","Conclusiones"][i],content:"Texto de prueba",image:"/lab-image.svg"}));window.themeLab.router.push("/post/local-theme-demo")');await until('!!document.querySelector(".article-section-rail .scroll-rail-track")');await wait(200);
+ await ev('window.themeLab.post.value.sections=Array.from({length:7},(_,i)=>({title:["Estamos dentro","Que es","Nuestra aventura","Todo lo que podemos hacer","Ya triunfa en China","Nos vemos el 27","Conclusiones"][i],content:"Texto de prueba para comprobar el inicio del apartado. ".repeat(70),image:"/lab-image.svg"}));window.themeLab.router.push("/post/local-theme-demo")');await until('!!document.querySelector(".article-section-rail .scroll-rail-track")');await wait(200);
  check(await ev('getComputedStyle(document.querySelector(".article-section-nav")).scrollbarWidth==="none"'),'native horizontal scrollbar is hidden');
  check(await ev('document.querySelector(".article-section-rail").classList.contains("has-next")'),'overflow exposes next arrow');
  if(process.env.RAIL_QA_SCREENSHOT){await ev('document.querySelector(".article-section-rail").scrollIntoView({block:"center",behavior:"instant"})');await wait(150);const box=await ev('(()=>{const r=document.querySelector(".article-section-rail").getBoundingClientRect();return {x:r.x+scrollX,y:r.y+scrollY,width:r.width,height:r.height,scale:1}})()');const shot=await cdp('Page.captureScreenshot',{format:'png',clip:box,captureBeyondViewport:true});fs.writeFileSync(process.env.RAIL_QA_SCREENSHOT,Buffer.from(shot.result.data,'base64'))}
@@ -17,6 +17,12 @@ try{
  check(await ev('document.querySelector(".article-section-rail").classList.contains("has-previous")'),'previous arrow becomes available');
  await ev('document.querySelector(".article-section-nav [role=tab]").dispatchEvent(new KeyboardEvent("keydown",{key:"End",bubbles:true}))');await wait(600);
  check(await ev('document.querySelector(".article-section-nav [role=tab]:last-child").getAttribute("aria-selected")==="true"'),'keyboard selection still works');
+ await wait(300);
+ const geometry=await ev('(()=>{const h=document.querySelector(".public-nav").getBoundingClientRect(),r=document.querySelector(".article-section-rail").getBoundingClientRect(),p=document.getElementById("article-reading-panel").getBoundingClientRect();return {header:Math.max(0,h.bottom),railTop:r.top,railBottom:r.bottom,panelTop:p.top,scroll:scrollY}})()');
+ check(geometry.railTop>=10&&geometry.railTop<=15,'section navigation keeps a small reading margin');
+ check(geometry.panelTop>=geometry.railBottom&&geometry.panelTop<=geometry.railBottom+32,'selected section aligns directly below the section navigation');
+ if(process.env.SECTION_QA_SCREENSHOT){const shot=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync(process.env.SECTION_QA_SCREENSHOT,Buffer.from(shot.result.data,'base64'))}
+
  check(await ev('(()=>{const t=document.querySelector(".article-section-nav [aria-selected=true]").getBoundingClientRect(),r=document.querySelector(".article-section-rail").getBoundingClientRect();return t.left>=r.left&&t.right<=r.right})()'),'selected tab is revealed');
  for(const width of [320,390,768,1440]){await cdp('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await wait(150);check(await ev('document.documentElement.scrollWidth<=innerWidth'),'no document overflow at '+width)}
  await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:true});await ev('window.themeLab.router.push("/news")');await until('!!document.querySelector(".category-filter-rail .scroll-rail-track")');check(await ev('getComputedStyle(document.querySelector(".filter-row")).scrollbarWidth==="none"'),'news filters use the shared rail');

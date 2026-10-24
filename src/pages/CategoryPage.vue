@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
 import { compactPostCategory } from '@/services/postCategoryDisplay'
 import { vSoftReveal } from '@/directives/softReveal'
@@ -487,7 +488,7 @@ watch(() => route.fullPath, () => {
             </RouterLink>
           </div>
 
-          <p v-else-if="isLoading || isLoadingMore" class="page-load-status" role="status">Cargando publicaciones...</p>
+          <ContentLoading v-else-if="isLoading || isLoadingMore" variant="cards" />
           <div v-else class="empty-state">
             <h2>No hay articulos disponibles</h2>
             <p>{{ canLoadMoreVisiblePosts ? 'No hay articulos en esta tanda. Puedes cargar mas resultados.' : 'Cuando apruebes publicaciones para esta seccion apareceran aqui.' }}</p>

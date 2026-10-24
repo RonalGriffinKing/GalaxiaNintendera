@@ -1,5 +1,15 @@
 import { expect, it } from 'vitest'
 import { createReadingNavigation } from './readingNavigation'
+it('keeps reading controls hidden until returning near the beginning',()=>{
+ const nav=createReadingNavigation()
+ const options={revealNearTopOnly:true}
+ expect(nav.update(600,options)).toBe(true)
+ expect(nav.update(400,options)).toBe(true)
+ expect(nav.update(150,options)).toBe(true)
+ expect(nav.update(119,options)).toBe(false)
+ expect(nav.update(600,options)).toBe(true)
+ expect(nav.update(600,{...options,locked:true})).toBe(false)
+})
 it('responds to slow deliberate scroll and ignores small direction reversals',()=>{
  const nav=createReadingNavigation()
  for(let y=0;y<=150;y+=3)nav.update(y)

@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, onMounted, ref, watch } from 'vue'
 import { fetchGiphyItems, hasGiphyKey } from '@/services/giphy'
 
@@ -123,7 +124,7 @@ onMounted(() => {
     </div>
 
     <p v-if="loadError" class="global-gif-message">{{ loadError }}</p>
-    <p v-else-if="isLoading" class="global-gif-message">Cargando GIFs...</p>
+    <ContentLoading v-else-if="isLoading" variant="inline" />
 
     <div class="global-gif-grid">
       <button

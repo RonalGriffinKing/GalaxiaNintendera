@@ -42,11 +42,7 @@
       </ListControls>
     </div>
 
-    <div v-if="isLoadingUsers" class="users-empty">
-      <i class="fas fa-circle-notch fa-spin"></i>
-      <strong>Cargando usuarios</strong>
-      <span>Conectando con la base de datos...</span>
-    </div>
+    <ContentLoading v-if="isLoadingUsers" variant="cards" />
 
     <div v-else-if="loadError" class="users-empty">
       <i class="fas fa-triangle-exclamation"></i>
@@ -269,6 +265,7 @@
 </template>
 
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'

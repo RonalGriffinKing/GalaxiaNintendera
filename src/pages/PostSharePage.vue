@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, nextTick, onBeforeUpdate, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getFontEmbedCSS, toPng } from 'html-to-image'
@@ -1145,10 +1146,7 @@ function slugify(value) {
       </div>
     </header>
 
-    <section v-if="isLoading" class="share-state">
-      <i class="fas fa-circle-notch fa-spin"></i>
-      <strong>Cargando post...</strong>
-    </section>
+    <ContentLoading v-if="isLoading" variant="inline" />
 
     <section v-else-if="error && !post" class="share-state">
       <i class="fas fa-triangle-exclamation"></i>

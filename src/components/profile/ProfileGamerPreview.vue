@@ -1,4 +1,5 @@
 ﻿<script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import { computed, ref, watch } from 'vue'
 import { gamerHighlights, GAMER_PLATFORMS } from '@/services/gamerIdentity'
@@ -25,7 +26,7 @@ const hoursLabel = minutes => {
 <template>
  <section v-if="own || highlights.platforms.length" v-soft-reveal="'.gamer-featured,.gamer-most-played li,.gamer-game-achievements li,.gamer-recent-preview li'" class="profile-gamer-preview" aria-label="Mi universo gamer">
   <header class="gamer-heading"><h2><i class="fas fa-gamepad" aria-hidden="true"></i> Mi universo gamer</h2><div class="gamer-heading-actions"><div v-if="platforms.length > 1" class="gamer-system-selector" role="group" aria-label="Sistema de juego"><button v-for="platform in platforms" :key="platform" type="button" :aria-pressed="selectedPlatform === platform" @click="selectedPlatform = platform">{{ platform === 'nintendo' ? 'Nintendo' : GAMER_PLATFORMS[platform] }}</button></div><button v-if="showLink" class="gamer-connect-button" type="button" @click="$emit('open')"><i class="fas fa-plug" aria-hidden="true"></i>{{ actionLabel }}</button></div></header>
-  <p v-if="loading" role="status" class="gamer-invitation">Consultando plataformas…</p><p v-if="error" role="status" class="gamer-invitation">{{ error }}</p>
+  <ContentLoading v-if="loading" variant="inline" /><p v-if="error" role="status" class="gamer-invitation">{{ error }}</p>
   <p v-if="!highlights.platforms.length" class="gamer-invitation">Conecta Nintendo o Xbox para compartir tu actividad de juego.</p>
   <template v-else>
    <article v-if="highlights.activity" class="gamer-featured">

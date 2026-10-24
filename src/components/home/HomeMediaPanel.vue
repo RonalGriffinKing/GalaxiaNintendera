@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import { computed, onMounted, ref, watch } from 'vue'
 import { proxiedImageUrl } from '@/constants/assets'
@@ -307,10 +308,7 @@ onMounted(() => {
             allowfullscreen
           ></iframe>
           <img v-else-if="activeVideo?.thumbnail" :src="activeVideo.thumbnail" alt="" />
-          <div v-else class="media-preview-empty">
-            <i class="fab fa-youtube"></i>
-            <strong>{{ youtubeLoading ? 'Cargando canal...' : 'Preview del canal' }}</strong>
-          </div>
+          <div v-else class="media-preview-empty"><ContentLoading v-if="youtubeLoading" /><template v-else><i class="fab fa-youtube"></i><strong>Preview del canal</strong></template></div>
           <button type="button" class="media-play-orb" aria-label="Ver video" @click="openActive">
             <i class="fas fa-play"></i>
           </button>

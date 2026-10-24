@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = defineProps({
@@ -490,7 +491,7 @@ const returnToCommunityPlayer = () => {
       </div>
 
       <div v-else class="official-video-empty">
-        <p v-if="youtubeVideosLoading">Cargando videos del canal...</p>
+        <ContentLoading v-if="youtubeVideosLoading" variant="inline" />
         <p v-else-if="youtubeVideosError">{{ youtubeVideosError }}</p>
         <p v-else-if="!youtubeApiKey">Agrega tu YouTube API key para traer directos antiguos y videos recientes.</p>
         <p v-else>Aun no encontramos videos recientes.</p>

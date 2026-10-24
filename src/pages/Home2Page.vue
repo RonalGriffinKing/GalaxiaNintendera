@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { compactPostCategory } from '@/services/postCategoryDisplay'
 import { vSoftReveal } from '@/directives/softReveal'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
@@ -324,7 +325,7 @@ onUnmounted(() => {
     <HomeWelcomeLoader :visible="isInitialHomeLoading" />
 
     <main class="home2-shell">
-      <p v-if="isLoading" class="page-load-status" role="status">Cargando publicaciones...</p>
+      <ContentLoading v-if="isLoading" variant="hero" />
 
       <template v-else>
         <section class="home2-hero-grid" :class="{'home-cold-load':!cachedHomePosts}">

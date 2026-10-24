@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { addDoc, collection, doc, getDoc, getDocs, increment, setDoc, updateDoc } from 'firebase/firestore'
@@ -462,7 +463,7 @@ onUnmounted(() => {
     </header>
 
     <div class="global-thread-content">
-      <div v-if="isLoading" class="global-thread-state">Preparando comunidades...</div>
+      <ContentLoading v-if="isLoading" variant="inline" />
 
       <div v-else-if="isCurrentUserBlocked" class="global-thread-state">
         <strong>Tu cuenta está bloqueada</strong>

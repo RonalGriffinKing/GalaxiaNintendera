@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, getDocs } from 'firebase/firestore'
@@ -107,10 +108,7 @@ loadPosts()
       </form>
     </header>
 
-    <section v-if="loading" class="search-page-state">
-      <i class="fas fa-circle-notch fa-spin"></i>
-      Buscando publicaciones...
-    </section>
+    <ContentLoading v-if="loading" variant="cards" />
 
     <section v-else-if="results.length" class="search-result-grid">
       <RouterLink v-for="post in results" :key="post.id" :to="`/post/${post.slug || post.id}`" class="search-result-card">

@@ -669,9 +669,7 @@
             <div v-if="!igdbImages.length && !igdbLoading" class="igdb-empty">
               {{ igdbHasSearched ? 'No encontramos imagenes. Prueba con menos palabras.' : 'Escribe al menos dos letras para comenzar.' }}
             </div>
-            <div v-if="igdbLoading" class="igdb-empty">
-              Buscando imagenes...
-            </div>
+            <ContentLoading v-if="igdbLoading" variant="inline" />
 
             <div v-if="igdbImages.length && !igdbLoading" class="igdb-picker-workspace">
               <aside class="igdb-targets" aria-label="Ubicacion de la imagen">
@@ -757,6 +755,7 @@
 </template>
 
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import ClipboardUrlField from '@/components/posts/ClipboardUrlField.vue'
 import VisualThemeSelector from '@/components/posts/VisualThemeSelector.vue'
 import { clearPublicPageCache } from '@/services/publicPageCache'

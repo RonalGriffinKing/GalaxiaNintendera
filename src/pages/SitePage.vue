@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PageBlockRenderer from '@/components/sitePages/PageBlockRenderer.vue'
@@ -56,10 +57,7 @@ watch(() => route.fullPath, loadPage)
 <template>
   <main class="site-page" :style="{ '--page-accent': page?.theme?.accent || '#a855f7' }">
     <div class="site-page-bg" aria-hidden="true"></div>
-    <section v-if="loading" class="site-page-state">
-      <i class="fas fa-spinner fa-spin"></i>
-      <strong>Cargando pagina...</strong>
-    </section>
+    <ContentLoading v-if="loading" variant="hero" />
     <section v-else-if="error" class="site-page-state">
       <i class="far fa-face-frown"></i>
       <strong>{{ error }}</strong>

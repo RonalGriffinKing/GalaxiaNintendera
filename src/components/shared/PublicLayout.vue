@@ -8,7 +8,7 @@ import GalaxiaHub from '@/components/shared/GalaxiaHub.vue'
 import PublicNavbar from '@/components/nav/PublicNavbar.vue'
 import SiteFooter from '@/components/sitePages/SiteFooter.vue'
 import { defaultLogoUrl } from '@/constants/assets'
-import { publicChromeLoading } from '@/composables/usePublicChromeLoading'
+import { publicChromeLoading, publicNavigationOverlayOpen, publicReadingControlsHidden, publicReadingHeaderHidden } from '@/composables/usePublicChromeLoading'
 
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
 const COMMUNITY_FAVORITES_KEY = 'galaxia-community-favorites'
@@ -124,7 +124,7 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
 <template>
   <div
     class="public-layout-shell"
-    :class="{ 'workspace-layout': isWorkspace }"
+    :class="{ 'workspace-layout': isWorkspace, 'reading-controls-hidden': publicReadingHeaderHidden }"
     :style="layoutStyle"
   >
     <PublicNavbar />
@@ -136,7 +136,7 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
       </Transition>
     </router-view>
     <SiteFooter v-if="showSiteFooter" />
-    <div v-show="!publicChromeLoading" :inert="publicChromeLoading || undefined"><GalaxiaHub
+    <div class="public-floating-controls" :class="{ suppressed: publicReadingControlsHidden }" v-show="!publicChromeLoading && !publicNavigationOverlayOpen" :inert="publicChromeLoading || publicNavigationOverlayOpen || publicReadingControlsHidden || undefined"><GalaxiaHub
       :official-community="officialCommunity"
       :favorite-communities="favoriteCommunities"
       :suggested-communities="suggestedCommunities"
@@ -189,6 +189,7 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
 }
 
 .public-layout-shell {
+  --public-floating-bottom: calc(34px + env(safe-area-inset-bottom, 0px));
   background: var(--app-bg, #050816);
   min-height: 100vh;
   min-height: 100dvh;
@@ -218,6 +219,12 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
   transform: translateY(-4px);
 }
 
+@media (max-width: 859px) {
+  .public-layout-shell { --public-floating-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}
+
+
+
 @media (max-width: 680px) {
   .public-layout-shell {
     --public-nav-offset: calc(64px + var(--safe-top, 0px));
@@ -230,4 +237,11 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
     transition: none;
   }
 }
+</style>
+
+<style scoped>
+.public-floating-controls { transition: opacity .22s ease, visibility .22s; }
+.public-floating-controls.suppressed { opacity: 0; visibility: hidden; pointer-events: none; }
+.reading-controls-hidden :deep(.article-section-rail) { top: calc(12px + env(safe-area-inset-top, 0px)); }
+@media (prefers-reduced-motion: reduce) { .public-floating-controls { transition: none; } }
 </style>

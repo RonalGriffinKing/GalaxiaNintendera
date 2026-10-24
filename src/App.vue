@@ -88,8 +88,7 @@ onUnmounted(() => {
   <Transition name="global-loader">
     <section v-if="isRouteLoading" class="global-loader-screen">
       <GalaxyLoader
-        title="Cargando"
-        text="Preparando la experiencia..."
+        quiet
       />
     </section>
   </Transition>

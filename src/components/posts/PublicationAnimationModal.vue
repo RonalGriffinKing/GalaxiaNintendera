@@ -1,4 +1,5 @@
 ﻿<script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import {ref,onMounted,onBeforeUnmount,nextTick} from 'vue'
 import {captureAnimationLayers,drawAnimation,encodeAnimation,DEFAULT_EFFECTS} from '@/services/publicationAnimation'
 const props=defineProps({getElement:{type:Function,required:true},name:{type:String,default:'galaxia-publicacion'}})
@@ -20,7 +21,7 @@ onBeforeUnmount(()=>{disposed=true;controller.abort();pause();document.body.styl
 <template>
 <Teleport to="body"><div class="animation-backdrop" @click.self="close"><section ref="dialog" class="publication-animation" role="dialog" aria-modal="true" aria-labelledby="animation-title" tabindex="-1" @keydown="keys">
 <header><div><small>GALAXIA · VÍDEO</small><h2 id="animation-title">Animar publicación</h2><p>Cinemática suave · 8 segundos · 30 fps · Sin audio</p></div><button aria-label="Cerrar animación" @click="close">✕</button></header>
-<div class="animation-layout"><div class="animation-screen"><canvas ref="canvas" aria-label="Previsualización de la publicación animada"></canvas><p v-if="preparing" role="status">Preparando las capas…</p></div><div class="animation-settings">
+<div class="animation-layout"><div class="animation-screen"><canvas ref="canvas" aria-label="Previsualización de la publicación animada"></canvas><ContentLoading v-if="preparing" variant="inline" /></div><div class="animation-settings">
 <p>Se anima la diapositiva seleccionada. El ciclo suave prepara el final para enlazar con el inicio; activa la repetición al reproducir el vídeo. Tus capas y el diseño estático siguen editables al volver al editor.</p>
 <fieldset :disabled="busy||preparing||!layers"><legend>Efectos</legend><label v-for="(label,key) in labels" :key="key"><input v-model="effects[key]" type="checkbox" @change="render"/>{{ label }}</label>
 <template v-if="layers?.background"><label>Movimiento del fondo<select v-model="effects.backgroundMotion" @change="render"><option value="none">Sin movimiento</option><option value="zoom">Zoom suave</option><option value="pan">Desplazamiento lateral</option><option value="float">Flotación suave</option></select></label><label v-if="effects.backgroundMotion!=='none'">Intensidad · {{ effects.backgroundIntensity }} %<input v-model.number="effects.backgroundIntensity" aria-label="Intensidad del movimiento del fondo" type="range" min="0" max="100" step="5" @input="render"/></label><p>El movimiento se aplica a la imagen de fondo. El texto conserva su posición y el efecto se incluye en el vídeo exportado.</p></template>

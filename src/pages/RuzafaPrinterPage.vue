@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { defaultRuzafaProducts } from '@/data/ruzafaProducts'
 import { getRuzafaProducts, saveRuzafaPrintHistory, saveRuzafaProduct, saveRuzafaProducts } from '@/services/ruzafaProducts'
@@ -707,7 +708,7 @@ const goHome = () => {
 
     <p v-if="message" class="notice no-print">{{ message }}</p>
 
-    <section v-if="loading" class="loading-state no-print">Cargando productos...</section>
+    <ContentLoading v-if="loading" variant="inline" />
 
     <section v-else-if="mode === 'home'" class="home-view no-print">
       <div class="intro">

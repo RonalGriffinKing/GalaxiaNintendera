@@ -17,9 +17,9 @@ onUnmounted(() => { homeWelcomeLoading.value = false })
   <Teleport to="body"><Transition name="home-welcome">
     <section v-if="visible" class="home-welcome-loader" aria-live="polite" aria-busy="true">
       <GalaxyLoader
+        quiet
         show-logo
-        title="Bienvenido a Galaxia Nintendera"
-        text="Estamos cargando noticias, eventos y tus comunidades favoritas..."
+
       />
     </section>
   </Transition></Teleport>

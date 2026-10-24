@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { publicReadingControlsHidden, publicNavigationOverlayOpen } from '@/composables/usePublicChromeLoading'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -10,41 +10,15 @@ const props = defineProps({
 })
 
 const router = useRouter()
-const showTip = ref(false)
-let tipInterval = null
-let tipTimeout = null
-let initialTipTimeout = null
-
 const goBack = () => {
   if (window.history.state?.back) router.back()
   else router.push(props.fallback)
 }
 
-onMounted(() => {
-  const revealTip = () => {
-    showTip.value = true
-    window.clearTimeout(tipTimeout)
-    tipTimeout = window.setTimeout(() => { showTip.value = false }, 5200)
-  }
-
-  initialTipTimeout = window.setTimeout(revealTip, 1800)
-  tipInterval = window.setInterval(revealTip, 30000)
-})
-
-onUnmounted(() => {
-  window.clearTimeout(initialTipTimeout)
-  window.clearTimeout(tipTimeout)
-  window.clearInterval(tipInterval)
-})
 </script>
 
 <template>
-  <div class="floating-back-control">
-    <Transition name="back-tip">
-      <div v-if="showTip" class="floating-back-tip" role="status">
-        ¿Quieres volver? Pulsa aquí
-      </div>
-    </Transition>
+  <div class="floating-back-control" :class="{ suppressed: publicReadingControlsHidden || publicNavigationOverlayOpen }" :inert="publicReadingControlsHidden || publicNavigationOverlayOpen || undefined">
     <button
       type="button"
       class="floating-back-button"
@@ -58,19 +32,20 @@ onUnmounted(() => {
 
 <style scoped>
 .floating-back-control {
-  --back-orb-bottom: 106px;
-  --back-orb-right: 28px;
+  --back-orb-bottom: var(--public-floating-bottom, 34px);
+  --back-orb-left: 28px;
   --back-orb-size: 58px;
   bottom: var(--back-orb-bottom);
   height: var(--back-orb-size);
   pointer-events: none;
   position: fixed;
-  right: var(--back-orb-right);
+  left: var(--back-orb-left);
   width: var(--back-orb-size);
   z-index: 510;
 }
 
 .floating-back-button {
+  box-sizing: border-box;
   align-items: center;
   backdrop-filter: blur(18px);
   background:
@@ -101,46 +76,18 @@ onUnmounted(() => {
   transform: translateY(-2px);
 }
 
-.floating-back-tip {
-  background: rgba(8, 12, 30, 0.94);
-  border: 1px solid rgba(192, 132, 252, 0.45);
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 850;
-  line-height: 1.25;
-  padding: 9px 12px;
-  pointer-events: none;
-  position: absolute;
-  right: calc(100% + 10px);
-  text-align: center;
-  top: 50%;
-  transform: translateY(-50%);
-  white-space: nowrap;
-}
-
-.back-tip-enter-active,
-.back-tip-leave-active {
-  transition: opacity 0.22s ease, transform 0.22s ease;
-}
-
-.back-tip-enter-from,
-.back-tip-leave-to {
-  opacity: 0;
-  transform: translate(8px, -50%);
-}
+.floating-back-control { transition: opacity .22s ease, visibility .22s; }
+.floating-back-control.suppressed { opacity: 0; visibility: hidden; pointer-events: none; }
 
 @media (max-width: 859px) {
   .floating-back-control {
-    --back-orb-bottom: calc(152px + env(safe-area-inset-bottom, 0px));
-    --back-orb-right: max(14px, env(safe-area-inset-right, 0px));
+    --back-orb-bottom: var(--public-floating-bottom, calc(84px + env(safe-area-inset-bottom, 0px)));
+    --back-orb-left: max(14px, env(safe-area-inset-left, 0px));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .floating-back-button,
-  .back-tip-enter-active,
-  .back-tip-leave-active { transition-duration: 0.01ms; }
+  .floating-back-control { transition-duration: 0.01ms; }
 }
 </style>

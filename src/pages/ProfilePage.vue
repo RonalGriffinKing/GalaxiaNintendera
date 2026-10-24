@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -1204,7 +1205,7 @@ onUnmounted(() => {
 <template>
   <main v-soft-reveal="'.profile-hero,.profile-right > .profile-section,.recent-post-card,.recent-post-list > button,.profile-directory-grid > button'" class="profile-page" :class="{ 'profile-ready': !isLoading && profile, 'rewards-mode': isRewardsPage }" :aria-busy="isLoading">
     <GalaxyAtmosphere />
-    <p v-if="isLoading" class="profile-loading-status" role="status">{{ isRewardsPage ? "Cargando logros y colección..." : "Cargando perfil..." }}</p>
+    <ContentLoading v-if="isLoading" variant="profile" />
     <div v-if="!isLoading && !profile" class="profile-empty">
       Este perfil no existe.
     </div>
@@ -1282,7 +1283,7 @@ onUnmounted(() => {
         <ProfileGamerPreview :loading="nintendoLoading || xboxLoading" :error="[nintendoError,xboxError].filter(Boolean).join(' ')" :own="isOwnProfile" :identities="gamerIdentities" :show-link="isOwnProfile" action-label="Conectar sistemas" show-recent @open="openSystems" />
 
 
-        <div class="profile-section profile-activity"><p v-if="publicationsLoading" role="status">Cargando publicaciones…</p>
+        <div class="profile-section profile-activity"><ContentLoading v-if="publicationsLoading" variant="inline" />
           <div class="section-head">
             <div>
               <span>Actividad reciente</span>
@@ -2366,7 +2367,7 @@ onUnmounted(() => {
 .profile-tab-content .activity-tabs button[aria-pressed=true]{background:var(--accent,#7c3aed);color:#fff}.profile-tab-content .activity-tabs button:focus-visible{outline:2px solid var(--accent,#c084fc);outline-offset:2px}
 @media(max-width:500px){.profile-tab-content .activity-tabs{width:100%}.profile-tab-content .profile-activity .section-head{align-items:start}}
 .profile-page{background:transparent;position:relative;isolation:isolate}
-.profile-loading-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
 
 .achievement-preview-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .achievement-preview-items button{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;padding:14px 10px;text-align:center;border:1px solid #a855f744;border-radius:14px;background:#6d28d914;color:inherit;cursor:pointer}

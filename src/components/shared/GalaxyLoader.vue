@@ -2,6 +2,7 @@
 import { defaultLogoUrl } from '@/constants/assets'
 
 defineProps({
+  quiet: Boolean,
   title: {
     type: String,
     default: 'Cargando galaxia'
@@ -22,7 +23,7 @@ defineProps({
 </script>
 
 <template>
-  <section class="galaxy-loader" :class="{ compact, 'with-logo': showLogo }" role="status" aria-live="polite" aria-busy="true">
+  <section class="galaxy-loader" :class="{ compact, 'with-logo': showLogo }" role="status" :aria-label="quiet ? 'Cargando contenido' : undefined" aria-live="polite" aria-busy="true">
     <div class="loader-stars" aria-hidden="true">
       <span v-for="index in 28" :key="index"></span>
     </div>
@@ -35,8 +36,8 @@ defineProps({
         <i></i>
       </div>
       <div class="loader-copy">
-        <strong>{{ title }}</strong>
-        <p>{{ text }}</p>
+        <strong v-if="!quiet">{{ title }}</strong>
+        <p v-if="!quiet">{{ text }}</p>
         <div class="loader-dots" aria-hidden="true"><i></i><i></i><i></i></div>
       </div>
     </div>

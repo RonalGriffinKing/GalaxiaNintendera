@@ -1,4 +1,5 @@
 ﻿<script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import {ref,watch,onUnmounted} from 'vue'
 import {fetchXboxProfile,fetchXboxImageDiagnostic} from '@/services/xboxProfileClient'
 const props=defineProps({own:Boolean,link:Object,identity:Object,loading:Boolean,error:String,saveLink:Function,refresh:Function})
@@ -20,7 +21,7 @@ const state=identity=>({online:'En línea',offline:'Sin conexión',unknown:'Esta
  <section class="xbox-link" :aria-busy="busy||loading">
   <header><strong><i class="fab fa-xbox" aria-hidden="true"></i> Xbox</strong><span>{{link?'Perfil público vinculado':'Sin vincular'}}</span></header>
   <p class="xbox-explanation">Comparte los datos públicos de tu gamertag. La vinculación no verifica la propiedad de la cuenta.</p>
-  <p v-if="loading" role="status">Consultando Xbox…</p><p v-if="error" role="status">{{error}}</p>
+  <ContentLoading v-if="loading" variant="inline" /><p v-if="error" role="status">{{error}}</p>
   <div v-if="identity&&!editing" class="xbox-account"><img v-if="identity.avatarUrl" :src="identity.avatarUrl" alt=""/><div><strong>{{identity.displayName}}</strong><small>{{state(identity)}}<template v-if="identity.gamerscore!==null"> · {{identity.gamerscore}} G</template></small></div></div>
   <p v-if="identity?.unavailable?.length" class="xbox-explanation">Parte de la actividad no está disponible por privacidad o por una limitación temporal del servicio.</p>
   <div class="xbox-actions"><button v-if="link&&!editing" type="button" :disabled="busy||loading" @click="refresh?.()">Actualizar datos</button><button v-if="own&&!editing" type="button" class="xbox-connect" :disabled="busy" @click="edit">{{link?'Cambiar gamertag':'Conectar Xbox'}}</button><button v-if="own&&link&&!editing" type="button" class="xbox-remove" :disabled="busy" @click="save(null)">Eliminar vinculación</button></div>

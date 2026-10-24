@@ -1,4 +1,5 @@
 ﻿<script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { fetchNintendoSource } from '@/services/nintendoPresenceClient'
 import { nxapiPresenceId, nxapiProfileId, NXAPI_BASE, NXAPI_PROFILE_BASE } from '@/services/nxapiPresence'
@@ -37,7 +38,7 @@ async function save(links) {
  <div class="nintendo-link" :aria-busy="busy || loading">
   <div class="nintendo-heading"><strong>Nintendo Switch</strong><span>{{ linked ? 'Enlace público vinculado' : 'Sin vincular' }}</span></div>
   <p class="link-explanation">Enlaces a datos públicos de nxapi. No verifican tu identidad Nintendo.</p>
-  <p v-if="loading" role="status">Consultando Nintendo…</p><p v-if="error" role="status">{{ error }}</p>
+  <ContentLoading v-if="loading" variant="inline" /><p v-if="error" role="status">{{ error }}</p>
   <div v-if="identity && !editing" class="nintendo-account"><img v-if="identity.avatarUrl" :src="identity.avatarUrl" alt="" /><div><strong>{{ identity.displayName }}</strong><small class="nintendo-state" :class="{online:identity.presence?.state==='online'}"><span aria-hidden="true">●</span> {{ stateLabel(identity) }}</small></div></div>
   <div class="nintendo-actions account-actions">
    <button v-if="linked && !editing" class="action-refresh" type="button" :disabled="loading || busy" @click="refresh?.()"><i class="fas fa-rotate-right" aria-hidden="true"></i>Actualizar datos</button>

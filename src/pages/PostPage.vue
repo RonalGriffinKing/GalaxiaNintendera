@@ -49,7 +49,20 @@ const activeSection = ref(-1)
 const actualNavHeight = ref(null)
 let navbarObserver
 const displayedSections = computed(() => postSections.value.map((section,index)=>({...section,articleIndex:index})).filter(section=>activeSection.value===-1 || section.articleIndex===activeSection.value))
-function selectArticleSection(index) { activeSection.value=index }
+async function selectArticleSection(index) {
+ activeSection.value=index
+ await nextTick()
+ if(!window.matchMedia('(max-width: 859px)').matches)return
+ const panel=document.getElementById('article-reading-panel')
+ const rail=document.querySelector('.article-section-rail')
+ if(!panel||!rail)return
+ const header=document.querySelector('.public-nav')
+ const contentTop=window.scrollY+panel.getBoundingClientRect().top-rail.getBoundingClientRect().height-14
+ // Keep the section below the reading margin once the header is hidden.
+ const top=contentTop>120 ? 12 : (header?.offsetHeight||0)
+ const destination=contentTop-top
+ window.scrollTo({top:Math.max(0,destination),behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'})
+}
 async function tabKeydown(event) {
  const nav=event.currentTarget
  const count=postSections.value.length+1
@@ -821,7 +834,7 @@ onUnmounted(() => {
     linear-gradient(135deg, #061120 0%, #26104b 42%, #5b214f 70%, #503712 100%);
   color: #e5e7eb;
   min-height: 100vh;
-  overflow-x: hidden;
+  overflow-x: clip;
   position: relative;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
@@ -1277,8 +1290,10 @@ onUnmounted(() => {
  .editorial-page .post-layout>.post-cinematic-hero :deep(.hero-content){margin-left:max(clamp(14px,3vw,28px),calc((100% - 860px)/2));margin-right:max(clamp(14px,3vw,28px),calc((100% - 860px)/2));max-width:none;width:auto;padding-left:0;padding-right:0}
 }
 @media(max-width:760px){
+ .editorial-page{--mobile-reading-gutter:clamp(20px,6vw,28px)}
+ .editorial-page .post-layout{grid-template-columns:max(var(--mobile-reading-gutter),env(safe-area-inset-left,0px)) minmax(0,1fr) max(var(--mobile-reading-gutter),env(safe-area-inset-right,0px))}
  .editorial-page .post-layout>.post-cinematic-hero{min-height:0}
- .editorial-page .post-layout>.post-cinematic-hero :deep(.hero-content){margin-left:clamp(14px,3vw,28px);margin-right:clamp(14px,3vw,28px);padding:20px 0 24px;min-height:0;max-width:none;width:auto;gap:16px}
+ .editorial-page .post-layout>.post-cinematic-hero :deep(.hero-content){margin-left:max(var(--mobile-reading-gutter),env(safe-area-inset-left,0px));margin-right:max(var(--mobile-reading-gutter),env(safe-area-inset-right,0px));padding:20px 0 24px;min-height:0;max-width:none;width:auto;gap:16px}
  .editorial-page .post-layout>.post-cinematic-hero :deep(.hero-breadcrumb){margin-bottom:72px}
 }
 </style>

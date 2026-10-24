@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -52,7 +53,7 @@ onMounted(load)
     <GalaxyAtmosphere v-if="!embedded" />
     <header><component :is="embedded ? 'h2' : 'h1'"><i class="fas fa-users" aria-hidden="true"></i> {{ embedded ? 'Explora las comunidades' : 'Comunidades' }}</component><p v-if="!embedded">Encuentra tu comunidad y descubre qué comparten sus miembros.</p></header>
     <label class="community-search"><i class="fas fa-search" aria-hidden="true"></i><input v-model="search" type="search" aria-label="Buscar comunidades" placeholder="Buscar comunidad o saga…" /></label>
-    <p v-if="loading" role="status">Cargando comunidades…</p>
+    <ContentLoading v-if="loading" variant="inline" />
     <div v-if="error" role="alert"><p>{{ error }}</p><button type="button" @click="load">Reintentar</button></div>
     <template v-if="!loading && communities.length">
       <p class="result-count" role="status">{{ filtered.length }} comunidades</p>

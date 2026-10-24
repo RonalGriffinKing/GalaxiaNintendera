@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -228,7 +229,7 @@ onMounted(() => loadPages({ signal: true }))
       </div>
     </div>
 
-    <div v-if="loading" class="pages-empty">Cargando paginas...</div>
+    <ContentLoading v-if="loading" variant="inline" />
     <div v-else-if="loadError" class="pages-empty">
       <i class="fas fa-triangle-exclamation"></i>
       <strong>No se pudieron cargar las paginas</strong>

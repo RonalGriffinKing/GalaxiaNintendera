@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { eventGameNames } from '@/services/eventGame'
 import EventJsonImport from '@/components/events/EventJsonImport.vue'
 import { EVENT_TYPES } from '@/services/eventJson'
@@ -2317,9 +2318,7 @@ onUnmounted(() => {
 
 <template>
   <div class="community-panel">
-    <div v-if="isCommunitiesLoading" class="community-empty">
-      Cargando comunidades...
-    </div>
+    <ContentLoading v-if="isCommunitiesLoading" variant="inline" />
 
     <div v-else-if="!communities.length" class="community-empty">
       Todavia no hay comunidades creadas.
@@ -2822,9 +2821,7 @@ onUnmounted(() => {
             </span>
           </div>
 
-          <div v-if="isProfileLoading" class="profile-view-empty">
-            Cargando perfil...
-          </div>
+          <ContentLoading v-if="isProfileLoading" variant="inline" />
 
           <div v-else class="profile-view-sections">
             <section>

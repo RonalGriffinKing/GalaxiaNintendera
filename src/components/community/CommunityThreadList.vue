@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { ref } from 'vue'
 import CommunityEmptyState from '@/components/community/CommunityEmptyState.vue'
 import PostEditCard from '@/components/community/PostEditCard.vue'
@@ -243,9 +244,7 @@ const deleteComment = (thread, comment) => {
       <button class="filter-button" type="button"><i class="fas fa-sliders"></i> Filtros</button>
     </div>
 
-    <div v-if="isLoading" class="community-empty">
-      Cargando hilos de la comunidad...
-    </div>
+    <ContentLoading v-if="isLoading" variant="inline" />
 
     <CommunityEmptyState
       v-else-if="!threads.length"

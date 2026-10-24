@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { fetchGiphyItems, hasGiphyKey } from '@/services/giphy'
 
@@ -98,7 +99,7 @@ onUnmounted(() => { requestId++; window.clearTimeout(searchTimer) })
       <button v-for="item in items" :key="item.id" type="button" @click="selectItem(item)">
         <img :src="item.previewUrl || item.url" :alt="item.title" loading="lazy" />
       </button>
-      <span v-if="isLoading">Cargando...</span>
+      <ContentLoading v-if="isLoading" variant="inline" />
     </div>
 
     <p v-if="error" class="giphy-error" role="status">{{ error }}</p>

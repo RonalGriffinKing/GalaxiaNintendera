@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { iso, weekDates, overlaps, blockOf, validateBooking, validateMonthlyRequest, weekStart, isBlocked, quotaFor, personException, bookingDates, bookingWeeks, usedWeeks, selectionWeeks, MAX_VACATION_CHANGES } from '@/services/vacationRules'
@@ -120,7 +121,7 @@ onUnmounted(() => clearInterval(timer))
     <header><div><RouterLink to="/ruzafa-impresora" class="back">← Impresora Russafa</RouterLink><p class="eyebrow">PLANIFICACIÓN DEL EQUIPO</p><h1>Calendario de vacaciones</h1><p>{{ state?.name || 'Tu local' }} · Organiza tus semanas con tiempo.</p></div><button @click="token ? token = '' : loginOpen = !loginOpen">{{ token ? 'Cerrar gerencia' : 'Acceso gerentes' }}</button></header>
     <p v-if="message" role="status" class="notice">{{ message }}</p>
     <form v-if="loginOpen" class="panel login" @submit.prevent="action({ action: 'login', username, password }, 'Sesión de gerencia iniciada.')"><h2>Acceso de gerencia</h2><label>Usuario<input v-model="username" autocomplete="username" required></label><label>Contraseña<input v-model="password" type="password" autocomplete="current-password" required></label><button :disabled="busy" class="primary">Entrar</button></form>
-    <p v-if="loading">Cargando calendario compartido…</p>
+    <ContentLoading v-if="loading" variant="inline" />
     <button v-if="!state && !loading" @click="load">Volver a intentar</button>
     <template v-if="state">
       <nav class="plan-switch" aria-label="Forma de organizar las vacaciones"><button :class="{ active: !isMonthly }" :aria-pressed="!isMonthly" :disabled="busy" @click="planMode = 'blocks'">Por cuatrimestres</button><button :class="{ active: isMonthly }" :aria-pressed="isMonthly" :disabled="busy" @click="planMode = 'monthly'">Mes completo</button></nav>

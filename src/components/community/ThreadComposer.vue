@@ -1,4 +1,5 @@
 <script setup>
+import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { addDoc, collection, doc, getDoc, getDocs } from 'firebase/firestore'
@@ -369,7 +370,7 @@ onMounted(async () => {
 
 <template>
   <section class="thread-composer" :class="[`is-${variant}`, { 'picker-open': communityPickerOpen, 'sticker-open': giphyOpen }]">
-    <div v-if="isLoading" class="composer-loading">Preparando comunidades...</div>
+    <ContentLoading v-if="isLoading" variant="inline" />
 
     <template v-else-if="allowedCommunities.length">
       <div class="composer-shell">

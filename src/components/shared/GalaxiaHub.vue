@@ -1174,7 +1174,7 @@ onUnmounted(() => {
 .galaxia-hub-root {
   --hub-keyboard-offset: 0px;
   --hub-orb-size: 58px;
-  --hub-orb-bottom: 34px;
+  --hub-orb-bottom: var(--public-floating-bottom, 34px);
   --hub-orb-right: 28px;
   pointer-events: none;
   position: fixed;
@@ -1182,6 +1182,7 @@ onUnmounted(() => {
 }
 
 .galaxia-hub-orb {
+  box-sizing: border-box;
   align-items: center;
   animation: hubBorderFlow 7s linear infinite;
   background:
@@ -2221,7 +2222,7 @@ onUnmounted(() => {
 
 @media (max-width: 859px) {
   .galaxia-hub-root {
-    --hub-orb-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    --hub-orb-bottom: var(--public-floating-bottom, calc(84px + env(safe-area-inset-bottom, 0px)));
     --hub-orb-right: max(14px, env(safe-area-inset-right, 0px));
   }
 
