@@ -5,8 +5,8 @@ const state = () => ({ people: [{ id: 'a' }, { id: 'b' }], rules: defaultRules()
 describe('vacation booking rules', () => {
   it('selects 14 consecutive days in the middle block and checks the second week too', () => {
     const s = state()
-    expect(selectionWeeks(s, 'a', '2027-05-03')).toBe(2)
-    expect(validateBooking(s, { person: 'a', start: '2027-05-03', weeks: 1 })).toContain('dos semanas')
+    expect(selectionWeeks(s, 'a', '2027-05-03')).toBe(1)
+    expect(validateBooking(s, { person: 'a', start: '2027-05-03', weeks: 1 })).toBe('')
     expect(bookingDates({ start: '2027-05-03', weeks: 2 })).toHaveLength(14)
     expect(bookingDates({ start: '2027-05-03', weeks: 2 }).at(-1)).toBe('2027-05-16')
     s.rules.datedBlocked = [['2027-05-12', '2027-05-12']]

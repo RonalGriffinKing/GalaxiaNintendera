@@ -23,10 +23,34 @@ const request = async (body, local = 'russafa', token = '') => {
 }
 describe('shared vacation API', () => {
   beforeEach(() => storage.clear())
+  it('allows two separate middle-block weeks and prevents a third', async () => {
+    const { data: initial } = await request()
+    const person = initial.people[0].id
+    expect((await request({ action: 'book', person, start: '2027-05-03' })).status).toBe(200)
+    const second = await request({ action: 'book', person, start: '2027-07-05' })
+    expect(second.status).toBe(200)
+    expect(second.data.bookings.map(b => b.weeks)).toEqual([1, 1])
+    expect((await request({ action: 'book', person, start: '2027-08-02' })).status).toBe(400)
+  })
+  it('splits an existing fortnight for free so either week can be replaced', async () => {
+    const { data: initial } = await request()
+    const person = initial.people[0].id
+    const saved = await request({ action: 'book', person, start: '2027-05-03', weeks: 2 })
+    const id = saved.data.bookings[0].id
+    expect((await request({ action: 'splitBooking', id, person: initial.people[1].id })).status).toBe(403)
+    const split = await request({ action: 'splitBooking', id, person })
+    expect(split.status).toBe(200)
+    expect(split.data.bookings.map(b => [b.start, b.weeks])).toEqual([['2027-05-03', 1], ['2027-05-10', 1]])
+    expect(split.data.changeCounts).toBeUndefined()
+    expect((await request({ action: 'cancelBooking', id, person })).status).toBe(200)
+    const replaced = await request({ action: 'book', person, start: '2027-07-05' })
+    expect(replaced.status).toBe(200)
+    expect(replaced.data.bookings.map(b => b.start)).toEqual(['2027-05-10', '2027-07-05'])
+  })
   it('stores a four-week consultation separately, with approval restricted to managers', async () => {
     const { data: initial } = await request()
     const person = initial.people[0].id
-    await request({ action: 'book', person, start: '2027-05-03' })
+    await request({ action: 'book', person, start: '2027-05-03', weeks: 2 })
     const saved = await request({ action: 'monthlyRequest', person, start: '2027-05-03', weeks: 1, status: 'approved' })
     expect(saved.status).toBe(200)
     expect(saved.data.bookings).toHaveLength(1)
@@ -96,7 +120,7 @@ describe('shared vacation API', () => {
   })
   it('requires confirmation for overlapping alternatives and protects edits', async () => {
     const { data: s } = await request()
-    const first = { action: 'book', person: s.people[0].id, start: '2027-05-03' }
+    const first = { action: 'book', person: s.people[0].id, start: '2027-05-03', weeks: 2 }
     const saved = await request(first)
     expect(saved.status).toBe(200)
     expect(saved.data.bookings[0].weeks).toBe(2)

@@ -74,6 +74,8 @@ export const createVacationHandler = storeProvider => async event => {
       proposal.status = body.status
     } else if (body.action === 'book') {
       const booking = { id: body.id || randomUUID(), person: body.person, start: body.start }
+      const previous = state.bookings.find(b => b.id === body.id)
+      if (previous?.quotaStart) booking.quotaStart = previous.quotaStart
       booking.weeks = body.weeks ?? selectionWeeks(state, booking.person, String(booking.start || ''), body.id)
       if (body.id && !manager) return response(403, { error: 'Solo gerencia puede editar reservas.' })
       if (body.id && !state.bookings.some(b => b.id === body.id)) return response(404, { error: 'La reserva ya no existe.' })
@@ -83,6 +85,15 @@ export const createVacationHandler = storeProvider => async event => {
       if (conflicts.length && !body.confirmOverlap) return response(409, { error: 'Estas fechas ya están solicitadas. Puedes guardarlas como alternativa pendiente de coordinar con esas personas y gerencia.', conflicts })
       booking.pendingCoordination = conflicts.length > 0
       state.bookings = [...state.bookings.filter(b => b.id !== booking.id), booking]
+    } else if (body.action === 'splitBooking') {
+      const booking = state.bookings.find(b => b.id === body.id)
+      if (!booking) return response(404, { error: 'La reserva ya no existe.' })
+      if (!manager && body.person !== booking.person) return response(403, { error: 'Selecciona la persona de esta reserva.' })
+      if (booking.weeks !== 2) return response(400, { error: 'Esta reserva no contiene dos semanas.' })
+      const secondStart = new Date(`${booking.start}T12:00:00Z`)
+      secondStart.setUTCDate(secondStart.getUTCDate() + 7)
+      const quotaStart = booking.quotaStart || booking.start
+      state.bookings = [...state.bookings.filter(b => b.id !== booking.id), { ...booking, quotaStart, weeks: 1 }, { ...booking, quotaStart, id: randomUUID(), weeks: 1, start: secondStart.toISOString().slice(0, 10) }]
     } else if (body.action === 'cancelBooking') {
       const booking = state.bookings.find(b => b.id === body.id)
       if (!booking) return response(404, { error: 'La reserva ya no existe. Actualiza el calendario.' })

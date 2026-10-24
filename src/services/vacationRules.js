@@ -18,13 +18,11 @@ export function weekStart(day) {
 }
 export const personException = (state, person, year) => state.exceptions?.find(e => e.person === person && e.year === Number(year))
 export const quotaFor = (state, person, year, block) => personException(state, person, year)?.quotas?.[block] ?? state.rules.quotas[block]
-export const usedWeeks = (state, person, year, block, exceptId) => state.bookings.filter(b => b.id !== exceptId && b.person === person && Number(b.start.slice(0, 4)) === Number(year) && blockOf(b.start) === block).reduce((sum, b) => sum + bookingWeeks(b), 0)
+export const usedWeeks = (state, person, year, block, exceptId) => state.bookings.filter(b => b.id !== exceptId && b.person === person && Number(b.start.slice(0, 4)) === Number(year) && blockOf(b.quotaStart || b.start) === block).reduce((sum, b) => sum + bookingWeeks(b), 0)
 export function selectionWeeks(state, person, start, exceptId) {
   const existing = state.bookings.find(b => b.id === exceptId)
   if (existing) return bookingWeeks(existing)
-  const block = blockOf(start)
-  const remaining = quotaFor(state, person, start.slice(0, 4), block) - usedWeeks(state, person, start.slice(0, 4), block)
-  return block === 1 && remaining >= 2 ? 2 : 1
+  return 1
 }
 export function isBlocked(state, day, person, start = weekStart(day)) {
   const exception = personException(state, person, day.slice(0, 4))
@@ -39,17 +37,18 @@ export function isBlocked(state, day, person, start = weekStart(day)) {
 }
 export function validateBooking(state, booking, exceptId) {
   const weeks = booking.weeks ?? selectionWeeks(state, booking.person, booking.start, exceptId)
-  if (![1, 2].includes(weeks) || weeks !== selectionWeeks(state, booking.person, booking.start, exceptId)) return 'En este bloque debes seleccionar las dos semanas seguidas.'
+  if (![1, 2].includes(weeks) || (weeks === 2 && blockOf(booking.start) !== 1 && bookingWeeks(state.bookings.find(b => b.id === exceptId) || {}) !== 2)) return 'Solo puedes elegir dos semanas juntas en mayo–agosto.'
   const dates = weekDates(booking.start, weeks)
   if (!state.people.some(p => p.id === booking.person)) return 'Selecciona una persona del local.'
   if (dates.length !== weeks * 7) return 'Selecciona una fecha válida.'
   if (weekStart(booking.start) !== booking.start) return 'Selecciona una semana de lunes a domingo.'
   if (dates.some(d => d.slice(0, 4) !== booking.start.slice(0, 4))) return 'La semana debe quedar dentro del mismo año.'
   if (dates.some(d => isBlocked(state, d, booking.person, booking.start))) return 'La semana incluye fechas bloqueadas. Solo gerencia puede autorizar una excepción personal.'
-  const used = state.bookings.filter(b => b.id !== exceptId && b.person === booking.person && b.start.slice(0, 4) === booking.start.slice(0, 4) && blockOf(b.start) === blockOf(booking.start))
+  const quotaStart = booking.quotaStart || state.bookings.find(b => b.id === exceptId)?.quotaStart || booking.start
+  const used = state.bookings.filter(b => b.id !== exceptId && b.person === booking.person && b.start.slice(0, 4) === booking.start.slice(0, 4) && blockOf(b.quotaStart || b.start) === blockOf(quotaStart))
   const candidate = { ...booking, weeks }
   if (state.bookings.some(b => b.id !== exceptId && b.person === booking.person && overlaps(b, candidate))) return 'Ya tienes vacaciones en esas fechas.'
-  if (used.reduce((sum, b) => sum + bookingWeeks(b), 0) + weeks > quotaFor(state, booking.person, booking.start.slice(0, 4), blockOf(booking.start))) return 'Has completado las semanas de este bloque.'
+  if (used.reduce((sum, b) => sum + bookingWeeks(b), 0) + weeks > quotaFor(state, booking.person, booking.start.slice(0, 4), blockOf(quotaStart))) return 'Has completado las semanas de este bloque.'
   return ''
 }
 
