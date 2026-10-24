@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const storage = vi.hoisted(() => new Map())
 vi.mock('@netlify/blobs', () => ({
-  connectLambda: vi.fn(),
   getStore: () => ({
     async getWithMetadata(key) { const value = storage.get(key); return value ? structuredClone(value) : null },
     async setJSON(key, data, options = {}) {
@@ -13,10 +12,14 @@ vi.mock('@netlify/blobs', () => ({
     }
   })
 }))
-import { handler } from '../../netlify/functions/vacations.js'
+import handler from '../../netlify/functions/vacations.js'
 const request = async (body, local = 'russafa', token = '') => {
-  const res = await handler({ httpMethod: body ? 'POST' : 'GET', headers: { authorization: `Bearer ${token}` }, queryStringParameters: { local }, body: body ? JSON.stringify(body) : undefined })
-  return { status: res.statusCode, data: JSON.parse(res.body) }
+  const res = await handler(new Request(`https://example.test/.netlify/functions/vacations?local=${encodeURIComponent(local)}`, {
+    method: body ? 'POST' : 'GET',
+    headers: { authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined
+  }))
+  return { status: res.status, data: await res.json() }
 }
 describe('shared vacation API', () => {
   beforeEach(() => storage.clear())

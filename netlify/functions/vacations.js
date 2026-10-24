@@ -1,4 +1,4 @@
-import { getStore, connectLambda } from '@netlify/blobs'
+import { getStore } from '@netlify/blobs'
 import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto'
 import { defaultRules, validateBooking, validateMonthlyRequest, selectionWeeks, overlaps, MAX_VACATION_CHANGES } from '../../src/services/vacationRules.js'
 
@@ -17,7 +17,6 @@ const validRanges = ranges => Array.isArray(ranges) && ranges.length <= 50 && ra
 const validQuotas = quotas => Array.isArray(quotas) && quotas.length === 3 && quotas.every(n => Number.isInteger(n) && n >= 0 && n <= 18)
 export const createVacationHandler = storeProvider => async event => {
   try {
-    if (event.blobs) connectLambda(event)
     const store = storeProvider()
     const query = event.queryStringParameters || {}
     const local = query.local || 'russafa'
@@ -125,4 +124,17 @@ export const createVacationHandler = storeProvider => async event => {
   }
 }
 
-export const handler = createVacationHandler(() => getStore({ name: 'team-vacations', consistency: 'strong' }))
+const handleEvent = createVacationHandler(() => getStore({ name: 'team-vacations', consistency: 'strong' }))
+
+// Use the native Functions runtime so Netlify supplies the Blobs environment.
+// The legacy Lambda event did not reliably carry its storage credentials.
+export default async function vacations(request) {
+  const url = new URL(request.url)
+  const result = await handleEvent({
+    httpMethod: request.method,
+    headers: Object.fromEntries(request.headers.entries()),
+    queryStringParameters: Object.fromEntries(url.searchParams.entries()),
+    body: ['GET', 'HEAD'].includes(request.method) ? '' : await request.text()
+  })
+  return new Response(result.body, { status: result.statusCode, headers: result.headers })
+}

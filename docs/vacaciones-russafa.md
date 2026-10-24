@@ -1,5 +1,7 @@
 # Calendario de vacaciones
 
+La función publicada utiliza la API nativa de Netlify (`Request`/`Response`) para recibir la configuración de Netlify Blobs del runtime. El adaptador de Vite conserva el controlador de eventos y su almacén de desarrollo independiente; un funcionamiento local correcto no verifica por sí solo el acceso al almacén de producción.
+
 ## Consulta de cuatro semanas juntas
 
 El selector superior alterna entre el plan por cuatrimestres y «Mes completo». La consulta equivale a 28 días, de lunes a domingo, no a un mes natural. La vista muestra siempre los doce meses, sin pasos ni división por cuatrimestres. Se valida todo el periodo contra los bloqueos y las autorizaciones personales; no consume cuotas ni sustituye el plan habitual. Se guarda en `monthlyRequests`, separada de `bookings`, inicialmente con estado `pending`. Solo gerencia puede cambiarlo a `approved`, `rejected` o volver a `pending`; incluso una alternativa aprobada no convierte automáticamente las fechas del plan habitual, que gerencia debe coordinar.
