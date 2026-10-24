@@ -1004,8 +1004,8 @@ onUnmounted(() => {
     <div v-if="isReadingRoute" class="mobile-reading-progress" aria-hidden="true"></div>
     <div class="public-nav-inner">
       <div class="public-brand-zone">
-        <button class="public-brand" @click="goTo('/')">
-          <img :src="defaultLogoUrl" class="public-brand-logo" alt="Galaxia Nintendera" />
+        <button class="public-brand" type="button" aria-label="Galaxia Nintendera · Inicio" @click="goTo('/')">
+          <img :src="defaultLogoUrl" class="public-brand-logo" alt="" />
           <span>Galaxia Nintendera</span>
         </button>
       </div>
@@ -2273,14 +2273,17 @@ onUnmounted(() => {
   }
 
   .public-brand span {
-    display: none;
+    display: block;
+    max-width: 150px;
+    font-size: 17px;
+    line-height: 1.05;
+    letter-spacing: .025em;
+    text-wrap: balance;
+    text-shadow: 0 0 18px #a855f733;
   }
 
-  .public-nav.compact .public-brand-logo {
-    height: 34px;
-    max-width: 46px;
-    transform: translateY(-1px);
-  }
+  .public-brand-logo { display: none; }
+  .public-brand { min-height: 44px; padding: 0; border: 0; background: transparent; cursor: pointer; }
 
   .public-nav.compact .public-icon {
     height: 32px;
@@ -2613,10 +2616,6 @@ onUnmounted(() => {
     padding: 8px 16px;
   }
 
-  .public-brand-logo {
-    height: 36px;
-    max-width: 82px;
-  }
 
   .public-actions {
     gap: 6px;
