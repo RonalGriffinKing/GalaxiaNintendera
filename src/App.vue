@@ -1,10 +1,11 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
+import { publicRouteLoading } from '@/composables/usePublicChromeLoading'
 
 const router = useRouter()
-const isRouteLoading = ref(false)
+const isRouteLoading = publicRouteLoading
 const ROUTE_LOADER_DELAY_MS = 250
 const MIN_LOADER_TIME_MS = 420
 let loadingStartedAt = Date.now()

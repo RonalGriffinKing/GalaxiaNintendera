@@ -306,6 +306,11 @@ const achievementRoadmap = computed(() => managedAchievements.value.map((achieve
     remaining: Math.max(0, target - currentValue)
   }
 }))
+const showcaseAchievements = computed(() => {
+ const earned=achievementRoadmap.value.filter(item=>item.unlocked).slice(-2).reverse()
+ const upcoming=achievementRoadmap.value.filter(item=>!item.unlocked).sort((a,b)=>Number(b.isNext)-Number(a.isNext)||b.progress-a.progress).slice(0,earned.length?2:4)
+ return [...earned,...upcoming]
+})
 const isCreatorProfile = computed(() => ['admin', 'publisher'].includes(profile.value?.role))
 const allProfileIcons = computed(() => {
   const managedById = new Map(customIcons.value.map(icon => [icon.id, icon]))
@@ -1162,7 +1167,6 @@ watch(message, (value) => {
   if (value) noticeTimer = setTimeout(() => { message.value = '' }, 5000)
 })
 watch(() => route.params.uid, loadProfile)
-watch(profileId, () => { mirrorSceneId.value = '' })
 watch(() => route.fullPath, () => { gachaponOpen.value = false })
 watch(isOwnProfile, own => { if (!own) gachaponOpen.value = false })
 watch(() => route.fullPath, () => { closeIconPanel(); achievementEditorOpen.value = false; message.value = '' })
@@ -1392,7 +1396,7 @@ onUnmounted(() => {
         </div>
         <div class="profile-section achievement-preview">
           <div class="section-head"><div><span>Progreso del perfil</span><h2>Vitrina de logros</h2></div><button type="button" @click="openRewards('achievements')">Ver todos →</button></div>
-          <p v-if="!earnedAchievements.length" class="mini-empty">Aún no hay logros completados. Descubre tu próximo objetivo.</p><div class="achievement-preview-items"><button v-for="item in achievementRoadmap.filter(item => item.unlocked || item.isNext).slice(0,3)" :key="item.id" type="button" :class="{ earned: item.unlocked }" @click="openRewards('achievements')"><span><img v-if="item.iconUrl" :src="item.iconUrl" alt="" /><i v-else class="fas fa-trophy" aria-hidden="true"></i></span><strong>{{ item.label }}</strong><small>{{ item.unlocked ? 'Completado' : `${item.currentValue} / ${item.target}` }}</small><progress :value="item.progress" max="100" :aria-label="item.label"></progress></button></div>
+          <p v-if="!earnedAchievements.length" class="mini-empty">Aún no hay logros completados. Descubre tu próximo objetivo.</p><div class="achievement-preview-items"><button v-for="item in showcaseAchievements" :key="item.id" type="button" :class="{earned:item.unlocked}" @click="openRewards('achievements')"><span class="showcase-orb"><img v-if="item.iconUrl" :src="item.iconUrl" alt=""/><i v-else :class="item.unlocked?'fas fa-trophy':item.typeMeta.icon" aria-hidden="true"></i></span><em class="showcase-status">{{ item.unlocked ? 'Conseguido' : 'En camino' }}</em><strong>{{ item.label }}</strong><small>{{ item.unlocked ? 'Completado' : item.currentValue+' / '+item.target+' '+item.typeMeta.unit }}</small><progress v-if="!item.unlocked" :value="item.progress" max="100" :aria-label="item.label"></progress></button></div>
         </div>
       </section>
 
@@ -2241,10 +2245,10 @@ onUnmounted(() => {
 }
 
 
-.profile-page { max-width: 1360px; margin: 0 auto; }.profile-highlights { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 18px; margin: 18px 0; }.profile-highlights .profile-section { margin: 0; }.profile-highlights h2 { font-size: 18px; }.profile-highlights .section-head > button { white-space: nowrap; color: #c084fc; font-size: 12px; min-height: 44px; }.collection-preview-icons { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; }.collection-preview-icons button { display: grid; justify-items: center; gap: 8px; color: #e2e8f0; min-width: 0; }.collection-preview-icons :deep(.profile-avatar-ui) { --avatar-size: 56px; }.collection-preview-icons small { font-size: 10px; line-height: 1.4; }.achievement-preview-items { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }.achievement-preview-items button { display: grid; justify-items: center; align-content: start; padding: 14px 10px; gap: 8px; background: #6d28d920; border: 1px solid #a855f755; border-radius: 14px; color: white; }.achievement-preview-items .earned { border-color: #f59e0b66; background: #b4530918; }.achievement-preview-items span { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; background: #9333ea; box-shadow: 0 0 20px #a855f722; }.achievement-preview-items .earned span { background: linear-gradient(135deg,#f59e0b,#ffd454); }.achievement-preview-items img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }.achievement-preview-items strong { font-size: 12px; line-height: 1.5; }.achievement-preview-items small { font-size: 10px; color: #cbd5e1; }.achievement-preview-items progress { width: 100%; height: 5px; border: 0; overflow: hidden; border-radius: 10px; }.achievement-preview-items progress::-webkit-progress-bar { background: #ffffff15; }.achievement-preview-items progress::-webkit-progress-value { background: #c084fc; }.achievement-preview-items progress::-moz-progress-bar { background: #c084fc; }
+.profile-page { max-width: 1360px; margin: 0 auto; }.profile-highlights { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 18px; margin: 18px 0; }.profile-highlights .profile-section { margin: 0; }.profile-highlights h2 { font-size: 18px; }.profile-highlights .section-head > button { white-space: nowrap; color: #c084fc; font-size: 12px; min-height: 44px; }.collection-preview-icons { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; }.collection-preview-icons button { display: grid; justify-items: center; gap: 8px; color: #e2e8f0; min-width: 0; }.collection-preview-icons :deep(.profile-avatar-ui) { --avatar-size: 56px; }.collection-preview-icons small { font-size: 10px; line-height: 1.4; }
 .profile-social-grid { grid-template-columns: minmax(0,1.65fr) minmax(0,1fr); align-items: start; }.profile-activity { grid-column: 1; grid-row: 1; }.profile-communities { grid-column: 2; grid-row: 1; }.community-card-row { display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; }.community-card-row button { display: grid; grid-template-columns: 46px minmax(0,1fr); grid-template-rows: auto auto; gap: 3px 12px; min-height: 68px; padding: 10px; background: #ffffff04; text-align: left; }.community-card-row img,.community-card-row .community-letter { position: static; grid-row: 1/span 2; width: 46px; height: 46px; border-radius: 50%; object-fit: cover; }.community-card-row .community-overlay { display: none; }.community-card-row strong,.community-card-row small,.community-card-row em { position: static; z-index: auto; }.community-card-row strong { font-size: 13px; align-self: end; }.community-card-row small { background: none; padding: 0; color: #94a3b8; font-size: 11px; }.community-card-row em { display: none; }.recent-post-card { min-height: 280px; }.recent-post-card strong { font-size: 20px; line-height: 1.45; }
 @media(max-width:1000px) { .profile-highlights { grid-template-columns: minmax(0,1fr); }.collection-preview-icons { grid-template-columns: repeat(8,minmax(0,1fr)); }.collection-preview-icons :deep(.profile-avatar-ui) { --avatar-size: 48px; }.profile-social-grid { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); }.recent-post-card { min-height: 250px; } }
-@media(max-width:700px) { .profile-highlights { gap: 12px; }.collection-preview-icons { grid-template-columns: repeat(4,minmax(0,1fr)); }.profile-social-grid { grid-template-columns: minmax(0,1fr); }.profile-activity { grid-column: 1; grid-row: 1; }.profile-communities { grid-column: 1; grid-row: 2; }.community-card-row { margin: 0; overflow: visible; padding: 0; grid-auto-columns: auto; }.community-card-row button { min-height: 68px; border-radius: 12px; }.profile-highlights .section-head { flex-wrap: wrap; gap: 4px; }.recent-post-card { min-height: 220px; }.recent-post-card strong { font-size: 17px; }.achievement-preview-items { gap: 8px; }.achievement-preview-items button { padding: 12px 8px; } }
+@media(max-width:700px) { .profile-highlights { gap: 12px; }.collection-preview-icons { grid-template-columns: repeat(4,minmax(0,1fr)); }.profile-social-grid { grid-template-columns: minmax(0,1fr); }.profile-activity { grid-column: 1; grid-row: 1; }.profile-communities { grid-column: 1; grid-row: 2; }.community-card-row { margin: 0; overflow: visible; padding: 0; grid-auto-columns: auto; }.community-card-row button { min-height: 68px; border-radius: 12px; }.profile-highlights .section-head { flex-wrap: wrap; gap: 4px; }.recent-post-card { min-height: 220px; }.recent-post-card strong { font-size: 17px; } }
 
 
 .community-card-row strong { grid-column: 2; grid-row: 1; margin: 0; }.community-card-row small { grid-column: 2; grid-row: 2; margin: 0; }.community-card-row img { opacity: 1; }.community-card-row button { align-items: center; }.community-card-row .community-letter { font-size: 16px; }.community-card-row strong { align-self: end; }.community-card-row small { align-self: start; }
@@ -2257,7 +2261,7 @@ onUnmounted(() => {
 
 .profile-page { --profile-content-width: 100%; width:100%; max-width:1400px; padding-left:24px; padding-right:24px; box-sizing:border-box; }.profile-hero,.profile-hero-stats { width:100%; max-width:none; margin-left:0; margin-right:0; }
 .profile-dashboard { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1.05fr) minmax(0,1fr); gap:16px; align-items:start; margin:16px 0; }.profile-dashboard > .profile-activity { grid-column:1; grid-row:1; }.profile-middle { grid-column:2; grid-row:1; min-width:0; display:grid; gap:14px; }.profile-dashboard > .profile-communities { grid-column:3; grid-row:1; }.profile-dashboard .profile-section { margin:0; min-width:0; padding:16px; border-radius:14px; }.profile-dashboard .section-head { margin-bottom:12px; align-items:center; gap:10px; }.profile-dashboard .section-head h2 { font-size:17px; line-height:1.3; }.profile-dashboard .section-head span { display:none; }.profile-dashboard .section-head > button { font-size:11px; color:#c084fc; white-space:nowrap; min-height:36px; }.profile-about p { font-size:13px; line-height:1.65; color:#cbd5e1; margin:8px 0; }
-.profile-highlights { display:flex; flex-direction:column; margin:0; gap:14px; }.achievement-preview { order:0; }.collection-preview { order:1; }.achievement-preview-items { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }.achievement-preview-items > button:last-child:nth-child(3) { display:none; }.achievement-preview-items button { padding:12px 10px; }.collection-preview-icons { grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }.collection-preview-icons :deep(.profile-avatar-ui) { --avatar-size:44px; }.collection-preview-icons small { display:none; }
+.profile-highlights { display:flex; flex-direction:column; margin:0; gap:14px; }.achievement-preview { order:0; }.collection-preview { order:1; }.collection-preview-icons { grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }.collection-preview-icons :deep(.profile-avatar-ui) { --avatar-size:44px; }.collection-preview-icons small { display:none; }
 .community-card-row { gap:6px; }.community-card-row button { padding:10px 0; border:0; border-bottom:1px solid #ffffff12; background:transparent; border-radius:0; grid-template-columns:42px minmax(0,1fr); min-height:68px; }.community-card-row img,.community-card-row .community-letter { width:42px; height:42px; }.community-card-row strong { font-size:12px; }.community-card-row em { display:block; grid-column:2; position:static; font-size:9px; color:#94a3b8; }.community-card-row button { grid-template-rows:auto auto auto; }.community-card-row img { grid-row:1/span 3; }.recent-post-card { min-height:290px; border-radius:12px; }.recent-post-card strong { font-size:17px; }.profile-directory { max-width:none; }
 @media(max-width:1100px) { .profile-dashboard { grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); }.profile-dashboard > .profile-activity { grid-column:1; grid-row:1/span 2; }.profile-middle { grid-column:2; grid-row:1; }.profile-dashboard > .profile-communities { grid-column:2; grid-row:2; }.profile-page { padding-left:18px; padding-right:18px; } }
 @media(max-width:760px) { .profile-page { padding-left:12px; padding-right:12px; }.profile-dashboard { grid-template-columns:minmax(0,1fr); gap:12px; }.profile-dashboard > .profile-activity { grid-column:1; grid-row:1; }.profile-middle { grid-column:1; grid-row:2; }.profile-dashboard > .profile-communities { grid-column:1; grid-row:3; }.collection-preview-icons { grid-template-columns:repeat(6,minmax(0,1fr)); }.collection-preview-icons > button:nth-child(n+7) { display:none; }.collection-preview-icons :deep(.profile-avatar-ui) { --avatar-size:40px; }.recent-post-card { min-height:230px; } }
@@ -2325,10 +2329,10 @@ onUnmounted(() => {
 .profile-tab-content .profile-highlights .profile-section{width:100%;min-width:0;min-height:0;height:auto;flex:none}
 .profile-tab-content .profile-highlights .section-head{flex-wrap:wrap;gap:8px}
 .profile-tab-content .section-head button,.profile-tab-content .collection-preview-icons button{background:transparent;border:1px solid #a855f733;border-radius:8px;color:inherit;padding:7px}
-.profile-tab-content .achievement-preview-items{grid-template-columns:minmax(0,1fr)}
-.profile-tab-content .achievement-preview-items button{display:grid;grid-template-columns:42px minmax(0,1fr);align-items:center;gap:6px 12px;text-align:left}
-.profile-tab-content .achievement-preview-items button>span{grid-row:1 / span 3;width:42px;height:42px;margin:0}
-.profile-tab-content .achievement-preview-items progress{grid-column:2}
+
+
+
+
 
 /* Independent column stacks prevent sidebar height from stretching the introduction. */
 .profile-tab-content .section-summary{grid-template-rows:auto}
@@ -2363,4 +2367,17 @@ onUnmounted(() => {
 @media(max-width:500px){.profile-tab-content .activity-tabs{width:100%}.profile-tab-content .profile-activity .section-head{align-items:start}}
 .profile-page{background:transparent;position:relative;isolation:isolate}
 .profile-loading-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+.achievement-preview-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.achievement-preview-items button{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;padding:14px 10px;text-align:center;border:1px solid #a855f744;border-radius:14px;background:#6d28d914;color:inherit;cursor:pointer}
+.achievement-preview-items button.earned{border-color:#f59e0b55;background:#b4530910}
+.achievement-preview-items .showcase-orb{display:grid;place-items:center;width:38px;height:38px;flex:none;border-radius:50%;background:#9333ea33;color:#d8b4fe}
+.achievement-preview-items .earned .showcase-orb{background:linear-gradient(135deg,#f59e0b,#ffd454);color:#fff}
+.achievement-preview-items img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.achievement-preview-items strong{font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+.achievement-preview-items .showcase-status{font-style:normal;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#c4b5fd}
+.achievement-preview-items .earned .showcase-status{color:#fcd34d}
+.achievement-preview-items small{font-size:10px;color:#b8c2d7;margin-top:auto;line-height:1.4}
+.achievement-preview-items progress{appearance:none;-webkit-appearance:none;width:100%;height:5px;border:0;border-radius:999px;overflow:hidden;background:#ffffff15;color:#c084fc}
+.achievement-preview-items progress::-webkit-progress-bar{background:#ffffff15}.achievement-preview-items progress::-webkit-progress-value{background:#c084fc;border-radius:999px}.achievement-preview-items progress::-moz-progress-bar{background:#c084fc;border-radius:999px}
 </style>

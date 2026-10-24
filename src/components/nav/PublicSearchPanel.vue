@@ -1,4 +1,5 @@
 <script setup>
+import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
 import { computed } from 'vue'
 import { defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
 import { postCategoryLabels } from '@/services/postCategories'
@@ -114,7 +115,7 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
       </button>
     </form>
 
-    <div class="search-filter-row" aria-label="Filtros de busqueda">
+    <ScrollTabRail class="search-filter-rail"><div class="search-filter-row" aria-label="Filtros de busqueda">
       <button
         v-for="filter in filters"
         :key="filter.id"
@@ -124,7 +125,7 @@ const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
       >
         {{ filter.label }}
       </button>
-    </div>
+    </div></ScrollTabRail>
 
     <div v-if="!hasQuery && recentSearches.length" class="recent-searches">
       <span>Busquedas recientes</span>

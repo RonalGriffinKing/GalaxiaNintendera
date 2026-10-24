@@ -1,5 +1,6 @@
 <script setup>
 import { createReadingNavigation } from '@/services/readingNavigation'
+import { publicChromeLoading } from '@/composables/usePublicChromeLoading'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth'
@@ -44,6 +45,9 @@ const currentUser = ref(auth.currentUser)
 const notificationsOpen = ref(false)
 const accountMenuOpen = ref(false)
 const accountButton = ref(null)
+const accountCard = ref(null)
+let accountReturnFocus = null
+let accountOpenedRoute = ''
 const accountPanelPosition = ref({})
 function positionAccountMenu() {
  if(!accountMenuOpen.value || !accountButton.value) return
@@ -52,13 +56,30 @@ function positionAccountMenu() {
  accountPanelPosition.value={'--account-menu-right':Math.max(12,window.innerWidth-rect.right)+'px','--account-menu-top':(Math.max(rect.bottom,navBottom)+10)+'px'}
 }
 function closeAccountOnOutside(event) {
- if(accountMenuOpen.value && !event.target.closest('.public-account-panel') && !accountButton.value?.contains(event.target)) accountMenuOpen.value=false
+ if(accountMenuOpen.value && !event.target.closest('.public-account-panel') && !accountButton.value?.contains(event.target) && !bottomAccountButton.value?.contains(event.target)) accountMenuOpen.value=false
 }
 function closeAccountOnEscape(event) {
- if(event.key==='Escape' && accountMenuOpen.value){accountMenuOpen.value=false;accountButton.value?.focus()}
+ if(event.key==='Escape' && accountMenuOpen.value){accountMenuOpen.value=false;nextTick(() => (isMobileNav()?bottomAccountButton.value:accountButton.value)?.focus())}
 
 }
-watch(accountMenuOpen,async open=>{if(open){await nextTick();positionAccountMenu()}})
+watch(accountMenuOpen,async open=>{
+ if(open){
+  accountReturnFocus=document.activeElement
+  accountOpenedRoute=route.fullPath
+  await nextTick();positionAccountMenu()
+  if(isMobileNav())accountCard.value?.querySelector('button')?.focus({preventScroll:true})
+ }else{
+  await nextTick()
+  if(accountOpenedRoute===route.fullPath && accountReturnFocus?.isConnected)accountReturnFocus.focus({preventScroll:true})
+ }
+})
+function trapAccountFocus(event){
+ if(event.key!=='Tab'||!isMobileNav())return
+ const buttons=[...accountCard.value.querySelectorAll('button,a[href],[tabindex="0"]')].filter(node=>!node.disabled&&node.offsetParent)
+ const first=buttons[0],last=buttons.at(-1)
+ if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}
+ else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}
+}
 onMounted(()=>{document.addEventListener('pointerdown',closeAccountOnOutside);document.addEventListener('keydown',closeAccountOnEscape);window.addEventListener('resize',positionAccountMenu);window.addEventListener('scroll',positionAccountMenu,{passive:true})})
 onUnmounted(()=>{document.removeEventListener('pointerdown',closeAccountOnOutside);document.removeEventListener('keydown',closeAccountOnEscape);window.removeEventListener('resize',positionAccountMenu);window.removeEventListener('scroll',positionAccountMenu)})
 const notifications = ref([])
@@ -76,6 +97,8 @@ const quickUserOpen = ref(false)
 const quickCreateSaving = ref(false)
 const scrollY = ref(0)
 const navHidden = ref(false)
+const navExpanded = ref(false)
+const bottomAccountButton = ref(null)
 const navCompact = ref(false)
 const readingProgress = ref(0)
 const keepNativeNavigationVisible = isNativeApp()
@@ -100,8 +123,8 @@ const quickUserDraft = ref({
 let unsubscribeAuth = null
 let unsubscribeNotifications = null
 const readingNavigation=createReadingNavigation()
-let lastScrollY = 0
 let scrollTicking = false
+let scrollFrame = null
 let searchDebounceTimer = null
 let searchRequestId = 0
 const searchCache = new Map()
@@ -132,18 +155,18 @@ const unreadCount = computed(() => notifications.value.filter(notification => !n
 const isCurrentUserBlocked = computed(() => Boolean(currentProfile.value?.isBlocked))
 const canPublish = computed(() => !isCurrentUserBlocked.value && ['admin', 'publisher'].includes(currentRole.value))
 const isAdmin = computed(() => currentRole.value === 'admin')
-const bottomNavItems = computed(() => PUBLIC_NAV_LINKS)
-const bottomNavColumns = computed(() => bottomNavItems.value.length + 1)
+const bottomNavItems = computed(() => PUBLIC_NAV_LINKS.filter(item => item.to !== '/comunidades'))
+const bottomNavColumns = computed(() => bottomNavItems.value.length + 2)
 const isReadingRoute = computed(() => route.path.startsWith('/post/'))
 const mobileNavClass = computed(() => ({
+  pill: !keepNativeNavigationVisible && scrollY.value > 120 && !navExpanded.value && !searchOpen.value && !notificationsOpen.value && !accountMenuOpen.value,
   compact: navCompact.value,
   hidden: navHidden.value,
   reading: isReadingRoute.value,
   'account-open': accountMenuOpen.value
 }))
 const bottomNavClass = computed(() => ({
-  compact: isReadingRoute.value,
-  suppressed: menuOpen.value
+  suppressed: (isReadingRoute.value && navHidden.value) || menuOpen.value
     || createMenuOpen.value
     || accountMenuOpen.value
     || searchOpen.value
@@ -152,6 +175,7 @@ const bottomNavClass = computed(() => ({
     || quickUserOpen.value
 }))
 const activeBottomIndex = computed(() => {
+  if (route.path.startsWith('/perfil') || accountMenuOpen.value) return 4
   const index = bottomNavItems.value.findIndex(item => isActivePath(item.to))
   if (index < 0) return 0
   return index < 2 ? index : index + 1
@@ -183,7 +207,7 @@ const accountMenuItems = computed(() => {
 const accountAdminItems = computed(() => currentUser.value && canPublish.value
   ? [{ label: 'Gestor global', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' }]
   : [])
-const accountAdminLabel = computed(() => (isAdmin.value ? 'PANEL ADMIN' : canPublish.value ? 'PUBLISHER' : ''))
+const accountAdminLabel = computed(() => (isAdmin.value ? 'ADMINISTRACIÓN' : canPublish.value ? 'PUBLICACIÓN' : ''))
 
 const searchPreview = computed(() => {
   const queryText = normalize(debouncedSearchQuery.value)
@@ -452,7 +476,6 @@ const isMobileNav = () => {
 const updateScrollNavigation = () => {
   if (typeof window === 'undefined') return
   const nextY = Math.max(0, window.scrollY || 0)
-  const delta = nextY - lastScrollY
   const doc = document.documentElement
   const maxScroll = Math.max(1, doc.scrollHeight - window.innerHeight)
 
@@ -464,32 +487,25 @@ const updateScrollNavigation = () => {
   if (keepNativeNavigationVisible) {
     navCompact.value = false
     navHidden.value = false
-    lastScrollY = nextY
     scrollTicking = false
     return
   }
 
   const mobile=isMobileNav()
-  const readingMobile=mobile && isReadingRoute.value
-  const controlsOpen=menuOpen.value || accountMenuOpen.value || searchOpen.value || notificationsOpen.value || createMenuOpen.value
+  const controlsOpen=menuOpen.value || accountMenuOpen.value || searchOpen.value || notificationsOpen.value || createMenuOpen.value || quickCommunityOpen.value || quickUserOpen.value
   // Keep the measured article offset fixed throughout hide/reveal.
-  navCompact.value = !readingMobile && nextY > 28
-  if(readingMobile){
+  navCompact.value = !mobile && nextY > 28
+  if(mobile){
+    const wasHidden=navHidden.value
     navHidden.value=readingNavigation.update(nextY,{maxScroll:doc.scrollHeight-window.innerHeight,locked:controlsOpen})
-    lastScrollY=nextY
+    if(navHidden.value && !wasHidden) navExpanded.value=false
+    if(nextY<24) navExpanded.value=false
     scrollTicking=false
     return
   }
 
-  if (isMobileNav() && !menuOpen.value && !accountMenuOpen.value && !searchOpen.value && !notificationsOpen.value) {
-    const hideThreshold = isReadingRoute.value ? 72 : 150
-    if (delta > 8 && nextY > hideThreshold) navHidden.value = true
-    if (delta < -8 || nextY < 24) navHidden.value = false
-  } else {
-    navHidden.value = false
-  }
+  navHidden.value = false
 
-  lastScrollY = nextY
   scrollTicking = false
 }
 
@@ -497,7 +513,7 @@ const onScrollNavigation = () => {
   if (scrollTicking) return
   scrollTicking = true
   if (typeof window !== 'undefined') {
-    window.requestAnimationFrame(updateScrollNavigation)
+    scrollFrame = window.requestAnimationFrame(updateScrollNavigation)
   }
 }
 
@@ -515,6 +531,8 @@ const goAccount = () => {
 
   accountMenuOpen.value = !accountMenuOpen.value
 }
+
+function expandNavigation(){navExpanded.value=true;navHidden.value=false;readingNavigation.reset(window.scrollY)}
 
 const goAccountItem = (to) => {
   menuOpen.value = false
@@ -634,6 +652,7 @@ const subscribeNotifications = (user) => {
 }
 
 const toggleNotifications = () => {
+  if (!currentUser.value) { router.push('/login?mode=login'); return }
   notificationsOpen.value = !notificationsOpen.value
   searchOpen.value = false
   menuOpen.value = false
@@ -930,10 +949,18 @@ onMounted(() => {
 watch([menuOpen, createMenuOpen, accountMenuOpen, quickCommunityOpen, quickUserOpen], ([isMenuOpen, isCreateOpen, isAccountOpen, isQuickCommunityOpen, isQuickUserOpen]) => {
   document.body.style.overflow = isMenuOpen || isCreateOpen || (isAccountOpen && isMobileNav()) || isQuickCommunityOpen || isQuickUserOpen ? 'hidden' : ''
 })
+watch([menuOpen, createMenuOpen, accountMenuOpen, searchOpen, notificationsOpen, quickCommunityOpen, quickUserOpen], () => {
+  updateScrollNavigation()
+})
 
 watch(() => route.fullPath, () => {
+  searchOpen.value=false
+  notificationsOpen.value=false
+  accountMenuOpen.value=false
+  menuOpen.value=false
+  createMenuOpen.value=false
+  navExpanded.value=false
   navHidden.value = false
-  lastScrollY = 0
   readingNavigation.reset()
   navCompact.value=false
   if (typeof window !== 'undefined') {
@@ -959,6 +986,7 @@ watch(currentUser, () => {
 })
 
 onUnmounted(() => {
+  if (scrollFrame !== null) window.cancelAnimationFrame(scrollFrame)
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
   searchRequestId += 1
   window.removeEventListener('galaxy-profile-updated', syncCurrentProfile)
@@ -972,7 +1000,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <nav class="public-nav" :class="mobileNavClass" :style="{ '--read-progress': `${readingProgress}%` }">
+  <nav v-show="!publicChromeLoading" :inert="publicChromeLoading || (navHidden && isMobileNav()) || undefined" class="public-nav" :class="mobileNavClass" :style="{ '--read-progress': `${readingProgress}%` }">
     <div v-if="isReadingRoute" class="mobile-reading-progress" aria-hidden="true"></div>
     <div class="public-nav-inner">
       <div class="public-brand-zone">
@@ -1023,10 +1051,10 @@ onUnmounted(() => {
           </button>
 
           <button
-            v-if="currentUser"
             ref="notificationButton"
             class="public-icon notification-nav-btn"
             aria-label="Notificaciones"
+            :aria-expanded="notificationsOpen"
             @click="toggleNotifications"
           >
             <i class="fas fa-bell"></i>
@@ -1058,23 +1086,7 @@ onUnmounted(() => {
 
         </div>
 
-        <button
-          v-if="currentUser"
-          class="public-menu-toggle"
-          type="button"
-          aria-label="Abrir opciones de perfil"
-          :aria-expanded="accountMenuOpen"
-          @click="goAccount"
-        >
-          <ProfileAvatar
-            class="profile-icon-effect-wrap"
-            :src="currentProfileIcon"
-            :alt="authLabel"
-            :label="authLabel"
-            :effect="currentProfileIconMeta"
-            :loading="currentProfileLoading"
-          />
-        </button>
+        <button class="public-nav-expand public-icon" type="button" aria-label="Expandir navegación" @click="expandNavigation"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
       </div>
     </div>
 
@@ -1112,10 +1124,11 @@ onUnmounted(() => {
     />
 
     <Teleport to="body">
+    <Transition name="account-drawer">
     <div v-if="accountMenuOpen" class="public-account-panel" :style="accountPanelPosition" @click.self="accountMenuOpen = false">
-        <div class="public-account-card">
+        <div ref="accountCard" class="public-account-card" role="dialog" :aria-modal="isMobileNav() ? 'true' : undefined" aria-label="Menú de perfil" @keydown="trapAccountFocus">
         <button class="public-account-close" type="button" aria-label="Cerrar menu de cuenta" @click="accountMenuOpen = false">
-          <i class="fas fa-xmark"></i>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
         </button>
         <button class="public-account-head" type="button" @click="goOwnProfile">
           <span>
@@ -1130,7 +1143,7 @@ onUnmounted(() => {
           </span>
           <div>
             <strong>{{ authLabel }}</strong>
-            <p>{{ currentRole }}</p>
+            <p>{{ currentRole.toUpperCase() }}</p>
           </div>
         </button>
 
@@ -1167,13 +1180,13 @@ onUnmounted(() => {
         <div class="public-account-actions">
           <button class="danger" @click="confirmLogoutOpen = true; accountMenuOpen = false">
             <i class="fas fa-right-from-bracket"></i>
-            Cerrar sesion
+            Cerrar sesión
           </button>
         </div>
 
       </div>
     </div>
-
+    </Transition>
     </Teleport>
     <Teleport to="body">
       <Transition name="fade">
@@ -1291,7 +1304,7 @@ onUnmounted(() => {
     />
 
     <Teleport to="body">
-      <div class="public-bottom-nav" :class="bottomNavClass" aria-label="Navegacion movil" :style="bottomNavStyle">
+      <div v-show="!publicChromeLoading" :inert="publicChromeLoading || bottomNavClass.suppressed || undefined" class="public-bottom-nav" :class="bottomNavClass" aria-label="Navegacion movil" :style="bottomNavStyle">
         <span class="bottom-nav-indicator" aria-hidden="true"></span>
         <button
           v-for="item in bottomNavItems.slice(0, 2)"
@@ -1319,6 +1332,7 @@ onUnmounted(() => {
           <i :class="item.icon"></i>
           <span>{{ item.label }}</span>
         </button>
+        <button ref="bottomAccountButton" class="bottom-profile-btn" type="button" :class="{active:accountMenuOpen || route.path.startsWith('/perfil')}" aria-label="Abrir menú de perfil" :aria-expanded="accountMenuOpen" @click="goAccount"><ProfileAvatar v-if="currentUser" class="bottom-profile-avatar" :src="currentProfileIcon" :alt="authLabel" :label="authLabel" :effect="currentProfileIconMeta" :loading="currentProfileLoading"/><i v-else class="fas fa-user" aria-hidden="true"></i><span>Perfil</span></button>
       </div>
     </Teleport>
 
@@ -1637,36 +1651,6 @@ onUnmounted(() => {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.public-menu-toggle {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  display: none;
-  flex: 0 0 auto;
-  height: 38px;
-  justify-content: center;
-  overflow: hidden;
-  position: relative;
-  width: 38px;
-}
-
-.public-menu-toggle[aria-expanded="true"] {
-  border-color: rgba(216, 180, 254, 0.78);
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
-}
-
-.public-menu-toggle img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.public-menu-toggle i {
-  color: #ffffff;
-  font-size: 15px;
 }
 
 .account-btn-avatar {
@@ -2333,19 +2317,13 @@ onUnmounted(() => {
     display: inline-flex;
   }
 
-  .public-menu-toggle {
-    display: inline-flex;
-  }
-
   .public-account-panel {
     align-items: stretch;
-    background:
-      linear-gradient(90deg, rgba(5, 8, 22, 0.18) 0%, rgba(5, 8, 22, 0.78) 100%),
-      rgba(5, 8, 22, 0.58);
-    backdrop-filter: blur(10px);
+    background: rgba(5, 8, 22, 0.5);
+    backdrop-filter: blur(3px);
     bottom: 0;
     display: flex;
-    justify-content: flex-start;
+    justify-content: flex-end;
     left: 0;
     margin: 0;
     max-width: none;
@@ -2358,16 +2336,16 @@ onUnmounted(() => {
   }
 
   .public-account-card {
-    animation: mobile-account-drawer-in 0.24s cubic-bezier(0.2, 0.85, 0.25, 1);
     border: 0;
-    border-right: 1px solid rgba(216, 180, 254, 0.2);
-    border-radius: 0 24px 24px 0;
-    box-shadow: 28px 0 70px rgba(0, 0, 0, 0.38);
+    border-left: 1px solid rgba(216, 180, 254, 0.2);
+    border-radius: 24px 0 0 24px;
+    box-shadow: -28px 0 70px rgba(0, 0, 0, 0.38);
     gap: 14px;
     height: 100dvh;
     margin: 0;
     max-height: none;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: calc(16px + var(--safe-top, 0px)) 18px calc(18px + var(--safe-bottom, 0px));
     position: relative;
     right: auto;
@@ -2448,17 +2426,6 @@ onUnmounted(() => {
     min-height: 46px;
   }
 
-  @keyframes mobile-account-drawer-in {
-    from {
-      opacity: 0;
-      transform: translateX(-24px);
-    }
-
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
 
   .public-bottom-nav {
     align-items: center;
@@ -2498,12 +2465,6 @@ onUnmounted(() => {
       0 20px 56px rgba(0, 0, 0, 0.42),
       0 0 42px rgba(168, 85, 247, 0.26),
       inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  }
-
-  .public-bottom-nav.compact {
-    background: rgba(5, 8, 22, 0.58);
-    padding: 5px 8px;
-    transform: translate3d(0, 4px, 0) scale(0.985);
   }
 
   .public-bottom-nav.suppressed {
@@ -3038,4 +2999,39 @@ onUnmounted(() => {
  .public-nav.reading{background:#080c1af5;backdrop-filter:none;box-shadow:none;transition:transform .22s ease-out}
  .public-nav.reading .public-nav-inner,.public-nav.reading .public-brand-logo,.public-nav.reading .public-icon{transition:none}
 }
+</style>
+
+<style scoped>
+.public-nav-expand{display:none}
+@media(max-width:859px){
+ .public-icon{background:transparent;border:0;cursor:pointer;width:44px;height:44px}
+ .public-bottom-nav button{border:0;cursor:pointer}
+ .public-mobile-join-top{display:none}
+ .public-nav{transition:transform .35s cubic-bezier(.22,1,.36,1),opacity .35s ease,background .35s ease}
+ .public-nav.hidden{pointer-events:none;opacity:0}
+ .public-nav.pill{left:auto;right:max(12px,env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));width:auto;border:1px solid #a78bfa44;border-radius:999px;background:#080b20d9;backdrop-filter:blur(18px);box-shadow:0 8px 24px #02061744}
+ .public-nav.pill .public-brand-zone{display:none}
+ .public-nav.pill .public-nav-inner{min-height:0;padding:6px 10px}
+ .public-nav.pill .public-nav-expand{display:inline-flex}
+ .public-nav.pill .public-actions{gap:6px}
+ .public-nav.pill.hidden{transform:translate3d(0,calc(-100% - 40px - env(safe-area-inset-top)),0)}
+ .bottom-profile-avatar{width:28px;height:28px;min-width:28px;flex-shrink:0}
+ .public-bottom-nav{transition:transform .35s cubic-bezier(.22,1,.36,1),opacity .35s ease}
+}
+@media(prefers-reduced-motion:reduce){.public-nav,.public-bottom-nav{transition:none!important}}
+</style>
+
+<style scoped>
+.account-drawer-enter-active,.account-drawer-leave-active{transition:opacity .3s ease}
+.account-drawer-enter-active .public-account-card,.account-drawer-leave-active .public-account-card{transition:transform .3s cubic-bezier(.22,1,.36,1)}
+.account-drawer-enter-from,.account-drawer-leave-to{opacity:0}
+.public-account-head{background:transparent;border:0;border-bottom:1px solid #a78bfa22;cursor:pointer}
+.public-account-head>div{min-width:0}.public-account-head strong{overflow-wrap:anywhere}
+@media(max-width:859px){
+ .public-account-card{border-radius:24px 0 0 24px;padding-right:max(18px,env(safe-area-inset-right));padding-bottom:calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column}
+ .account-drawer-enter-from .public-account-card,.account-drawer-leave-to .public-account-card{transform:translate3d(100%,0,0)}
+ .public-account-head p{color:#c4b5fd;font-size:11px;letter-spacing:.12em;font-weight:800}
+ .public-account-actions{align-self:stretch}
+}
+@media(prefers-reduced-motion:reduce){.account-drawer-enter-active,.account-drawer-leave-active,.account-drawer-enter-active .public-account-card,.account-drawer-leave-active .public-account-card{transition:none!important}}
 </style>

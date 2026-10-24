@@ -1,4 +1,5 @@
 <script setup>
+import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -16,7 +17,6 @@ import ReaderLoadingShell from '@/components/posts/ReaderLoadingShell.vue'
 import PostCinematicHero from '@/components/posts/PostCinematicHero.vue'
 import { useVisualThemes } from '@/composables/useVisualThemes'
 import { postWebThemeCss } from '@/services/visualThemes'
-import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
 import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
 
 const route = useRoute()
@@ -672,10 +672,10 @@ onUnmounted(() => {
           @news="router.push('/#noticias')"
         />
       <article class="post-article" id="article-introduction">
-        <nav v-if="postSections.length && !isUpcomingPost" class="article-section-nav" role="tablist" aria-label="Apartados de la publicación" @keydown="tabKeydown">
+        <ScrollTabRail v-if="postSections.length && !isUpcomingPost" class="article-section-rail"><nav class="article-section-nav" role="tablist" aria-label="Apartados de la publicación" @keydown="tabKeydown">
           <button id="article-tab-all" type="button" role="tab" aria-controls="article-reading-panel" :aria-selected="activeSection===-1" :tabindex="activeSection===-1 ? 0 : -1" @click="selectArticleSection(-1)">{{ isAnalysisPost ? 'Análisis' : 'Noticia' }}</button>
           <button v-for="(section,index) in postSections" :id="'article-tab-'+index" :key="index" type="button" role="tab" aria-controls="article-reading-panel" :aria-selected="activeSection===index" :tabindex="activeSection===index ? 0 : -1" :title="section.title" @click="selectArticleSection(index)">{{ sectionNavLabel(section,index) }}</button>
-        </nav>
+        </nav></ScrollTabRail>
         <div id="article-reading-panel" class="article-reading-panel" :role="postSections.length ? 'tabpanel' : undefined" :aria-labelledby="postSections.length ? (activeSection===-1 ? 'article-tab-all' : 'article-tab-'+activeSection) : undefined" tabindex="-1">
         <div v-if="activeSection===-1 && post.content && !isUpcomingPost" class="analysis-introduction rich-content reading-prose" v-html="richText(post.content)"></div>
 
@@ -802,7 +802,6 @@ onUnmounted(() => {
         </div>
       </aside>
     </main>
-    <ScrollHintBubble />
 
     <Transition name="toast">
       <div v-if="rewardToast.show" class="read-reward-toast">
@@ -1173,6 +1172,8 @@ onUnmounted(() => {
  .post-layout { padding-top:calc(var(--public-nav-offset, 64px) + 16px); }
 }
 .post-content-section { scroll-margin-top:calc(var(--public-nav-offset, 72px) + 20px); }
+
+.article-section-rail{position:sticky;top:var(--article-nav-height,var(--public-nav-offset,72px));z-index:10;justify-self:start;width:100%}.article-section-rail .article-section-nav{position:static}
 </style>
 
 

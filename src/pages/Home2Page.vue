@@ -19,7 +19,6 @@ import bannerImage from '@/iconos/Banner.png'
 import logoImage from '@/iconos/logo.png'
 import HomeMediaPanel from '@/components/home/HomeMediaPanel.vue'
 import HomeWelcomeLoader from '@/components/home/HomeWelcomeLoader.vue'
-import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
 import { postCategoryLabels, normalizeCategory } from '@/services/postCategories'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { peekPublicPage, requestPublicPage } from '@/services/publicPageCache'
@@ -332,7 +331,7 @@ onUnmounted(() => {
           <HomeHeroDeck v-if="activeHeroSlide" :slides="heroSlides" :active-index="heroSlideIndex" :author-icon="authorIcon" @select="selectHeroSlide" @read="openHeroSlide" @pause="pauseHero" @resume="resumeHero" />
         </section>
 
-        <section id="home2-next-section" class="home2-community-band">
+        <section class="home2-community-band">
           <div>
             <span><i class="fas fa-users"></i> Comunidad Nintendo</span>
             <h2>Unete a nuestras comunidades</h2>
@@ -388,7 +387,6 @@ onUnmounted(() => {
         />
       </template>
     </main>
-    <ScrollHintBubble target-id="home2-next-section" />
   </div>
 </template>
 

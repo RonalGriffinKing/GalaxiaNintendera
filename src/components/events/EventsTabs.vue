@@ -1,4 +1,5 @@
 <script setup>
+import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
 defineProps({
   modelValue: {
     type: String,
@@ -17,7 +18,7 @@ const tabs = [
 </script>
 
 <template>
-  <nav class="events-tabs-premium" aria-label="Secciones de eventos">
+  <ScrollTabRail class="events-filter-rail"><nav class="events-tabs-premium" aria-label="Secciones de eventos">
     <button
       v-for="tab in tabs"
       :key="tab.id"
@@ -28,7 +29,7 @@ const tabs = [
       <i :class="tab.icon"></i>
       {{ tab.label }}
     </button>
-  </nav>
+  </nav></ScrollTabRail>
 </template>
 
 <style scoped>

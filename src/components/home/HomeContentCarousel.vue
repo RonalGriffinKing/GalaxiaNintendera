@@ -78,7 +78,6 @@ onUnmounted(()=>{cancelMovement();observer?.disconnect();media?.removeEventListe
    <div v-for="(page,pageIndex) in pages" :key="pageIndex" class="carousel-page" role="group" :aria-label="`Página ${pageIndex+1} de ${pages.length}`" :inert="pageIndex!==active"><slot v-for="(item,index) in page" :key="item.id" :item="item" :index="pageIndex*size+index" /></div>
   </div>
   <p v-if="!items.length" class="carousel-empty">Todavía no hay publicaciones.</p>
-  <p v-if="pages.length>1" class="carousel-swipe-hint" aria-hidden="true">Desliza para ver más <span>↔</span></p>
   <nav v-if="pages.length" class="carousel-controls" :aria-label="`Navegar ${label}`"><div ref="dotTrack" class="carousel-dots"><button v-for="(_,index) in pages" :key="index" :aria-label="`Ver página ${index+1}`" :aria-current="index===active ? 'page' : undefined" :class="{active:index===active}" @click="select(index)"></button></div></nav>
  </div>
 </template>
@@ -92,7 +91,6 @@ onUnmounted(()=>{cancelMovement();observer?.disconnect();media?.removeEventListe
 .carousel-viewport{position:relative}
 .carousel-dots{position:relative;scrollbar-width:none}
 .carousel-dots::-webkit-scrollbar{display:none}
-.carousel-swipe-hint{display:none}
 @media(max-width:760px){
  .content-carousel.is-grid{--editorial-card-height:170px}
  .content-carousel:not(.is-grid){--editorial-card-height:300px}
@@ -100,8 +98,6 @@ onUnmounted(()=>{cancelMovement();observer?.disconnect();media?.removeEventListe
  .can-slide .carousel-viewport{gap:12px}
  .can-slide .carousel-page{flex-basis:88%}
  .can-slide .carousel-viewport::after{content:'';flex:0 0 calc(12% - 12px)}
- .carousel-swipe-hint{display:flex;align-items:center;justify-content:space-between;margin:0;font-size:11px;color:#c4b5fd}
- .carousel-swipe-hint span{font-size:18px}
  .carousel-controls{gap:8px}
  .carousel-dots button{position:relative;width:20px;height:28px;flex-basis:20px;background:transparent}
  .carousel-dots button.active{width:26px;flex-basis:26px;background:transparent}

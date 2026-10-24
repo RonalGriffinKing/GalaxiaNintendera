@@ -1,4 +1,5 @@
 <script setup>
+import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
 import { compactPostCategory } from '@/services/postCategoryDisplay'
 import { vSoftReveal } from '@/directives/softReveal'
 import { analysisRating } from '@/services/articlePresentation'
@@ -12,7 +13,6 @@ import { resolveAssetUrl } from '@/constants/assets'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { categoryIcon, DEFAULT_POST_CATEGORIES, uniqueCategories, loadPostCategories, normalizeCategory as normalize, postCategoryLabels, postMatchesCategory } from '@/services/postCategories'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
-import ScrollHintBubble from '@/components/shared/ScrollHintBubble.vue'
 import { useVisualThemes } from '@/composables/useVisualThemes'
 import { resolvePostVisualTheme, postWebThemeCss } from '@/services/visualThemes'
 import { peekPublicPage, isPublicPageFresh, storePublicPage } from '@/services/publicPageCache'
@@ -391,7 +391,7 @@ watch(() => route.fullPath, () => {
       </header>
 
       <div class="listing-filter-bar">
-        <div class="filter-row">
+        <ScrollTabRail class="category-filter-rail"><div class="filter-row">
           <button
             v-for="filter in displayFilters"
             :key="filter"
@@ -402,7 +402,7 @@ watch(() => route.fullPath, () => {
             <i :class="categoryIcon(filter)"></i>
             {{ filter }}
           </button>
-        </div>
+        </div></ScrollTabRail>
 
         <div class="listing-sort-combobox" @click.stop>
           <button
@@ -560,7 +560,6 @@ watch(() => route.fullPath, () => {
         </aside>
       </section>
     </main>
-    <ScrollHintBubble v-if="!isLoading" />
 
   </div>
 </template>
@@ -3118,6 +3117,8 @@ watch(() => route.fullPath, () => {
  .popular-post strong { font-size:14px; line-height:1.4; }
 }
 
+
+.category-filter-rail{flex:1;min-width:0}
 </style>
 
 <style scoped>

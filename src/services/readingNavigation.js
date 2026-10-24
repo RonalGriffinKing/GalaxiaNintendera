@@ -12,7 +12,7 @@ export function createReadingNavigation() {
    const nextDirection=Math.sign(delta)
    distance=nextDirection===direction?distance+Math.abs(delta):Math.abs(delta)
    direction=nextDirection
-   if(direction>0 && position>96 && distance>=32)hidden=true
+   if(direction>0 && position>120 && distance>=32)hidden=true
    if(direction<0 && distance>=24)hidden=false
    return hidden
   }

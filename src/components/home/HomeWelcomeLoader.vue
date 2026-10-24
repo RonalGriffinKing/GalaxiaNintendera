@@ -1,16 +1,20 @@
 <script setup>
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
+import { watch, onUnmounted } from 'vue'
+import { homeWelcomeLoading } from '@/composables/usePublicChromeLoading'
 
-defineProps({
+const props = defineProps({
   visible: {
     type: Boolean,
     default: false
   }
 })
+watch(() => props.visible, value => { homeWelcomeLoading.value = value }, { immediate: true, flush: 'sync' })
+onUnmounted(() => { homeWelcomeLoading.value = false })
 </script>
 
 <template>
-  <Transition name="home-welcome">
+  <Teleport to="body"><Transition name="home-welcome">
     <section v-if="visible" class="home-welcome-loader" aria-live="polite" aria-busy="true">
       <GalaxyLoader
         show-logo
@@ -18,7 +22,7 @@ defineProps({
         text="Estamos cargando noticias, eventos y tus comunidades favoritas..."
       />
     </section>
-  </Transition>
+  </Transition></Teleport>
 </template>
 
 <style scoped>

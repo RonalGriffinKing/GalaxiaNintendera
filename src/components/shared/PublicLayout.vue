@@ -8,6 +8,7 @@ import GalaxiaHub from '@/components/shared/GalaxiaHub.vue'
 import PublicNavbar from '@/components/nav/PublicNavbar.vue'
 import SiteFooter from '@/components/sitePages/SiteFooter.vue'
 import { defaultLogoUrl } from '@/constants/assets'
+import { publicChromeLoading } from '@/composables/usePublicChromeLoading'
 
 const OFFICIAL_COMMUNITY_ID = 'galaxia-oficial'
 const COMMUNITY_FAVORITES_KEY = 'galaxia-community-favorites'
@@ -135,7 +136,7 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
       </Transition>
     </router-view>
     <SiteFooter v-if="showSiteFooter" />
-    <GalaxiaHub
+    <div v-show="!publicChromeLoading" :inert="publicChromeLoading || undefined"><GalaxiaHub
       :official-community="officialCommunity"
       :favorite-communities="favoriteCommunities"
       :suggested-communities="suggestedCommunities"
@@ -146,7 +147,7 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
       @toggle-favorite="toggleFavoriteCommunity"
       @open-explore="openExplore"
     />
-    <DirectChatBubble />
+    <DirectChatBubble /></div>
   </div>
 </template>
 
