@@ -783,7 +783,7 @@ import { loadPostCategories } from '@/services/postCategories'
 import { READ_REWARD_STARS } from '@/services/profileProgress'
 import { renderRichText } from '@/services/richText'
 import { playPublishSound } from '@/services/uiSounds'
-import { apiUrl } from '@/services/appEnvironment'
+
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
 import PostCinematicHero from '@/components/posts/PostCinematicHero.vue'
 
@@ -1490,7 +1490,7 @@ const searchIgdbImages = async () => {
   igdbError.value = ''
   igdbHasSearched.value = true
   try {
-    const response = await fetch(apiUrl('/.netlify/functions/igdb'), {
+    const response = await fetch('/.netlify/functions/igdb', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query })

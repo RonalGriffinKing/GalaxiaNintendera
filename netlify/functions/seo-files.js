@@ -1,6 +1,3 @@
-const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'widget-dreams'
-const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || 'AIzaSyCIjX5wXqFS5nWj6u13bnVDq2PSFNjhZhA'
-
 export const handler = async (event) => {
   const siteUrl = resolveSiteUrl(event)
   const type = String(event.queryStringParameters?.type || '').toLowerCase()
@@ -50,6 +47,9 @@ function resolveSiteUrl(event) {
 }
 
 async function loadPublicPosts() {
+  const FIREBASE_PROJECT_ID = globalThis.Netlify?.env?.get('FIREBASE_PROJECT_ID') ?? process.env.FIREBASE_PROJECT_ID
+  const FIREBASE_API_KEY = globalThis.Netlify?.env?.get('FIREBASE_API_KEY') ?? process.env.FIREBASE_API_KEY
+  if (!FIREBASE_PROJECT_ID || !FIREBASE_API_KEY) throw new Error('Firebase configuration is missing')
   const posts = []
   let pageToken = ''
 

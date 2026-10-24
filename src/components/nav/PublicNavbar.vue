@@ -9,7 +9,6 @@ import { deleteApp, initializeApp } from 'firebase/app'
 import { auth, db, firebaseConfig } from '@/firebase'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { resetPlayerSession } from '@/services/playerState'
-import { isNativeApp } from '@/services/appEnvironment'
 import PublicCreateSheet from '@/components/nav/PublicCreateSheet.vue'
 import NotificationDropdown from '@/components/nav/NotificationDropdown.vue'
 import PublicQuickAdminModals from '@/components/nav/PublicQuickAdminModals.vue'
@@ -101,7 +100,6 @@ const navExpanded = ref(false)
 const bottomAccountButton = ref(null)
 const navCompact = ref(false)
 const readingProgress = ref(0)
-const keepNativeNavigationVisible = isNativeApp()
 const quickCommunityDraft = ref({
   name: '',
   description: '',
@@ -159,7 +157,7 @@ const bottomNavItems = computed(() => PUBLIC_NAV_LINKS.filter(item => item.to !=
 const bottomNavColumns = computed(() => bottomNavItems.value.length + 2)
 const isReadingRoute = computed(() => route.path.startsWith('/post/'))
 const mobileNavClass = computed(() => ({
-  pill: !keepNativeNavigationVisible && scrollY.value > 120 && !navExpanded.value && !searchOpen.value && !notificationsOpen.value && !accountMenuOpen.value,
+  pill: scrollY.value > 120 && !navExpanded.value && !searchOpen.value && !notificationsOpen.value && !accountMenuOpen.value,
   compact: navCompact.value,
   hidden: navHidden.value,
   reading: isReadingRoute.value,
@@ -481,15 +479,6 @@ const updateScrollNavigation = () => {
 
   scrollY.value = nextY
   readingProgress.value = isReadingRoute.value ? Math.min(100, Math.max(0, (nextY / maxScroll) * 100)) : 0
-
-  // En la APK el nav debe conservar siempre su tamano y posicion completos.
-  // Evitamos que el scroll lo compacte u oculte debajo de la barra del sistema.
-  if (keepNativeNavigationVisible) {
-    navCompact.value = false
-    navHidden.value = false
-    scrollTicking = false
-    return
-  }
 
   const mobile=isMobileNav()
   const controlsOpen=menuOpen.value || accountMenuOpen.value || searchOpen.value || notificationsOpen.value || createMenuOpen.value || quickCommunityOpen.value || quickUserOpen.value

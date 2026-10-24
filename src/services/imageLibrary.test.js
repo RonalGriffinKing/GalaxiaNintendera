@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest'
-vi.mock('./appEnvironment', () => ({ apiUrl: path => path }))
 vi.mock('@/firebase',()=>({auth:{currentUser:{uid:'admin'}},db:{}}))
 vi.mock('firebase/firestore',()=>({collection:vi.fn((_,name)=>name),getDocs:vi.fn(),limit:vi.fn(n=>({limit:n})),orderBy:vi.fn((...v)=>({orderBy:v})),query:vi.fn((...v)=>v),startAfter:vi.fn(v=>({after:v.id}))}))
 import {extractPostImages,loadWebImageLibrary,searchIgdbMedia} from './imageLibrary'

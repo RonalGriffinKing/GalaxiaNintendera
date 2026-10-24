@@ -1,6 +1,6 @@
 ﻿import { collection,getDocs,limit,orderBy,query,startAfter } from 'firebase/firestore'
 import { auth,db } from '@/firebase'
-import { apiUrl } from './appEnvironment'
+
 import { eventGameNames } from './eventGame'
 const libraries=new Map(),igdbCache=new Map(),TTL=5*60*1000,PAGE_SIZE=40
 export const mediaSearchText=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()
@@ -39,7 +39,7 @@ export async function searchIgdbMedia(text,{signal}={}) {
  const value=String(text||'').trim();if(value.length<2)throw Error('Escribe al menos dos letras del juego.')
  const key=value.toLowerCase(),cached=igdbCache.get(key)
  if(cached&&Date.now()-cached.at<TTL)return cached.data
- const response=await fetch(apiUrl('/.netlify/functions/igdb'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:value}),signal})
+ const response=await fetch('/.netlify/functions/igdb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:value}),signal})
  const data=await response.json().catch(()=>({}))
  if(!response.ok)throw Error(data.error||'No se pudo consultar IGDB.')
  const images=(Array.isArray(data.images)?data.images:[]).filter(image=>image?.url)
@@ -51,5 +51,5 @@ export function imageSearchPreview(url){
  if(!url)return ''
  if(/^(data:|blob:|\/)/.test(url))return url
  try{if(new URL(url,location.origin).origin===location.origin)return url}catch{return ''}
- return apiUrl('/.netlify/functions/image-proxy?url='+encodeURIComponent(url))
+ return '/.netlify/functions/image-proxy?url='+encodeURIComponent(url)
 }

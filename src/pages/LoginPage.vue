@@ -95,8 +95,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createUserWithEmailAndPassword, GoogleAuthProvider, sendEmailVerification, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from 'firebase/auth'
-import { Capacitor } from '@capacitor/core'
+import { createUserWithEmailAndPassword, GoogleAuthProvider, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { defaultLogoUrl } from '@/constants/assets'
@@ -146,20 +145,7 @@ const loginWithGoogle = async () => {
   loading.value = true
 
   try {
-    let credential
-
-    if (Capacitor.isNativePlatform()) {
-      const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
-      const nativeResult = await FirebaseAuthentication.signInWithGoogle({
-        skipNativeAuth: true,
-        useCredentialManager: true
-      })
-      const idToken = nativeResult.credential?.idToken
-      if (!idToken) throw new Error('auth/native-google-token-missing')
-      credential = await signInWithCredential(auth, GoogleAuthProvider.credential(idToken))
-    } else {
-      credential = await signInWithPopup(auth, new GoogleAuthProvider())
-    }
+    const credential = await signInWithPopup(auth, new GoogleAuthProvider())
 
     const user = credential.user
     const userRef = doc(db, 'users', user.uid)
@@ -218,12 +204,8 @@ const getAuthErrorMessage = (e, fallback) => {
     return 'Se cerro la ventana de Google antes de terminar'
   }
 
-  if (e?.message?.includes('12501') || e?.message?.toLowerCase().includes('cancel')) {
+  if (e?.message?.toLowerCase().includes('cancel')) {
     return 'Se cancelo el inicio de sesion con Google'
-  }
-
-  if (e?.message?.includes('10') || e?.code === 'auth/native-google-token-missing') {
-    return 'Google no pudo validar la configuracion Android. Instala la ultima version de la app.'
   }
 
   return fallback

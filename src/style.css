@@ -1,7 +1,6 @@
 @import './assets/styles/base.css';
 @import './assets/styles/theme.css';
 @import './assets/styles/animations.css';
-@import './assets/styles/native-app.css';
 
 :root {
   --app-bg: #070816;

@@ -10,7 +10,7 @@ import { normalizeSocialContent, titleRuns } from '@/services/socialContent'
 import PublicationAnimationModal from '@/components/posts/PublicationAnimationModal.vue'
 import SocialVisualInspector from '@/components/posts/SocialVisualInspector.vue'
 import { resolveProfileIcon } from '@/services/profileProgress'
-import { apiUrl } from '@/services/appEnvironment'
+
 import fallbackCover from '@/iconos/Banner.png'
 import galaxyLogo from '@/iconos/logo.png'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
@@ -923,7 +923,7 @@ function proxiedImageUrl(value) {
   if (!value || typeof window === 'undefined') return value || fallbackCover
   if (isLocalOrInlineImage(value)) return value
 
-  return apiUrl(`/.netlify/functions/image-proxy?url=${encodeURIComponent(value)}&cb=${imageCacheNonce.value}`)
+  return `/.netlify/functions/image-proxy?url=${encodeURIComponent(value)}&cb=${imageCacheNonce.value}`
 }
 
 function isLocalOrInlineImage(value) {

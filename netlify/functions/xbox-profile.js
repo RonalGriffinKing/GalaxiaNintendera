@@ -1,7 +1,5 @@
-﻿import {cleanGamertag,validXuid,findExactXboxPlayer,xboxProfilePerson,normalizeXboxIdentity} from '../../src/services/xboxIdentity.js'
+import {cleanGamertag,validXuid,findExactXboxPlayer,xboxProfilePerson,normalizeXboxIdentity} from '../../src/services/xboxIdentity.js'
 const API='https://api.xbl.io/v2'
-const FIREBASE_KEY=process.env.FIREBASE_API_KEY||'AIzaSyCIjX5wXqFS5nWj6u13bnVDq2PSFNjhZhA'
-const PROJECT=process.env.FIREBASE_PROJECT_ID||'widget-dreams'
 const cache=new Map(),pending=new Map(),searches=new Map()
 const TTL=300000
 let blockedUntil=0
@@ -40,6 +38,9 @@ export async function handler(event){
  const params=event.queryStringParameters||{}
  if(Object.keys(params).some(key=>!['gamertag','uid','diagnostic'].includes(key))||Boolean(params.gamertag)===Boolean(params.uid))return json(400,{error:'Consulta Xbox no válida.'})
  if(params.diagnostic!==undefined&&(params.diagnostic!=='images'||!params.uid||params.gamertag))return json(400,{error:'Diagnostico no valido.'})
+ const FIREBASE_KEY=globalThis.Netlify?.env?.get('FIREBASE_API_KEY')??process.env.FIREBASE_API_KEY
+ const PROJECT=globalThis.Netlify?.env?.get('FIREBASE_PROJECT_ID')??process.env.FIREBASE_PROJECT_ID
+ if(!FIREBASE_KEY||!PROJECT)return json(503,{error:'La configuración de Firebase no está disponible.'})
  if(!process.env.OPENXBL_API_KEY)return json(503,{error:'La conexión de Xbox todavía no está disponible.'})
  const token=(event.headers?.authorization||event.headers?.Authorization||'').match(/^Bearer ([A-Za-z0-9_.-]{20,5000})$/)?.[1]
  try{

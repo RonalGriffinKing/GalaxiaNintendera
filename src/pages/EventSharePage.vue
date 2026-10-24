@@ -5,7 +5,7 @@ import { collection,deleteDoc,doc,getDoc,getDocs,updateDoc } from 'firebase/fire
 import { toPng } from 'html-to-image'
 import JSZip from 'jszip'
 import { auth,db } from '@/firebase'
-import { apiUrl } from '@/services/appEnvironment'
+
 import { INVITATION_FORMATS,eventTime,invitationDefaults,isEventActive } from '@/services/eventInvitation'
 import { useEventClock } from '@/composables/useEventClock'
 import PublicationAnimationModal from '@/components/posts/PublicationAnimationModal.vue'
@@ -73,7 +73,7 @@ function applyStyleToAll(){
 function imageUrl(source){
  if(!source)return ''
  if(/^(data:|blob:|\/)/.test(source))return source
- try{const url=new URL(source,location.origin);if(url.origin===location.origin)return source;return apiUrl('/.netlify/functions/image-proxy?url='+encodeURIComponent(source))}catch{return ''}
+ try{const url=new URL(source,location.origin);if(url.origin===location.origin)return source;return '/.netlify/functions/image-proxy?url='+encodeURIComponent(source)}catch{return ''}
 }
 function renderedOptions(event){const value=options.value[event.id];return {...value,logo:imageUrl(value.logo)}}
 async function upload(event,key){

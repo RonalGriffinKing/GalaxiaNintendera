@@ -32,7 +32,7 @@ Presencia e historial se mantienen independientes: la fuente de presencia determ
 - `src/components/profile/ProfileGamerPreview.vue`: datos reales, estados vacíos, juegos destacados y actividad reciente.
 - `src/components/profile/ProfileIconEditor.vue` y `ProfileSystemsPanel.vue`: editor adaptable y gestión de sistemas en su interior.
 - `src/services/nxapiPresence.js`: validadores, normalizadores y combinación de capacidades.
-- `src/services/nintendoPresenceClient.js`: consultas a la función y caché del navegador, reutilizando `apiUrl` para web/Android.
+- `src/services/nintendoPresenceClient.js`: consultas a la función y caché del navegador, con rutas relativas para web.
 - `src/services/gamerIdentity.js`: selector de destacados y contrato de juegos parciales.
 - `vite.config.js`: puente local a la función, siguiendo el mecanismo existente.
 
