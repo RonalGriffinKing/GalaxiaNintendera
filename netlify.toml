@@ -3,8 +3,10 @@
   publish = "dist"
 
 [build.environment]
-  # The canonical site URL is public metadata, also present in the generated HTML.
-  SECRETS_SCAN_OMIT_KEYS = "GALAXIA_FIREBASE_PROJECT,VITE_YOUTUBE_CHANNEL_ID,VITE_YOUTUBE_API_KEY,VITE_SOCKET_URL,VITE_YOUTUBE_HANDLE,VITE_SITE_URL,IGDB_CLIENT_ID,IGDB_CLIENT_SECRET,TWITCH_CLIENT_ID,TWITCH_CLIENT_SECRET"
+  # Only public client configuration may be excluded from value scanning.
+  # Firebase client API keys/project IDs identify the app; they are not admin credentials.
+  # Never add OPENXBL_API_KEY, IGDB_CLIENT_SECRET, TWITCH_CLIENT_SECRET or session secrets here.
+  SECRETS_SCAN_OMIT_KEYS = "GALAXIA_FIREBASE_PROJECT,FIREBASE_API_KEY,FIREBASE_PROJECT_ID,VITE_YOUTUBE_CHANNEL_ID,VITE_YOUTUBE_API_KEY,VITE_SOCKET_URL,VITE_YOUTUBE_HANDLE,VITE_SITE_URL"
   VITE_SITE_URL = "https://galaxianintendera.com"
 
 [[redirects]]
