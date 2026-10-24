@@ -25,7 +25,25 @@ try{
 
  check(await ev('(()=>{const t=document.querySelector(".article-section-nav [aria-selected=true]").getBoundingClientRect(),r=document.querySelector(".article-section-rail").getBoundingClientRect();return t.left>=r.left&&t.right<=r.right})()'),'selected tab is revealed');
  for(const width of [320,390,768,1440]){await cdp('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await wait(150);check(await ev('document.documentElement.scrollWidth<=innerWidth'),'no document overflow at '+width)}
+ for(const reduced of [false,true]){
+  await cdp('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:reduced?'reduce':'no-preference'}]});
+  await ev('window.scrollTo({top:0,behavior:"instant"})');await wait(150);
+  await ev('document.querySelectorAll(".article-section-nav [role=tab]")[2].click()');await wait(900);
+  check(await ev('(()=>{const r=document.querySelector(".article-section-rail").getBoundingClientRect(),p=document.getElementById("article-reading-panel").getBoundingClientRect();return scrollY>100&&r.top>=10&&r.top<=15&&p.top>=r.bottom&&p.top<=r.bottom+32})()'),'desktop section click aligns content'+(reduced?' with reduced motion':''));
+ }
+ await cdp('Emulation.setEmulatedMedia',{features:[]});
+ await ev('document.querySelectorAll(".article-section-nav [role=tab]").forEach((button,index)=>{if(index>2)button.remove()})');await wait(300);
+ check(await ev('(()=>{const r=document.querySelector(".article-section-rail"),last=r.querySelector("[role=tab]:last-child").getBoundingClientRect(),bounds=r.getBoundingClientRect();return !r.classList.contains("is-scrollable")&&bounds.right-last.right<16&&bounds.width<document.querySelector(".post-article").clientWidth})()'),'desktop rail fits its tabs without a trailing empty area');
+ if(process.env.DESKTOP_RAIL_SCREENSHOT){await ev('document.querySelector(".article-section-rail").scrollIntoView({block:"center",behavior:"instant"})');await wait(300);const shot=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync(process.env.DESKTOP_RAIL_SCREENSHOT,Buffer.from(shot.result.data,'base64'))}
+ await ev('(()=>{const nav=document.querySelector(".article-section-nav"),sample=nav.querySelector("button");for(let i=0;i<18;i++){const button=sample.cloneNode(true);button.removeAttribute("id");button.textContent="Apartado de prueba "+i;nav.append(button)}})()');await wait(300);
+ check(await ev('document.querySelector(".article-section-rail").classList.contains("has-next")&&document.documentElement.scrollWidth<=innerWidth'),'desktop rail still scrolls when its tabs do not fit');
  await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:true});await ev('window.themeLab.router.push("/news")');await until('!!document.querySelector(".category-filter-rail .scroll-rail-track")');check(await ev('getComputedStyle(document.querySelector(".filter-row")).scrollbarWidth==="none"'),'news filters use the shared rail');
+ for(const width of [760,761,899,900,991,1100,1101,1200,1440]){
+  await cdp('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await wait(120);
+  check(await ev('(()=>{const sidebar=document.querySelector(".listing-sidebar"),cards=[...sidebar.querySelectorAll(".side-card,.purple-card")].filter(card=>card.getClientRects().length);return cards.every(card=>card.getBoundingClientRect().width>=250)&&document.documentElement.scrollWidth<=innerWidth})()'),'listing sidebar remains readable at '+width);
+ }
+ if(process.env.LISTING_QA_SCREENSHOT){await cdp('Emulation.setDeviceMetricsOverride',{width:991,height:900,deviceScaleFactor:1,mobile:false});await ev('document.querySelector(".listing-sidebar").scrollIntoView({block:"center",behavior:"instant"})');await wait(250);const shot=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync(process.env.LISTING_QA_SCREENSHOT,Buffer.from(shot.result.data,'base64'))}
+ await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:true});
  await ev('window.themeLab.router.push("/events")');await until('!!document.querySelector(".events-filter-rail .scroll-rail-track")');check(await ev('document.querySelector(".events-filter-rail").classList.contains("has-next")'),'event tabs expose overflow controls');
  check(!errors.length,'no runtime exceptions');
 }catch(e){console.log('FAIL',e.message,errors);process.exitCode=1}finally{ws.close();edge.kill()}

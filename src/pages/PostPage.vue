@@ -52,7 +52,6 @@ const displayedSections = computed(() => postSections.value.map((section,index)=
 async function selectArticleSection(index) {
  activeSection.value=index
  await nextTick()
- if(!window.matchMedia('(max-width: 859px)').matches)return
  const panel=document.getElementById('article-reading-panel')
  const rail=document.querySelector('.article-section-rail')
  if(!panel||!rail)return
@@ -1187,6 +1186,9 @@ onUnmounted(() => {
 .post-content-section { scroll-margin-top:calc(var(--public-nav-offset, 72px) + 20px); }
 
 .article-section-rail{position:sticky;top:var(--article-nav-height,var(--public-nav-offset,72px));z-index:10;justify-self:start;width:100%}.article-section-rail .article-section-nav{position:static}
+@media(min-width:860px){
+ .article-section-rail{width:max-content;max-width:100%}
+}
 </style>
 
 
