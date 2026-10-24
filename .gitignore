@@ -36,3 +36,6 @@ dist.zip
 
 *storybook.log
 storybook-static
+
+# Firebase Android config: restore locally from the Firebase Console.
+/android/app/google-services.json

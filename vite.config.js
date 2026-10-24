@@ -109,6 +109,20 @@ const netlifyFunctionsDev = () => ({
 })
 
 export default defineConfig(({ command, mode }) => {
+  // Only Firebase's public web configuration is exposed to the client.
+  const firebaseEnv = { ...loadEnv(mode, process.cwd(), ''), ...process.env }
+  const firebaseFields = ['API_KEY', 'PROJECT_ID', 'AUTH_DOMAIN', 'STORAGE_BUCKET', 'MESSAGING_SENDER_ID', 'APP_ID']
+  const firebaseDefines = Object.fromEntries(firebaseFields.map(field => [
+    `import.meta.env.VITE_FIREBASE_${field}`,
+    JSON.stringify(firebaseEnv[`VITE_FIREBASE_${field}`] || firebaseEnv[`FIREBASE_${field}`] || '')
+  ]))
+  if (command === 'serve') {
+    for (const field of ['API_KEY', 'PROJECT_ID']) {
+      const key = `FIREBASE_${field}`
+      if (!process.env[key] && firebaseEnv[key]) process.env[key] = firebaseEnv[key]
+    }
+  }
+
   if (command === 'serve') {
     const vacationEnv = loadEnv(mode, process.cwd(), 'VACATION_')
     for (const key of ['VACATION_MANAGER_PASSWORD', 'VACATION_SESSION_SECRET']) {
@@ -122,6 +136,7 @@ export default defineConfig(({ command, mode }) => {
     if (OPENXBL_API_KEY) process.env.OPENXBL_API_KEY = OPENXBL_API_KEY
   }
   return {
+    define: firebaseDefines,
     optimizeDeps: { include: ['mediabunny'] },
     plugins: [
       netlifyFunctionsDev(),

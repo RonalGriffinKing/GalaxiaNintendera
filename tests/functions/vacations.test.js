@@ -13,7 +13,7 @@ vi.mock('@netlify/blobs', () => ({
     }
   })
 }))
-import { handler } from './vacations'
+import { handler } from '../../netlify/functions/vacations.js'
 const request = async (body, local = 'russafa', token = '') => {
   const res = await handler({ httpMethod: body ? 'POST' : 'GET', headers: { authorization: `Bearer ${token}` }, queryStringParameters: { local }, body: body ? JSON.stringify(body) : undefined })
   return { status: res.statusCode, data: JSON.parse(res.body) }

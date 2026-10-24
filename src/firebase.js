@@ -4,13 +4,19 @@ import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { Capacitor } from '@capacitor/core'
 
+const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID
+
 export const firebaseConfig = {
-  apiKey: 'AIzaSyCIjX5wXqFS5nWj6u13bnVDq2PSFNjhZhA',
-  authDomain: 'widget-dreams.firebaseapp.com',
-  projectId: 'widget-dreams',
-  storageBucket: 'widget-dreams.firebasestorage.app',
-  messagingSenderId: '416372701871',
-  appId: '1:416372701871:web:0dfbc6749b3e10d57ab25a'
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || `${projectId}.firebaseapp.com`,
+  projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || `${projectId}.firebasestorage.app`,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
+}
+
+if (!firebaseConfig.apiKey || !projectId) {
+  throw new Error('Missing Firebase configuration: set FIREBASE_API_KEY and FIREBASE_PROJECT_ID, or their VITE_ equivalents.')
 }
 
 const app = initializeApp(firebaseConfig)
