@@ -5,7 +5,7 @@ import { useRoute } from 'vue-router'
 import { iso, weekDates, overlaps, blockOf, validateBooking, validateMonthlyRequest, weekStart, isBlocked, quotaFor, personException, bookingDates, bookingWeeks, usedWeeks, selectionWeeks, MAX_VACATION_CHANGES } from '@/services/vacationRules'
 
 const route = useRoute()
-const state = ref(null), person = ref(''), year = ref(new Date().getFullYear()), start = ref(''), editing = ref('')
+const state = ref(null), person = ref(''), year = ref(2027), start = ref(''), editing = ref('')
 const message = ref(''), busy = ref(false), loading = ref(true), loginOpen = ref(false)
 const username = ref(''), password = ref(''), token = ref(''), newName = ref(''), renameId = ref(''), localName = ref(''), newLink = ref('')
 const rulesDraft = ref(null), overlapPending = ref(false)

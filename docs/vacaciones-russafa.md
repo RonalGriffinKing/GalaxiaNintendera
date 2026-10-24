@@ -1,5 +1,7 @@
 # Calendario de vacaciones
 
+La planificación abre en 2027, tanto por cuatrimestres como en «Mes completo». El selector de año permite consultar otros ejercicios; no se trasladan automáticamente las reservas guardadas de un año a otro. Los bloqueos anuales se aplican a las fechas del año seleccionado.
+
 La función publicada utiliza la API nativa de Netlify (`Request`/`Response`) para recibir la configuración de Netlify Blobs del runtime. El adaptador de Vite conserva el controlador de eventos y su almacén de desarrollo independiente; un funcionamiento local correcto no verifica por sí solo el acceso al almacén de producción.
 
 ## Consulta de cuatro semanas juntas
