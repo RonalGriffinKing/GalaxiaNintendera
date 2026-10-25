@@ -8,15 +8,19 @@ try{
  check(await ev('(()=>{const r=document.querySelector(".hero-deck").getBoundingClientRect();return r.width>1000&&r.width<=1300})()'),'featured story is large and centered within its maximum width');
  check(await ev('(()=>{const hero=document.querySelector(".hero-deck-card").getBoundingClientRect(),band=document.querySelector(".home2-community-band").getBoundingClientRect();return Math.abs(hero.left-band.left)<1&&Math.abs(hero.right-band.right)<1})()'),'featured and lower blocks have aligned edges');
  check(await ev('document.querySelectorAll(".deck-controls button").length===6&&document.querySelectorAll(".deck-arrow").length===2'),'all stories remain reachable through indicators and arrows');
+ const initialArrowColor=await ev('getComputedStyle(document.querySelector(".deck-arrow")).color');
  const before=await ev('document.querySelector(".slot-main").getBoundingClientRect().width');await ev('document.querySelectorAll(".deck-controls button")[4].click()');await wait(80);
  check(await ev('document.querySelector(".slot-main").getBoundingClientRect().width')===before,'width stays fixed during the fade');await wait(400);
  check(await ev('document.querySelector(".deck-main").textContent.includes("descubrir 4")'),'indicator selects the requested story');await ev('document.querySelector(".deck-arrow-next").click()');await wait(400);
  check(await ev('document.querySelector(".deck-main").textContent.includes("descubrir 5")'),'next arrow changes the story');
  check(await ev('!!document.querySelector(".deck-main.is-analysis .deck-category svg")'),'analysis retains its crown');
+ check(await ev('getComputedStyle(document.querySelector(".deck-arrow")).color')!==initialArrowColor,'arrows follow the active post theme');
  let shot=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync(process.env.TEMP+'/home-deck-desktop.png',Buffer.from(shot.result.data,'base64'));
  for(const width of [1100,900,768,760,430,390,360,320]){
   await cdp('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await wait(150);
   check(await ev('document.documentElement.scrollWidth<=innerWidth&&document.querySelectorAll(".hero-deck-card").length===1'),'one complete story fits at '+width);
+  check(await ev('(()=>{const scene=document.querySelector(".hero-deck-scene").getBoundingClientRect(),left=document.querySelector(".deck-arrow-previous").getBoundingClientRect(),right=document.querySelector(".deck-arrow-next").getBoundingClientRect();return left.width>=44&&right.width>=44&&left.left-scene.left>=18&&scene.right-right.right>=18&&Math.abs(left.top-right.top)<1})()'),'carousel arrows stay aligned with comfortable tap targets at '+width);
+  if(width<=760)check(await ev('(()=>{const card=document.querySelector(".hero-deck-card").getBoundingClientRect(),button=document.querySelector(".deck-read").getBoundingClientRect();return Math.abs(button.x+button.width/2-card.x-card.width/2)<1})()'),'mobile reading button is centered at '+width);
   check(await ev('(()=>{const c=document.querySelector(".deck-copy").getBoundingClientRect(),r=document.querySelector(".hero-deck-card").getBoundingClientRect(),badge=document.querySelector(".deck-category").getBoundingClientRect();return c.left>=r.left&&c.right<=r.right&&c.bottom<=r.bottom&&c.top>badge.bottom})()'),'copy fits below the category at '+width);
   if(width===390){shot=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync(process.env.TEMP+'/home-deck-mobile.png',Buffer.from(shot.result.data,'base64'))}
  }

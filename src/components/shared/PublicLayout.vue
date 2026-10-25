@@ -7,6 +7,7 @@ import DirectChatBubble from '@/components/widgets/chat/DirectChatBubble.vue'
 import GalaxiaHub from '@/components/shared/GalaxiaHub.vue'
 import PublicNavbar from '@/components/nav/PublicNavbar.vue'
 import SiteFooter from '@/components/sitePages/SiteFooter.vue'
+import MobileNavigationHint from '@/components/shared/MobileNavigationHint.vue'
 import { defaultLogoUrl } from '@/constants/assets'
 import { publicChromeLoading, publicNavigationOverlayOpen, publicReadingControlsHidden, publicReadingHeaderHidden } from '@/composables/usePublicChromeLoading'
 
@@ -128,6 +129,7 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
     :style="layoutStyle"
   >
     <PublicNavbar />
+    <MobileNavigationHint />
     <router-view v-slot="{ Component, route: viewRoute }">
       <Transition name="page-soft" mode="out-in">
         <KeepAlive include="CommunityPage">

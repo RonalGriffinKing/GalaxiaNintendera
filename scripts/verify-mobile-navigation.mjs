@@ -13,6 +13,9 @@ try{
  await ev('document.body.style.minHeight="6000px";window.scrollTo({top:500,behavior:"instant"})');await wait(200);
  await wait(300);
  check(await ev('document.querySelector(".public-nav").classList.contains("reading-hidden")&&document.querySelector(".public-bottom-nav").inert'),'public mobile navigation hides on descent');
+ check(await ev('!!document.querySelector(".mobile-navigation-hint")&&localStorage.getItem("galaxia-mobile-navigation-hint-seen")==="1"'),'first hide explains how to restore navigation');
+ if(process.env.NAV_HINT_SCREENSHOT){const shot=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync(process.env.NAV_HINT_SCREENSHOT,Buffer.from(shot.result.data,'base64'))}
+ await wait(5300);check(await ev('!document.querySelector(".mobile-navigation-hint")'),'hint fades out automatically');
  await ev('window.scrollTo({top:350,behavior:"instant"})');await wait(450);
  check(await ev('document.querySelector(".public-nav").inert&&!document.querySelector(".public-bottom-nav").inert'),'only lower controls return after scrolling upward');
  await ev('window.scrollTo({top:60,behavior:"instant"})');await wait(450);
@@ -62,5 +65,7 @@ try{
  await ev('window.themeLab.router.push("/news")');await wait(200);
  await ev('window.__labAuthChange(null)');await wait(100);check(await ev('!!document.querySelector(".bottom-profile-btn .fa-user")'),'visitors retain profile access');
  await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await wait(100);await ev('window.scrollTo({top:650,behavior:"instant"})');await wait(450);check(await ev('getComputedStyle(document.querySelector(".public-bottom-nav")).display==="none"&&!document.querySelector(".public-nav").inert&&getComputedStyle(document.querySelector(".public-floating-controls")).visibility==="visible"'),'desktop listing navigation remains stable');
+ await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await nav('/public-navigation','.public-nav');await ev('document.body.style.minHeight="6000px";window.scrollTo({top:600,behavior:"instant"})');await wait(700);
+ check(await ev('!document.querySelector(".mobile-navigation-hint")'),'hint stays dismissed after a new page load');
  check(!errors.length,'no runtime exceptions');
 }catch(e){console.log('FAIL',e.message,errors);process.exitCode=1}finally{ws.close();edge.kill()}
