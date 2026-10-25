@@ -1,6 +1,6 @@
 <script setup>
 import { createReadingNavigation } from '@/services/readingNavigation'
-import { publicChromeLoading, publicNavigationOverlayOpen, publicReadingControlsHidden, publicReadingHeaderHidden } from '@/composables/usePublicChromeLoading'
+import { publicChromeLoading, publicNavigationOverlayOpen, publicReadingControlsHidden, publicReadingHeaderHidden, publicSearchRequest } from '@/composables/usePublicChromeLoading'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth'
@@ -377,6 +377,13 @@ const toggleSearch = async (event) => {
     await loadSearchIndex()
   }
 }
+
+watch(publicSearchRequest, request => {
+  if(!request)return
+  publicSearchRequest.value=null
+  if(searchOpen.value){searchTrigger.value=request.trigger;return}
+  toggleSearch({currentTarget:request.trigger})
+})
 
 const closeSearch = () => {
   searchOpen.value = false

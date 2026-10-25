@@ -1,4 +1,5 @@
 <script setup>
+import {publicReadingHeaderHidden,requestPublicSearch} from '@/composables/usePublicChromeLoading'
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
 import { compactPostCategory } from '@/services/postCategoryDisplay'
@@ -6,7 +7,7 @@ import { vSoftReveal } from '@/directives/softReveal'
 import { analysisRating } from '@/services/articlePresentation'
 import FeaturedSheen from '@/components/shared/FeaturedSheen.vue'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter } from "firebase/firestore"
 import { auth, db } from "@/firebase"
@@ -283,9 +284,25 @@ const goPost = (postOrId) => {
   router.push(postPath(postOrId))
 }
 
-const selectFilter = (filter) => {
-  if(normalize(selectedFilter.value)===normalize(filter))return
-  router.push({name:'news',query:{...route.query,category:normalize(filter)==='todas'?undefined:filter}})
+let filterScrollRequest=0
+const selectFilter = async (filter) => {
+  const request=++filterScrollRequest
+  if(normalize(selectedFilter.value)!==normalize(filter)){
+    const failure=await router.push({name:'news',query:{...route.query,category:normalize(filter)==='todas'?undefined:filter}})
+    if(failure)return
+  }
+  if(!window.matchMedia('(max-width:859px)').matches)return
+  await nextTick()
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))
+  if(request!==filterScrollRequest)return
+  const results=document.querySelector('.listing-layout'),bar=document.querySelector('.listing-filter-navigation')
+  if(!results||!bar)return
+  const resultTop=window.scrollY+results.getBoundingClientRect().top
+  const height=bar.getBoundingClientRect().height
+  const hiddenTop=12
+  const candidate=resultTop-height-hiddenTop-16
+  const top=candidate<120?(document.querySelector('.public-nav')?.offsetHeight||64)+8:12
+  window.scrollTo({top:Math.max(0,resultTop-height-top-16),behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'})
 }
 
 const selectSort = (value) => {
@@ -375,7 +392,7 @@ watch(() => route.fullPath, () => {
 </script>
 
 <template>
-  <div class="listing-page" @click="sortOpen = false">
+  <div class="listing-page" :class="{'listing-header-hidden':publicReadingHeaderHidden}" @click="sortOpen = false">
     <GalaxyAtmosphere />
     <main v-soft-reveal="'.news-row,.popular-card,.recent-post'" class="listing-shell" :aria-busy="isLoading">
       <header class="listing-header">
@@ -392,7 +409,7 @@ watch(() => route.fullPath, () => {
       </header>
 
       <div class="listing-filter-bar">
-        <ScrollTabRail class="category-filter-rail"><div class="filter-row">
+        <div class="listing-filter-navigation"><ScrollTabRail class="category-filter-rail"><div class="filter-row">
           <button
             v-for="filter in displayFilters"
             :key="filter"
@@ -403,7 +420,7 @@ watch(() => route.fullPath, () => {
             <i :class="categoryIcon(filter)"></i>
             {{ filter }}
           </button>
-        </div></ScrollTabRail>
+        </div></ScrollTabRail><button type="button" class="listing-search-trigger" aria-label="Buscar noticias" @click.stop="requestPublicSearch($event.currentTarget)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></button></div>
 
         <div class="listing-sort-combobox" @click.stop>
           <button
@@ -1268,7 +1285,7 @@ watch(() => route.fullPath, () => {
     radial-gradient(circle at 10% 18%, rgba(168, 85, 247, 0.16), transparent 28%),
     linear-gradient(180deg, #070a18 0%, #090d1d 52%, #060914 100%);
   color: #f8fafc;
-  overflow-x: hidden;
+  overflow-x: clip;
   padding-top: var(--public-nav-offset, 72px);
 }
 
@@ -3173,4 +3190,19 @@ watch(() => route.fullPath, () => {
  .listing-shell .news-list .news-row.featured-latest .post-copy p{font-size:16px;line-height:1.6;-webkit-line-clamp:4;font-weight:400}
 }
 @media(max-width:760px){.listing-shell .news-list .news-row.featured-latest .post-copy h2{font-size:26px;line-height:1.2;font-weight:700}.listing-shell .news-list .news-row.featured-latest .post-copy p{font-size:14px;line-height:1.55;-webkit-line-clamp:2;font-weight:400}}
+</style>
+
+<style scoped>
+.listing-filter-navigation{display:flex;align-items:center;min-width:0;gap:6px}
+.listing-search-trigger{display:none}
+@media(max-width:859px){
+ .listing-filter-bar{display:contents}
+ .listing-filter-navigation{position:sticky;top:calc(var(--public-nav-offset,64px) + 8px);z-index:30;margin-bottom:14px;padding:3px;border:1px solid #b78bfa66;border-radius:999px;background:#111024f5;box-shadow:0 6px 20px #0003;isolation:isolate;box-sizing:border-box}
+ .listing-header-hidden .listing-filter-navigation{top:calc(12px + env(safe-area-inset-top,0px))}
+ .listing-filter-navigation .category-filter-rail{border:0;box-shadow:none;background:transparent}
+ .listing-search-trigger{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;margin-right:3px;border:1px solid #c4b5fd55;border-radius:50%;background:#7c3aed22;color:#e3d5ff;cursor:pointer}
+ .listing-search-trigger svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+ .listing-search-trigger:focus-visible{outline:2px solid #e9b4ff;outline-offset:2px}
+ .listing-sort-combobox{margin-bottom:24px;width:100%;min-width:0}
+}
 </style>

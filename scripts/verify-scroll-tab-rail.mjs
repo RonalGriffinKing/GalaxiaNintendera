@@ -38,6 +38,19 @@ try{
  await ev('(()=>{const nav=document.querySelector(".article-section-nav"),sample=nav.querySelector("button");for(let i=0;i<18;i++){const button=sample.cloneNode(true);button.removeAttribute("id");button.textContent="Apartado de prueba "+i;nav.append(button)}})()');await wait(300);
  check(await ev('document.querySelector(".article-section-rail").classList.contains("has-next")&&document.documentElement.scrollWidth<=innerWidth'),'desktop rail still scrolls when its tabs do not fit');
  await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:true});await ev('window.themeLab.router.push("/news")');await until('!!document.querySelector(".category-filter-rail .scroll-rail-track")');check(await ev('getComputedStyle(document.querySelector(".filter-row")).scrollbarWidth==="none"'),'news filters use the shared rail');
+ for(const width of [320,390,768,859]){
+  await cdp('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:true});await ev('window.scrollTo({top:0,behavior:"instant"})');await wait(150);await ev('window.scrollTo({top:600,behavior:"instant"})');await wait(450);
+  check(await ev('(()=>{const bar=document.querySelector(".listing-filter-navigation").getBoundingClientRect(),search=document.querySelector(".listing-search-trigger").getBoundingClientRect();return bar.top>=10&&bar.top<=15&&search.width>=44&&search.left>=bar.left&&search.right<=bar.right&&document.documentElement.scrollWidth<=innerWidth})()'),'mobile news filters and search remain visible at '+width);
+ }
+ await ev('document.querySelector(".category-filter-rail .filter-row button:not(.active)").click()');await wait(1000);
+ check(await ev('(()=>{const bar=document.querySelector(".listing-filter-navigation").getBoundingClientRect(),results=document.querySelector(".listing-layout").getBoundingClientRect();return !!window.themeLab.router.currentRoute.value.query.category&&results.top>=bar.bottom&&results.top<=bar.bottom+24})()'),'changing category starts the results directly below the sticky filters');
+ await ev('window.scrollTo({top:700,behavior:"instant"})');await wait(250);await ev('document.querySelector(".category-filter-rail .filter-row button.active").click()');await wait(900);
+ check(await ev('(()=>{const bar=document.querySelector(".listing-filter-navigation").getBoundingClientRect(),results=document.querySelector(".listing-layout").getBoundingClientRect();return results.top>=bar.bottom&&results.top<=bar.bottom+24})()'),'tapping the active category also returns to the first result');
+ if(process.env.NEWS_RAIL_SCREENSHOT){const shot=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync(process.env.NEWS_RAIL_SCREENSHOT,Buffer.from(shot.result.data,'base64'))}
+ await ev('document.querySelector(".listing-search-trigger").click()');await until('!!document.querySelector(".public-search-panel")');
+ check(await ev('document.activeElement===document.querySelector(".public-search-panel input")'),'news rail opens the existing search with input focus');
+ await ev('document.querySelector(".public-search-panel").dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');await wait(300);
+ check(await ev('!document.querySelector(".public-search-panel")&&document.activeElement===document.querySelector(".listing-search-trigger")'),'closing search returns focus to the news rail');
  for(const width of [760,761,899,900,991,1100,1101,1200,1440]){
   await cdp('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await wait(120);
   check(await ev('(()=>{const sidebar=document.querySelector(".listing-sidebar"),cards=[...sidebar.querySelectorAll(".side-card,.purple-card")].filter(card=>card.getClientRects().length);return cards.every(card=>card.getBoundingClientRect().width>=250)&&document.documentElement.scrollWidth<=innerWidth})()'),'listing sidebar remains readable at '+width);
