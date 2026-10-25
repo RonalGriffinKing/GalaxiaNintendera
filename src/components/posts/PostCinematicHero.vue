@@ -106,11 +106,6 @@ const platformIcon = (platform = '') => {
   if (value.includes('switch') || value.includes('nintendo')) return 'fas fa-gamepad'
   return 'fas fa-gamepad'
 }
-const heroSummary = computed(() => {
-  const text = String(props.post.heroSummary || props.post.excerpt || props.post.content || '').replace(/\s+/g, ' ').trim()
-  if (text.length <= 230) return text
-  return `${text.slice(0, 227).trim()}...`
-})
 const heroStyle = computed(() => ({
   ...visualCss.value,
   '--post-image-position': normalizeHomeHero(props.post.hero).position,
@@ -197,7 +192,6 @@ const scoreTone = computed(() => {
 
       <div class="hero-copy">
         <h1><span v-for="(run,index) in titleRuns(post.title || 'Titulo de la publicacion',post.titleHighlights)" :key="index" :class="{'visual-title-highlight':run.highlighted}">{{run.text}}</span></h1>
-        <p v-if="heroSummary">{{ heroSummary }}</p>
       </div>
 
       <div v-if="gamePlatforms.length" class="hero-platforms" aria-label="Plataformas">
@@ -501,16 +495,6 @@ const scoreTone = computed(() => {
   text-shadow: 0 20px 54px rgba(0, 0, 0, 0.58);
 }
 
-.hero-copy p {
-  color: #e2e8f0;
-  font-size: clamp(15px, 1.5vw, 18px);
-  font-weight: 750;
-  line-height: 1.72;
-  margin: 18px 0 0;
-  max-width: 620px;
-  text-shadow: 0 12px 28px rgba(0, 0, 0, 0.62);
-}
-
 .hero-platforms {
   align-items: center;
   display: flex;
@@ -554,10 +538,6 @@ const scoreTone = computed(() => {
   text-transform: uppercase;
   top: -13px;
   white-space: nowrap;
-}
-
-.is-analysis .hero-copy p {
-  color: #fff2c2;
 }
 
 .hero-footer {
@@ -728,12 +708,6 @@ const scoreTone = computed(() => {
     max-width: 100%;
   }
 
-  .hero-copy p {
-    font-size: 13.5px;
-    line-height: 1.58;
-    margin-top: 14px;
-  }
-
   .hero-platforms > span {
     font-size: 10px;
     min-height: 28px;
@@ -794,11 +768,6 @@ const scoreTone = computed(() => {
     line-height: 1.08;
   }
 
-  .hero-copy p {
-    font-size: 13px;
-    line-height: 1.55;
-  }
-
   .hero-actions {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 42px;
   }
@@ -820,7 +789,6 @@ const scoreTone = computed(() => {
  .post-cinematic-hero:not(.is-preview) { min-height:400px; }
  .post-cinematic-hero:not(.is-preview) .hero-content { padding:22px 24px; gap:14px; }
  .post-cinematic-hero:not(.is-preview) .hero-copy h1 { font-size:clamp(28px,2.65vw,36px); line-height:1.15; overflow-wrap:break-word; }
- .post-cinematic-hero:not(.is-preview) .hero-copy p { font-size:15px; line-height:1.55; margin-top:14px; }
  .post-cinematic-hero:not(.is-preview) .hero-footer { flex-wrap:wrap; gap:14px; }
 }
 
@@ -860,10 +828,10 @@ const scoreTone = computed(() => {
 <style scoped>
 .post-cinematic-hero.is-editorial:not(.is-preview){min-height:480px;border-radius:22px;box-shadow:0 18px 50px #0004;border-color:#d6b45b55}
 .is-editorial .hero-pattern{display:none}.is-editorial .hero-content{max-width:760px;min-height:480px;padding:30px 38px;gap:20px;grid-template-rows:auto auto 1fr auto auto}
-.is-editorial .hero-copy h1{font-size:clamp(32px,3.5vw,50px);line-height:1.12;letter-spacing:-.025em}.is-editorial .hero-copy p{font-size:17px;line-height:1.6;max-width:620px;margin-top:18px}
+.is-editorial .hero-copy h1{font-size:clamp(32px,3.5vw,50px);line-height:1.12;letter-spacing:-.025em}
 .is-editorial .hero-media::after{background:linear-gradient(90deg,#090c18eb 0%,#090c1899 40%,#090c1810 80%),linear-gradient(0deg,#090c18e8,transparent 70%)}
-.is-editorial .hero-mini-score{display:none}.is-editorial .hero-footer{flex-wrap:wrap;gap:18px}.is-editorial .hero-copy p{color:#e5e7eb}
-@media(max-width:760px){.post-cinematic-hero.is-editorial:not(.is-preview){min-height:600px}.is-editorial .hero-content{padding:20px;min-height:600px;gap:16px}.is-editorial .hero-breadcrumb{margin-bottom:200px}.is-editorial .hero-copy h1{font-size:clamp(28px,7.8vw,38px)}.is-editorial .hero-copy p{font-size:15px;line-height:1.65;margin-top:14px}.is-editorial .hero-media::after{background:linear-gradient(180deg,#090c1808 5%,#090c1844 28%,#090c18e8 52%,#090c18 85%)}.is-editorial .hero-footer{align-items:start}.is-editorial .hero-author{max-width:100%}}
+.is-editorial .hero-mini-score{display:none}.is-editorial .hero-footer{flex-wrap:wrap;gap:18px}
+@media(max-width:760px){.post-cinematic-hero.is-editorial:not(.is-preview){min-height:600px}.is-editorial .hero-content{padding:20px;min-height:600px;gap:16px}.is-editorial .hero-breadcrumb{margin-bottom:200px}.is-editorial .hero-copy h1{font-size:clamp(28px,7.8vw,38px)}.is-editorial .hero-media::after{background:linear-gradient(180deg,#090c1808 5%,#090c1844 28%,#090c18e8 52%,#090c18 85%)}.is-editorial .hero-footer{align-items:start}.is-editorial .hero-author{max-width:100%}}
 </style>
 
 <style scoped>

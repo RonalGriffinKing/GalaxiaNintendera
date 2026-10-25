@@ -3,7 +3,7 @@ import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { compactPostCategory } from '@/services/postCategoryDisplay'
 import { vSoftReveal } from '@/directives/softReveal'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { homePinnedPosts } from '@/services/homePins'
 import { socialHeadline } from '@/services/socialPostPresentation'
 import HomeEditorialCard from '@/components/home/HomeEditorialCard.vue'
@@ -13,7 +13,6 @@ import { useRouter } from 'vue-router'
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { resolveAssetUrl } from '@/constants/assets'
-import { HOME_HERO_SLIDE_DURATION } from '@/constants/home'
 import { useTimedCarousel } from '@/composables/useTimedCarousel'
 import bienvenidaImage from '@/iconos/bienvenida.png'
 import bannerImage from '@/iconos/Banner.png'
@@ -277,22 +276,12 @@ const isAnalysisPost = (post) => postCategories(post).some(category => normalize
 const authorProfile = (post) => authorProfiles.value[post?.authorId] || {}
 const authorIcon = (post) => post?.authorId ? resolveProfileIcon(authorProfile(post)) : ''
 const authorIconMeta = (post) => post?.authorId ? resolveProfileIconMeta(authorProfile(post)) : {}
-const heroCarousel = useTimedCarousel(computed(() => heroSlides.value.length), HOME_HERO_SLIDE_DURATION)
-const heroSlideIndex = heroCarousel.index
-const heroPaused = ref(false)
-function startHeroIfAllowed() { if (!heroPaused.value) heroCarousel.start(); else heroCarousel.stop() }
-function pauseHero() { heroPaused.value=true; heroCarousel.stop() }
-function resumeHero() { heroPaused.value=false; startHeroIfAllowed() }
+const heroSlideIndex = ref(0)
+watch(() => heroSlides.value.length, count => { if(heroSlideIndex.value>=count)heroSlideIndex.value=0 })
 const activeHeroSlide = computed(() => heroSlides.value[heroSlideIndex.value] || heroSlides.value[0] || null)
 const communityCarousel = useTimedCarousel(communityPageCount, COMMUNITY_SLIDE_DURATION)
 const communitySlideIndex = communityCarousel.index
-const selectHeroSlide = (index) => {
-  heroCarousel.select(index)
-  if (heroPaused.value) heroCarousel.stop()
-}
-function swipeHero(direction) {
-  if (heroSlides.value.length > 1) selectHeroSlide((heroSlideIndex.value + direction + heroSlides.value.length) % heroSlides.value.length)
-}
+const selectHeroSlide = index => { heroSlideIndex.value=Math.max(0,Math.min(heroSlides.value.length-1,Number(index)||0)) }
 const selectCommunitySlide = (index) => {
   communityCarousel.select(index)
 }
@@ -307,14 +296,12 @@ onMounted(() => {
     }, HOME_WELCOME_MAX_WAIT)
   }
 
-  startHeroIfAllowed()
   communityCarousel.start()
   loadData()
 })
 
 onUnmounted(() => {
   if (typeof window !== 'undefined') window.clearTimeout(homeWelcomeTimer)
-  heroCarousel.stop()
   communityCarousel.stop()
 })
 </script>
@@ -329,7 +316,7 @@ onUnmounted(() => {
 
       <template v-else>
         <section class="home2-hero-grid" :class="{'home-cold-load':!cachedHomePosts}">
-          <HomeHeroDeck v-if="activeHeroSlide" :slides="heroSlides" :active-index="heroSlideIndex" :author-icon="authorIcon" @select="selectHeroSlide" @read="openHeroSlide" @pause="pauseHero" @resume="resumeHero" />
+          <HomeHeroDeck v-if="activeHeroSlide" :slides="heroSlides" :active-index="heroSlideIndex" :author-icon="authorIcon" @select="selectHeroSlide" @read="openHeroSlide" />
         </section>
 
         <section class="home2-community-band">
@@ -1352,7 +1339,7 @@ onUnmounted(() => {
  .home2-community-card { min-height:52px; }
 }
 
-@media(min-width:761px) { .home2-shell { width:var(--public-content-width); max-width:100%; margin-inline:auto; } }
+@media(min-width:761px) { .home2-shell { width:min(var(--public-content-width),1300px); max-width:100%; margin-inline:auto; } }
 @media(min-width:1441px) { .home2-main-hero { height:380px; padding:28px; }.home2-main-hero h1 { font-size:38px; line-height:1.15; }.home2-community-band h2 { font-size:30px; } }
 </style>
 

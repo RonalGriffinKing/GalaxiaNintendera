@@ -46,6 +46,7 @@ const currentUrl = computed(() => {
 const publicPostPath = computed(() => `/post/${post.value.slug || post.value.id || route.params.id}`)
 const postSections = computed(() => (Array.isArray(post.value.sections) ? post.value.sections : []).filter(section => !section.hidden))
 const activeSection = ref(-1)
+const articleIntroduction = computed(() => post.value.content || post.value.heroSummary || post.value.excerpt || post.value.summary || '')
 const actualNavHeight = ref(null)
 let navbarObserver
 const displayedSections = computed(() => postSections.value.map((section,index)=>({...section,articleIndex:index})).filter(section=>activeSection.value===-1 || section.articleIndex===activeSection.value))
@@ -689,7 +690,7 @@ onUnmounted(() => {
           <button v-for="(section,index) in postSections" :id="'article-tab-'+index" :key="index" type="button" role="tab" aria-controls="article-reading-panel" :aria-selected="activeSection===index" :tabindex="activeSection===index ? 0 : -1" :title="section.title" @click="selectArticleSection(index)">{{ sectionNavLabel(section,index) }}</button>
         </nav></ScrollTabRail>
         <div id="article-reading-panel" class="article-reading-panel" :role="postSections.length ? 'tabpanel' : undefined" :aria-labelledby="postSections.length ? (activeSection===-1 ? 'article-tab-all' : 'article-tab-'+activeSection) : undefined" tabindex="-1">
-        <div v-if="activeSection===-1 && post.content && !isUpcomingPost" class="analysis-introduction rich-content reading-prose" v-html="richText(post.content)"></div>
+        <div v-if="activeSection===-1 && articleIntroduction && !isUpcomingPost" class="analysis-introduction rich-content reading-prose" v-html="richText(articleIntroduction)"></div>
 
 
 
