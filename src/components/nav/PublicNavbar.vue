@@ -165,11 +165,11 @@ const isReadingRoute = computed(() => route.path.startsWith('/post/'))
 const mobileNavClass = computed(() => ({
   compact: navCompact.value,
   reading: isReadingRoute.value,
-  'reading-hidden': isReadingRoute.value && headerHidden.value,
+  'reading-hidden': headerHidden.value,
   'account-open': accountMenuOpen.value
 }))
 const bottomNavClass = computed(() => ({
-  suppressed: (isReadingRoute.value && navHidden.value) || menuOpen.value
+  suppressed: navHidden.value || menuOpen.value
     || createMenuOpen.value
     || accountMenuOpen.value
     || searchOpen.value
@@ -489,9 +489,10 @@ const updateScrollNavigation = () => {
 
   const mobile=isMobileNav()
   const controlsOpen=menuOpen.value || accountMenuOpen.value || searchOpen.value || notificationsOpen.value || createMenuOpen.value || quickCommunityOpen.value || quickUserOpen.value
-  // Keep the measured article offset fixed throughout hide/reveal.
+  // Hide the public chrome without changing the page layout.
   navCompact.value = !mobile && nextY > 28
-  if(isReadingRoute.value){
+  const mobilePublicPage=mobile && !route.meta.workspace && !/^\/(admin|login|editor|dashboard)(\/|$)/.test(route.path) && !route.query.create && route.query.mode !== 'register'
+  if(isReadingRoute.value || mobilePublicPage){
     navHidden.value=readingNavigation.update(nextY,{maxScroll:doc.scrollHeight-window.innerHeight,locked:controlsOpen})
     headerHidden.value=headerReadingNavigation.update(nextY,{maxScroll:doc.scrollHeight-window.innerHeight,locked:controlsOpen,revealNearTopOnly:true})
     scrollTicking=false
@@ -500,6 +501,8 @@ const updateScrollNavigation = () => {
 
   navHidden.value = false
   headerHidden.value = false
+  readingNavigation.reset(nextY)
+  headerReadingNavigation.reset(nextY)
 
   scrollTicking = false
 }
@@ -984,9 +987,9 @@ watch(currentUser, () => {
   searchCache.clear()
 })
 
-watch([navHidden, headerHidden, isReadingRoute], ([hidden, header, reading]) => {
-  publicReadingControlsHidden.value = hidden && reading
-  publicReadingHeaderHidden.value = header && reading
+watch([navHidden, headerHidden], ([hidden, header]) => {
+  publicReadingControlsHidden.value = hidden
+  publicReadingHeaderHidden.value = header
 }, { flush: 'sync' })
 
 onUnmounted(() => {

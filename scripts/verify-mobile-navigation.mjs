@@ -11,7 +11,12 @@ try{
  check(await ev('getComputedStyle(document.querySelector(".public-brand-logo")).display!=="none"&&getComputedStyle(document.querySelector(".public-brand span")).display!=="none"'),'mobile header shows logo and brand text');
  check(await ev('getComputedStyle(document.querySelector(".public-nav .notification-nav-btn")).display==="none"&&!document.querySelector(".mobile-page-context")'),'mobile header has no notification button or contextual title');
  await ev('document.body.style.minHeight="6000px";window.scrollTo({top:500,behavior:"instant"})');await wait(200);
- check(await ev('!document.querySelector(".public-nav").classList.contains("hidden")&&!document.querySelector(".public-nav-expand")'),'header stays complete without minimization');
+ await wait(300);
+ check(await ev('document.querySelector(".public-nav").classList.contains("reading-hidden")&&document.querySelector(".public-bottom-nav").inert'),'public mobile navigation hides on descent');
+ await ev('window.scrollTo({top:350,behavior:"instant"})');await wait(450);
+ check(await ev('document.querySelector(".public-nav").inert&&!document.querySelector(".public-bottom-nav").inert'),'only lower controls return after scrolling upward');
+ await ev('window.scrollTo({top:60,behavior:"instant"})');await wait(450);
+ check(await ev('!document.querySelector(".public-nav").inert'),'header returns near the beginning');
  await ev('document.querySelector(".bottom-profile-btn").click()');await wait(350);
  check(await ev('!!document.querySelector(".public-account-list .thread-action")'),'create thread is in the profile menu');
  check(await ev('(()=>{const n=document.querySelector(".profile-notifications-btn").getBoundingClientRect(),x=document.querySelector(".public-account-close").getBoundingClientRect();return x.left-n.right>=12&&n.height>=44&&x.height>=44})()'),'notification and close controls have separate large tap targets');
@@ -44,7 +49,18 @@ try{
  check(await ev('(()=>{const a=document.querySelector(".floating-back-button").getBoundingClientRect(),b=document.querySelector(".galaxia-hub-orb").getBoundingClientRect();return Math.abs(a.top-b.top)<1&&Math.abs(a.bottom-b.bottom)<1})()'),'back and hub bubbles share the same vertical alignment');
  await ev('window.scrollTo({top:60,behavior:"instant"})');await wait(450);
  check(await ev('!document.querySelector(".public-nav").classList.contains("reading-hidden")&&getComputedStyle(document.querySelector(".public-floating-controls")).visibility==="visible"&&!document.querySelector(".floating-back-control").inert'),'controls return near the beginning');
+ for(const path of ['/navigation','/news','/events','/public-navigation','/profile/local-admin']){
+  await ev('window.themeLab.router.push('+JSON.stringify(path)+')');await wait(250);await ev('window.scrollTo({top:0,behavior:"instant"})');await wait(100);await ev('window.scrollTo({top:600,behavior:"instant"})');await wait(450);
+  check(await ev('document.querySelector(".public-nav").inert&&document.querySelector(".public-bottom-nav").inert&&getComputedStyle(document.querySelector(".public-floating-controls")).visibility==="hidden"'),'mobile controls hide on '+path);
+  await ev('window.scrollTo({top:400,behavior:"instant"})');await wait(450);
+  check(await ev('document.querySelector(".public-nav").inert&&!document.querySelector(".public-bottom-nav").inert&&getComputedStyle(document.querySelector(".public-floating-controls")).visibility==="visible"'),'bottom controls return while header stays hidden on '+path);
+  await ev('window.scrollTo({top:50,behavior:"instant"})');await wait(450);
+  check(await ev('!document.querySelector(".public-nav").inert'),'header returns near the beginning on '+path);
+ }
+ await ev('window.themeLab.router.push("/admin/post-share/local-theme-demo")');await until('!!document.querySelector(".social-card")');await ev('window.scrollTo({top:600,behavior:"instant"})');await wait(450);
+ check(await ev('!document.querySelector(".public-nav").inert'),'editing tools retain stable navigation');
+ await ev('window.themeLab.router.push("/news")');await wait(200);
  await ev('window.__labAuthChange(null)');await wait(100);check(await ev('!!document.querySelector(".bottom-profile-btn .fa-user")'),'visitors retain profile access');
- await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await wait(100);check(await ev('getComputedStyle(document.querySelector(".public-bottom-nav")).display==="none"'),'desktop navigation remains available');
+ await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await wait(100);await ev('window.scrollTo({top:650,behavior:"instant"})');await wait(450);check(await ev('getComputedStyle(document.querySelector(".public-bottom-nav")).display==="none"&&!document.querySelector(".public-nav").inert&&getComputedStyle(document.querySelector(".public-floating-controls")).visibility==="visible"'),'desktop listing navigation remains stable');
  check(!errors.length,'no runtime exceptions');
 }catch(e){console.log('FAIL',e.message,errors);process.exitCode=1}finally{ws.close();edge.kill()}
