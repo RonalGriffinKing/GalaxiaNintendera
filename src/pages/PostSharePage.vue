@@ -9,6 +9,7 @@ import { auth, db } from '@/firebase'
 import { mergeSocialSettings, updateSocialSetting } from '@/services/socialTemplateState'
 import { normalizeSocialContent, titleRuns } from '@/services/socialContent'
 import PublicationAnimationModal from '@/components/posts/PublicationAnimationModal.vue'
+import AnalysisCrown from '@/components/shared/AnalysisCrown.vue'
 import SocialVisualInspector from '@/components/posts/SocialVisualInspector.vue'
 import { resolveProfileIcon } from '@/services/profileProgress'
 
@@ -96,7 +97,8 @@ const defaultTemplateSettings = {
   description: { visible: true, size: 42, color: '#ede9fe', lines: 6 },
   button: { visible: false, foregroundColor: '#ffffff', text: 'Leela en la web', color: '#f97316', endColor: '#f59e0b', gradient: true, radius: 999, y: 126 },
   number: { visible: true, color: '#ffffff', size: 30 },
-  overlay: { color: '#050816', endColor: '#050816', intensity: 0.9, height: 100, gradient: true },
+  score: { visible: true, size: 100 },
+  overlay: { color: '#050816', endColor: '#050816', intensity: 0.9, darkness: 0, height: 100, gradient: true },
   typography: { family: 'Inter, system-ui, sans-serif' }
 }
 
@@ -391,7 +393,7 @@ function restoreHistory(redo) {
 function resetSingleDesign() { rememberDesign(); const next = { ...slideTemplateOverrides.value }; delete next[selectedSlideIndex.value]; slideTemplateOverrides.value = next }
 function visualElementStyle(index, key) {
  const settings = settingsForSlide(index); const layout = settings['visual_' + key] || {}; const typography = settings[key] || {}
- return { translate: ((layout.x || 0) * exportSize.value.width / 100) + 'px ' + ((layout.y || 0) * exportSize.value.height / 100) + 'px', textAlign: typography.align || undefined, width: ['title','description','points'].includes(key) && typography.customWidth ? typography.width + 'px' : undefined, maxWidth: ['title','description','points'].includes(key) && typography.customWidth ? 'none' : undefined, scale: key === 'button' && typography.size ? typography.size / 100 : undefined, fontWeight: typography.weight || undefined, fontFamily: typography.family || undefined, lineHeight: typography.line || undefined, WebkitLineClamp: key === 'title' && typography.lines > 0 ? String(typography.lines) : undefined, display: key === 'title' && typography.lines > 0 ? '-webkit-box' : undefined, WebkitBoxOrient: key === 'title' && typography.lines > 0 ? 'vertical' : undefined, overflow: key === 'title' && typography.lines > 0 ? 'hidden' : undefined, color: ['title','description','points','number'].includes(key) ? typography.color || undefined : undefined, outline: editorOpen.value && !isDownloading.value && selectedSlideIndex.value === index && selectedElement.value === key ? 'var(--selection-outline, 4px solid #c084fc)' : undefined, outlineOffset: '6px', position: key === 'title' ? 'relative' : undefined }
+ return { translate: ((layout.x || 0) * exportSize.value.width / 100) + 'px ' + ((layout.y || 0) * exportSize.value.height / 100) + 'px', textAlign: typography.align || undefined, width: ['title','description','points'].includes(key) && typography.customWidth ? typography.width + 'px' : undefined, maxWidth: ['title','description','points'].includes(key) && typography.customWidth ? 'none' : undefined, scale: ['button','score'].includes(key) && typography.size ? typography.size / 100 : undefined, fontWeight: typography.weight || undefined, fontFamily: typography.family || undefined, lineHeight: typography.line || undefined, WebkitLineClamp: key === 'title' && typography.lines > 0 ? String(typography.lines) : undefined, display: key === 'title' && typography.lines > 0 ? '-webkit-box' : undefined, WebkitBoxOrient: key === 'title' && typography.lines > 0 ? 'vertical' : undefined, overflow: key === 'title' && typography.lines > 0 ? 'hidden' : undefined, color: ['title','description','points','number'].includes(key) ? typography.color || undefined : undefined, outline: editorOpen.value && !isDownloading.value && selectedSlideIndex.value === index && selectedElement.value === key ? 'var(--selection-outline, 4px solid #c084fc)' : undefined, outlineOffset: '6px', position: key === 'title' ? 'relative' : undefined }
 }
 function startVisualDrag(event, index, resize = false) {
  if (isDownloading.value || event.button !== 0) return
@@ -612,7 +614,7 @@ function resetPositions() {
     'button.y'
   ]
   paths.forEach(path => setSetting(path, getByPath(defaults, path)))
-  for (const key of ['title', 'description', 'logo', 'gameLogo', 'author', 'part', 'arrow', 'button', 'number']) { setSetting('visual_' + key + '.x', 0); setSetting('visual_' + key + '.y', 0) }
+  for (const key of ['title', 'description', 'logo', 'gameLogo', 'author', 'part', 'arrow', 'button', 'number', 'score']) { setSetting('visual_' + key + '.x', 0); setSetting('visual_' + key + '.y', 0) }
   setCoverLogoSetting('x', defaults.coverGameLogo.x)
   setCoverLogoSetting('y', defaults.coverGameLogo.y)
 }
@@ -852,8 +854,10 @@ function loadStoredTemplate(style = 'editorial') {
 function overlayGradient(overlay) {
   const color = overlay.color || '#050816'
   const end = overlay.endColor || color
-  if (!overlay.gradient) return hexToRgba(color, overlay.intensity)
-  return `linear-gradient(180deg, ${hexToRgba(color, 0)} 4%, ${hexToRgba(color, 0.06)} 23%, ${hexToRgba(color, overlay.intensity * .5)} 43%, ${hexToRgba(color, overlay.intensity)} 72%, ${hexToRgba(end, 1)} 100%)`
+  const darkness=Math.max(0,Math.min(1,Number(overlay.darkness)||0))
+  const shade=hexToRgba('#000000',darkness)
+  const background=overlay.gradient ? `linear-gradient(180deg, ${hexToRgba(color, 0)} 4%, ${hexToRgba(color, 0.06)} 23%, ${hexToRgba(color, overlay.intensity * .5)} 43%, ${hexToRgba(color, overlay.intensity)} 72%, ${hexToRgba(end, 1)} 100%)` : `linear-gradient(${hexToRgba(color,overlay.intensity)},${hexToRgba(color,overlay.intensity)})`
+  return darkness ? `linear-gradient(${shade},${shade}),${background}` : background
 }
 
 function hexToRgba(hex, alpha) {
@@ -1225,7 +1229,7 @@ function slugify(value) {
 
                 </div>
 
-                <div v-if="slide.showScore" class="social-score social-score-independent"><strong>{{ slide.score }}</strong><span>Nota</span></div>
+                <div v-if="slide.showScore && settingsForSlide(index).score?.visible !== false" class="social-score social-score-independent" data-edit="score" :style="visualElementStyle(index, 'score')"><AnalysisCrown class="social-score-crown" /><strong>{{ slide.score }}</strong><span>Nota / 100</span></div>
 
                 <div class="social-card-copy" :class="{ 'has-points': displaySlidePoints(slide).filter(point => point.trim()).length }">
                   <span v-if="settingsForSlide(index).part.visible" class="social-category" data-edit="part" :style="visualElementStyle(index, 'part')">
@@ -1284,8 +1288,8 @@ function slugify(value) {
       </div>
     </section>
 
-    <PublicationAnimationModal v-if="animationOpen" :get-element="animationElement" @close="animationOpen=false"/>
-    <SocialVisualInspector v-if="editorOpen" :templates="savedTemplates" :template-notice="templateNotice" @save-template="saveNamedTemplate" @load-template="loadNamedTemplate" @reset="resetVisualElement" :element="selectedElement" :scope="applyScope" :number="selectedSlide?.number || 1" :settings="settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :slide-type="selectedSlide?.type" :slide-accent="selectedSlide?.accent" :cta="selectedSlide ? displaySlideCta(selectedSlide) : ''" :title-highlights="selectedSlide ? displayTitleHighlights(selectedSlide) : []" :points="selectedSlide ? displaySlidePoints(selectedSlide) : []" :image="selectedSlide ? slideImage(selectedSlide) : fallbackCover" :image-url="selectedTemporaryImage()" :fonts="fontOptions" :overflow="textOverflow" :notice="fitNotice" :inert="isDownloading" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectedElement = $event" @scope="applyScope = $event" @setting="setVisualInspectorSetting" @cta="setSlideCta" @title-highlights="setTitleHighlights" @title="updateTextContent('title', $event)" @description="updateTextContent('subtitle', $event)" @points="updateTextContent('points', $event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @fit="fitSlideText" @download="downloadCarousel" @center="centerVisualElement" @image-url="handleTemporaryImageUrl" @upload="handleTemporaryImageUpload" @original="clearTemporaryImage" @close="editorOpen = false" />
+    <PublicationAnimationModal v-if="animationOpen" :get-element="animationElement" :get-elements="() => cardRefs.filter(Boolean)" :initial-index="selectedSlideIndex" :name="title" @close="animationOpen=false"/>
+    <SocialVisualInspector v-if="editorOpen" :templates="savedTemplates" :template-notice="templateNotice" @save-template="saveNamedTemplate" @load-template="loadNamedTemplate" @reset="resetVisualElement" :element="selectedElement" :scope="applyScope" :number="selectedSlide?.number || 1" :settings="settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :has-score="Boolean(selectedSlide?.showScore)" :slide-type="selectedSlide?.type" :slide-accent="selectedSlide?.accent" :cta="selectedSlide ? displaySlideCta(selectedSlide) : ''" :title-highlights="selectedSlide ? displayTitleHighlights(selectedSlide) : []" :points="selectedSlide ? displaySlidePoints(selectedSlide) : []" :image="selectedSlide ? slideImage(selectedSlide) : fallbackCover" :image-url="selectedTemporaryImage()" :fonts="fontOptions" :overflow="textOverflow" :notice="fitNotice" :inert="isDownloading" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectedElement = $event" @scope="applyScope = $event" @setting="setVisualInspectorSetting" @cta="setSlideCta" @title-highlights="setTitleHighlights" @title="updateTextContent('title', $event)" @description="updateTextContent('subtitle', $event)" @points="updateTextContent('points', $event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @fit="fitSlideText" @download="downloadCarousel" @center="centerVisualElement" @image-url="handleTemporaryImageUrl" @upload="handleTemporaryImageUpload" @original="clearTemporaryImage" @close="editorOpen = false" />
   </main>
 </template>
 
@@ -2645,4 +2649,11 @@ function slugify(value) {
 
 <style scoped>
 .social-margin-picker{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px;margin-bottom:16px;border:1px solid #a78bfa44;border-radius:14px;background:#12182b;color:#f1f5f9}.social-margin-picker button{border:1px solid #ffffff30;border-radius:10px;padding:10px 14px;background:#20263b;color:#f1f5f9;cursor:pointer;font-weight:700}.social-margin-picker button[aria-pressed=true]{background:#6d28d9;border-color:#c4b5fd;box-shadow:0 0 0 2px #a78bfa33}.social-margin-picker small{flex-basis:100%;color:#bdc6db;line-height:1.5}
+</style>
+
+<style scoped>
+.social-score-crown{position:absolute;top:-38px;left:50%;transform:translateX(-50%);width:70px;height:54px;color:#ffdf66;filter:drop-shadow(0 3px 8px #0008)}
+.social-card.analysis .social-score{border:3px solid #ffe58c;background:radial-gradient(ellipse at 50% 0,#674708,#1b1307 80%);box-shadow:0 0 0 7px #e4b44122,0 12px 36px #0007,inset 0 0 20px #ffd44b22;padding-top:12px;box-sizing:border-box}
+.social-card.analysis .social-score strong{color:#ffe17a;text-shadow:0 2px 12px #eab30844}
+.social-card.analysis .social-score span{font-size:18px;letter-spacing:1.5px}
 </style>

@@ -6,6 +6,7 @@ import { normalizeHomeHero } from '@/services/homeHero'
 import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
 import { titleRuns } from '@/services/socialContent'
 import FeaturedSheen from '@/components/shared/FeaturedSheen.vue'
+import AnalysisCrown from '@/components/shared/AnalysisCrown.vue'
 
 const props=defineProps({slides:{type:Array,default:()=>[]},activeIndex:{type:Number,default:0},authorIcon:Function})
 const emit=defineEmits(['select','read','pause','resume'])
@@ -61,13 +62,13 @@ onUnmounted(()=>{clearTimeout(openTimer);motion?.removeEventListener('change',vi
      <div class="aurora-message"><span>&#10023;</span><strong>La magia comienza...</strong><small>GALAXIA NINTENDERA</small></div>
     </div>
     <FeaturedSheen v-if="card.position==='main'" :gold="isAnalysis(card.slide)" />
-    <span class="deck-category">{{ card.slide.eyebrow }}</span>
+    <span class="deck-category"><AnalysisCrown v-if="isAnalysis(card.slide)&&card.position==='main'" />{{ isAnalysis(card.slide)&&card.position==='main' ? 'Análisis destacado' : card.slide.eyebrow }}</span>
     <div class="deck-copy">
      <h1 v-if="card.position==='main'"><template v-for="(run,index) in titleRuns(card.slide.title,card.slide.highlights)" :key="index"><mark v-if="run.highlighted">{{ run.text }}</mark><template v-else>{{ run.text }}</template></template></h1>
      <h2 v-else>{{ card.slide.title }}</h2>
      <p>{{ card.slide.text }}</p>
      <div class="deck-meta"><img v-if="authorIcon?.(card.slide.post)" :src="authorIcon(card.slide.post)" alt="" /><span>{{ card.slide.post?.authorName || 'Redacción' }}<small>{{ card.slide.meta }}</small></span></div>
-     <button v-if="card.position==='main'" class="deck-read" type="button" @click.stop="openArticle"><span>Leer noticia</span><span aria-hidden="true">→</span></button>
+     <button v-if="card.position==='main'" class="deck-read" type="button" @click.stop="openArticle"><span>{{ isAnalysis(card.slide) ? 'Leer análisis' : 'Leer noticia' }}</span><span aria-hidden="true">→</span></button>
      <button v-else class="deck-select" type="button" :aria-label="`Destacar: ${card.slide.title}`" @click.stop="select(card.index)">Ver destacado</button>
     </div>
    </article></Transition></div>
@@ -113,4 +114,15 @@ onUnmounted(()=>{clearTimeout(openTimer);motion?.removeEventListener('change',vi
 @media(max-width:360px){.hero-deck-scene,.deck-slot,.slot-main{height:480px}.deck-copy h1{font-size:24px}}
 @media(max-width:760px),(hover:none) and (pointer:coarse){.deck-main{animation:none}}
 @media(prefers-reduced-motion:reduce){.hero-deck-card{transition:none;animation:none}.deck-fade-enter-active,.deck-fade-leave-active{transition:none}}
+</style>
+
+<style scoped>
+.deck-main{box-shadow:0 0 24px color-mix(in srgb,var(--visual-accent,#a855f7) 28%,transparent),0 14px 30px #0005}
+.deck-main.is-analysis{border-color:#ffe17c;box-shadow:0 0 0 1px #ffe4a366,0 0 30px #edbe3944,0 12px 42px #0006;animation:analysis-aura 6s ease-in-out infinite}
+.deck-main.is-analysis::after{content:"";position:absolute;inset:7px;border:1px solid #ffe8a344;border-radius:12px;z-index:2;pointer-events:none;background:radial-gradient(ellipse at 80% 0,#ffd45722,transparent 45%)}
+.deck-main.is-analysis .deck-category{display:flex;align-items:center;gap:8px;background:linear-gradient(115deg,#ffe384,#d7a624);color:#271b04;border:1px solid #fff1b6;box-shadow:0 3px 18px #ffcd4244;letter-spacing:.05em}
+.deck-category svg{width:22px;height:18px;flex:none}
+.deck-main.is-analysis :deep(.featured-sheen.is-gold .foil-prism){opacity:.24}
+@keyframes analysis-aura{0%,100%{box-shadow:0 0 0 1px #ffe4a355,0 0 24px #edbe3933,0 12px 42px #0006}50%{box-shadow:0 0 0 1px #ffe4a388,0 0 38px #edbe3966,0 12px 42px #0006}}
+@media(prefers-reduced-motion:reduce),(max-width:760px){.deck-main.is-analysis{animation:none}}
 </style>

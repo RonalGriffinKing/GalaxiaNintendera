@@ -2,9 +2,9 @@
 import { computed, ref } from 'vue'
 import SocialPaintControls from './SocialPaintControls.vue'
 const templateName = ref('')
-const props = defineProps({ templates:Array, templateNotice:String, element:String, cta:String, slideType:String, slideAccent:String, scope:String, settings:Object, title:String, titleHighlights:Array, description:String, points:Array, fonts:Array, number:Number, image:String, imageUrl:String, overflow:Boolean, notice:String, canUndo:Boolean, canRedo:Boolean, inert:Boolean })
+const props = defineProps({ hasScore:Boolean, templates:Array, templateNotice:String, element:String, cta:String, slideType:String, slideAccent:String, scope:String, settings:Object, title:String, titleHighlights:Array, description:String, points:Array, fonts:Array, number:Number, image:String, imageUrl:String, overflow:Boolean, notice:String, canUndo:Boolean, canRedo:Boolean, inert:Boolean })
 const emit=defineEmits(['save-template','load-template','reset','select','scope','setting','cta','title','title-highlights','description','points','undo','redo','close','center','fit','download','image-url','upload','original'])
-const names=computed(()=>({...(props.slideType==='closing'?{cta:'Invitacion a comentar'}:{}),brand:'Marca superior',progress:'Progreso del carrusel',title:'Titulo',description:'Subtitulo',points:'Puntos',image:'Imagen de fondo',overlay:'Color del fondo',logo:'Logo Galaxia',gameLogo:'Logo del juego',author:'Autor',part:'Etiqueta Parte',arrow:'Flecha',button:'Boton',number:'Numeracion'}))
+const names=computed(()=>({...(props.slideType==='closing'?{cta:'Invitacion a comentar'}:{}),...(props.hasScore?{score:'Nota del análisis'}:{}),brand:'Marca superior',progress:'Progreso del carrusel',title:'Titulo',description:'Subtitulo',points:'Puntos',image:'Imagen de fondo',overlay:'Color del fondo',logo:'Logo Galaxia',gameLogo:'Logo del juego',author:'Autor',part:'Etiqueta Parte',arrow:'Flecha',button:'Boton',number:'Numeracion'}))
 const current=computed(()=>props.settings[props.element] || {})
 const isText=computed(()=>['title','description','points'].includes(props.element))
 const hidden=computed(()=>Object.keys(names.value).filter(k=>k!=='overlay' && props.settings[k]?.visible===false))
@@ -60,7 +60,8 @@ function setNumber(key,event,min,max){const value=Number(event.target.value);if(
     </template>
     <template v-else-if="element==='overlay'">
      <SocialPaintControls :value="current" @change="set($event.key,$event.value)" />
-     <label>Intensidad<input type="number" min="0" max="1" step="0.05" :value="current.intensity" @input="setNumber('intensity',$event,0,1)" /></label>
+     <label>Intensidad del color · {{ Math.round((current.intensity || 0)*100) }} %<input type="range" min="0" max="1" step="0.01" :value="current.intensity" @input="setNumber('intensity',$event,0,1)" /></label>
+     <label>Oscurecer toda la imagen · {{ Math.round((current.darkness || 0)*100) }} %<input aria-label="Oscurecer toda la imagen" type="range" min="0" max="1" step="0.01" :value="current.darkness || 0" @input="setNumber('darkness',$event,0,1)" /></label>
 
      <button @click="emit('select','image')">Editar imagen de fondo</button>
     </template>
@@ -70,7 +71,7 @@ function setNumber(key,event,min,max){const value=Number(event.target.value);if(
      <label v-if="element==='gameLogo'">URL del logo<input type="url" :value="current.url" @change="set('url',$event.target.value)" /></label>
      <template v-if="element==='author'"><label v-for="(name,key) in {avatar:'Mostrar avatar',name:'Mostrar nombre',date:'Mostrar fecha'}" :key="key" class="check"><input type="checkbox" :checked="current[key]" @change="set(key,$event.target.checked)" />{{ name }}</label></template>
      <label v-if="element==='arrow'">Icono<select :value="current.icon" @change="set('icon',$event.target.value)"><option value="fa-arrow-right">Flecha</option><option value="fa-chevron-right">Indicador</option><option value="fa-plus">Mas</option></select></label>
-     <label v-if="element!=='progress'">Tamano<input type="number" min="16" max="760" :value="current.size || 100" @input="setNumber('size',$event,16,760)" /></label>
+     <label v-if="element!=='progress'">{{ element==='score' ? 'Tamaño de la nota (%)' : 'Tamaño' }}<input type="number" min="16" max="760" :value="current.size || 100" @input="setNumber('size',$event,16,760)" /></label>
      <template v-if="['part','arrow','button','progress'].includes(element)">
       <label v-if="['arrow','button','part'].includes(element)">{{ element==='arrow' ? 'Color de la flecha interior' : 'Color del texto' }}<input type="color" :value="current.foregroundColor || (element==='part' && slideAccent==='gold' ? '#18120a' : '#ffffff')" @input="set('foregroundColor',$event.target.value)" /></label>
       <strong class="paint-heading">{{ element==='progress' ? 'Color de la barra' : 'Fondo del botón' }}</strong>

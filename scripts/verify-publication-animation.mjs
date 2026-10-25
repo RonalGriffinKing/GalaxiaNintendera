@@ -4,18 +4,18 @@ const base=process.env.THEME_LAB_URL||'http://127.0.0.1:5225';const port=Number(
 async function until(expression){for(let i=0;i<50;i++){if(await ev(expression))return;await wait(100)}throw Error('Timeout '+expression)}
 
 try {
- await cdp('Runtime.enable');await cdp('Page.enable');await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+ await cdp('Page.addScriptToEvaluateOnNewDocument',{source:'window.__labAllowPresence=true'});await cdp('Runtime.enable');await cdp('Page.enable');await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
  await nav('/public-navigation','.community-card');
  await ev('window.__labEvents=[{id:"animation",title:"Invitacion animada",type:"Direct",startsAt:Date.now()+86400000,durationMinutes:90,description:"Una aventura para toda la comunidad.",backgroundUrl:"/lab-image.svg"}]');
  await ev('window.themeLab.router.push("/admin/event-share/animation")');await until('!!document.querySelector(".inv-preview-scale .event-invitation")');
  await ev('window.__staticBefore=document.querySelector(".inv-preview-scale .event-invitation").outerHTML;[...document.querySelectorAll("button")].find(b=>b.textContent.includes("Animar publicación")).click()');
  await until('!!document.querySelector(".animation-export")&&!document.querySelector(".animation-export").disabled&&!document.querySelector(".animation-export").closest("fieldset").disabled');
  check(await ev('document.querySelectorAll(".publication-animation input[type=checkbox]:checked").length===8'),'cinematic effects, rising particles and smooth loop enabled by default');
- check(await ev('document.querySelector(".publication-animation select").value==="mp4"'),'MP4 is the default export');
+ check(await ev('[...document.querySelectorAll(".publication-animation select")].find(s=>[...s.options].some(o=>o.value==="mp4")).value==="mp4"'),'MP4 is the default export');
  check(await ev('document.querySelector(".animation-screen canvas").width===1080'),'preview renders at original resolution');
  await ev('document.querySelector(".animation-playback button").click()');
  await ev('(async()=>{window.__animationModule=await import("/src/services/publicationAnimation.js");window.__layers=await window.__animationModule.captureAnimationLayers(document.querySelector(".inv-preview-scale .event-invitation"));window.__canvas=document.createElement("canvas");window.__canvas.width=1080;window.__canvas.height=1920})()');
- check(await ev('(()=>{const p=window.__layers.base.getContext("2d").getImageData(300,300,1,1).data;return p[3]===255&&(p[0]+p[1]+p[2])>50})()'),'captured background contains the original artwork');
+ check(await ev('(()=>{window.__animationModule.drawAnimation(window.__canvas.getContext("2d"),window.__layers,2,{...window.__animationModule.DEFAULT_EFFECTS,hologram:false,particles:false,stars:false});const p=window.__canvas.getContext("2d").getImageData(300,300,1,1).data;return p[3]===255&&(p[0]+p[1]+p[2])>50})()'),'captured background contains the original artwork');
  check(await ev('Object.keys(window.__layers).includes("title")&&Object.keys(window.__layers).includes("pill")&&Object.keys(window.__layers).includes("button")'),'title, pill and button are captured as separate layers');
  check(await ev('(()=>{const ctx=window.__canvas.getContext("2d");window.__animationModule.drawAnimation(ctx,window.__layers,0);const a=window.__canvas.toDataURL();window.__animationModule.drawAnimation(ctx,window.__layers,2);return a!==window.__canvas.toDataURL()})()'),'timeline renders genuinely different frames');
  for(const key of ['base','title']){const data=await ev('window.__layers.'+key+(key==='base'?'':'.canvas')+'.toDataURL("image/png").split(",")[1]');fs.writeFileSync(process.env.TEMP+'/galaxia-layer-'+key+'.png',Buffer.from(data,'base64'))}
