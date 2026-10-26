@@ -52,7 +52,6 @@ const hoursLabel = minutes => {
      </template><template v-else><strong>Sin datos de logros</strong><span>Xbox no publica este progreso.</span></template></div>
     </li></ul>
     <div class="gamer-more"><span>{{ Math.min(visibleGames,xboxAchievements.length) }} de {{ xboxAchievements.length }} juegos</span><button v-if="visibleGames<xboxAchievements.length" type="button" @click="visibleGames+=6">Ver más juegos</button><button v-if="visibleGames>3" type="button" @click="visibleGames=3">Ver menos</button></div>
-    <p v-if="selectedIdentities.some(identity=>identity.archiveAvailable===false)" class="gamer-history-note" role="status">El historial no se pudo guardar ahora. Se muestran los datos disponibles.</p>
    </div>
    <div v-else class="gamer-most-played"><h3 class="gamer-section-title">Más jugados</h3><ol><li v-for="(entry,index) in playedSlots" :key="entry?.key || 'empty-'+index" :class="{'empty-game':!entry}"><div class="played-art"><img v-if="entry?.game.imageUrl" :src="entry.game.imageUrl" alt="" loading="lazy" /><i v-else class="fas fa-gamepad cover-placeholder" aria-hidden="true"></i><span v-if="entry" class="played-rank" aria-hidden="true">{{ index+1 }}</span></div><div v-if="entry" class="played-copy"><strong :title="entry.game.title">{{ entry.game.title }}</strong><span class="played-hours">{{ hoursLabel(entry.minutes) }}</span><small>{{ entry.platform }}</small></div><div v-else class="played-copy empty-copy"><strong>Sin datos de juego</strong><span>Aún no disponible.</span></div></li></ol></div>
    <div v-if="selectedPlatform!=='xbox' && highlights.mostPlayed.length>3" class="gamer-more"><span>{{ Math.min(visibleGames,highlights.mostPlayed.length) }} de {{ highlights.mostPlayed.length }} juegos</span><button v-if="visibleGames<highlights.mostPlayed.length" type="button" @click="visibleGames+=6">Ver más juegos</button><button v-if="visibleGames>3" type="button" @click="visibleGames=3">Ver menos</button></div>
@@ -103,7 +102,7 @@ const hoursLabel = minutes => {
 .featured-shade{background:linear-gradient(90deg,#0b1024fa 0%,#0b1024ed 26%,#0b1024bc 52%,#0b10246b 100%),linear-gradient(0deg,#0b1024b3,transparent 65%)}
 @media(max-width:500px){.featured-backdrop{width:calc(100% + 36px);opacity:.5;filter:blur(8px)}.featured-shade{background:linear-gradient(90deg,#0b1024f2,#0b1024bf 55%,#0b10248c),linear-gradient(0deg,#0b1024bb,transparent 70%)}}
 
-.gamer-more{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:11px;color:var(--text-secondary,#b8bfd5)}.gamer-more button{padding:8px 16px;border:1px solid var(--gamer-border);border-radius:9px;background:#7c3aed18;color:inherit;font:inherit;font-weight:600;cursor:pointer}.gamer-more button:hover{background:#7c3aed30}.gamer-history-note{font-size:11px;color:var(--text-secondary,#b8bfd5);margin:10px 0 0}
+.gamer-more{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:11px;color:var(--text-secondary,#b8bfd5)}.gamer-more button{padding:8px 16px;border:1px solid var(--gamer-border);border-radius:9px;background:#7c3aed18;color:inherit;font:inherit;font-weight:600;cursor:pointer}.gamer-more button:hover{background:#7c3aed30}
 
 .achievement-remaining time{font-size:10px;line-height:1.5;color:var(--text-secondary,#94a3b8)}
 </style>

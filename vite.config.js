@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
-import { handler as xboxProfileHandler } from './netlify/lib/xbox-profile.js'
+import { handler as xboxProfileHandler } from './netlify/functions/xbox-profile.js'
 import { handler as nintendoPresenceHandler } from './netlify/functions/nintendo-presence.js'
 import { handler as igdbHandler } from './netlify/functions/igdb.js'
 import { handler as imageProxyHandler } from './netlify/functions/image-proxy.js'
