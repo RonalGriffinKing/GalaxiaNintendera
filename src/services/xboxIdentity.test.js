@@ -3,6 +3,11 @@ import {cleanGamertag,validXuid,findExactXboxPlayer,xboxProfilePerson,normalizeX
 const person={xuid:'2533274792093122',gamertag:'Player',uniqueModernGamertag:'Player#1234',gamerScore:'123',displayPicRaw:'https://example.com/avatar.png',realName:'Private name'}
 const history={content:{xuid:person.xuid,titles:[{titleId:'1',name:'Game',type:'Game',displayImage:'https://example.com/game.png',titleHistory:{visible:true,lastTimePlayed:'2026-10-18T10:00:00Z'}},{titleId:'2',name:'Hidden',type:'Game',titleHistory:{visible:false,lastTimePlayed:'2026-10-18T11:00:00Z'}},{titleId:'3',name:'App',type:'App',titleHistory:{lastTimePlayed:'2026-10-18T11:00:00Z'}}]}}
 describe('Xbox public identity',()=>{
+ it('keeps every public title returned, beyond the three initially displayed',()=>{
+  const titles=Array.from({length:8},(_,i)=>({titleId:String(i+1),name:'Game '+i,type:'Game',titleHistory:{lastTimePlayed:'2026-10-26T10:00:00Z'},achievement:{currentAchievements:i,currentGamerscore:i,progressPercentage:0}}))
+  const result=normalizeXboxIdentity(person,null,{titles})
+  expect(result.history).toHaveLength(8);expect(result.gameAchievements).toHaveLength(8)
+ })
  it('validates gamertags and keeps XUIDs as strings',()=>{expect(cleanGamertag(' Player#1234 ')).toBe('Player#1234');expect(validXuid(person.xuid)).toBe(true);expect(validXuid(Number(person.xuid))).toBe(false);for(const value of ['https://evil.test','../name','bad?token=x','a'.repeat(33)])expect(()=>cleanGamertag(value)).toThrow()})
  it('requires one exact match, never the first fuzzy suggestion',()=>{expect(findExactXboxPlayer({content:{people:[person]}},'player#1234')).toEqual(person);expect(findExactXboxPlayer({people:[person]},'Play')).toBeNull();expect(findExactXboxPlayer({people:[person,{...person,xuid:'2533274792093123'}]},'Player')).toBeNull()})
  it('supports account settings without leaking real names',()=>{const parsed=xboxProfilePerson({content:{profileUsers:[{id:person.xuid,settings:[{id:'Gamertag',value:'Player'},{id:'Gamerscore',value:'0'}]}]}},person.xuid);expect(parsed.gamertag).toBe('Player');expect(parsed.gamerScore).toBe('0')})

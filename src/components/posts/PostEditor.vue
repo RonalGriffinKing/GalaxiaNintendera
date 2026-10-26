@@ -671,7 +671,7 @@
             </div>
             <ContentLoading v-if="igdbLoading" variant="inline" />
 
-            <div v-if="igdbImages.length && !igdbLoading" class="igdb-picker-workspace">
+            <div class="igdb-picker-workspace">
               <aside class="igdb-targets" aria-label="Ubicacion de la imagen">
                 <div class="igdb-pane-title">
                   <span>Destino</span>
@@ -725,7 +725,7 @@
                     <em v-if="assignedLabel(image.url)" :title="`Asignada a ${assignedLabel(image.url)}`"><i class="fas fa-check"></i></em>
                   </button>
                 </div>
-                <div v-else class="igdb-empty">No hay imagenes en esta categoria.</div>
+                <div v-else class="igdb-empty">{{ igdbLoading ? 'Buscando imágenes del juego…' : 'No hay imágenes. Puedes elegir otro destino o cambiar la búsqueda.' }}</div>
               </section>
 
               <aside class="igdb-selection-pane">
@@ -759,6 +759,7 @@ import ContentLoading from "@/components/shared/ContentLoading.vue"
 import ClipboardUrlField from '@/components/posts/ClipboardUrlField.vue'
 import VisualThemeSelector from '@/components/posts/VisualThemeSelector.vue'
 import { clearPublicPageCache } from '@/services/publicPageCache'
+import { imageSearchQuery, normalizePostSections } from '@/services/postSectionGames'
 import { normalizeSocialContent } from '@/services/socialContent'
 import { normalizeHomeHero } from '@/services/homeHero'
 import { gameEditorialFields } from '@/services/articlePresentation'
@@ -774,7 +775,7 @@ import { homePinOverflow } from '@/services/homePins'
 import socialJsonInstructions from '../../../docs/prompt-post-completo-redes.md?raw'
 import socialJsonExample from '../../../examples/post-completo-social-v2.example.json?raw'
 import AppNotice from '@/components/shared/AppNotice.vue'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { addDoc, collection, deleteField, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
@@ -843,6 +844,7 @@ const igdbError = ref('')
 const igdbHasSearched = ref(false)
 let igdbSearchTimer = null
 let igdbSearchSequence = 0
+const igdbSearchCache = new Map()
 const releaseAtInput = ref('')
 const openAccordions = ref(['main'])
 const previewDevice = ref('desktop')
@@ -1135,11 +1137,19 @@ watch(isInitialFlowComplete, (complete) => {
   mobileStep.value = 'info'
 })
 
-watch(igdbQuery, (query) => {
-  clearTimeout(igdbSearchTimer)
-  if (!imagePickerOpen.value || query.trim().length < 2) return
-  igdbSearchTimer = window.setTimeout(() => searchIgdbImages(), 550)
-})
+const resetImageSearch = () => {
+ clearTimeout(igdbSearchTimer);igdbSearchSequence++
+ igdbImages.value=[];igdbGames.value=[];selectedIgdbImage.value=null
+ igdbGameFilter.value='all';igdbTypeFilter.value='all';igdbError.value='';igdbHasSearched.value=false;igdbLoading.value=false
+}
+watch(igdbQuery, query => {
+ resetImageSearch()
+ if(!imagePickerOpen.value || query.trim().length<2)return
+ igdbLoading.value=true
+ igdbSearchTimer=window.setTimeout(()=>searchIgdbImages(true),550)
+}, {flush:'sync'})
+watch(imagePickerOpen, open => {if(!open)resetImageSearch()})
+onUnmounted(resetImageSearch)
 
 const normalizeText = (value) => String(value || '')
   .normalize('NFD')
@@ -1334,20 +1344,7 @@ const showEditorToast = (message, type = 'success') => {
   setTimeout(() => { toast.value.show = false }, 2500)
 }
 
-const normalizeSections = (sections = [], { dropEmpty = false } = {}) => {
-  const normalized = sections.map((section, index) => ({
-    title: section?.title || section?.subtitulo || '',
-    label: section?.label || section?.type || sectionTypeLabel(index),
-    navLabel: String(section?.navLabel || '').trim().slice(0, 42),
-    image: section?.image || section?.imagen || '',
-    content: section?.content || section?.contenido || '',
-    hidden: Boolean(section?.hidden)
-  }))
-  const filtered = dropEmpty
-    ? normalized.filter(section => section.title.trim() || section.image.trim() || section.content.trim())
-    : normalized
-  return filtered.length ? filtered : [{ title: '', label: 'Introduccion', image: '', content: '', hidden: false }]
-}
+const normalizeSections = (sections = [], options = {}) => normalizePostSections(sections, { ...options, labelForIndex: sectionTypeLabel })
 
 const parseAiJsonPost = (value) => {
   const data = JSON.parse(value || '{}')
@@ -1472,37 +1469,42 @@ const openImagePicker = (targetId = 'cover') => {
   imageTargetId.value = targetId
   imagePickerOpen.value = true
   igdbError.value = ''
-  const suggestedQuery = post.value.game?.nameEn || post.value.game?.nameEs || post.value.mediaGameName || post.value.title || ''
-  if (igdbQuery.value === suggestedQuery && suggestedQuery.trim().length >= 2 && !igdbImages.value.length) {
-    window.setTimeout(() => searchIgdbImages(), 0)
-  } else {
-    igdbQuery.value = suggestedQuery
-  }
+  suggestImageSearch(targetId)
 }
 
-const searchIgdbImages = async () => {
+const suggestImageSearch = targetId => {
+ const query=imageSearchQuery(post.value,targetId)
+ if(igdbQuery.value!==query)igdbQuery.value=query
+ else if(!igdbImages.value.length && query.length>=2)searchIgdbImages(true)
+}
+
+const searchIgdbImages = async (useCache = false) => {
   const query = igdbQuery.value.trim()
   if (query.length < 2) return
   clearTimeout(igdbSearchTimer)
   const requestId = ++igdbSearchSequence
+  const targetId = imageTargetId.value
   igdbLoading.value = true
   igdbError.value = ''
   igdbHasSearched.value = true
   try {
-    const response = await fetch('/.netlify/functions/igdb', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
-    })
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(data?.error || 'No se pudieron buscar imagenes')
-    if (requestId !== igdbSearchSequence) return
-    igdbImages.value = data.images || []
-    igdbGames.value = data.games || (data.game ? [{ ...data.game, imageCount: data.images?.length || 0 }] : [])
+    let data = useCache === true ? igdbSearchCache.get(query) : null
+    if(!data) {
+      const response = await fetch('/.netlify/functions/igdb', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query })
+      })
+      data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data?.error || 'No se pudieron buscar imagenes')
+    }
+    if (requestId !== igdbSearchSequence || !imagePickerOpen.value) return
+    if(igdbSearchCache.size>=30)igdbSearchCache.delete(igdbSearchCache.keys().next().value)
+    igdbSearchCache.set(query,data)
+    igdbImages.value = Array.isArray(data.images) ? data.images : []
+    igdbGames.value = Array.isArray(data.games) ? data.games : (data.game ? [{ ...data.game, imageCount: igdbImages.value.length }] : [])
     selectedIgdbImage.value = igdbImages.value[0] || null
     igdbGameFilter.value = 'all'
     igdbTypeFilter.value = 'all'
-    post.value.mediaGameName = data.game?.name || query
+    if(targetId==='cover')post.value.mediaGameName = query
   } catch (error) {
     if (requestId !== igdbSearchSequence) return
     console.error(error)
@@ -1525,6 +1527,7 @@ const assignIgdbImage = (image) => {
 
 const selectImageTarget = (target) => {
   imageTargetId.value = target.id
+  suggestImageSearch(target.id)
   selectedIgdbImage.value = igdbImages.value.find(image => image.url === target.url) || activeIgdbImage.value
 }
 

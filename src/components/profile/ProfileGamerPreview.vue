@@ -10,12 +10,16 @@ const platforms = computed(() => [...new Set(connected.value.map(identity => ide
 const selectedPlatform = ref('')
 watch(platforms, values => { if (!values.includes(selectedPlatform.value)) selectedPlatform.value = values.includes('nintendo') ? 'nintendo' : values[0] || '' }, { immediate: true })
 const selectedIdentities = computed(() => connected.value.filter(identity => identity.platform === selectedPlatform.value))
-const highlights = computed(() => gamerHighlights(selectedIdentities.value, props.own))
-const recent = computed(() => props.showRecent ? selectedIdentities.value.filter(identity => identity.connectionState==='connected' && (props.own || identity.visibility==='public')).flatMap(identity => identity.history || []).filter(entry => entry.game?.title && Number.isFinite(Date.parse(entry.at))).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at)).slice(0,3) : [])
-const xboxAchievements = computed(() => selectedIdentities.value.flatMap(identity => identity.gameAchievements || []).filter(entry => entry.game?.title).slice(0,3))
-const achievementSlots = computed(() => Array.from({length:3},(_,index)=>xboxAchievements.value[index] || null))
-const playedSlots = computed(() => Array.from({length:3},(_,index)=>highlights.value.mostPlayed[index] || null))
-const recentSlots = computed(() => Array.from({length:3},(_,index)=>recent.value[index] || null))
+const visibleGames=ref(3),visibleRecent=ref(3)
+watch(selectedPlatform,()=>{visibleGames.value=3;visibleRecent.value=3})
+const highlights = computed(() => gamerHighlights(selectedIdentities.value, props.own, 100))
+const uniqueRecent=entries=>{const seen=new Set();return entries.filter(entry=>{if(seen.has(entry.game.id))return false;seen.add(entry.game.id);return true})}
+
+const recent = computed(() => props.showRecent ? uniqueRecent(selectedIdentities.value.filter(identity => identity.connectionState==='connected' && (props.own || identity.visibility==='public')).flatMap(identity => identity.history || []).filter(entry => entry.game?.title && Number.isFinite(Date.parse(entry.at))).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at))) : [])
+const xboxAchievements = computed(() => uniqueRecent(selectedIdentities.value.flatMap(identity => identity.gameAchievements || []).filter(entry => entry.game?.title).sort((a,b)=>(Date.parse(b.at)||0)-(Date.parse(a.at)||0))))
+const achievementSlots = computed(() => Array.from({length:Math.max(3,Math.min(visibleGames.value,xboxAchievements.value.length))},(_,index)=>xboxAchievements.value[index] || null))
+const playedSlots = computed(() => Array.from({length:Math.max(3,Math.min(visibleGames.value,highlights.value.mostPlayed.length))},(_,index)=>highlights.value.mostPlayed[index] || null))
+const recentSlots = computed(() => Array.from({length:Math.max(3,Math.min(visibleRecent.value,recent.value.length))},(_,index)=>recent.value[index] || null))
 const dateLabel = value => new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 const number = value => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2, useGrouping: false }).format(value)
 const hoursLabel = minutes => {
@@ -44,12 +48,16 @@ const hoursLabel = minutes => {
       <strong class="achievement-game-title" :title="entry.game.title">{{ entry.game.title }}</strong>
       <div class="achievement-stats"><span><b>{{ entry.unlocked != null ? number(entry.unlocked) : '—' }}</b> {{ entry.unlocked === 1 ? 'logro' : 'logros' }}</span><span class="achievement-score"><b>{{ entry.gamerscore != null ? number(entry.gamerscore) : '—' }}</b><template v-if="entry.totalGamerscore != null"> / {{ number(entry.totalGamerscore) }}</template> G</span></div>
       <div class="game-progress"><template v-if="entry.progress != null"><label :for="'xbox-progress-'+index"><span>Progreso Xbox</span><b>{{ number(entry.progress) }} %</b></label><progress :id="'xbox-progress-'+index" :value="entry.progress" max="100">{{ entry.progress }} %</progress></template><span v-else>Progreso no disponible</span></div>
-      <div class="achievement-remaining"><small v-if="entry.remaining === 0 && entry.remainingGamerscore === 0" class="achievement-complete">Completado</small><template v-else><small v-if="entry.remaining != null">{{ entry.remaining === 1 ? 'Falta 1 logro' : 'Faltan '+number(entry.remaining)+' logros' }}</small><small v-if="entry.remainingGamerscore != null">Faltan {{ number(entry.remainingGamerscore) }} G</small></template><small v-if="entry.remaining == null" class="achievement-unavailable">Total de logros no disponible</small></div>
+      <div class="achievement-remaining"><time v-if="entry.at" :datetime="entry.at">Última partida: {{ dateLabel(entry.at) }}</time><small v-if="entry.remaining === 0 && entry.remainingGamerscore === 0" class="achievement-complete">Completado</small><template v-else><small v-if="entry.remaining != null">{{ entry.remaining === 1 ? 'Falta 1 logro' : 'Faltan '+number(entry.remaining)+' logros' }}</small><small v-if="entry.remainingGamerscore != null">Faltan {{ number(entry.remainingGamerscore) }} G</small></template><small v-if="entry.remaining == null" class="achievement-unavailable">Total de logros no disponible</small></div>
      </template><template v-else><strong>Sin datos de logros</strong><span>Xbox no publica este progreso.</span></template></div>
     </li></ul>
+    <div class="gamer-more"><span>{{ Math.min(visibleGames,xboxAchievements.length) }} de {{ xboxAchievements.length }} juegos</span><button v-if="visibleGames<xboxAchievements.length" type="button" @click="visibleGames+=6">Ver más juegos</button><button v-if="visibleGames>3" type="button" @click="visibleGames=3">Ver menos</button></div>
+    <p v-if="selectedIdentities.some(identity=>identity.archiveAvailable===false)" class="gamer-history-note" role="status">El historial no se pudo guardar ahora. Se muestran los datos disponibles.</p>
    </div>
    <div v-else class="gamer-most-played"><h3 class="gamer-section-title">Más jugados</h3><ol><li v-for="(entry,index) in playedSlots" :key="entry?.key || 'empty-'+index" :class="{'empty-game':!entry}"><div class="played-art"><img v-if="entry?.game.imageUrl" :src="entry.game.imageUrl" alt="" loading="lazy" /><i v-else class="fas fa-gamepad cover-placeholder" aria-hidden="true"></i><span v-if="entry" class="played-rank" aria-hidden="true">{{ index+1 }}</span></div><div v-if="entry" class="played-copy"><strong :title="entry.game.title">{{ entry.game.title }}</strong><span class="played-hours">{{ hoursLabel(entry.minutes) }}</span><small>{{ entry.platform }}</small></div><div v-else class="played-copy empty-copy"><strong>Sin datos de juego</strong><span>Aún no disponible.</span></div></li></ol></div>
+   <div v-if="selectedPlatform!=='xbox' && highlights.mostPlayed.length>3" class="gamer-more"><span>{{ Math.min(visibleGames,highlights.mostPlayed.length) }} de {{ highlights.mostPlayed.length }} juegos</span><button v-if="visibleGames<highlights.mostPlayed.length" type="button" @click="visibleGames+=6">Ver más juegos</button><button v-if="visibleGames>3" type="button" @click="visibleGames=3">Ver menos</button></div>
    <div v-if="showRecent" class="gamer-recent-preview"><h3 class="gamer-section-title">Actividad reciente</h3><ul><li v-for="(entry,index) in recentSlots" :key="entry?.game.id || 'recent-empty-'+index" :class="{'empty-game':!entry}"><img v-if="entry?.game.imageUrl" :src="entry.game.imageUrl" alt="" loading="lazy" /><i v-else class="fas fa-gamepad cover-placeholder" aria-hidden="true"></i><div class="recent-shade" aria-hidden="true"></div><div v-if="entry" class="recent-copy"><strong :title="entry.game.title">{{ entry.game.title }}</strong><time :datetime="entry.at">{{ dateLabel(entry.at) }}</time></div><div v-else class="recent-copy empty-copy"><strong>Sin actividad publicada</strong><span>No hay datos disponibles.</span></div></li></ul></div>
+   <div v-if="showRecent && recent.length>3" class="gamer-more"><span>{{ Math.min(visibleRecent,recent.length) }} de {{ recent.length }} juegos</span><button v-if="visibleRecent<recent.length" type="button" @click="visibleRecent+=6">Ver más actividad</button><button v-if="visibleRecent>3" type="button" @click="visibleRecent=3">Ver menos</button></div>
    <ul class="gamer-connected" aria-label="Plataformas conectadas"><li v-for="platform in highlights.platforms" :key="platform"><span aria-hidden="true">●</span> {{ platform }}</li></ul>
   </template>
  </section>
@@ -94,4 +102,8 @@ const hoursLabel = minutes => {
 .featured-backdrop{inset:-18px;width:calc(100% + 36px);height:calc(100% + 36px);max-width:none;object-fit:cover;object-position:center 38%;filter:blur(10px);transform:scale(1.04);opacity:.65}
 .featured-shade{background:linear-gradient(90deg,#0b1024fa 0%,#0b1024ed 26%,#0b1024bc 52%,#0b10246b 100%),linear-gradient(0deg,#0b1024b3,transparent 65%)}
 @media(max-width:500px){.featured-backdrop{width:calc(100% + 36px);opacity:.5;filter:blur(8px)}.featured-shade{background:linear-gradient(90deg,#0b1024f2,#0b1024bf 55%,#0b10248c),linear-gradient(0deg,#0b1024bb,transparent 70%)}}
+
+.gamer-more{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:11px;color:var(--text-secondary,#b8bfd5)}.gamer-more button{padding:8px 16px;border:1px solid var(--gamer-border);border-radius:9px;background:#7c3aed18;color:inherit;font:inherit;font-weight:600;cursor:pointer}.gamer-more button:hover{background:#7c3aed30}.gamer-history-note{font-size:11px;color:var(--text-secondary,#b8bfd5);margin:10px 0 0}
+
+.achievement-remaining time{font-size:10px;line-height:1.5;color:var(--text-secondary,#94a3b8)}
 </style>

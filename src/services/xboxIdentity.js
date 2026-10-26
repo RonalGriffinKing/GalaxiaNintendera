@@ -55,8 +55,8 @@ export function normalizeXboxIdentity(person,presencePayload,titlesPayload) {
   const progress=typeof raw.progressPercentage==='number'&&Number.isFinite(raw.progressPercentage)&&raw.progressPercentage>=0&&raw.progressPercentage<=100?raw.progressPercentage:null
   if(unlocked===null&&earned===null&&progress===null)return []
   return [{game:gameData(game),unlocked,total:validTotal,remaining:validTotal!==null?validTotal-unlocked:null,gamerscore:earned,totalGamerscore:validScoreTotal,remainingGamerscore:validScoreTotal!==null?validScoreTotal-earned:null,progress,at:date(game.titleHistory?.lastTimePlayed)}]
- }).sort((a,b)=>(Date.parse(b.at)||0)-(Date.parse(a.at)||0)).slice(0,3)
- const history=games.flatMap(game=>{const at=date(game.titleHistory?.lastTimePlayed);return at?[{game:gameData(game),at}]:[]}).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at)).slice(0,3)
+ }).sort((a,b)=>(Date.parse(b.at)||0)-(Date.parse(a.at)||0))
+ const history=games.flatMap(game=>{const at=date(game.titleHistory?.lastTimePlayed);return at?[{game:gameData(game),at}]:[]}).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at))
  const state=presence?.state==='Online'?'online':presence?.state==='Offline'?'offline':'unknown'
  const active=(presence?.devices||[]).flatMap(device=>device.titles||[]).filter(title=>title.state==='Active'&&text(title.name)&&/^\d{1,12}$/.test(String(title.id)))
  // Use a single explicitly active title; never pick arbitrarily between simultaneous games.

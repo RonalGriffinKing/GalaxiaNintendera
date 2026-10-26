@@ -1,8 +1,9 @@
 <script setup>
 import { computed, ref } from 'vue'
 import SocialPaintControls from './SocialPaintControls.vue'
+import { constrainImagePan } from '@/services/socialImageDrag'
 const templateName = ref('')
-const props = defineProps({ hasScore:Boolean, templates:Array, templateNotice:String, element:String, cta:String, slideType:String, slideAccent:String, scope:String, settings:Object, title:String, titleHighlights:Array, description:String, points:Array, fonts:Array, number:Number, image:String, imageUrl:String, overflow:Boolean, notice:String, canUndo:Boolean, canRedo:Boolean, inert:Boolean })
+const props = defineProps({ imagePanLimits:Object, hasScore:Boolean, templates:Array, templateNotice:String, element:String, cta:String, slideType:String, slideAccent:String, scope:String, settings:Object, title:String, titleHighlights:Array, description:String, points:Array, fonts:Array, number:Number, image:String, imageUrl:String, overflow:Boolean, notice:String, canUndo:Boolean, canRedo:Boolean, inert:Boolean })
 const emit=defineEmits(['save-template','load-template','reset','select','scope','setting','cta','title','title-highlights','description','points','undo','redo','close','center','fit','download','image-url','upload','original'])
 const names=computed(()=>({...(props.slideType==='closing'?{cta:'Invitacion a comentar'}:{}),...(props.hasScore?{score:'Nota del análisis'}:{}),brand:'Marca superior',progress:'Progreso del carrusel',title:'Titulo',description:'Subtitulo',points:'Puntos',image:'Imagen de fondo',overlay:'Color del fondo',logo:'Logo Galaxia',gameLogo:'Logo del juego',author:'Autor',part:'Etiqueta Parte',arrow:'Flecha',button:'Boton',number:'Numeracion'}))
 const current=computed(()=>props.settings[props.element] || {})
@@ -13,6 +14,9 @@ function set(key,value){emit('setting',{path:props.element+'.'+key,value})}
 function content(value){emit(props.element,value)}
 function restore(key){emit('setting',{path:key+'.visible',value:true});emit('select',key)}
 function setNumber(key,event,min,max){const value=Number(event.target.value);if(Number.isFinite(value))set(key,Math.max(min,Math.min(max,value)))}
+const imageOffset=computed(()=>({x:constrainImagePan(props.settings.image?.panX,props.imagePanLimits||{min:0,max:0}),y:0}))
+const rounded=value=>Math.round((Number(value)||0)*10)/10
+function setImageOffset(event){const value=Number(event.target.value);if(Number.isFinite(value))emit('setting',{path:'image.panX',value:constrainImagePan(rounded(value),props.imagePanLimits||{min:0,max:0})})}
 </script>
 <template>
  <aside class="layers-panel" aria-label="Capas de la imagen">
@@ -55,7 +59,10 @@ function setNumber(key,event,min,max){const value=Number(event.target.value);if(
      <small>Solo cambia este diseno; no reemplaza la imagen de la noticia.</small>
      <button @click="emit('original')">Volver a la imagen original</button>
      <div class="tools"><label>Zoom (%)<input type="number" min="100" max="200" :value="current.scale" @input="setNumber('scale',$event,100,200)" /></label><label>Brillo (%)<input type="number" min="20" max="180" :value="current.brightness" @input="setNumber('brightness',$event,20,180)" /></label></div>
-     <div class="tools"><label>Horizontal (%)<input type="number" min="0" max="100" :value="current.x" @input="setNumber('x',$event,0,100)" /></label><label>Vertical (%)<input type="number" min="0" max="100" :value="current.y" @input="setNumber('y',$event,0,100)" /></label></div>
+     <small>Arrastra la foto a izquierda o derecha para elegir el recorte. El fondo siempre queda cubierto. Si no hay margen, aumenta el zoom.</small>
+     <label>Horizontal (%)<input type="number" :min="imagePanLimits?.min||0" :max="imagePanLimits?.max||0" step="0.1" :value="rounded(imageOffset.x)" @input="setImageOffset($event)" /></label>
+     <button @click="emit('setting',{path:'image.panX',value:0})">Restablecer posición del fondo</button>
+     <details><summary>Punto de recorte original</summary><label>Recorte horizontal (%)<input type="number" min="0" max="100" step="0.1" :value="rounded(current.x)" @input="setNumber('x',$event,0,100)" /></label></details>
      <button @click="emit('select','overlay')">Color y sombreado del fondo</button>
     </template>
     <template v-else-if="element==='overlay'">

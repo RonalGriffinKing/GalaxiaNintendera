@@ -16,6 +16,7 @@ import { resolveProfileIcon } from '@/services/profileProgress'
 import fallbackCover from '@/iconos/Banner.png'
 import galaxyLogo from '@/iconos/logo.png'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
+import { imageDragOffset, imagePanLimits, constrainImagePan } from '@/services/socialImageDrag'
 import { useVisualThemes } from '@/composables/useVisualThemes'
 import { pngWithThemeMetadata } from '@/services/visualThemePng'
 import SeasonalThemeDecor from '@/components/posts/SeasonalThemeDecor.vue'
@@ -38,6 +39,15 @@ const renderedCards = () => [...(sharePreview.value?.querySelectorAll('.social-c
 const selectedFormat = ref('story')
 const socialMargins = ref(true)
 const brokenImages = ref({})
+const imageDimensions=ref({})
+function recordImageSize(event,slide){const img=event.target;if(img.naturalWidth)imageDimensions.value[slide.id]={naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight}}
+function panLimitsFor(index){
+ const settings=settingsForSlide(index),slide=carouselSlides.value[index]
+ const img=sharePreview.value?.querySelectorAll('.social-card')[index]?.querySelector('.social-card-bg')
+ const dimensions=img?.naturalWidth?{naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight}:imageDimensions.value[slide?.id]
+ return imagePanLimits({...exportSize.value,...dimensions,scale:settings.image.scale,cropX:settings.image.x})
+}
+
 const imageCacheNonce = ref(Date.now())
 const exportProgress = ref({ current: 0, total: 0, label: '' })
 const editorViewport = ref({ width: window.innerWidth, height: window.innerHeight })
@@ -393,7 +403,7 @@ function restoreHistory(redo) {
 }
 function resetSingleDesign() { rememberDesign(); const next = { ...slideTemplateOverrides.value }; delete next[selectedSlideIndex.value]; slideTemplateOverrides.value = next }
 function visualElementStyle(index, key) {
- const settings = settingsForSlide(index); const layout = settings['visual_' + key] || {}; const typography = settings[key] || {}
+ const settings = settingsForSlide(index); const savedLayout = settings['visual_' + key] || {}; const layout=key==='image'?{x:0,y:0}:savedLayout; const typography = settings[key] || {}
  return { translate: ((layout.x || 0) * exportSize.value.width / 100) + 'px ' + ((layout.y || 0) * exportSize.value.height / 100) + 'px', textAlign: typography.align || undefined, width: ['title','description','points'].includes(key) && typography.customWidth ? typography.width + 'px' : undefined, maxWidth: ['title','description','points'].includes(key) && typography.customWidth ? 'none' : undefined, scale: ['button','score'].includes(key) && typography.size ? typography.size / 100 : undefined, fontWeight: typography.weight || undefined, fontFamily: typography.family || undefined, lineHeight: typography.line || undefined, WebkitLineClamp: key === 'title' && typography.lines > 0 ? String(typography.lines) : undefined, display: key === 'title' && typography.lines > 0 ? '-webkit-box' : undefined, WebkitBoxOrient: key === 'title' && typography.lines > 0 ? 'vertical' : undefined, overflow: key === 'title' && typography.lines > 0 ? 'hidden' : undefined, color: ['title','description','points','number'].includes(key) ? typography.color || undefined : undefined, outline: editorOpen.value && !isDownloading.value && selectedSlideIndex.value === index && selectedElement.value === key ? 'var(--selection-outline, 4px solid #c084fc)' : undefined, outlineOffset: '6px', position: key === 'title' ? 'relative' : undefined }
 }
 function startVisualDrag(event, index, resize = false) {
@@ -405,14 +415,14 @@ function startVisualDrag(event, index, resize = false) {
  if (!element || element.dataset.edit === 'image') element = cardElement?.querySelector('.social-card-bg')
  if (!element) { selectedSlideIndex.value = index; selectedElement.value = 'overlay'; return }
  event.preventDefault(); selectedSlideIndex.value = index; selectedElement.value = element.dataset.edit || 'image'; rememberDesign()
- const card = cardElement.getBoundingClientRect(); const box = element.getBoundingClientRect(); const layout = selectedElement.value === 'image' ? settingsForSlide(index).image : settingsForSlide(index)['visual_' + selectedElement.value] || {}
- visualDrag = { key: selectedElement.value, startX: event.clientX, startY: event.clientY, x: layout.x || 0, y: layout.y || 0, card, box, resize, size: selectedElement.value === 'gameLogo' && selectedStyle.value === 'impact' && index === 0 ? settingsForSlide(index).coverGameLogo.size : settingsForSlide(index)[selectedElement.value]?.size || 100, width: box.width * exportSize.value.width / card.width }
+ const card = cardElement.getBoundingClientRect(); const box = element.getBoundingClientRect(); const layout = selectedElement.value==='image'?{x:settingsForSlide(index).image.panX||0,y:0}:settingsForSlide(index)['visual_' + selectedElement.value] || {}
+ visualDrag = { pointerId:event.pointerId, panLimits:panLimitsFor(index), key: selectedElement.value, startX: event.clientX, startY: event.clientY, x: selectedElement.value==='image'?constrainImagePan(layout.x,panLimitsFor(index)):layout.x || 0, y: layout.y || 0, card, box, resize, size: selectedElement.value === 'gameLogo' && selectedStyle.value === 'impact' && index === 0 ? settingsForSlide(index).coverGameLogo.size : settingsForSlide(index)[selectedElement.value]?.size || 100, width: box.width * exportSize.value.width / card.width }
  event.currentTarget.setPointerCapture(event.pointerId)
 }
 function moveVisualDrag(event) {
- if (!visualDrag) return
+ if (!visualDrag || event.pointerId !== visualDrag.pointerId) return
  const d = visualDrag; const dx = event.clientX - d.startX; const dy = event.clientY - d.startY
- if (d.key === 'image') { setSetting('image.x', Math.max(0, Math.min(100, d.x - dx / d.card.width * 100))); setSetting('image.y', Math.max(0, Math.min(100, d.y - dy / d.card.height * 100))); return }
+ if (d.key === 'image') { const offset=imageDragOffset(d,dx,d.card,d.panLimits); setSetting('image.panX',offset.x); return }
  if (d.resize === 'width-right' || d.resize === 'width-left') {
   const left = d.resize === 'width-left'
   const width = Math.max(180, Math.min(1000, d.width + (left ? -dx : dx) * exportSize.value.width / d.card.width))
@@ -588,6 +598,7 @@ function resetImageFilters() {
   setSetting('image.scale', defaults.scale)
   setSetting('image.x', defaults.x)
   setSetting('image.y', defaults.y)
+  setSetting('image.panX', 0)
 }
 
 function resetLogoLayout(group) {
@@ -607,14 +618,14 @@ function resetCoverLogoLayout() {
 function resetPositions() {
   const defaults = activeStyle.value.settings
   const paths = [
-    'image.x', 'image.y',
+    'image.x', 'image.y', 'image.panX',
     'logo.x', 'logo.y',
     'gameLogo.x', 'gameLogo.y',
     'author.x', 'author.y',
     'arrow.x', 'arrow.y',
     'button.y'
   ]
-  paths.forEach(path => setSetting(path, getByPath(defaults, path)))
+  paths.forEach(path => setSetting(path, getByPath(defaults, path) ?? 0))
   for (const key of ['title', 'description', 'logo', 'gameLogo', 'author', 'part', 'arrow', 'button', 'number', 'score']) { setSetting('visual_' + key + '.x', 0); setSetting('visual_' + key + '.y', 0) }
   setCoverLogoSetting('x', defaults.coverGameLogo.x)
   setCoverLogoSetting('y', defaults.coverGameLogo.y)
@@ -754,7 +765,7 @@ function cardStyleFor(index) {
     '--template-font-family': settings.typography.family,
     '--image-filter': `brightness(${settings.image.brightness}%) contrast(${settings.image.contrast}%) saturate(${settings.image.saturation}%) blur(${settings.image.blur}px)`,
     '--image-scale': settings.image.scale / 100,
-    '--image-position-x': `${settings.image.x}%`,
+    '--image-position-x': `calc(${settings.image.x}% + ${constrainImagePan(settings.image.panX,panLimitsFor(index))*exportSize.value.width/100/Math.max(1,settings.image.scale/100)}px)`,
     '--image-position-y': `${settings.image.y}%`,
     '--author-x': `${settings.author.x}px`,
     '--author-y': `${settings.author.y}px`,
@@ -833,10 +844,11 @@ function labelForPart(slide, index) {
 }
 
 function cloneSettings(settings) {
-  return JSON.parse(JSON.stringify(settings))
+  // Retire the abandoned free-moving image layer from loaded/saved templates.
+  return JSON.parse(JSON.stringify(settings, (key,value) => key === 'visual_image' ? undefined : value))
 }
 
-function mergeSettings(base, override) { return mergeSocialSettings(base, override) }
+function mergeSettings(base, override) { const settings=mergeSocialSettings(base, override);delete settings.visual_image;return settings }
 
 function getByPath(source, path) {
   return path.split('.').reduce((value, key) => value?.[key], source)
@@ -1187,7 +1199,7 @@ function slugify(value) {
             <div class="share-card-scale" :style="previewScaleStyle">
               <article
                 :ref="(el) => setCardRef(el, index)"
-                class="social-card social-network-layout" :data-social-margins="socialMargins ? 'true' : null" :data-visual-themed="!isLegacyTheme(renderedTheme) ? 'true' : null" :data-slide-type="slide.type" :data-accent="slide.accent" :data-format="selectedFormat" @pointerdown="startVisualDrag($event, index)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag"
+                class="social-card social-network-layout" :data-social-margins="socialMargins ? 'true' : null" :data-visual-themed="!isLegacyTheme(renderedTheme) ? 'true' : null" :data-slide-type="slide.type" :data-accent="slide.accent" :data-format="selectedFormat" @pointerdown="startVisualDrag($event, index)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag" @lostpointercapture="stopVisualDrag"
                 :class="[activeStyle.className, {
                   analysis: isAnalysisPost,
                   'impact-cover': selectedStyle === 'impact' && index === 0,
@@ -1207,6 +1219,7 @@ function slugify(value) {
                   :src="slideImage(slide)"
                   crossorigin="anonymous"
                   alt=""
+                  @load="recordImageSize($event,slide)"
                   @error="markImageBroken(slide)"
                 />
                 <div class="social-card-scrim" data-edit="image"></div>
@@ -1291,7 +1304,7 @@ function slugify(value) {
     </section>
 
     <PublicationAnimationModal v-if="animationOpen" :get-element="animationElement" :get-elements="() => cardRefs.filter(Boolean)" :initial-index="selectedSlideIndex" :name="title" @close="animationOpen=false"/>
-    <SocialVisualInspector v-if="editorOpen" :templates="savedTemplates" :template-notice="templateNotice" @save-template="saveNamedTemplate" @load-template="loadNamedTemplate" @reset="resetVisualElement" :element="selectedElement" :scope="applyScope" :number="selectedSlide?.number || 1" :settings="settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :has-score="Boolean(selectedSlide?.showScore)" :slide-type="selectedSlide?.type" :slide-accent="selectedSlide?.accent" :cta="selectedSlide ? displaySlideCta(selectedSlide) : ''" :title-highlights="selectedSlide ? displayTitleHighlights(selectedSlide) : []" :points="selectedSlide ? displaySlidePoints(selectedSlide) : []" :image="selectedSlide ? slideImage(selectedSlide) : fallbackCover" :image-url="selectedTemporaryImage()" :fonts="fontOptions" :overflow="textOverflow" :notice="fitNotice" :inert="isDownloading" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectedElement = $event" @scope="applyScope = $event" @setting="setVisualInspectorSetting" @cta="setSlideCta" @title-highlights="setTitleHighlights" @title="updateTextContent('title', $event)" @description="updateTextContent('subtitle', $event)" @points="updateTextContent('points', $event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @fit="fitSlideText" @download="downloadCarousel" @center="centerVisualElement" @image-url="handleTemporaryImageUrl" @upload="handleTemporaryImageUpload" @original="clearTemporaryImage" @close="editorOpen = false" />
+    <SocialVisualInspector v-if="editorOpen" :templates="savedTemplates" :template-notice="templateNotice" @save-template="saveNamedTemplate" @load-template="loadNamedTemplate" @reset="resetVisualElement" :image-pan-limits="panLimitsFor(selectedSlideIndex)" :element="selectedElement" :scope="applyScope" :number="selectedSlide?.number || 1" :settings="settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :has-score="Boolean(selectedSlide?.showScore)" :slide-type="selectedSlide?.type" :slide-accent="selectedSlide?.accent" :cta="selectedSlide ? displaySlideCta(selectedSlide) : ''" :title-highlights="selectedSlide ? displayTitleHighlights(selectedSlide) : []" :points="selectedSlide ? displaySlidePoints(selectedSlide) : []" :image="selectedSlide ? slideImage(selectedSlide) : fallbackCover" :image-url="selectedTemporaryImage()" :fonts="fontOptions" :overflow="textOverflow" :notice="fitNotice" :inert="isDownloading" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectedElement = $event" @scope="applyScope = $event" @setting="setVisualInspectorSetting" @cta="setSlideCta" @title-highlights="setTitleHighlights" @title="updateTextContent('title', $event)" @description="updateTextContent('subtitle', $event)" @points="updateTextContent('points', $event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @fit="fitSlideText" @download="downloadCarousel" @center="centerVisualElement" @image-url="handleTemporaryImageUrl" @upload="handleTemporaryImageUpload" @original="clearTemporaryImage" @close="editorOpen = false" />
   </main>
 </template>
 
@@ -2608,6 +2621,8 @@ function slugify(value) {
 .social-network-layout .social-score-independent{top:170px;right:64px}
 .social-network-layout .network-arrow-icon{width:48px;height:48px;color:var(--arrow-color);flex:0 0 auto}
 .network-brand{grid-column:1;grid-row:1}.network-progress{grid-column:2;grid-row:1}.network-count{grid-column:3;grid-row:1}
+
+.visual-editing .social-card{touch-action:none;user-select:none;cursor:grab}.visual-editing .social-card:active{cursor:grabbing}.visual-editing .social-card-bg,.visual-editing .social-card-scrim,.visual-editing .social-card-glow{pointer-events:none}.visual-editing .social-card-copy,.visual-editing .network-header,.visual-editing .social-card-footer{pointer-events:none}.visual-editing .social-card [data-edit]:not(.social-card-bg):not(.social-card-scrim):not(.social-card-glow){pointer-events:auto}
 </style>
 
 <style scoped>

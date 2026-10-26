@@ -6,6 +6,14 @@ Estas instrucciones se pueden copiar al chat/GPT que redacta el JSON. La web imp
 
 Genera un único JSON válido, sin comentarios ni bloques Markdown. Conserva el artículo completo en `title`, `subtitle`, `summary`, `image`, `category`, `categories` y `sections`. No reduzcas el artículo para hacerlo caber en las imágenes. Respeta también los campos de ficha del juego y análisis que se hayan solicitado; este cambio no los sustituye.
 
+## Juegos de cada sección (opcional)
+
+Si el artículo reúne varios juegos, cada entrada de `sections` puede incluir `game: { "nameEs": "Nombre en español", "nameEn": "English game name" }`. Usa el nombre completo del juego y de la edición correspondiente, sin precios ni numeración. Basta con uno de los dos nombres; no inventes una traducción si el nombre comercial es el mismo. Estos metadatos no aparecen en el artículo: sirven para buscar imágenes del juego de esa sección al abrir el buscador o cambiar de destino.
+
+Para artículos de un solo juego, conserva la ficha `game` de la raíz; no hace falta repetirla en cada sección. Las secciones sin `game`, con nombres vacíos o sin un juego concreto usan el juego general. Si tampoco existe, el buscador conserva la alternativa del nombre anterior o del título del post y permite escribir manualmente. No asignes arbitrariamente uno de los juegos del recopilatorio como juego general de la portada.
+
+Ejemplo parcial: `{ "title": "1. Alien: Isolation — 10,99 €", "game": { "nameEs": "Alien: Isolation", "nameEn": "Alien: Isolation" }, "image": "", "content": "..." }`.
+
 ## Hero de Inicio
 
 Incluye el objeto raíz opcional `hero` para la presentación de Inicio. Es independiente de `social`: no sustituye el carrusel ni cambia la portada del artículo.

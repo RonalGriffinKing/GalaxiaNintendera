@@ -14,7 +14,7 @@ El plan gratuito anuncia acceso a todos los endpoints con 150 peticiones/hora en
 
 ## Datos y límites
 
-Se guarda únicamente `{xuid, gamertag}` en `users/{uid}.socialLinks.xbox` con una actualización de campo anidado. Cambiar y eliminar la vinculación requieren ser el propietario autenticado. No se cambian colecciones, reglas, estrellas, logros ni recompensas. El gamerscore se muestra como dato de Xbox, sin convertirlo a estrellas.
+La vinculación guarda `{xuid, gamertag}` en `users/{uid}.socialLinks.xbox` con una actualización de campo anidado. El historial separado se describe al final de este documento. Cambiar y eliminar la vinculación requieren ser el propietario autenticado. No se cambian colecciones, reglas, estrellas, logros ni recompensas del sitio. El gamerscore se muestra como dato de Xbox, sin convertirlo a estrellas.
 
 El perfil y el editor muestran nombre, avatar, gamerscore y estado si están disponibles. La vista principal reutiliza la identidad gamer existente para juego activo e historial (hasta tres destacados recientes). No se infieren horas jugadas, biblioteca completa ni logros. Se excluyen títulos marcados como privados o que no son juegos en el historial. Si hay varios títulos activos distintos, no se escoge uno arbitrariamente. Si la presencia o el historial están restringidos o fallan, se conserva el perfil y se informa de que parte de la actividad no está disponible.
 
@@ -41,10 +41,20 @@ El encabezado de "Mi universo gamer" permite cambiar entre los sistemas vinculad
 
 Diagnostico temporal: Editar perfil > Conectar sistemas > Xbox > Diagnostico temporal de portadas. El modo uid + diagnostic=images exige una sesion Firebase cuyo UID coincida con el perfil y devuelve dos muestras de objetos de titulo originales (con/sin displayImage HTTPS), sin cabeceras ni campos de credenciales. Reutiliza la cache de historial de cinco minutos. No modifica Firebase.
 
-Xbox muestra ahora Logros por juego en lugar de Mas jugados: hasta tres resumenes por ultima actividad, portadas, logros desbloqueados, gamerscore y porcentaje publicado por Xbox. Los totales cero, ausentes o incoherentes se tratan como desconocidos; solo se calculan restantes con totales validos. gameAchievements es independiente de achievements y de las recompensas de Galaxia. No se realizan consultas adicionales al proveedor. El fondo del juego destacado se extiende a toda la tarjeta con blur y degradado continuo.
+Xbox muestra Logros por juego en lugar de Mas jugados: tres resúmenes iniciales, ampliables con «Ver más», por última actividad, portadas, logros desbloqueados, gamerscore y porcentaje publicado por Xbox. Los totales cero, ausentes o incoherentes se tratan como desconocidos; solo se calculan restantes con totales válidos. gameAchievements es independiente de achievements y de las recompensas de Galaxia. No se realizan consultas adicionales al proveedor. El fondo del juego destacado se extiende a toda la tarjeta con blur y degradado continuo.
 
 ## Prueba local y OBS
 
 Configura OPENXBL_API_KEY en .env.local (ignorado por Git) y reinicia npm run dev. Vite carga la clave solo en el servidor del proxy local, sin prefijo VITE_ ni exposicion al navegador. .env.example contiene un campo vacio. La clave no debe compartirse por chat ni pegarse como gamertag.
 
 Abre el perfil desde localhost, vincula Xbox y guarda el widget Jugando ahora en el editor de overlays. Copia el enlace desde la web local y usalo en OBS, conservando el puerto indicado por Vite y manteniendo npm run dev abierto. El enlace publico sigue necesitando la variable de Netlify. Firebase sigue siendo el proyecto actual: el servidor local no crea un entorno de datos aislado.
+
+## Historial acumulado de juegos
+
+El proxy conserva hasta 500 juegos distintos por XUID en el almacén privado de Netlify Blobs `xbox-game-history`: juego, portada, última actividad y resúmenes de logros normalizados de OpenXBL. No guarda tokens, claves, nombres reales ni presencia en vivo. Cada respuesta actualiza por ID los juegos presentes y conserva los anteriores. Los datos son observaciones del proveedor, no una biblioteca completa ni logros individuales.
+
+Las escrituras usan ETags, condiciones y reintentos para evitar pérdidas por consultas simultáneas. Una respuesta idéntica no genera otra escritura. La caché existente de cinco minutos evita consultas repetidas; no se añaden llamadas a OpenXBL ni sondeos periódicos. El historial crece al consultar el perfil o el widget. El punto de entrada usa el runtime nativo de Netlify para recibir el contexto de Blobs automáticamente; la lógica compartida vive en `netlify/lib/xbox-profile.js`. En Vite sin contexto de Blobs se conserva la consulta actual, sin persistencia.
+
+La lectura exige primero comprobar la vinculación pública guardada en Firebase. Si el proveedor deniega el historial, no se devuelve la copia anterior. Los juegos explícitamente ocultos se retiran del archivo. Si falla el almacenamiento, se devuelve la información disponible y se avisa de que no se pudo guardar.
+
+El perfil muestra tres tarjetas inicialmente y añade seis con «Ver más juegos» o «Ver más actividad», sin peticiones adicionales. Nintendo conserva hasta 100 entradas por lista realmente suministrada por el perfil público de nxapi, antes recortadas a tres; no se crea un archivo acumulado ni se afirma acceso a toda su biblioteca.

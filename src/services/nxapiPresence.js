@@ -55,8 +55,8 @@ function isoDate(value) {
 }
 export function normalizeNxapiPublicProfile(profile) {
   if (!text(profile?.name)) throw new Error('Perfil público no válido.')
-  const recent = Array.isArray(profile.recent_titles) ? profile.recent_titles.slice(0, 3) : []
-  const top = Array.isArray(profile.most_played_titles) ? profile.most_played_titles.slice(0, 3) : []
+  const recent = Array.isArray(profile.recent_titles) ? profile.recent_titles.slice(0, 100) : []
+  const top = Array.isArray(profile.most_played_titles) ? profile.most_played_titles.slice(0, 100) : []
   const validGame = game => game && /^[a-f0-9]{16}$/.test(game.id) && text(game.name)
   const gameData = game => ({ id: game.id, title: text(game.name), imageUrl: imageUrl(game.image_url), firstPlayedAt: isoDate(game.first_played_at) })
   const featured = [...new Map([...top, ...recent].filter(validGame).map(game => [game.id, game])).values()]

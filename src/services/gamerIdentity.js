@@ -20,7 +20,7 @@ export const GAMER_CAPABILITIES = Object.freeze(['presence', 'history', 'library
 export const GAMER_PLATFORMS = Object.freeze({ nintendo: 'Nintendo Switch', steam: 'Steam', xbox: 'Xbox' })
 
 /** Build a read-only preview from independently supplied adapter capabilities. */
-export function gamerHighlights(identities = [], own = false) {
+export function gamerHighlights(identities = [], own = false, limit = 3) {
   const connected = identities.filter(identity => identity && GAMER_PLATFORMS[identity.platform]
     && identity.connectionState === 'connected' && (own || identity.visibility === 'public'))
   const activity = connected.flatMap(identity => {
@@ -44,6 +44,6 @@ export function gamerHighlights(identities = [], own = false) {
       seen.add(entry.gameId)
       return [{ game, minutes: entry.minutes, platform: GAMER_PLATFORMS[identity.platform], key: identity.platform + ':' + entry.gameId }]
     })
-  }).sort((a, b) => b.minutes - a.minutes).slice(0, 3)
+  }).sort((a, b) => b.minutes - a.minutes).slice(0, limit)
   return { platforms: [...new Set(connected.map(identity => GAMER_PLATFORMS[identity.platform]))], activity: activity[0] || null, mostPlayed }
 }

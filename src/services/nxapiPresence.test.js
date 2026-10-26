@@ -58,7 +58,12 @@ describe('nxapi public links and capabilities', () => {
   expect(() => parseNxapiPublicProfile('<h2>Prueba</h2>',profileId)).toThrow()
   expect(() => parseNxapiPublicProfile('<script id="state" type="application/json">{}</script>',profileId)).toThrow()
  })
- it('limits public highlights and ignores invalid times and dates', () => {
+ it('keeps more than three public games when the source supplies them',()=>{
+  const games=Array.from({length:8},(_,i)=>({...game,id:i.toString(16).padStart(16,'0')}))
+  const result=normalizeNxapiPublicProfile({name:'Prueba',recent_titles:games,most_played_titles:games})
+  expect(result.featuredGames).toHaveLength(8);expect(result.history).toHaveLength(8);expect(result.playtime).toHaveLength(8)
+ })
+ it('ignores invalid times and dates', () => {
   const result=normalizeNxapiPublicProfile({name:'Prueba',recent_titles:[{...game,last_played_at:'yesterday',total_play_time:-1}],most_played_titles:[{...game,total_play_time:-1}]})
   expect(result.history).toEqual([]);expect(result.playtime).toEqual([]);expect(result.presence.updatedAt).toBeNull()
  })
