@@ -1,5 +1,6 @@
 <template>
   <div class="timer-card" :class="[`theme-${data.theme}`,{'no-background':data.showBackground===false,'timer-finished':isFinished}]" :style="cardStyle">
+    <HalloweenDecor v-if="data.theme === 'halloween'" />
     <span v-for="star in visibleStars" :key="star.id" class="timer-star" :style="star.style"><i class="fas fa-star"></i></span>
     <div v-if="data.showOrbit!==false" class="timer-orbit" aria-hidden="true"></div>
     <div v-if="isFinished" class="finish-stars" aria-hidden="true"><i v-for="star in finishStars" :key="star.id" class="fas fa-star" :style="star.style"></i></div>
@@ -14,6 +15,7 @@
 </template>
 
 <script setup>
+import HalloweenDecor from '../HalloweenDecor.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = defineProps({ widget: { type: Object, required: true } })
@@ -148,4 +150,6 @@ onUnmounted(() => window.clearInterval(interval))
 @keyframes finish-star{0%{opacity:0;transform:translate(-50%,-50%) scale(.2) rotate(0)}18%{opacity:1}72%{opacity:.85}100%{opacity:0;transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(1.35) rotate(190deg)}}
 @keyframes timer-finish{0%,22%{opacity:1;transform:scale(1);filter:blur(0)}62%{opacity:.78;transform:scale(1.025);filter:brightness(1.22)}84%{opacity:.28;transform:scale(.96);filter:blur(1px)}100%{opacity:0;transform:scale(.86);filter:blur(7px);visibility:hidden}}
 @media (prefers-reduced-motion: reduce) { .timer-star, .timer-dots i,.timer-value.gradient-numbers,.timer-value.gradient-numbers::after,.finish-stars i { animation: none; }.timer-value{transition:none!important}.timer-card.timer-finished{animation:none;opacity:0;visibility:hidden} }
+
+.theme-halloween{background:radial-gradient(ellipse at 85% 0,#7942a166,transparent 55%),linear-gradient(135deg,#1c102b,#321744);border:2px solid #ff973e99;box-shadow:0 0 24px #ff973e22,inset 0 0 32px #8755cc22}.theme-halloween .timer-star{color:#ffc775;text-shadow:0 0 8px #ff973e}.theme-halloween .timer-orbit{border-color:#ff973e44;box-shadow:0 0 0 17px #ff973e08,0 0 0 42px #8755cc12}.theme-halloween .timer-dots i{background:#ffb464}
 </style>

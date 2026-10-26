@@ -1,4 +1,5 @@
 <script setup>
+import HalloweenDecor from '../HalloweenDecor.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { nowPlayingCard, nowPlayingSettings } from '@/services/nowPlaying'
 import { fetchOverlayGamer } from '@/services/overlayGamerClient'
@@ -36,6 +37,7 @@ const style = computed(() => ({ width: settings.value.width + 'px', height: sett
   <div class="now-playing-shell" :style="style">
     <Transition name="now-playing" mode="out-in" appear>
       <article v-if="settings.enabled && visible && card" :key="card.platform + ':' + card.game.id" :class="['now-playing-card', settings.theme, card.platform, { compact: settings.width < 400 }]" aria-label="Actividad de juego">
+        <HalloweenDecor v-if="settings.theme === 'halloween'" />
         <img v-if="card.game.imageUrl" class="now-playing-backdrop" :src="card.game.imageUrl" alt="" />
         <div v-if="settings.particles" class="now-playing-particles" aria-hidden="true"><span v-for="(particle,index) in particles" :key="index" :style="particle"></span></div>
         <span class="now-playing-label"><i class="fas fa-gamepad" aria-hidden="true"></i> {{ card.playing ? 'Jugando ahora' : 'Último juego detectado' }}</span>
@@ -67,4 +69,6 @@ const style = computed(() => ({ width: settings.value.width + 'px', height: sett
 .now-playing-particles{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none;z-index:0;mask-image:linear-gradient(90deg,#0004,#0006 50%,#000)}.now-playing-particles span{position:absolute;border-radius:50%;background:#d8c7ff;box-shadow:0 0 6px #b794ff88;opacity:.35;animation:now-playing-drift 7s ease-in-out infinite alternate}.minimal .now-playing-particles{opacity:.4}
 @keyframes now-playing-drift{from{transform:translate3d(-4px,8px,0);opacity:.12}to{transform:translate3d(9px,-10px,0);opacity:.6}}
 @media(prefers-reduced-motion:reduce){.now-playing-particles span{animation:none;opacity:.25}}
+
+.halloween{border-color:#ff973eaa;background:#1c102bf5;box-shadow:0 0 20px #ff973e22,inset 0 0 24px #8755cc33}.halloween:before{background:linear-gradient(115deg,#1c102bf0,#321744db)}.halloween .now-playing-label{background:linear-gradient(100deg,#a44816,#713394);box-shadow:0 3px 12px #ff973e33}.halloween .now-playing-cover{border-color:#ffb46488}.halloween .now-playing-stats{color:#fff1dc}.halloween .now-playing-stats i{color:#ffb464}.halloween .now-playing-particles span{background:#ffc775;box-shadow:0 0 6px #ff973e88}
 </style>

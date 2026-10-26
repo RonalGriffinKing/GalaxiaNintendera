@@ -18,7 +18,8 @@ import galaxyLogo from '@/iconos/logo.png'
 import GalaxyLoader from '@/components/shared/GalaxyLoader.vue'
 import { useVisualThemes } from '@/composables/useVisualThemes'
 import { pngWithThemeMetadata } from '@/services/visualThemePng'
-import { DEFAULT_VISUAL_THEME, isLegacyTheme, socialThemeSettings, socialThemeCss, visualThemeExportManifest } from '@/services/visualThemes'
+import SeasonalThemeDecor from '@/components/posts/SeasonalThemeDecor.vue'
+import { themeDecoration, DEFAULT_VISUAL_THEME, isLegacyTheme, socialThemeSettings, socialThemeCss, visualThemeExportManifest } from '@/services/visualThemes'
 
 const route = useRoute()
 const router = useRouter()
@@ -1210,6 +1211,7 @@ function slugify(value) {
                 />
                 <div class="social-card-scrim" data-edit="image"></div>
                 <div class="social-card-glow" data-edit="image"></div>
+                <SeasonalThemeDecor :season="themeDecoration(renderedTheme)" />
                 <div v-if="isAnalysisPost" class="analysis-gold-pattern" aria-hidden="true">
                   <span v-for="tile in 24" :key="tile">GOLD</span>
                 </div>

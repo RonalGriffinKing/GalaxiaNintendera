@@ -2,7 +2,8 @@
 import { compactPostCategory } from '@/services/postCategoryDisplay'
 import { computed } from 'vue'
 import { useVisualThemes } from '@/composables/useVisualThemes'
-import { postWebThemeCss } from '@/services/visualThemes'
+import { themeDecoration, postWebThemeCss } from '@/services/visualThemes'
+import SeasonalThemeDecor from './SeasonalThemeDecor.vue'
 import { normalizeHomeHero } from '@/services/homeHero'
 import { titleRuns } from '@/services/socialContent'
 import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
@@ -158,6 +159,7 @@ const scoreTone = computed(() => {
       <span v-for="tile in 18" :key="tile">{{ isAnalysis ? analysisTier.label : categoryLabel }}</span>
     </div>
 
+    <SeasonalThemeDecor v-if="themeEnabled.web" :season="themeDecoration(visualTheme)" />
     <div class="hero-content">
       <nav v-if="!preview" class="hero-breadcrumb">
         <button type="button" @click="emit('home')">Inicio</button>
@@ -796,6 +798,7 @@ const scoreTone = computed(() => {
  .post-cinematic-hero:not(.is-preview) { min-height:480px; }
  .post-cinematic-hero:not(.is-preview) .hero-copy h1 { font-size:46px; line-height:1.15; }
 }
+.post-cinematic-hero > .seasonal-decor{z-index:0;opacity:.65}
 </style>
 
 <style scoped>

@@ -27,7 +27,7 @@ async function persistControl(changes) {
     <p>Usa las cuentas públicas de tu perfil. Conéctalas desde Editar perfil → Conectar sistemas.</p>
     <label><input v-model="data.showLastGame" type="checkbox" /> Mostrar el último juego si no se detecta una partida</label>
     <p>Se identificará como «Último juego detectado». Estar en línea no significa estar jugando.</p>
-    <label>Estilo<select v-model="data.theme" class="app-input"><option value="galaxy">Galaxia</option><option value="minimal">Minimalista</option></select></label>
+    <label>Estilo<select v-model="data.theme" class="app-input"><option value="galaxy">Galaxia</option><option value="minimal">Minimalista</option><option value="halloween">Halloween</option></select></label>
     <label>Tamaño de la portada<div class="font-adjust"><input :value="data.coverWidth ?? 88" type="range" min="60" max="120" aria-label="Ancho de la portada" @input="data.coverWidth = Number($event.target.value)"/><output>{{ data.coverWidth ?? 88 }} px</output></div></label>
     <label><input type="checkbox" :checked="data.particles !== false" @change="data.particles = $event.target.checked"/> Partículas suaves de fondo</label>
     <p>En tarjetas estrechas la portada se ajusta para dejar espacio al texto.</p>

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { DEFAULT_VISUAL_THEME, INITIAL_VISUAL_THEMES, VISUAL_THEME_KEY, validateVisualTheme, parseVisualThemeJson, resolveVisualTheme, socialThemeSettings, socialThemeCss, webThemeCss, postWebThemeCss, persistVisualThemes, loadVisualThemes, removeVisualTheme, visualThemeExportManifest } from './visualThemes'
 import { titleRuns } from './socialContent'
 import { mergeSocialSettings } from './socialTemplateState'
-import { resolvePostVisualTheme } from './visualThemes'
+import { resolvePostVisualTheme, themeDecoration } from './visualThemes'
 const clone=value=>JSON.parse(JSON.stringify(value))
 const kirby=INITIAL_VISUAL_THEMES.find(t=>t.id==='kirby-dreamland')
 const zelda=INITIAL_VISUAL_THEMES.find(t=>t.id==='zelda-hyrule')
@@ -63,7 +63,7 @@ describe('visual themes local pilot',()=>{
   expect(()=>removeVisualTheme(INITIAL_VISUAL_THEMES,kirby.id,{role:'admin'})).toThrow(/verificar/)
   expect(()=>removeVisualTheme(INITIAL_VISUAL_THEMES,kirby.id,{role:'admin',usageComplete:true,posts:[{visualThemeId:kirby.id}]})).toThrow(/en uso/)
   expect(()=>removeVisualTheme(INITIAL_VISUAL_THEMES,'galaxia-general',{role:'admin',usageComplete:true})).toThrow()
-  expect(removeVisualTheme(INITIAL_VISUAL_THEMES,kirby.id,{role:'admin',usageComplete:true})).toHaveLength(6)
+  expect(removeVisualTheme(INITIAL_VISUAL_THEMES,kirby.id,{role:'admin',usageComplete:true})).toHaveLength(INITIAL_VISUAL_THEMES.length-1)
  })
  it('preserves exact highlights and safely ignores unmatched phrases',()=>{
   const title='¡Kirby esconde más secretos!'
@@ -89,5 +89,30 @@ describe('visual themes local pilot',()=>{
   expect(socialThemeSettings(theme)).toEqual(before)
   expect(theme).toEqual(kirby)
   expect(postWebThemeCss({categories:['Noticias']},theme)).toEqual(webThemeCss(theme))
+ })
+})
+
+describe('seasonal visual themes',()=>{
+ it('preserves optional decorations in published and exported snapshots',()=>{
+  for(const id of ['halloween','christmas']) {
+   const theme=INITIAL_VISUAL_THEMES.find(t=>t.id===id)
+   expect(themeDecoration(resolvePostVisualTheme({visualThemeId:id,visualThemeSnapshot:theme},[]))).toBe(id)
+   expect(visualThemeExportManifest(theme,true).snapshot.config.decoration).toBe(id)
+   expect(postWebThemeCss({category:'Análisis'},theme)).toEqual(webThemeCss(theme))
+  }
+  const invalid=clone(kirby);invalid.config.decoration='url(https://example.com)'
+  expect(()=>validateVisualTheme(invalid)).toThrow()
+  expect(themeDecoration(kirby)).toBe('none')
+ })
+ it('adds seasonal choices to old libraries without altering custom themes',()=>{
+  const local=storage(),old=clone(INITIAL_VISUAL_THEMES.filter(t=>!t.config.decoration))
+  old[1].name='Mi Kirby personalizado'
+  local.setItem(VISUAL_THEME_KEY,JSON.stringify({schemaVersion:1,themes:old}))
+  const original=local.getItem(VISUAL_THEME_KEY),loaded=loadVisualThemes(local)
+  expect(loaded.themes.slice(0,old.length)).toEqual(old)
+  expect(loaded.themes.slice(-2).map(t=>themeDecoration(t))).toEqual(['halloween','christmas'])
+  expect(local.getItem(VISUAL_THEME_KEY)).toBe(original)
+  persistVisualThemes(loaded.themes.filter(t=>t.id!=='halloween'),'admin',local)
+  expect(loadVisualThemes(local).themes.some(t=>t.id==='halloween')).toBe(false)
  })
 })

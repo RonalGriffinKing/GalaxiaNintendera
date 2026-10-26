@@ -29,7 +29,18 @@ export const INITIAL_VISUAL_THEMES = [copy(DEFAULT_VISUAL_THEME),
   preset('mario-kingdom','Mario Kingdom','#b91c1c','#1d4ed8','#ffe35a','#170d19'),
   preset('nintendo-news','Nintendo News','#c40019','#111111','#ffffff','#100609'),
   preset('analisis-epico','Análisis Épico','#5b21b6','#351259','#ffda64','#11091e'),
-  preset('petit-planet','Petit Planet','#166854','#155e75','#d8f7af','#0b211e')]
+  preset('petit-planet','Petit Planet','#166854','#155e75','#d8f7af','#0b211e'),
+  seasonalPreset('halloween', 'Halloween', '#7935a5', '#653014', '#ffb45b', '#160e21', '#261735'),
+  seasonalPreset('christmas', 'Navidad', '#a52239', '#17614b', '#ffe09a', '#081b19', '#102d29')]
+
+function seasonalPreset(id, name, primary, secondary, accent, background, surface) {
+  const theme = preset(id, name, primary, secondary, accent, background)
+  theme.config.decoration = id
+  Object.assign(theme.config.general, { surface, muted: '#e5deec' })
+  Object.assign(theme.config.social, { cardBackground: surface + 'ed', cardEnd: background + 'ed', cardBorder: accent + '66', arrowBorder: accent })
+  return theme
+}
+export function themeDecoration(theme) { return ['halloween', 'christmas'].includes(theme?.config?.decoration) ? theme.config.decoration : 'none' }
 
 const fail = message => { throw new Error(message) }
 function keysOnly(value, allowed, path) {
@@ -43,7 +54,8 @@ export function validateVisualTheme(input) {
   if(typeof input.name!=='string'||!input.name.trim()||input.name.length>80) fail('Nombre inválido (1–80 caracteres).')
   if(!Number.isSafeInteger(input.version)||input.version<1) fail('La versión debe ser un entero positivo.')
   if(typeof input.archived!=='boolean') fail('archived debe ser booleano.')
-  keysOnly(input.config,['general','social','web'],'config')
+  keysOnly(input.config,['general','social','web','decoration'],'config')
+  if(input.config.decoration !== undefined && !['none','halloween','christmas'].includes(input.config.decoration)) fail('Decoración de tema no compatible.')
   for(const group of ['general','social','web']) {
     const values=input.config[group], shape=DEFAULT_VISUAL_THEME.config[group]
     keysOnly(values,Object.keys(shape),group)
@@ -89,6 +101,12 @@ export function loadVisualThemes(storage=globalThis.localStorage) {
     const themes=data.themes.map(validateVisualTheme)
     if(new Set(themes.map(t=>t.id)).size!==themes.length) fail('Identificadores duplicados.')
     if(!themes.some(t=>t.id===DEFAULT_THEME_ID&&!t.archived)) fail('Falta el tema predeterminado.')
+    // Offer new seasonal presets once to existing libraries, preserving every saved theme.
+    if(!data.seasonalPresetsVersion) {
+      for(const preset of INITIAL_VISUAL_THEMES.filter(t=>themeDecoration(t)!=='none')) {
+        if(themes.length<100 && !themes.some(t=>t.id===preset.id)) themes.push(copy(preset))
+      }
+    }
     return {themes,error:''}
   } catch { return {themes:copy(INITIAL_VISUAL_THEMES),error:'No se pudo leer la biblioteca local. Se muestran los valores iniciales sin sobrescribirla.'} }
 }
@@ -104,7 +122,7 @@ export function persistVisualThemes(themes,role,storage=globalThis.localStorage)
     try{history=JSON.parse(storage.getItem(VISUAL_THEME_KEY+'-history')||'[]');if(!Array.isArray(history))history=[]}catch{}
     storage.setItem(VISUAL_THEME_KEY+'-history',JSON.stringify([...history.slice(-4),{savedAt:Date.now(),json:previous}]))
   }
-  storage.setItem(VISUAL_THEME_KEY,JSON.stringify({schemaVersion:1,themes:checked}))
+  storage.setItem(VISUAL_THEME_KEY,JSON.stringify({schemaVersion:1,seasonalPresetsVersion:1,themes:checked}))
   if(typeof window!=='undefined') window.dispatchEvent(new Event('galaxia-themes-changed'))
   return checked
 }
@@ -123,7 +141,7 @@ export function resolvePostVisualTheme(post={},themes=[],{preferLocal=false}={})
  } catch {}
  return resolveVisualTheme(id,themes)
 }
-export function isLegacyTheme(theme) { return !theme || Object.entries(DEFAULT_VISUAL_THEME.config).every(([group,values])=>Object.entries(values).every(([key,value])=>theme.config?.[group]?.[key]===value)) }
+export function isLegacyTheme(theme) { return !theme || (themeDecoration(theme)==='none' && Object.entries(DEFAULT_VISUAL_THEME.config).every(([group,values])=>Object.entries(values).every(([key,value])=>theme.config?.[group]?.[key]===value))) }
 export function removeVisualTheme(themes,id,{role,posts=[],usageComplete=false}={}) {
   if(role!=='admin') fail('Solo los administradores pueden eliminar temas.')
   if(id===DEFAULT_THEME_ID) fail('No se puede eliminar el tema predeterminado.')
@@ -162,7 +180,7 @@ export function visualThemeExportManifest(theme,enabled) {return {schemaVersion:
 export function postWebThemeCss(post,theme) {
  const css=webThemeCss(theme)
  const analysis=[...(Array.isArray(post?.categories)?post.categories:[]),post?.category||''].some(value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes('analisis'))
- if(!analysis)return css
+ if(!analysis || themeDecoration(theme)!=='none')return css
  return {...css,'--visual-background':'#130e06','--visual-surface':'#181309','--visual-primary':'#997419','--visual-secondary':'#5c3b0d',
   '--visual-accent':'#facc15','--visual-highlight':'#ffda64','--visual-border':'#d6a82899',
   '--visual-label-background':'#6b4b0d','--visual-label-text':'#fff4c2','--visual-button-background':'#171208','--visual-button-text':'#ffe17d'}

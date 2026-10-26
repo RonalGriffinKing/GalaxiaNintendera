@@ -25,9 +25,9 @@
 <script setup>
 const props=defineProps({widget:Object});const data=props.widget.data||(props.widget.data={})
 data.title||='Meta de la comunidad';data.current=Number(data.current)||0;data.goal=Number(data.goal)||2000;data.barColor||='#d946ef';data.bgColor||='#17102f';data.textColor||='#ffffff';data.titleSize=Number(data.titleSize)||20;data.numberSize=Number(data.numberSize)||22;data.width=Number(data.width)||430;data.height=Number(data.height)||170;data.layout||='card';data.theme||='galaxy';data.sparkles=data.sparkles!==false;data.showBackground=data.showBackground!==false;data.contentAlign||='left';data.animateBar=data.animateBar!==false;data.barHeight=Number(data.barHeight)||18;data.titleGap=Number(data.titleGap)||28;data.symbol||='fas fa-star';data.rotateSymbol=data.rotateSymbol!==false;data.compactThousands=Boolean(data.compactThousands);data.titlePillWidth=Number(data.titlePillWidth)||240
-const themes=[{id:'galaxy',label:'Galaxia',bg:'#17102f',text:'#ffffff',accent:'#d946ef'},{id:'nebula',label:'Nebulosa',bg:'#071a3d',text:'#ecfeff',accent:'#22d3ee'},{id:'starlight',label:'Luz estelar',bg:'#fff7ed',text:'#3b174f',accent:'#ff2d95'},{id:'petit-planet',label:'Petit Planet',bg:'#073467',text:'#fff8d6',accent:'#69e6f3'}]
+const themes=[{id:'halloween',label:'Halloween',bg:'#1c102b',text:'#fff1dc',accent:'#ff973e'},{id:'galaxy',label:'Galaxia',bg:'#17102f',text:'#ffffff',accent:'#d946ef'},{id:'nebula',label:'Nebulosa',bg:'#071a3d',text:'#ecfeff',accent:'#22d3ee'},{id:'starlight',label:'Luz estelar',bg:'#fff7ed',text:'#3b174f',accent:'#ff2d95'},{id:'petit-planet',label:'Petit Planet',bg:'#073467',text:'#fff8d6',accent:'#69e6f3'}]
 const symbols=['fas fa-star','fas fa-moon','fas fa-heart','fas fa-bolt','fas fa-crown','fas fa-gamepad']
-const applyTheme=theme=>{data.theme=theme.id;data.bgColor=theme.bg;data.textColor=theme.text;data.barColor=theme.accent;if(theme.id==='petit-planet'){data.symbol='fas fa-moon';data.sparkles=true;data.animateBar=true}}
+const applyTheme=theme=>{data.theme=theme.id;data.bgColor=theme.bg;data.textColor=theme.text;data.barColor=theme.accent;if(theme.id==='halloween'){data.symbol='fas fa-moon'};if(theme.id==='petit-planet'){data.symbol='fas fa-moon';data.sparkles=true;data.animateBar=true}}
 const setLayout=layout=>{data.layout=layout;if(layout==='starbar'&&data.height>180)data.height=150}
 </script>
 <style scoped>
@@ -35,4 +35,6 @@ const setLayout=layout=>{data.layout=layout;if(layout==='starbar'&&data.height>1
 .align-options{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}.align-options button{height:36px;border:1px solid #dbe1ea;border-radius:8px;color:#64748b;background:white;font-size:10px;font-weight:800}.align-options button.active{border-color:#9333ea;color:#7e22ce;box-shadow:0 0 0 2px rgba(147,51,234,.12)}.align-options i{margin-right:5px}
 .symbol-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-top:7px}.symbol-grid button{height:36px;border:1px solid #dbe1ea;border-radius:8px;color:#64748b;background:white}.symbol-grid button.active{border-color:#9333ea;color:white;background:linear-gradient(135deg,#7c3aed,#db2777);box-shadow:0 0 0 2px rgba(147,51,234,.12)}
 .theme-option.petit-planet span{background:linear-gradient(135deg,#073467 8%,#18b8d4 58%,#ffe987)}
+
+.theme-option.halloween span{background:linear-gradient(135deg,#1c102b,#8755cc 50%,#ff973e)}
 </style>

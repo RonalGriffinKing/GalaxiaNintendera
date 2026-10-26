@@ -4,7 +4,7 @@
       v-for="widget in widgets"
       :key="widget.id + '-' + widget.type"
       class="absolute"
-      :style="{ top: widget.y + 'px', left: widget.x + 'px' }"
+      :style="{ top: widget.y + 'px', left: widget.x + 'px',transform:'scale('+Math.max(.1,Math.min(5,Number(widget.scale)||1))+')',transformOrigin:'top left' }"
     >
       <WidgetRenderer :widget="widget" :owner-id="ownerId" />
     </div>

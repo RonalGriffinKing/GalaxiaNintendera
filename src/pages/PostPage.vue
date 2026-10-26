@@ -16,7 +16,8 @@ import { analysisRating, sectionNavLabel } from '@/services/articlePresentation'
 import ReaderLoadingShell from '@/components/posts/ReaderLoadingShell.vue'
 import PostCinematicHero from '@/components/posts/PostCinematicHero.vue'
 import { useVisualThemes } from '@/composables/useVisualThemes'
-import { postWebThemeCss } from '@/services/visualThemes'
+import SeasonalThemeDecor from '@/components/posts/SeasonalThemeDecor.vue'
+import { themeDecoration, postWebThemeCss } from '@/services/visualThemes'
 import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
 
 const route = useRoute()
@@ -650,8 +651,10 @@ onUnmounted(() => {
     v-else
     class="post-page"
     :class="[{ 'analysis-page': isAnalysisPost, 'editorial-page':true, 'section-focused':activeSection>=0, 'visual-themed-article':Object.keys(articleThemeStyle).length }, isAnalysisPost ? `analysis-tier-${analysisTier.key}` : '']"
+    :data-season="themeEnabled.web ? themeDecoration(visualTheme) : 'none'"
     :style="{...articleThemeStyle,'--article-nav-height':actualNavHeight ? actualNavHeight+'px' : undefined,...(isAnalysisPost ? { '--analysis-pattern': `'${analysisTier.pattern}'` } : {})}"
   >
+    <SeasonalThemeDecor v-if="themeEnabled.web" :season="themeDecoration(visualTheme)" reading />
     <div v-if="isAnalysisPost" class="analysis-pattern-field" aria-hidden="true">
       <span v-for="tile in 36" :key="tile">{{ analysisTier.pattern }}</span>
     </div>
@@ -1190,6 +1193,7 @@ onUnmounted(() => {
 @media(min-width:860px){
  .article-section-rail{width:max-content;max-width:100%}
 }
+.post-page.editorial-page.visual-themed-article[data-season=halloween],.post-page.editorial-page.visual-themed-article[data-season=christmas]{background:radial-gradient(ellipse at 90% 0,color-mix(in srgb,var(--visual-primary) 22%,transparent),transparent 60%),var(--visual-background)}
 </style>
 
 

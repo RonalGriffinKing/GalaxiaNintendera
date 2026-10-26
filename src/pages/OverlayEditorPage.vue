@@ -68,30 +68,35 @@
       </div>
     </div>
 
-    <div class="flex-1 flex items-center justify-center pt-16">
+    <div class="workspace flex-1 flex items-center justify-center pt-16" @pointerdown.self="selected=null">
+      <div class="canvas-tools"><button :aria-pressed="snapEnabled" @click="snapEnabled=!snapEnabled">Imán {{ snapEnabled?'activado':'desactivado' }}</button><button :aria-pressed="showRulers" @click="showRulers=!showRulers">Reglas</button><span>Esquinas: tamaño · Alt: mover libre</span></div>
       <div class="relative" :style="scaledCanvas">
+        <div v-if="showRulers" class="ruler top"><span v-for="tick in ticks(canvasWidth)" :key="tick" :style="{left:tick*scale+'px'}">{{ tick }}</span></div>
+        <div v-if="showRulers" class="ruler left"><span v-for="tick in ticks(canvasHeight)" :key="tick" :style="{top:tick*scale+'px'}">{{ tick }}</span></div>
         <div
           ref="canvasElement"
           class="canvas absolute inset-0 bg-black rounded-xl overflow-hidden shadow-2xl"
-          :style="canvasStyle"
+          :style="canvasStyle" @pointerdown.self="selected=null"
         >
           <div
             v-for="widget in widgets"
             :key="widget.id"
-            class="absolute cursor-move group"
-            :style="{ top: widget.y + 'px', left: widget.x + 'px' }"
+            class="editable-widget absolute cursor-move group" :class="{selected:selected?.id===widget.id}"
+            :style="{top:widget.y+'px',left:widget.x+'px',width:widgetSize(widget).width+'px',height:widgetSize(widget).height+'px','--ui':1/scale}"
             @pointerdown="startDrag(widget, $event)"
             @click.stop="selected = widget"
           >
             <button
-              @click.stop="removeWidget(widget.id)"
+              @pointerdown.stop @click.stop="removeWidget(widget.id)" aria-label="Eliminar widget"
               class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-black text-white text-xs opacity-0 group-hover:opacity-100 transition"
             >
               x
             </button>
 
-            <WidgetRenderer :widget="widget" :owner-id="auth.currentUser?.uid" preview />
+            <div :ref="el=>observeWidget(widget,el)" class="widget-artwork" :style="{transform:'scale('+widgetScale(widget)+')'}"><WidgetRenderer :widget="widget" :owner-id="auth.currentUser?.uid" preview /></div>
+            <template v-if="selected?.id===widget.id"><button v-for="corner in ['nw','ne','sw','se']" :key="corner" :class="['resize-handle',corner]" :aria-label="'Cambiar tamaño '+corner" @pointerdown.stop="beginGesture(widget,$event,corner)" @click.stop></button><span class="widget-size">{{ Math.round(widgetSize(widget).width) }} × {{ Math.round(widgetSize(widget).height) }} px</span></template>
           </div>
+          <div v-for="guide in guides" :key="guide.axis" :class="['alignment-guide',guide.axis]" :style="guide.axis==='x'?{left:guide.value+'px'}:{top:guide.value+'px'}"></div>
         </div>
       </div>
     </div>
@@ -140,6 +145,7 @@ import { auth, db } from '@/firebase'
 
 import WidgetRenderer from '@/components/widgets/WidgetRenderer.vue'
 import WidgetEditor from '@/components/widgets/WidgetEditor.vue'
+import { snapAxis, resizeCorner } from '@/services/overlayGeometry'
 import { NOW_PLAYING_DEFAULTS, nowPlayingSettings } from '@/services/nowPlaying'
 
 const route = useRoute()
@@ -186,7 +192,7 @@ const scaledCanvas = computed(() => ({
   width: `${canvasWidth.value * scale.value}px`,
   height: `${canvasHeight.value * scale.value}px`
 }))
-const canvasStyle = computed(() => ({ width: `${canvasWidth.value}px`, height: `${canvasHeight.value}px`, transform: `scale(${scale.value})`, transformOrigin: 'top left' }))
+const canvasStyle = computed(() => ({ width: `${canvasWidth.value}px`, height: `${canvasHeight.value}px`, transform: `scale(${scale.value})`, transformOrigin: 'top left', '--canvas-scale':scale.value }))
 
 const overlayLink = computed(() => {
   const user = auth.currentUser
@@ -215,7 +221,20 @@ const setFormat = (preset) => {
   updateScale()
 }
 
-const widgetSize = (widget) => {
+const snapEnabled=ref(true),showRulers=ref(true),guides=ref([]),measured=ref({})
+const widgetScale=w=>Math.max(.1,Math.min(5,Number(w.scale)||1))
+const ticks=length=>Array.from({length:Math.floor(length/100)+1},(_,i)=>i*100)
+let sizeObserver
+const elements=new Map()
+const observeWidget=(w,el)=>{
+ const old=elements.get(w.id);if(old===el)return
+ if(old)sizeObserver?.unobserve(old)
+ if(!el){elements.delete(w.id);return}
+ sizeObserver??=new ResizeObserver(entries=>{for(const e of entries)measured.value[e.target.dataset.widgetId]={width:e.target.offsetWidth,height:e.target.offsetHeight}})
+ el.dataset.widgetId=w.id;elements.set(w.id,el);sizeObserver.observe(el)
+}
+const naturalWidgetSize = (widget) => {
+  const actual=measured.value[widget.id];if(actual?.width&&actual?.height)return actual
   const data = widget?.data || {}
   if (widget?.type === 'nowPlaying') return nowPlayingSettings(data)
   if (widget?.type === 'todo' && data.minimized) return { width: Number(data.bubbleSize) || 70, height: Number(data.bubbleSize) || 70 }
@@ -224,6 +243,7 @@ const widgetSize = (widget) => {
   return { width: Number(data.width) || fallback[0], height: Number(data.height) || fallback[1] }
 }
 
+const widgetSize=w=>{const s=naturalWidgetSize(w),f=widgetScale(w);return {width:s.width*f,height:s.height*f}}
 const positionForAxis = (axis, placement, size, padding = 40) => {
   if (placement === 'left' || placement === 'top') return padding
   if (placement === 'right' || placement === 'bottom') return axis - size - padding
@@ -330,35 +350,27 @@ const removeWidget = (id) => {
   if (selected.value?.id === id) selected.value = null
 }
 
-let dragging = null
-let offsetX = 0
-let offsetY = 0
-let canvasRect = null
-
-const startDrag = (widget, e) => {
-  e.preventDefault()
-  dragging = widget
-  canvasRect = canvasElement.value?.getBoundingClientRect()
-  if (!canvasRect) return
-  offsetX = (e.clientX - canvasRect.left) / scale.value - widget.x
-  offsetY = (e.clientY - canvasRect.top) / scale.value - widget.y
-
-  window.addEventListener('pointermove', onDrag)
-  window.addEventListener('pointerup', stopDrag)
+let gesture=null
+const beginGesture=(widget,e,corner=null)=>{
+ if(e.button!==0)return
+ e.preventDefault();stopDrag();selected.value=widget
+ gesture={widget,corner,pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,x:Number(widget.x)||0,y:Number(widget.y)||0,...widgetSize(widget),scale:widgetScale(widget)}
+ window.addEventListener('pointermove',onDrag);window.addEventListener('pointerup',stopDrag);window.addEventListener('pointercancel',stopDrag);window.addEventListener('blur',stopDrag)
 }
-
-const onDrag = (e) => {
-  if (!dragging) return
-  const { width, height } = widgetSize(dragging)
-  dragging.x = Math.max(0, Math.min(canvasWidth.value - width, (e.clientX - canvasRect.left) / scale.value - offsetX))
-  dragging.y = Math.max(0, Math.min(canvasHeight.value - height, (e.clientY - canvasRect.top) / scale.value - offsetY))
+const startDrag=(widget,e)=>beginGesture(widget,e)
+const onDrag=e=>{
+ if(!gesture||gesture.pointerId!==e.pointerId)return
+ const g=gesture,dx=(e.clientX-g.startX)/scale.value,dy=(e.clientY-g.startY)/scale.value;guides.value=[]
+ if(g.corner){Object.assign(g.widget,resizeCorner(g,dx,dy,canvasWidth.value,canvasHeight.value));return}
+ const size=widgetSize(g.widget),targets={x:[0,canvasWidth.value/2,canvasWidth.value],y:[0,canvasHeight.value/2,canvasHeight.value]}
+ for(const w of widgets.value){if(w.id===g.widget.id)continue;const b=widgetSize(w);targets.x.push(w.x,w.x+b.width/2,w.x+b.width);targets.y.push(w.y,w.y+b.height/2,w.y+b.height)}
+ for(const [axis,start,delta,length,extent] of [['x',g.x,dx,size.width,canvasWidth.value],['y',g.y,dy,size.height,canvasHeight.value]]){
+ const max=Math.max(0,extent-length);let position=Math.max(0,Math.min(max,start+delta))
+ if(snapEnabled.value&&!e.altKey){const result=snapAxis(position,length,targets[axis],7/scale.value,max);position=result.position;if(result.guide!==null)guides.value.push({axis,value:result.guide})}
+ g.widget[axis]=Math.round(position*100)/100
+ }
 }
-
-const stopDrag = () => {
-  dragging = null
-  window.removeEventListener('pointermove', onDrag)
-  window.removeEventListener('pointerup', stopDrag)
-}
+const stopDrag=()=>{gesture=null;guides.value=[];window.removeEventListener('pointermove',onDrag);window.removeEventListener('pointerup',stopDrag);window.removeEventListener('pointercancel',stopDrag);window.removeEventListener('blur',stopDrag)}
 
 onMounted(async () => {
   updateScale()
@@ -382,6 +394,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  stopDrag();sizeObserver?.disconnect()
   window.removeEventListener('resize', updateScale)
   window.removeEventListener('pointermove', onDrag)
   window.removeEventListener('pointerup', stopDrag)
@@ -435,4 +448,10 @@ onUnmounted(() => {
 .align-heading { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 9px; }.align-heading span { font-size: 11px; font-weight: 900; text-transform: uppercase; color: #334155; }.align-heading small { font-size: 9px; color: #94a3b8; }
 .align-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }.align-grid button { height: 34px; border: 1px solid #e2e8f0; border-radius: 7px; color: #64748b; background: #f8fafc; transition: .18s; }.align-grid button:hover { color: white; border-color: #9333ea; background: linear-gradient(135deg,#7c3aed,#db2777); transform: translateY(-1px); }
 .axis-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 7px; }.axis-actions button { min-height: 35px; padding: 5px; border-radius: 7px; background: #f5f3ff; color: #7e22ce; font-size: 9px; line-height: 1.2; font-weight: 900; }.axis-actions i { margin-right: 3px; }
+
+.workspace{position:relative;min-width:0}.canvas-tools{position:absolute;top:75px;left:20px;right:20px;display:flex;gap:8px;align-items:center;font-size:10px;color:#64748b}.canvas-tools button{background:white;border:1px solid #ddd6fe;border-radius:6px;padding:6px}.canvas-tools button[aria-pressed=true]{background:#7c3aed;color:white}.canvas-tools span{margin-left:auto}
+.editable-widget{touch-action:none;user-select:none}.editable-widget.selected{outline:calc(1px * var(--ui)) solid #c4b5fd;z-index:10}.widget-artwork{width:max-content;transform-origin:top left}.widget-artwork :deep(*){pointer-events:none}
+.resize-handle{position:absolute;width:calc(12px * var(--ui));height:calc(12px * var(--ui));border:calc(1px * var(--ui)) solid #7c3aed;background:white;border-radius:2px;z-index:20;transform:translate(-50%,-50%);touch-action:none}.nw{left:0;top:0;cursor:nwse-resize}.ne{left:100%;top:0;cursor:nesw-resize}.sw{left:0;top:100%;cursor:nesw-resize}.se{left:100%;top:100%;cursor:nwse-resize}.widget-size{position:absolute;left:50%;top:100%;margin-top:calc(10px * var(--ui));transform:translateX(-50%) scale(var(--ui));transform-origin:top center;white-space:nowrap;background:#6d28d9;color:white;border-radius:4px;padding:3px 6px;font-size:10px;pointer-events:none}
+.alignment-guide{position:absolute;z-index:30;background:#f472b6;pointer-events:none}.alignment-guide.x{top:0;bottom:0;width:calc(1px / var(--canvas-scale))}.alignment-guide.y{left:0;right:0;height:calc(1px / var(--canvas-scale))}
+.ruler{position:absolute;background:#e2e8f0;color:#475569;font-size:8px;pointer-events:none}.ruler.top{left:0;right:0;top:-20px;height:16px}.ruler.left{top:0;bottom:0;left:-25px;width:21px}.ruler span{position:absolute;border-color:#94a3b8}.ruler.top span{border-left:1px solid;padding-left:3px;height:100%}.ruler.left span{border-top:1px solid;width:100%;padding-top:1px}
 </style>
