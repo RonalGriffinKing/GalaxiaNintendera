@@ -4,6 +4,11 @@
  const text=value=>typeof value==='string'?value.trim():''
  return {nameEs:text(game.nameEs||game.nombreEs||event.gameNameEs||(typeof value==='string'?value:event.gameName)),nameEn:text(game.nameEn||game.nombreEn||game.name||event.gameNameEn)}
 }
+export function eventImageSelection(event, image) {
+ if(typeof image?.url!=='string'||!/^https:\/\//i.test(image.url)&&!/^\/(?!\/)/.test(image.url))throw Error('La imagen seleccionada no es válida.')
+ const game=eventGameNames(event),name=typeof image.gameName==='string'?image.gameName.trim().slice(0,180):''
+ return {backgroundUrl:image.url,game:{nameEs:game.nameEs||name,nameEn:game.nameEn||name}}
+}
 export function parseEventGame(event) {
  const supplied=['game','juego','gameName','gameNameEs','gameNameEn'].some(key=>Object.hasOwn(event,key))
  if(!supplied)return undefined

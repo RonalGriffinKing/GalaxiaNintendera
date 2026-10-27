@@ -1,6 +1,7 @@
 <script setup>
 import ContentLoading from "@/components/shared/ContentLoading.vue"
-import { eventGameNames } from '@/services/eventGame'
+import { eventGameNames, eventImageSelection } from '@/services/eventGame'
+import GameImagePicker from '@/components/shared/GameImagePicker.vue'
 import EventJsonImport from '@/components/events/EventJsonImport.vue'
 import { EVENT_TYPES } from '@/services/eventJson'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -77,6 +78,8 @@ const eventDraft = ref({
   durationMinutes:60, backgroundUrl:'',game:{nameEs:'',nameEn:''},
   url: ''
 })
+const eventImagePickerOpen=ref(false)
+function selectEventImage(image){Object.assign(eventDraft.value,eventImageSelection(eventDraft.value,image));eventImagePickerOpen.value=false}
 const liveGoalDraft = ref({
   title: '',
   description: '',
@@ -2684,7 +2687,8 @@ onUnmounted(() => {
             <textarea v-model="eventDraft.description" placeholder="Descripcion corta opcional"></textarea>
             <input v-model="eventDraft.url" placeholder="Link opcional" />
             <label>Duracion (minutos)<input v-model.number="eventDraft.durationMinutes" type="number" min="0" max="10080" /></label>
-            <input v-model="eventDraft.backgroundUrl" placeholder="URL del fondo del evento" /><input v-model="eventDraft.game.nameEs" placeholder="Juego en español (opcional)" maxlength="180"/><input v-model="eventDraft.game.nameEn" placeholder="Juego en inglés / IGDB" maxlength="180"/>
+            <input v-model="eventDraft.backgroundUrl" placeholder="URL del fondo del evento" /><button type="button" @click="eventImagePickerOpen=true">Buscar imágenes del juego</button><input v-model="eventDraft.game.nameEs" placeholder="Juego en español (opcional)" maxlength="180"/><input v-model="eventDraft.game.nameEn" placeholder="Juego en inglés / IGDB" maxlength="180"/>
+            <GameImagePicker v-if="eventImagePickerOpen" :initial-query="eventDraft.game.nameEn||eventDraft.game.nameEs||eventDraft.title" @close="eventImagePickerOpen=false" @select="selectEventImage" />
             <div class="event-form-actions" :class="{ single: !editingEventId }">
               <button v-if="editingEventId" type="button" class="event-secondary-btn" @click="resetGalaxyEventDraft">
                 Nuevo

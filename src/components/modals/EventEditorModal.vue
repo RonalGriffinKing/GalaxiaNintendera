@@ -1,5 +1,6 @@
 <script setup>
-import { eventGameNames } from '@/services/eventGame'
+import { eventGameNames, eventImageSelection } from '@/services/eventGame'
+import GameImagePicker from '@/components/shared/GameImagePicker.vue'
 import EventJsonImport from '@/components/events/EventJsonImport.vue'
 import { EVENT_TYPES } from '@/services/eventJson'
 import { computed, ref, watch } from 'vue'
@@ -34,6 +35,8 @@ const emptyForm = () => ({
 
 const form = ref(emptyForm())
 const isSaving = ref(false)
+const imagePickerOpen=ref(false)
+function selectGameImage(image){Object.assign(form.value,eventImageSelection(form.value,image));imagePickerOpen.value=false}
 const showAllCommunities = ref(false)
 
 const eventTypes = EVENT_TYPES
@@ -50,6 +53,7 @@ const toInputDateTime = (value) => {
 }
 
 watch(() => props.event, (event) => {
+  imagePickerOpen.value=false
   form.value = event ? {
     title: event.title || '',
     game: eventGameNames(event),
@@ -160,6 +164,8 @@ const saveEvent = async () => {
             <label>
               <span>Fondo del evento</span>
               <input v-model="form.backgroundUrl" placeholder="URL de imagen para el banner" />
+              <button class="event-image-search" type="button" :disabled="isSaving" @click="imagePickerOpen=true"><i class="fas fa-search" aria-hidden="true"></i> Buscar imágenes del juego</button>
+              <img v-if="form.backgroundUrl" class="event-image-preview" :src="form.backgroundUrl" alt="Fondo elegido para el evento" />
             </label>
 
             <div class="event-game-fields"><label><span>Juego en español (opcional)</span><input v-model="form.game.nameEs" maxlength="180" placeholder="Los Pitufos: Dreams"/></label><label><span>Juego en inglés / IGDB</span><input v-model="form.game.nameEn" maxlength="180" placeholder="The Smurfs: Dreams"/></label></div>
@@ -203,6 +209,7 @@ const saveEvent = async () => {
       </div>
     </Transition>
   </Teleport>
+  <GameImagePicker v-if="imagePickerOpen" :initial-query="form.game.nameEn||form.game.nameEs||form.title" @close="imagePickerOpen=false" @select="selectGameImage" />
 </template>
 
 <style scoped>
@@ -468,4 +475,5 @@ const saveEvent = async () => {
   }
 }
 .event-game-fields{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}@media(max-width:500px){.event-game-fields{grid-template-columns:1fr}}
+.event-image-search{justify-self:start;padding:10px 14px;border:1px solid #c084fc66;border-radius:10px;background:#7c3aed33;color:white;font-size:12px;cursor:pointer}.event-image-preview{width:100%;max-height:120px;object-fit:cover;border-radius:10px;border:1px solid #ffffff22}
 </style>

@@ -1,13 +1,16 @@
 <script setup>
 import HalloweenDecor from '../HalloweenDecor.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { nowPlayingCard, nowPlayingSettings } from '@/services/nowPlaying'
+import { nowPlayingCard, nowPlayingSettings, eventNowPlayingCard, eventStartInfo } from '@/services/nowPlaying'
+import { fetchOverlayEvent } from '@/services/overlayEventClient'
 import { fetchOverlayGamer } from '@/services/overlayGamerClient'
 const props = defineProps({ widget: { type: Object, required: true }, ownerId: String, preview: Boolean })
 const settings = computed(() => nowPlayingSettings(props.widget.data))
 const particles = Array.from({length:14},(_,index)=>({left:((index*37+11)%100)+'%',top:((index*23+17)%100)+'%',width:(index%4===0?3:2)+'px',height:(index%4===0?3:2)+'px',animationDelay:-(index*.67)+'s',animationDuration:(6+index%5)+'s'}))
+const eventData=ref(null)
 const identities = ref([]), visible = ref(false), loading = ref(false)
-const card = computed(() => nowPlayingCard(identities.value, settings.value))
+const card = computed(() => settings.value.source==='event'?eventNowPlayingCard(eventData.value,settings.value.eventId):nowPlayingCard(identities.value, settings.value))
+const eventStart=computed(()=>settings.value.eventShowStart?eventStartInfo(card.value?.eventStartsAt,settings.value.eventTimeZone):null)
 let polling, hiding, repeating, sequence = 0
 function clearAnimation() { clearTimeout(hiding); clearTimeout(repeating); visible.value = false }
 function reveal() {
@@ -17,19 +20,22 @@ function reveal() {
   hiding = setTimeout(() => { visible.value = false }, settings.value.visibleSeconds * 1000)
   repeating = setTimeout(reveal, settings.value.repeatSeconds * 1000)
 }
-watch(() => [props.ownerId, settings.value.platform, settings.value.enabled, settings.value.refreshMode, props.widget.data?.refreshNonce], async () => {
+watch(() => [props.ownerId, settings.value.source, settings.value.eventId, settings.value.platform, settings.value.enabled, settings.value.refreshMode, props.widget.data?.refreshNonce], async () => {
   const id = ++sequence
-  clearTimeout(polling); clearAnimation(); identities.value = []; loading.value = false
-  if (!settings.value.enabled || !props.ownerId) return
+  clearTimeout(polling); clearAnimation(); identities.value = [];eventData.value=null; loading.value = false
+  if (!settings.value.enabled || (settings.value.source!=='event' && !props.ownerId)) return
   loading.value = true
   async function refresh() {
-    try { const values = await fetchOverlayGamer(props.ownerId, settings.value.platform, { refresh: Boolean(props.widget.data?.refreshNonce) }); if (id === sequence) identities.value = values }
-    catch { if (id === sequence) identities.value = [] }
-    finally { if (id === sequence) { loading.value = false; if (settings.value.refreshMode === 'auto') polling = setTimeout(refresh, settings.value.platform === 'nintendo' ? 60000 : 300000) } }
+    try {
+      if(settings.value.source==='event') {const value=await fetchOverlayEvent(settings.value.eventId);if(id===sequence)eventData.value=value}
+      else {const values=await fetchOverlayGamer(props.ownerId,settings.value.platform,{refresh:Boolean(props.widget.data?.refreshNonce)});if(id===sequence)identities.value=values}
+    }
+    catch { if (id === sequence) {identities.value = [];eventData.value=null} }
+    finally { if (id === sequence) { loading.value = false; if (settings.value.refreshMode === 'auto') polling = setTimeout(refresh, settings.value.source!=='event' && settings.value.platform === 'nintendo' ? 60000 : 300000) } }
   }
   await refresh()
 }, { immediate: true })
-watch(() => [card.value?.game.id, card.value?.platform, card.value?.playing, settings.value.showLastGame, settings.value.visibleSeconds, settings.value.repeatSeconds, props.widget.data?.replayNonce], reveal)
+watch(() => [card.value?.game.id, card.value?.game.title,card.value?.game.imageUrl, card.value?.platform, card.value?.playing, settings.value.showLastGame, settings.value.visibleSeconds, settings.value.repeatSeconds, props.widget.data?.replayNonce], reveal)
 onUnmounted(() => { sequence++; clearTimeout(polling); clearAnimation() })
 const style = computed(() => ({ width: settings.value.width + 'px', height: settings.value.height + 'px', '--cover-width': settings.value.coverWidth+'px', '--badge-space': Math.max(0,settings.value.labelSize-12)*1.2+'px', '--label-size': settings.value.labelSize+'px', '--title-size': settings.value.titleSize+'px', '--platform-size': settings.value.platformSize+'px', '--stats-size': settings.value.statsSize+'px', '--slide': settings.value.direction === 'right' ? '60px' : '-60px' }))
 </script>
@@ -40,9 +46,9 @@ const style = computed(() => ({ width: settings.value.width + 'px', height: sett
         <HalloweenDecor v-if="settings.theme === 'halloween'" />
         <img v-if="card.game.imageUrl" class="now-playing-backdrop" :src="card.game.imageUrl" alt="" />
         <div v-if="settings.particles" class="now-playing-particles" aria-hidden="true"><span v-for="(particle,index) in particles" :key="index" :style="particle"></span></div>
-        <span class="now-playing-label"><i class="fas fa-gamepad" aria-hidden="true"></i> {{ card.playing ? 'Jugando ahora' : 'Último juego detectado' }}</span>
+        <span class="now-playing-label"><i class="fas fa-gamepad" aria-hidden="true"></i> Hoy jugamos</span>
         <img v-if="card.game.imageUrl" class="now-playing-cover" :src="card.game.imageUrl" alt="" /><div v-else class="now-playing-cover cover-empty"><i class="fas fa-gamepad" aria-hidden="true"></i></div>
-        <div class="now-playing-copy"><h3>{{ card.game.title }}</h3><span class="now-playing-platform">{{ card.platformLabel }}</span><div v-if="card.stats.length" class="now-playing-stats"><span v-for="stat in card.stats" :key="stat.text"><i :class="stat.icon" aria-hidden="true"></i> {{ stat.text }}</span></div></div>
+        <div class="now-playing-copy"><h3>{{ card.game.title }}</h3><p v-if="settings.source==='event'&&settings.eventShowDescription&&card.eventDescription" class="now-playing-event-description">{{card.eventDescription}}</p><time v-if="settings.source==='event'&&eventStart" class="now-playing-event-start" :datetime="eventStart.iso"><i class="far fa-clock" aria-hidden="true"></i><span>Inicio: {{eventStart.label}}</span></time><span v-if="card.platformLabel" class="now-playing-platform">{{ card.platformLabel }}</span><div v-if="card.stats.length" class="now-playing-stats"><span v-for="stat in card.stats" :key="stat.text"><i :class="stat.icon" aria-hidden="true"></i> {{ stat.text }}</span></div></div>
         <span v-if="settings.theme === 'galaxy'" class="now-playing-star" aria-hidden="true">✦</span>
       </article>
     </Transition>
@@ -71,4 +77,5 @@ const style = computed(() => ({ width: settings.value.width + 'px', height: sett
 @media(prefers-reduced-motion:reduce){.now-playing-particles span{animation:none;opacity:.25}}
 
 .halloween{border-color:#ff973eaa;background:#1c102bf5;box-shadow:0 0 20px #ff973e22,inset 0 0 24px #8755cc33}.halloween:before{background:linear-gradient(115deg,#1c102bf0,#321744db)}.halloween .now-playing-label{background:linear-gradient(100deg,#a44816,#713394);box-shadow:0 3px 12px #ff973e33}.halloween .now-playing-cover{border-color:#ffb46488}.halloween .now-playing-stats{color:#fff1dc}.halloween .now-playing-stats i{color:#ffb464}.halloween .now-playing-particles span{background:#ffc775;box-shadow:0 0 6px #ff973e88}
+.now-playing-event-description{margin:0;color:#ede9f0;font-size:var(--stats-size);font-weight:400;line-height:1.4;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}.now-playing-event-start{display:flex;align-items:baseline;gap:6px;color:#ffe3ac;font-size:var(--stats-size);line-height:1.4;font-weight:600}.now-playing-event-start i{flex:none}.now-playing-event-start span{overflow-wrap:anywhere}
 </style>

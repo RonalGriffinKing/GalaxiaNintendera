@@ -1,8 +1,44 @@
 import { describe, it, expect } from 'vitest'
-import { nowPlayingCard, nowPlayingSettings } from './nowPlaying'
+import { nowPlayingCard, nowPlayingSettings, eventNowPlayingCard, eventStartInfo } from './nowPlaying'
 const game = { id: '1', title: 'Juego de prueba' }
 const identity = (platform, presence, extra = {}) => ({ platform, connectionState: 'connected', visibility: 'public', presence, ...extra })
 describe('OBS now-playing presentation', () => {
+  it('provides bounded event descriptions and valid start times without using the event title',()=>{
+    const event={title:'Título del directo',game:{nameEs:'Roco Kingdom'},description:'  Probamos\n la beta cerrada.  ',startsAt:'2026-10-27T17:00:00Z'}
+    const card=eventNowPlayingCard(event,'e1')
+    expect(card.eventDescription).toBe('Probamos la beta cerrada.')
+    expect(card.eventStartsAt).toBe(Date.parse(event.startsAt))
+    expect(eventStartInfo(card.eventStartsAt).label).toContain('18:00')
+    expect(eventStartInfo(card.eventStartsAt,'Atlantic/Canary').label).toContain('17:00')
+    expect(eventStartInfo({seconds:card.eventStartsAt/1000},'UTC').iso).toBe(event.startsAt.replace('Z','.000Z'))
+    expect(eventNowPlayingCard({...event,description:'x'.repeat(1000)},'e1').eventDescription).toHaveLength(300)
+    for(const value of [null,undefined,'bad',{},Infinity])expect(eventStartInfo(value)).toBeNull()
+  })
+  it('can hide event details and increases available height for larger event text',()=>{
+    const defaults=nowPlayingSettings({source:'event'})
+    expect(defaults).toMatchObject({eventShowDescription:true,eventShowStart:true,eventTimeZone:'Europe/Madrid'})
+    expect(nowPlayingSettings({source:'event',eventTimeZone:'invalid'}).eventTimeZone).toBe('Europe/Madrid')
+    expect(nowPlayingSettings({source:'event',titleSize:32,statsSize:24}).height).toBeGreaterThan(defaults.height)
+    expect(nowPlayingSettings({source:'event',eventShowDescription:false,eventShowStart:false})).toMatchObject({eventShowDescription:false,eventShowStart:false})
+  })
+  it('selects the last game independently of the active game and keeps legacy settings',()=>{
+    const old={id:'older',title:'Último juego'},active={id:'active',title:'Partida activa'}
+    const values=[identity('xbox',{state:'online',currentGame:active,lastGame:old})]
+    expect(nowPlayingCard(values,nowPlayingSettings({source:'last'})).game).toEqual(old)
+    expect(nowPlayingCard(values,nowPlayingSettings({source:'auto'})).game).toEqual(active)
+    expect(nowPlayingSettings({showLastGame:true})).toMatchObject({source:'auto',showLastGame:true})
+    expect(nowPlayingSettings({source:'invalid',eventId:'../private'})).toMatchObject({source:'auto',eventId:''})
+  })
+  it('renders the event game, never the event title or unrelated platform statistics',()=>{
+    const event={title:'Un directo especial',game:{nameEs:'Juego del evento',nameEn:'Event game'},backgroundUrl:'https://example.com/cover.jpg',stats:[{text:'fake'}]}
+    const card=eventNowPlayingCard(event,'event-1')
+    expect(card.game).toEqual({id:'event:event-1',title:'Juego del evento',imageUrl:event.backgroundUrl})
+    expect(card.stats).toEqual([]);expect(card.platformLabel).toBe('')
+    expect(nowPlayingCard([identity('xbox',{state:'online',currentGame:game})],nowPlayingSettings({source:'event'}))).toBeNull()
+    expect(eventNowPlayingCard(null,'gone')).toBeNull()
+    expect(eventNowPlayingCard({title:'No es el juego'},'id')).toBeNull()
+    expect(eventNowPlayingCard({game:{nameEn:'English only'},backgroundUrl:'javascript:alert(1)'},'id').game).toMatchObject({title:'English only',imageUrl:''})
+  })
   it('hides offline and online-without-game states unless the last-game option is enabled', () => {
     for (const state of ['online', 'offline', 'unknown']) {
       const values = [identity('xbox', { state, currentGame: null, lastGame: game })]

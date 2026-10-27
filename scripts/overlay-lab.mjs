@@ -10,7 +10,10 @@ const modules = {
     const listeners=new Set();window.overlayWrites=[];window.savedOverlay={name:'OBS de prueba',format:'horizontal',width:1920,height:1080,widgets:[]};
     window.publishOverlay=()=>{window.savedOverlay=JSON.parse(JSON.stringify(window.savedOverlay));listeners.forEach(callback=>callback({exists:()=>true,data:()=>window.savedOverlay}))};
     export const doc=(_, ...parts)=>({path:parts.join('/')});
-    export const getDoc=async()=>({exists:()=>true,data:()=>window.savedOverlay});
+    window.overlayEvents=[{id:'event-game',title:'Titulo del evento que no debe aparecer en OBS',game:{nameEs:'Roco Kingdom',nameEn:'Roco Kingdom'},backgroundUrl:'/src/iconos/iconosKirby/01.png',startsAt:Date.now()}];window.overlayEventReads=[];
+    export const collection=(_,name)=>({name});export const orderBy=(...args)=>args;export const limit=n=>n;export const query=ref=>ref;
+    export const getDocs=async()=>({docs:window.overlayEvents.map(event=>({id:event.id,data:()=>event}))});
+    export const getDoc=async(ref)=>{if(ref?.path.startsWith('galaxyEvents/')){window.overlayEventReads.push(ref.path);const event=window.overlayEvents.find(item=>item.id===ref.path.split('/')[1]);return {id:event?.id,exists:()=>!!event,data:()=>event}}return {exists:()=>true,data:()=>window.savedOverlay}};
     export const setDoc=async(ref,value)=>{if(window.overlayWriteFail)throw Error('Simulated write denial');window.overlayWrites.push({path:ref.path,value:JSON.parse(JSON.stringify(value))});window.savedOverlay=JSON.parse(JSON.stringify(value));listeners.forEach(callback=>callback({exists:()=>true,data:()=>window.savedOverlay}))};
     export const onSnapshot=(ref,callback)=>{listeners.add(callback);callback({exists:()=>true,data:()=>window.savedOverlay});return()=>listeners.delete(callback)};
   `,
