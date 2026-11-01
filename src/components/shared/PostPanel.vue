@@ -78,7 +78,8 @@
       </div>
     </div>
 
-    <p v-if="isAdmin" class="pin-help">Pineados en Inicio: {{ pinnedPosts.length }} / 6. La última publicación entra automáticamente; puedes quitarle el pin. Una nueva publicación sustituye al pin más antiguo si se llena el carrusel.</p>
+    <p v-if="isAdmin" class="pin-help">Pineados en la lista cargada: {{ pinnedPosts.length }} / 6. La última publicación entra automáticamente; puedes quitarle el pin. Una nueva publicación sustituye al pin más antiguo si se llena el carrusel.</p>
+    <button v-if="!allPostsLoaded" class="post-create-btn" type="button" :disabled="isLoadingPosts" @click="loadPosts(true)">Cargar todas las publicaciones</button>
     <ContentLoading v-if="isLoadingPosts" variant="cards" />
 
     <div v-else-if="loadError" class="post-empty-results">
@@ -262,7 +263,7 @@ import { vSoftReveal } from '@/directives/softReveal'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, deleteDoc, deleteField, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
+import { collection, query, orderBy, limit, deleteDoc, deleteField, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { resolveAssetUrl } from '@/constants/assets'
 import ListControls from '@/components/shared/ListControls.vue'
@@ -300,6 +301,11 @@ const pinnedPosts = computed(() => homePinnedPosts(posts.value))
 const isPinned = post => pinnedPosts.value.some(item => item.id === post.id)
 async function togglePin(post) {
   if (!isAdmin.value || pinSaving.value) return
+  if (!allPostsLoaded.value) {
+    await loadPosts(true)
+    if (loadError.value) return
+    post = posts.value.find(item => item.id === post.id) || post
+  }
   const next = !isPinned(post)
   if (next && pinnedPosts.value.length >= MAX_HOME_PINS) return showToast('Quita un pin antes de añadir otro. Máximo seis.', 'delete')
   pinSaving.value = true
@@ -365,11 +371,13 @@ const postSortOptions = [
   { value: 'az', label: 'A-Z' }
 ]
 
-const loadPosts = async () => {
+const allPostsLoaded = ref(false)
+const loadPosts = async (all = allPostsLoaded.value) => {
   isLoadingPosts.value = true
   loadError.value = ''
   try {
-    const snap = await getDocs(collection(db, 'posts'))
+    const snap = await getDocs(all ? collection(db, 'posts') : query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(3)))
+    allPostsLoaded.value = all
     posts.value = snap.docs.map(d => ({ id: d.id, ...d.data() }))
   } catch (error) {
     console.error(error)
@@ -443,7 +451,7 @@ const filteredPosts = computed(() => {
   })
 })
 
-const POST_PAGE_SIZE = 7
+const POST_PAGE_SIZE = 3
 const postPager = useListNavigation(filteredPosts, { initialPageSize: POST_PAGE_SIZE })
 const paginatedPosts = computed(() => postPager.pageItems.value)
 const postPagination = computed(() => ({
@@ -492,7 +500,7 @@ watch(isAdmin, (admin) => {
   if (!admin && filter.value === 'all') filter.value = 'mine'
 }, { immediate: true })
 
-watch([searchQuery, filter, categoryFilter, sortMode], postPager.resetPage)
+watch([searchQuery, filter, categoryFilter, sortMode], () => { postPager.resetPage(); if (!allPostsLoaded.value) loadPosts(true) })
 
 watch(() => route.query.create, (createTarget) => {
   if (createTarget === 'post') openCreate()

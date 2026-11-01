@@ -12,6 +12,8 @@
       </button>
     </div>
 
+    <p v-if="overlayError" role="alert">{{ overlayError }}</p>
+    <button v-if="!allOverlaysLoaded || overlayError" class="btn-primary-galaxy-xs mb-4" type="button" :disabled="loadingOverlays" @click="loadOverlays(true)">{{ loadingOverlays ? 'Cargando...' : 'Cargar todos los overlays' }}</button>
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3">
       <div
         v-for="overlay in overlays"
@@ -177,7 +179,7 @@
 import { vSoftReveal } from '@/directives/softReveal'
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, getDocs, deleteDoc, doc, setDoc, updateDoc } from "firebase/firestore"
+import { collection, query, orderBy, limit, getDocs, deleteDoc, doc, setDoc, updateDoc } from "firebase/firestore"
 import { db, auth } from "@/firebase"
 import WidgetRenderer from '@/components/widgets/WidgetRenderer.vue'
 
@@ -186,6 +188,9 @@ const route = useRoute()
 const emit = defineEmits(['loading', 'ready'])
 
 const overlays = ref([])
+const allOverlaysLoaded = ref(false)
+const loadingOverlays = ref(false)
+const overlayError = ref('')
 const showPanel = ref(false)
 const isEditing = ref(false)
 const isSaving = ref(false)
@@ -195,15 +200,23 @@ const form = ref({ id: null, name: '' })
 const toast = ref({ show: false, message: '', type: 'success' })
 const confirmDialog = ref({ show: false, id: null, title: '', message: '', action: null })
 
-const loadOverlays = async () => {
+const loadOverlays = async (all = allOverlaysLoaded.value) => {
+  if (loadingOverlays.value) return
   const user = auth.currentUser
   if (!user) return
 
-  const snap = await getDocs(collection(db, "overlays", user.uid, "items"))
+  loadingOverlays.value = true
+  overlayError.value = ''
+  try {
+  const items = collection(db, "overlays", user.uid, "items")
+  const snap = await getDocs(all ? items : query(items, orderBy('createdAt', 'desc'), limit(3)))
+  allOverlaysLoaded.value = all
   overlays.value = snap.docs.map(d => ({
     id: d.id,
     ...d.data()
   }))
+  } catch { overlayError.value = 'No se pudieron cargar los overlays. Vuelve a intentarlo.' }
+  finally { loadingOverlays.value = false }
 }
 
 onMounted(async () => {

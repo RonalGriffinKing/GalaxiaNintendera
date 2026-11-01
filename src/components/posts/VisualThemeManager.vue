@@ -6,8 +6,10 @@ import VisualThemePreview from './VisualThemePreview.vue'
 import SeasonalThemeDecor from './SeasonalThemeDecor.vue'
 const props=defineProps({userRole:String,posts:{type:Array,default:()=>[]},usageComplete:Boolean,embedded:Boolean})
 const {themes,enabled,refresh}=useVisualThemes()
-const selected=ref(DEFAULT_THEME_ID),draft=ref(''),notice=ref(loadVisualThemes().error),error=ref('')
+const selected=ref(null),draft=ref(''),notice=ref(loadVisualThemes().error),error=ref('')
 const isNew=ref(false)
+const editorOpen=ref(false)
+const emit=defineEmits(['open-theme'])
 const editorMode=ref('visual'),activeGroup=ref('general'),previewMode=ref('social')
 const form=computed(()=>{try{const value=JSON.parse(draft.value);return value?.config?.general&&value?.config?.social&&value?.config?.web?value:null}catch{return null}})
 const fieldLabels={primary:'Color principal',secondary:'Color secundario',accent:'Acento',background:'Fondo',surface:'Paneles',text:'Texto',muted:'Texto secundario',highlight:'Destacados',title:'Título',description:'Descripción',labelBackground:'Fondo de etiqueta',labelEnd:'Final de etiqueta',labelText:'Texto de etiqueta',numberBackground:'Fondo de números',numberEnd:'Final de números',numberText:'Texto de números',cardBackground:'Fondo de tarjetas',cardEnd:'Final de tarjetas',cardBorder:'Borde de tarjetas',progressActive:'Progreso activo',progressMiddle:'Centro del progreso',progressEnd:'Final del progreso',progressInactive:'Progreso pendiente',arrowBackground:'Fondo de flecha',arrowEnd:'Final de flecha',arrowIcon:'Icono de flecha',arrowBorder:'Borde de flecha',gradientStart:'Inicio del fondo',gradientEnd:'Final del fondo',gradientOpacity:'Intensidad del fondo',glowOpacity:'Intensidad del brillo',effect:'Efecto',buttonBackground:'Fondo del botón',buttonText:'Texto del botón',border:'Bordes'}
@@ -18,11 +20,11 @@ const parsed=computed(()=>{try{return parseVisualThemeJson(draft.value)}catch{re
 const validationError=computed(()=>{try{parseVisualThemeJson(draft.value);return ''}catch(e){return e.message}})
 const locked=computed(()=>props.userRole!=='admin')
 const usage=computed(()=>props.posts.filter(p=>p.visualThemeId===selected.value).length)
-function choose(id){selected.value=id;isNew.value=false;draft.value=JSON.stringify(themes.value.find(t=>t.id===id),null,2);error.value='';notice.value=''}
-choose(selected.value)
+function choose(id){editorOpen.value=true;emit('open-theme');selected.value=id;isNew.value=false;draft.value=JSON.stringify(themes.value.find(t=>t.id===id),null,2);error.value='';notice.value=''}
+
 function attempt(action){error.value='';notice.value='';try{if(locked.value)throw Error('Solo administradores.');action()}catch(e){error.value=e.message}}
 function commit(items,message){persistVisualThemes(items,props.userRole);refresh();notice.value=message}
-function create(duplicate=false){attempt(()=>{const source=duplicate?parseVisualThemeJson(draft.value):INITIAL_VISUAL_THEMES[0];const theme={...structuredClone(source),id:'tema-'+crypto.randomUUID(),name:duplicate?source.name+' (copia)':'Nuevo tema',version:1,archived:false};selected.value=theme.id;isNew.value=true;draft.value=JSON.stringify(theme,null,2);notice.value='Borrador local. Personaliza el tema y guarda para añadirlo.'})}
+function create(duplicate=false){editorOpen.value=true;attempt(()=>{const source=duplicate?parseVisualThemeJson(draft.value):INITIAL_VISUAL_THEMES[0];const theme={...structuredClone(source),id:'tema-'+crypto.randomUUID(),name:duplicate?source.name+' (copia)':'Nuevo tema',version:1,archived:false};selected.value=theme.id;isNew.value=true;draft.value=JSON.stringify(theme,null,2);notice.value='Borrador local. Personaliza el tema y guarda para añadirlo.'})}
 function save(){attempt(()=>{const value=parseVisualThemeJson(draft.value);if(!isNew.value&&value.id!==selected.value)throw Error('El identificador de un tema guardado es estable. Duplica para crear otro.');if(isNew.value&&themes.value.some(t=>t.id===value.id))throw Error('Ese identificador ya existe.');const prior=themes.value.find(t=>t.id===selected.value);if(prior&&!isNew.value)value.version=Math.max(prior.version+1,value.version);commit([...themes.value.filter(t=>t.id!==value.id),value],'Tema guardado solo en este navegador.');choose(value.id);notice.value='Tema guardado solo en este navegador.'})}
 function archive(){attempt(()=>{if(selected.value===DEFAULT_THEME_ID)throw Error('El tema predeterminado no se puede archivar.');const theme=themes.value.find(t=>t.id===selected.value);commit(themes.value.map(t=>t.id===theme.id?{...t,archived:!t.archived,version:t.version+1}:t),'Estado actualizado. Los posts conservan su referencia y usan el diseño predeterminado si se archiva.');draft.value=JSON.stringify(themes.value.find(t=>t.id===selected.value),null,2)})}
 function remove(){attempt(()=>{const next=removeVisualTheme(themes.value,selected.value,{role:props.userRole,posts:props.posts,usageComplete:props.usageComplete});commit(next,'Tema eliminado.');choose(DEFAULT_THEME_ID);notice.value='Tema eliminado de la biblioteca local.'})}
@@ -47,7 +49,8 @@ defineExpose({createTheme:()=>create()})
      <strong>{{theme.name}}</strong><small>{{theme.config.decoration==='halloween'||theme.config.decoration==='christmas'?'De temporada · ':''}}v{{theme.version}}{{theme.archived?' · Archivado':''}}</small>
     </button>
    </nav>
-   <div class="theme-manager-layout">
+   <button v-if="editorOpen" type="button" @click="editorOpen=false">Cerrar configuración</button>
+   <div v-if="editorOpen" class="theme-manager-layout">
     <div class="theme-draft">
      <div class="editor-heading"><div><h3>{{isNew?'Nuevo tema':form?.name||'Editar tema'}}</h3><small v-if="!isNew">{{usage}} publicaciones en la lista cargada</small></div><div class="segmented" aria-label="Modo de edición"><button :aria-pressed="editorMode==='visual'" @click="editorMode='visual'">Visual</button><button :aria-pressed="editorMode==='json'" @click="editorMode='json'">JSON avanzado</button></div></div>
      <template v-if="editorMode==='visual' && form">

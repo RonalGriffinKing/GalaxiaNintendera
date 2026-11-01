@@ -23,7 +23,9 @@
     </div>
 
     <div class="users-toolbar">
-      <ListControls
+      <button type="button" class="btn-primary-galaxy-xs" @click="showSearch = !showSearch">Buscar usuarios</button>
+      <button type="button" class="btn-primary-galaxy-xs" :disabled="isLoadingUsers" @click="loadUsers">{{ isLoadingUsers ? 'Cargando usuarios...' : usersRequested ? 'Actualizar usuarios' : 'Mostrar usuarios' }}</button>
+      <ListControls v-if="showSearch || usersRequested"
         v-model:search="searchQuery"
         v-model:sort="sortMode"
         v-model:page-size="userPageSize"
@@ -50,7 +52,7 @@
       <span>{{ loadError }}</span>
     </div>
 
-    <div v-else-if="!filteredUsers.length" class="users-empty">
+    <div v-else-if="usersRequested && !filteredUsers.length" class="users-empty">
       <i class="fas fa-magnifying-glass"></i>
       <strong>No hay usuarios con esos criterios</strong>
       <span>Prueba con otra búsqueda, filtro u ordenación.</span>
@@ -280,7 +282,8 @@ import ListControls from '@/components/shared/ListControls.vue'
 import PaginationNav from '@/components/shared/PaginationNav.vue'
 import { useListNavigation } from '@/composables/useListNavigation'
 
-defineProps({
+const props = defineProps({
+  userRole: { type: String, default: 'user' },
   embedded: {
     type: Boolean,
     default: false
@@ -299,7 +302,9 @@ const roleFilter = ref('all')
 const sortMode = ref('az')
 const isLoadingUsers = ref(false)
 const loadError = ref('')
-const currentRole = ref('')
+const currentRole = ref(props.userRole || '')
+const usersRequested = ref(false)
+const showSearch = ref(false)
 const showPanel = ref(false)
 const isEditing = ref(false)
 const isSaving = ref(false)
@@ -381,6 +386,7 @@ function normalizeSearch(value = '') {
 }
 
 const loadUsers = async () => {
+  usersRequested.value = true
   isLoadingUsers.value = true
   loadError.value = ''
   try {
@@ -597,7 +603,12 @@ const executeDelete = async () => {
 onMounted(async () => {
   emit('loading', 'users')
   try {
-    await loadUsers()
+    const user = auth.currentUser
+    if (user) {
+      const snapshot = await getDoc(doc(db, 'users', user.uid))
+      const profile = snapshot.data() || {}
+      currentRole.value = profile.isBlocked ? 'user' : (profile.role || 'user')
+    }
   } finally {
     emit('ready', 'users')
   }
@@ -621,6 +632,10 @@ onUnmounted(() => {
 
 <style scoped>
 .users-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-bottom: 16px;
 }
 

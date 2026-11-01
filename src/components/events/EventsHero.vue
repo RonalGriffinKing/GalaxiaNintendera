@@ -6,7 +6,7 @@ defineProps({
   }
 })
 
-defineEmits(['create','bulk','carousel'])
+defineEmits(['create','bulk','carousel','history'])
 </script>
 
 <template>
@@ -23,6 +23,10 @@ defineEmits(['create','bulk','carousel'])
       <button type="button" class="event-tool event-tool-import" @click="$emit('bulk')">
         <span class="event-tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Zm0 0v6h6M9 12l-2 3 2 3m6-6 2 3-2 3"/></svg></span>
         <span class="event-tool-copy"><strong>Importar eventos</strong><small>Pega o adjunta JSON</small></span>
+      </button>
+      <button type="button" class="event-tool" @click="$emit('history')">
+        <span class="event-tool-icon"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i></span>
+        <span class="event-tool-copy"><strong>Eventos anteriores</strong><small>Ver, reactivar o eliminar</small></span>
       </button>
       <button type="button" class="event-tool event-tool-magic" @click="$emit('carousel')">
         <span class="event-tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5L7 22l-5-5Zm-3 3 5 5M5 2v4M3 4h4m13 10v4m-2-2h4M20 1v4m-2-2h4"/></svg></span>
@@ -70,7 +74,7 @@ defineEmits(['create','bulk','carousel'])
 .events-hero-premium{gap:28px;flex-wrap:wrap}
 .events-hero-premium > div:first-child{flex:1 1 280px;min-width:0}
 .events-hero-premium p{font-weight:500}
-.events-admin-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;flex:1 1 580px;max-width:660px}
+.events-admin-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;flex:1 1 480px;max-width:660px}
 .event-tool{box-sizing:border-box;display:flex;align-items:center;gap:10px;min-width:0;min-height:76px;padding:14px 13px;border:1px solid #c4b5fd2e;border-radius:15px;background:#14142bca;color:#ede9fe;text-align:left;cursor:pointer;transition:background .2s ease,border-color .2s ease,transform .2s ease,box-shadow .2s ease}
 .event-tool-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:38px;border-radius:10px;background:#a78bfa1c;color:#c4b5fd}
 .event-tool-icon svg{width:23px;height:23px}

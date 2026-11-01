@@ -24,7 +24,8 @@ const searchQuery = ref('')
 const sortMode = ref('recent')
 const showEditor = ref(false)
 const editingPage = ref(null)
-const loading = ref(true)
+const loading = ref(false)
+const pagesRequested = ref(false)
 const loadError = ref('')
 const toast = ref('')
 const confirmDelete = ref(null)
@@ -85,6 +86,7 @@ function normalizeSearch(value = '') {
 
 const loadPages = async ({ signal = false } = {}) => {
   if (signal) emit('loading', 'pages')
+  pagesRequested.value = true
   loading.value = true
   loadError.value = ''
   try {
@@ -186,7 +188,7 @@ watch(() => route.query.seed, async (target) => {
 
 watch([searchQuery, filter, sortMode], pagePager.resetPage)
 
-onMounted(() => loadPages({ signal: true }))
+onMounted(() => emit('ready', 'pages'))
 </script>
 
 <template>
@@ -201,12 +203,13 @@ onMounted(() => loadPages({ signal: true }))
     </header>
 
     <div class="site-pages-toolbar">
-      <div class="page-tabs">
+      <button type="button" class="create-page-btn load-pages-btn" :disabled="loading" @click="loadPages()">{{ loading ? 'Cargando...' : 'Ver las páginas disponibles' }}</button>
+      <div v-if="pagesRequested" class="page-tabs">
         <button v-for="item in ['all','draft','published','footer','legal','guide','landing','home-section']" :key="item" :class="{ active: filter === item }" type="button" @click="filter = item">
           {{ item === 'all' ? 'Todas' : item === 'draft' ? 'Borradores' : item === 'published' ? 'Publicadas' : item }}
         </button>
       </div>
-      <ListControls
+      <ListControls v-if="pagesRequested"
         v-model:search="searchQuery"
         v-model:sort="sortMode"
         v-model:page-size="pagePageSize"
@@ -235,13 +238,13 @@ onMounted(() => loadPages({ signal: true }))
       <strong>No se pudieron cargar las paginas</strong>
       <span>{{ loadError }}</span>
     </div>
-    <div v-else-if="!filteredPages.length" class="pages-empty">
+    <div v-else-if="pagesRequested && !filteredPages.length" class="pages-empty">
       <i class="fas fa-file-lines"></i>
       <strong>No hay páginas con esos criterios</strong>
       <button v-if="canManage" type="button" @click="openCreate()">Crear una página</button>
     </div>
 
-    <div v-else class="pages-grid">
+    <div v-else-if="pagesRequested" class="pages-grid">
       <article v-for="page in paginatedPages" :key="page.id" class="site-page-card">
         <div class="page-card-icon" :style="{ '--page-accent': page.theme?.accent || '#a855f7' }">
           <i :class="page.icon || 'fas fa-book-open'"></i>
@@ -299,6 +302,7 @@ onMounted(() => loadPages({ signal: true }))
 .site-pages-panel { display: grid; gap: 18px; }
 .site-pages-head { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
 .site-pages-toolbar { align-items: start; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(300px, auto) auto; }
+.load-pages-btn { justify-self: start; }
 .site-pages-head span { color: var(--accent-hover); font-size: 11px; font-weight: 950; text-transform: uppercase; }
 .site-pages-head h1 { color: var(--text-primary); font-size: 28px; font-weight: 950; }
 .site-pages-head p { color: var(--text-muted); font-size: 13px; font-weight: 750; }

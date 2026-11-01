@@ -3,7 +3,7 @@ import { isEventActive } from '@/services/eventInvitation'
 import { useEventClock } from '@/composables/useEventClock'
 import EventsBulkImport from '@/components/events/EventsBulkImport.vue'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
@@ -17,6 +17,7 @@ import EventsSidebar from '@/components/events/EventsSidebar.vue'
 import EventsTabs from '@/components/events/EventsTabs.vue'
 import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
 import { peekPublicPage, storePublicPage } from '@/services/publicPageCache'
+const EventsHistory = defineAsyncComponent(() => import('@/components/events/EventsHistory.vue'))
 
 const eventNow = useEventClock()
 const route = useRoute()
@@ -33,6 +34,11 @@ const bulkOpen = ref(false)
 const editorOpen = ref(false)
 const editingEvent = ref(null)
 const calendarPanelOpen = ref(false)
+const historyOpen = ref(false)
+const reactivating = ref(false)
+const deletingEvent = ref(null)
+const isDeleting = ref(false)
+const deleteError = ref('')
 
 let unsubscribeEvents = null
 let unsubscribeCommunities = null
@@ -74,8 +80,20 @@ const googleCalendarUrl = (event) => {
 
 const openEditor = (event = null) => {
   if (!isAdmin.value) return
+  reactivating.value = false
   editingEvent.value = event
   editorOpen.value = true
+}
+
+const openHistory = () => {
+  if (!isAdmin.value) return
+  closeEditor()
+  historyOpen.value = true
+}
+
+const reactivateEvent = (event) => {
+  openEditor(event)
+  reactivating.value = true
 }
 
 const closeEditor = () => {
@@ -115,8 +133,26 @@ const toggleFeatured = async (event) => {
 
 const deleteEvent = async (event) => {
   if (!isAdmin.value || !event?.id) return
-  await deleteDoc(doc(db, 'galaxyEvents', event.id))
-  if (detailEvent.value?.id === event.id) closeDetails()
+  deletingEvent.value = event
+  deleteError.value = ''
+}
+
+const confirmDeleteEvent = async () => {
+  if (!isAdmin.value || !deletingEvent.value?.id || isDeleting.value) return
+  isDeleting.value = true
+  deleteError.value = ''
+  const id = deletingEvent.value.id
+  try {
+    await deleteDoc(doc(db, 'galaxyEvents', id))
+    events.value = events.value.filter(event => event.id !== id)
+    storePublicPage('events-live-list', events.value.map(({ notifyBy, ...event }) => ({ ...event, notifyBy: [] })))
+    if (detailEvent.value?.id === id) closeDetails()
+    deletingEvent.value = null
+  } catch {
+    deleteError.value = 'No se pudo eliminar del servidor. Vuelve a intentarlo.'
+  } finally {
+    isDeleting.value = false
+  }
 }
 
 const openCalendar = (event) => {
@@ -214,7 +250,8 @@ onUnmounted(() => {
     <GalaxyAtmosphere />
     <div class="events-page-inner">
       <FloatingBackButton />
-      <EventsHero :can-create="isAdmin" @create="openEditor()" @bulk="bulkOpen=true" @carousel="openEventsCarousel()" />
+      <EventsHero :can-create="isAdmin" @create="openEditor()" @history="openHistory" @bulk="bulkOpen=true" @carousel="openEventsCarousel()" />
+      <EventsHistory v-if="historyOpen && isAdmin" :events="events" :now="eventNow" :ready="eventsReady" @close="historyOpen=false" @view="openDetails" @reactivate="reactivateEvent" @delete="deleteEvent" />
       <EventsTabs v-model="activeTab" />
 
       <section class="events-premium-layout">
@@ -284,14 +321,24 @@ onUnmounted(() => {
 
     <EventsBulkImport v-if="bulkOpen && isAdmin" :communities="communities" @close="bulkOpen=false" @carousel="openEventsCarousel" />
     <EventEditorModal
-      v-if="editorOpen"
+      v-if="editorOpen && isAdmin"
       :event="editingEvent"
+      :reactivating="reactivating"
       :communities="communities"
+      @history="openHistory"
       @close="closeEditor"
       @saved="editingEvent = null"
     />
 
     <Teleport to="body">
+      <div v-if="deletingEvent && isAdmin" class="event-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-event-title" @keydown.esc="!isDeleting && (deletingEvent=null)">
+        <section>
+          <h2 id="delete-event-title">Eliminar evento definitivamente</h2>
+          <p>«{{ deletingEvent.title }}» se eliminará del servidor. Esta acción no se puede deshacer.</p>
+          <p v-if="deleteError" role="alert">{{ deleteError }}</p>
+          <div><button type="button" :disabled="isDeleting" @click="deletingEvent=null">Cancelar</button><button type="button" :disabled="isDeleting" @click="confirmDeleteEvent">{{ isDeleting ? 'Eliminando...' : 'Eliminar del servidor' }}</button></div>
+        </section>
+      </div>
       <Transition name="calendar-panel">
         <section v-if="calendarPanelOpen" class="events-calendar-modal" aria-label="Calendario de eventos">
           <div class="events-calendar-backdrop" @click="calendarPanelOpen = false"></div>
@@ -319,6 +366,10 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.event-delete-dialog{position:fixed;inset:0;z-index:4600;display:grid;place-items:center;background:#020617cc;padding:24px;color:#fff}
+.event-delete-dialog section{max-width:480px;background:#141027;border:1px solid #a855f755;padding:24px;border-radius:20px}
+.event-delete-dialog h2{font-size:22px;font-weight:800}.event-delete-dialog p{margin:16px 0;line-height:1.6;color:#ddd6fe}
+.event-delete-dialog section>div{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap}.event-delete-dialog button{padding:12px 16px;border-radius:12px;background:#31234d}.event-delete-dialog button:last-child{background:#b91c1c}.event-delete-dialog button:disabled{opacity:.5}
 .events-page-premium {
   background:
     radial-gradient(circle at 70% 8%, rgba(124, 58, 237, 0.22), transparent 28%),

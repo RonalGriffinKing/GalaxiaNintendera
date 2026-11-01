@@ -43,10 +43,11 @@
         </div>
       </header>
 
-      <Transition name="manager-fade" mode="out-in">
-        <section :key="activeTab" class="module-panel" :class="{ 'is-loading': isContentLoading }">
+        <section class="module-panel" :class="{ 'is-loading': isContentLoading }">
+          <Transition name="manager-fade" mode="out-in">
           <KeepAlive>
             <component
+              :key="activeTab"
               ref="activeModule"
               :is="activeComponent"
               :user-role="currentRole"
@@ -56,6 +57,7 @@
               @ready="handleModuleReady"
             />
           </KeepAlive>
+          </Transition>
 
           <Transition name="content-loading-fade">
             <ContentLoading
@@ -74,7 +76,6 @@
             />
           </Transition>
         </section>
-      </Transition>
     </section>
   </main>
 </template>
@@ -208,9 +209,6 @@ const setActiveTab = (tab) => {
   const nextTab = normalizeTab(tab)
   if (nextTab === activeTab.value && route.query.view === nextTab) return
   activeTab.value = nextTab
-  if (!loadedTabs.value.has(nextTab)) {
-    currentLoadToken.value = contentLoading.start({ id: nextTab })
-  }
   router.replace({ path: route.path, query: { ...route.query, view: activeTab.value } })
 }
 
@@ -226,21 +224,19 @@ const applyRouteTab = () => {
   const nextTab = normalizeTab(route.query.view)
   if (nextTab === activeTab.value) return
   activeTab.value = nextTab
-  if (!loadedTabs.value.has(nextTab)) {
-    currentLoadToken.value = contentLoading.start({ id: nextTab })
-  }
 }
 
 const handleModuleLoading = (moduleId = activeTab.value) => {
-  if (loadedTabs.value.has(moduleId)) return
+  if (moduleId !== activeTab.value || loadedTabs.value.has(moduleId)) return
   currentLoadToken.value = contentLoading.start({ id: moduleId })
 }
 
 const handleModuleReady = async (moduleId = activeTab.value) => {
   loadedTabs.value = new Set([...loadedTabs.value, moduleId])
+  const token = currentLoadToken.value
   await nextTick()
   if (moduleId === activeTab.value) {
-    contentLoading.finish(currentLoadToken.value)
+    contentLoading.finish(token)
   }
 }
 
@@ -260,6 +256,10 @@ const loadRole = async () => {
 }
 
 watch(() => route.query.view, applyRouteTab)
+watch(activeTab, (tab) => {
+  contentLoading.finish(currentLoadToken.value)
+  if (!loadedTabs.value.has(tab)) currentLoadToken.value = contentLoading.start({ id: tab })
+}, { immediate: true, flush: 'sync' })
 watch(visibleTabs, () => {
   if (!visibleTabs.value.some(tab => tab.id === activeTab.value)) {
     activeTab.value = 'posts'

@@ -9,6 +9,7 @@ import { auth, db } from '@/firebase'
 import { resolveAssetUrl } from '@/constants/assets'
 
 const props = defineProps({
+  reactivating: Boolean,
   event: {
     type: Object,
     default: null
@@ -19,7 +20,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'saved'])
+const emit = defineEmits(['close', 'saved', 'history'])
 
 const emptyForm = () => ({
   title: '',
@@ -35,6 +36,7 @@ const emptyForm = () => ({
 
 const form = ref(emptyForm())
 const isSaving = ref(false)
+const saveError = ref('')
 const imagePickerOpen=ref(false)
 function selectGameImage(image){Object.assign(form.value,eventImageSelection(form.value,image));imagePickerOpen.value=false}
 const showAllCommunities = ref(false)
@@ -52,14 +54,15 @@ const toInputDateTime = (value) => {
   return local.toISOString().slice(0, 16)
 }
 
-watch(() => props.event, (event) => {
+watch([() => props.event, () => props.reactivating], ([event]) => {
+  saveError.value = ''
   imagePickerOpen.value=false
   form.value = event ? {
     title: event.title || '',
     game: eventGameNames(event),
     description: event.description || '',
     type: event.type || 'Direct',
-    startsAt: toInputDateTime(event.startsAt),
+    startsAt: props.reactivating ? '' : toInputDateTime(event.startsAt),
     durationMinutes: Number(event.durationMinutes || 60),
     url: event.url || '',
     backgroundUrl: event.backgroundUrl || event.imageUrl || '',
@@ -75,6 +78,11 @@ const saveEvent = async () => {
   const title = form.value.title.trim()
   const startsAt = new Date(form.value.startsAt).getTime()
   if (!title || !Number.isFinite(startsAt)) return
+  saveError.value = ''
+  if (props.reactivating && startsAt <= Date.now()) {
+    saveError.value = 'Elige una fecha y hora futura para reactivar el evento.'
+    return
+  }
 
   isSaving.value = true
   const selectedCommunities = props.communities.filter(community => form.value.communityIds.includes(community.id))
@@ -107,6 +115,8 @@ const saveEvent = async () => {
     }
     emit('saved')
     emit('close')
+  } catch {
+    saveError.value = 'No se pudo guardar el evento en el servidor. Vuelve a intentarlo.'
   } finally {
     isSaving.value = false
   }
@@ -121,11 +131,15 @@ const saveEvent = async () => {
         <section class="event-editor-card">
           <header>
             <span><i class="far fa-calendar-plus"></i> Eventos</span>
-            <h2>{{ isEditing ? 'Editar evento' : 'Crear evento' }}</h2>
+            <h2>{{ reactivating ? 'Reactivar evento' : isEditing ? 'Editar evento' : 'Crear evento' }}</h2>
             <button type="button" aria-label="Cerrar" @click="emit('close')">
               <i class="fas fa-xmark"></i>
             </button>
           </header>
+
+          <button v-if="!isEditing" type="button" class="event-image-search" @click="emit('history')"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Ver eventos anteriores</button>
+          <p v-if="reactivating">Elige una nueva fecha y hora. Se actualizará este mismo evento conservando su configuración.</p>
+          <p v-if="saveError" role="alert">{{ saveError }}</p>
 
           <EventJsonImport :communities="communities" @apply="values => Object.assign(form, values)" />
           <form @submit.prevent="saveEvent">
@@ -201,7 +215,7 @@ const saveEvent = async () => {
               <button type="button" class="secondary" @click="emit('close')">Cancelar</button>
               <button type="submit" :disabled="isSaving || !form.title.trim() || !form.startsAt">
                 <i class="fas fa-check"></i>
-                {{ isSaving ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Crear evento' }}
+                {{ isSaving ? 'Guardando...' : reactivating ? 'Reactivar evento' : isEditing ? 'Guardar cambios' : 'Crear evento' }}
               </button>
             </footer>
           </form>
