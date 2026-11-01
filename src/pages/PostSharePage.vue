@@ -7,6 +7,7 @@ import JSZip from 'jszip'
 import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { mergeSocialSettings, updateSocialSetting } from '@/services/socialTemplateState'
+import { socialPointMarker } from '@/services/socialPointMarkers'
 import { normalizeSocialContent, titleRuns } from '@/services/socialContent'
 import PublicationAnimationModal from '@/components/posts/PublicationAnimationModal.vue'
 import AnalysisCrown from '@/components/shared/AnalysisCrown.vue'
@@ -1255,7 +1256,7 @@ function slugify(value) {
                   <p data-edit="description" :style="visualElementStyle(index, 'description')" v-if="settingsForSlide(index).description.visible">{{ displaySlideDescription(slide) }}</p>
                   <ul v-if="displaySlidePoints(slide).filter(point => point.trim()).length && settingsForSlide(index).points?.visible !== false" class="social-points" data-edit="points" :style="visualElementStyle(index, 'points')">
                     <li v-for="(point, pointIndex) in displaySlidePoints(slide).filter(point => point.trim())" :key="`${slide.id}-point-${pointIndex}`">
-                      <span>{{ slide.type === 'closing' ? '✦' : pointIndex + 1 }}</span>
+                      <span aria-hidden="true">{{ socialPointMarker(settingsForSlide(index).points?.marker, pointIndex, slide.type) }}</span>
                       <strong>{{ point }}</strong>
                     </li>
                   </ul>

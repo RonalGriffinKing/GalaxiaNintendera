@@ -1,9 +1,12 @@
 import { GAMER_PLATFORMS } from './gamerIdentity'
 import { eventGameNames } from './eventGame'
 
-export const NOW_PLAYING_DEFAULTS = Object.freeze({ source:'auto', eventId:'', eventShowDescription:true,eventShowStart:true,eventTimeZone:'Europe/Madrid', platform: 'auto', width: 520, height: 172, visibleSeconds: 12, repeatSeconds: 180, direction: 'left', showLastGame: false, theme: 'galaxy', labelSize: 12, titleSize: 20, platformSize: 11, statsSize: 12, coverWidth: 88, particles: true, xboxPlatform: 'Xbox', nintendoPlatform: 'auto', enabled: true, refreshMode: 'manual' })
+export const NOW_PLAYING_LABELS = Object.freeze(['Hoy jugamos', 'Hoy reaccionamos', 'Hoy vemos'])
+
+export const NOW_PLAYING_DEFAULTS = Object.freeze({ label: 'Hoy jugamos', source:'auto', eventId:'', eventShowDescription:true,eventShowStart:true,eventTimeZone:'Europe/Madrid', platform: 'auto', width: 520, height: 172, visibleSeconds: 12, repeatSeconds: 180, direction: 'left', showLastGame: false, theme: 'galaxy', labelSize: 12, titleSize: 20, platformSize: 11, statsSize: 12, coverWidth: 88, particles: true, xboxPlatform: 'Xbox', nintendoPlatform: 'auto', enabled: true, refreshMode: 'manual' })
 const bounded = (value, fallback, min, max) => Number.isFinite(Number(value)) ? Math.min(max, Math.max(min, Number(value))) : fallback
 export function nowPlayingSettings(data = {}) {
+  const label = NOW_PLAYING_LABELS.includes(data.label) ? data.label : NOW_PLAYING_LABELS[0]
   const visibleSeconds = bounded(data.visibleSeconds, 12, 5, 60)
   const labelSize = bounded(data.labelSize, 12, 10, 24), titleSize = bounded(data.titleSize, 20, 14, 32), platformSize = bounded(data.platformSize, 11, 9, 20), statsSize = bounded(data.statsSize, 12, 10, 24)
   const width = bounded(data.width, 520, 320, 900)
@@ -15,7 +18,7 @@ export function nowPlayingSettings(data = {}) {
   const coverHeight = coverWidth * 1.5 + 56 + Math.max(0,labelSize-12)*1.2
   const textHeight = 172 + Math.max(0,titleSize-20)*2.4 + Math.max(0,platformSize-11)*1.4 + Math.max(0,statsSize-12)*2.8 + Math.max(0,labelSize-12)*1.3
   const eventTextHeight=source==='event'?80+titleSize*2.4+(eventShowDescription?statsSize*2.8:0)+(eventShowStart?statsSize*2.8:0)+Math.max(0,labelSize-12)*1.3:0
-  return { eventShowDescription,eventShowStart,eventTimeZone,source, eventId, enabled: data.enabled !== false, refreshMode: data.refreshMode === 'auto' ? 'auto' : 'manual', nintendoPlatform: ['auto', 'Nintendo Switch', 'Nintendo Switch 2'].includes(data.nintendoPlatform) ? data.nintendoPlatform : 'auto', xboxPlatform: ['Xbox', 'Xbox Series', 'Xbox One', 'PC'].includes(data.xboxPlatform) ? data.xboxPlatform : 'Xbox', coverWidth, particles: data.particles !== false, labelSize, titleSize, platformSize, statsSize, platform: ['auto', 'nintendo', 'xbox'].includes(data.platform) ? data.platform : 'auto', width, height: Math.max(Math.ceil(coverHeight), Math.ceil(textHeight),Math.ceil(eventTextHeight), bounded(data.height, 172, 172, 360)), visibleSeconds, repeatSeconds: bounded(data.repeatSeconds, 180, visibleSeconds + 5, 1800), direction: data.direction === 'right' ? 'right' : 'left', showLastGame: data.showLastGame === true, theme: ['galaxy', 'minimal', 'halloween'].includes(data.theme) ? data.theme : 'galaxy' }
+  return { label, eventShowDescription,eventShowStart,eventTimeZone,source, eventId, enabled: data.enabled !== false, refreshMode: data.refreshMode === 'auto' ? 'auto' : 'manual', nintendoPlatform: ['auto', 'Nintendo Switch', 'Nintendo Switch 2'].includes(data.nintendoPlatform) ? data.nintendoPlatform : 'auto', xboxPlatform: ['Xbox', 'Xbox Series', 'Xbox One', 'PC'].includes(data.xboxPlatform) ? data.xboxPlatform : 'Xbox', coverWidth, particles: data.particles !== false, labelSize, titleSize, platformSize, statsSize, platform: ['auto', 'nintendo', 'xbox'].includes(data.platform) ? data.platform : 'auto', width, height: Math.max(Math.ceil(coverHeight), Math.ceil(textHeight),Math.ceil(eventTextHeight), bounded(data.height, 172, 172, 360)), visibleSeconds, repeatSeconds: bounded(data.repeatSeconds, 180, visibleSeconds + 5, 1800), direction: data.direction === 'right' ? 'right' : 'left', showLastGame: data.showLastGame === true, theme: ['galaxy', 'minimal', 'halloween'].includes(data.theme) ? data.theme : 'galaxy' }
 }
 export function nowPlayingCard(identities, settings) {
   if(settings.source==='event')return null

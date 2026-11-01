@@ -3,6 +3,10 @@ import { nowPlayingCard, nowPlayingSettings, eventNowPlayingCard, eventStartInfo
 const game = { id: '1', title: 'Juego de prueba' }
 const identity = (platform, presence, extra = {}) => ({ platform, connectionState: 'connected', visibility: 'public', presence, ...extra })
 describe('OBS now-playing presentation', () => {
+  it('supports activity titles and preserves the legacy default', () => {
+    for (const label of ['Hoy jugamos', 'Hoy reaccionamos', 'Hoy vemos']) expect(nowPlayingSettings({ label }).label).toBe(label)
+    for (const label of [undefined, null, '', 'invalid', {}]) expect(nowPlayingSettings({ label }).label).toBe('Hoy jugamos')
+  })
   it('provides bounded event descriptions and valid start times without using the event title',()=>{
     const event={title:'Título del directo',game:{nameEs:'Roco Kingdom'},description:'  Probamos\n la beta cerrada.  ',startsAt:'2026-10-27T17:00:00Z'}
     const card=eventNowPlayingCard(event,'e1')

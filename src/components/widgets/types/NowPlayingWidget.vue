@@ -46,7 +46,7 @@ const style = computed(() => ({ width: settings.value.width + 'px', height: sett
         <HalloweenDecor v-if="settings.theme === 'halloween'" />
         <img v-if="card.game.imageUrl" class="now-playing-backdrop" :src="card.game.imageUrl" alt="" />
         <div v-if="settings.particles" class="now-playing-particles" aria-hidden="true"><span v-for="(particle,index) in particles" :key="index" :style="particle"></span></div>
-        <span class="now-playing-label"><i class="fas fa-gamepad" aria-hidden="true"></i> Hoy jugamos</span>
+        <span class="now-playing-label"><i class="fas fa-gamepad" aria-hidden="true"></i> {{ settings.label }}</span>
         <img v-if="card.game.imageUrl" class="now-playing-cover" :src="card.game.imageUrl" alt="" /><div v-else class="now-playing-cover cover-empty"><i class="fas fa-gamepad" aria-hidden="true"></i></div>
         <div class="now-playing-copy"><h3>{{ card.game.title }}</h3><p v-if="settings.source==='event'&&settings.eventShowDescription&&card.eventDescription" class="now-playing-event-description">{{card.eventDescription}}</p><time v-if="settings.source==='event'&&eventStart" class="now-playing-event-start" :datetime="eventStart.iso"><i class="far fa-clock" aria-hidden="true"></i><span>Inicio: {{eventStart.label}}</span></time><span v-if="card.platformLabel" class="now-playing-platform">{{ card.platformLabel }}</span><div v-if="card.stats.length" class="now-playing-stats"><span v-for="stat in card.stats" :key="stat.text"><i :class="stat.icon" aria-hidden="true"></i> {{ stat.text }}</span></div></div>
         <span v-if="settings.theme === 'galaxy'" class="now-playing-star" aria-hidden="true">✦</span>

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import SocialPaintControls from './SocialPaintControls.vue'
+import { SOCIAL_POINT_MARKERS } from '@/services/socialPointMarkers'
 import { constrainImagePan } from '@/services/socialImageDrag'
 const templateName = ref('')
 const props = defineProps({ imagePanLimits:Object, hasScore:Boolean, templates:Array, templateNotice:String, element:String, cta:String, slideType:String, slideAccent:String, scope:String, settings:Object, title:String, titleHighlights:Array, description:String, points:Array, fonts:Array, number:Number, image:String, imageUrl:String, overflow:Boolean, notice:String, canUndo:Boolean, canRedo:Boolean, inert:Boolean })
@@ -41,6 +42,7 @@ function setImageOffset(event){const value=Number(event.target.value);if(Number.
       <label>Color del destacado<input type="color" :value="current.highlightColor || '#facc15'" @input="set('highlightColor',$event.target.value)" /></label>
      </template>
      <small v-if="element==='points'">Un punto por linea. Enter agrega otro punto.</small>
+     <label v-if="element==='points'">Marcadores de la lista<select :value="current.marker || (slideType==='closing' ? 'stars' : 'numbers')" @change="set('marker',$event.target.value)"><option v-for="option in SOCIAL_POINT_MARKERS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
      <small>El contenido cambia solo en esta imagen. El tama?o se adapta al formato elegido.</small>
      <div class="tools"><label>Tamano<input type="number" min="12" max="150" :value="current.size || 30" @input="setNumber('size',$event,12,150)" /></label><label>Color<input type="color" :value="current.color || settings.description.color" @input="set('color',$event.target.value)" /></label></div>
      <label>Fuente<select :value="current.family || settings.typography.family" @change="set('family',$event.target.value)"><option v-for="font in fonts" :key="font.value" :value="font.value">{{ font.label }}</option></select></label>
