@@ -2,12 +2,18 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { listOverlayEvents } from '@/services/overlayEventClient'
 import { eventGameNames } from '@/services/eventGame'
-import { NOW_PLAYING_DEFAULTS, NOW_PLAYING_LABELS } from '@/services/nowPlaying'
+import { NOW_PLAYING_DEFAULTS, NOW_PLAYING_LABELS, nowPlayingSettings } from '@/services/nowPlaying'
 const fontControls = [{ key: 'labelSize', label: 'Título del overlay', min: 10, max: 24 }, { key: 'titleSize', label: 'Nombre del juego', min: 14, max: 32 }, { key: 'platformSize', label: 'Plataforma', min: 9, max: 20 }, { key: 'statsSize', label: 'Horas y logros', min: 10, max: 24 }]
 const props = defineProps({ widget: Object, persist: Function })
 const data = computed(() => props.widget.data)
 const saving = ref(false), notice = ref('')
 const events=ref([]),eventsLoading=ref(false),eventsError=ref('')
+const imageSettings = computed(() => nowPlayingSettings(data.value))
+const eventImage = computed(() => {
+ const event = events.value.find(item => item.id === data.value.eventId)
+ const url = event?.backgroundUrl || event?.imageUrl || ''
+ return typeof url === 'string' && (/^https:\/\//i.test(url) || /^\/(?!\/)/.test(url)) ? url : ''
+})
 let eventsSequence=0
 async function loadEvents(){
  const id=++eventsSequence;eventsLoading.value=true;eventsError.value=''
@@ -53,8 +59,18 @@ async function persistControl(changes) {
     <label v-if="!data.source||data.source==='auto'"><input v-model="data.showLastGame" type="checkbox" /> Mostrar el último juego si no se detecta una partida</label>
     <p>En «Último juego» se usa la última actividad disponible, aunque no haya una partida activa.</p>
     </template>
-    <label>Estilo<select v-model="data.theme" class="app-input"><option value="galaxy">Galaxia</option><option value="minimal">Minimalista</option><option value="halloween">Halloween</option></select></label>
+    <label>Estilo<select v-model="data.theme" class="app-input"><option value="galaxy">Galaxia</option><option value="minimal">Minimalista</option><option value="halloween">Halloween</option><option value="zelda">Zelda · Trifuerza</option></select></label>
     <label>Tamaño de la portada<div class="font-adjust"><input :value="data.coverWidth ?? 88" type="range" min="60" max="120" aria-label="Ancho de la portada" @input="data.coverWidth = Number($event.target.value)"/><output>{{ data.coverWidth ?? 88 }} px</output></div></label>
+    <fieldset class="font-controls">
+      <legend>Encuadre de la imagen</legend>
+      <div v-if="data.source==='event' && eventImage" class="cover-framing-preview"><img :src="eventImage" alt="Vista previa del encuadre de la portada" :style="{objectFit:imageSettings.coverFit,objectPosition:imageSettings.coverPositionX+'% '+imageSettings.coverPositionY+'%',transform:'scale('+(imageSettings.coverZoom/100)+')',transformOrigin:imageSettings.coverPositionX+'% '+imageSettings.coverPositionY+'%'}" /></div>
+      <label>Ajuste<select :value="data.coverFit || 'cover'" class="app-input" @change="data.coverFit=$event.target.value"><option value="cover">Rellenar portada</option><option value="contain">Ver imagen completa</option></select></label>
+      <label>Posición horizontal<div class="font-adjust"><span>Izquierda</span><input :value="data.coverPositionX ?? 50" type="range" min="0" max="100" aria-label="Posición horizontal de la imagen" @input="data.coverPositionX=Number($event.target.value)"/><span>Derecha</span></div></label>
+      <label>Posición vertical<div class="font-adjust"><span>Arriba</span><input :value="data.coverPositionY ?? 50" type="range" min="0" max="100" aria-label="Posición vertical de la imagen" @input="data.coverPositionY=Number($event.target.value)"/><span>Abajo</span></div></label>
+      <label>Zoom<div class="font-adjust"><input :value="data.coverZoom ?? 100" type="range" min="100" max="250" aria-label="Zoom de la imagen" @input="data.coverZoom=Number($event.target.value)"/><output>{{ data.coverZoom ?? 100 }}%</output></div></label>
+      <button type="button" class="test-animation" @click="Object.assign(data,{coverPositionX:50,coverPositionY:50,coverZoom:100,coverFit:'cover'})">Restablecer encuadre</button>
+      <p>Elige qué parte de la imagen debe verse en la portada. Usa «Ver imagen completa» para mostrar todo el logo. Guarda el overlay para aplicar el encuadre en OBS.</p>
+    </fieldset>
     <label><input type="checkbox" :checked="data.particles !== false" @change="data.particles = $event.target.checked"/> Partículas suaves de fondo</label>
     <p>En tarjetas estrechas la portada se ajusta para dejar espacio al texto.</p>
     <label>Entrada y salida<select v-model="data.direction" class="app-input"><option value="left">Deslizar desde la izquierda</option><option value="right">Deslizar desde la derecha</option></select></label>
@@ -73,4 +89,5 @@ async function persistControl(changes) {
 .now-playing-editor{display:grid;gap:14px}.now-playing-editor label{display:grid;gap:7px;font-size:12px;font-weight:600;color:#334155}.now-playing-editor label:has(input[type=checkbox]){display:flex;align-items:start}.now-playing-editor p{font-size:11px;line-height:1.6;color:#64748b;margin:0}.test-animation{padding:10px;border-radius:9px;background:#7c3aed;color:white;font-size:12px;font-weight:600}.now-playing-editor input[type=checkbox]{margin-top:3px}
 .font-controls{border:1px solid #e2e8f0;border-radius:10px;padding:12px;display:grid;gap:12px}.font-controls legend{font-size:12px;font-weight:600;padding:0 5px}.font-adjust{display:flex;align-items:center;gap:7px;min-width:0}.font-adjust button{padding:5px;border-radius:6px;background:#ede9fe;color:#6d28d9;font-size:12px;flex:none}.font-adjust input{width:100%;min-width:20px;accent-color:#7c3aed}.font-adjust output{font-size:10px;min-width:30px;white-space:nowrap}
 .live-controls{display:flex;gap:8px;flex-wrap:wrap}.live-controls button{padding:10px;border-radius:9px;background:#7c3aed;color:white;font-size:12px;font-weight:600}.live-controls button.off{background:#15803d}.live-controls button:disabled{opacity:.5;cursor:wait}
+.cover-framing-preview{width:88px;height:132px;overflow:hidden;border:1px solid #c4b5fd;border-radius:12px;background:#080e1c;justify-self:center}.cover-framing-preview img{display:block;width:100%;height:100%}
 </style>

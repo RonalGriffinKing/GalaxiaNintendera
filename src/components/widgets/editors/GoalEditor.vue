@@ -6,7 +6,7 @@
     <div><label class="app-label">Estilo</label><div class="theme-grid"><button v-for="theme in themes" :key="theme.id" :class="['theme-option',theme.id,{active:data.theme===theme.id}]" @click="applyTheme(theme)"><span></span>{{ theme.label }}</button></div></div>
     <div class="color-grid"><label><span>Fondo</span><input v-model="data.bgColor" type="color" /></label><label><span>Texto</span><input v-model="data.textColor" type="color" /></label><label><span>Barra</span><input v-model="data.barColor" type="color" /></label></div>
     <div><label class="app-label">Alineacion del contenido</label><div class="align-options"><button :class="{active:data.contentAlign==='left'}" @click="data.contentAlign='left'"><i class="fas fa-align-left"></i> Izquierda</button><button :class="{active:data.contentAlign==='center'}" @click="data.contentAlign='center'"><i class="fas fa-align-center"></i> Centrado</button></div></div>
-    <div><label class="app-label">Simbolo de progreso</label><div class="symbol-grid"><button v-for="symbol in symbols" :key="symbol" :class="{active:data.symbol===symbol}" @click="data.symbol=symbol"><i :class="symbol"></i></button></div></div>
+    <div><label class="app-label">Simbolo de progreso</label><div class="symbol-grid"><button v-for="symbol in symbols" :key="symbol" :class="{active:data.symbol===symbol}" @click="data.symbol=symbol" :aria-label="symbol==='triforce'?'Trifuerza':symbol.replace('fas fa-','')"><TriforceSymbol v-if="symbol==='triforce'" /><i v-else :class="symbol"></i></button></div></div>
     <label class="check-row"><input v-model="data.showBackground" type="checkbox" /> Mostrar fondo y borde</label>
     <label class="check-row"><input v-model="data.sparkles" type="checkbox" /> Mostrar estrellas brillantes</label>
     <label class="check-row"><input v-model="data.animateBar" type="checkbox" /> Animar energia de la barra</label>
@@ -23,11 +23,12 @@
   </div>
 </template>
 <script setup>
+import TriforceSymbol from '../TriforceSymbol.vue'
 const props=defineProps({widget:Object});const data=props.widget.data||(props.widget.data={})
 data.title||='Meta de la comunidad';data.current=Number(data.current)||0;data.goal=Number(data.goal)||2000;data.barColor||='#d946ef';data.bgColor||='#17102f';data.textColor||='#ffffff';data.titleSize=Number(data.titleSize)||20;data.numberSize=Number(data.numberSize)||22;data.width=Number(data.width)||430;data.height=Number(data.height)||170;data.layout||='card';data.theme||='galaxy';data.sparkles=data.sparkles!==false;data.showBackground=data.showBackground!==false;data.contentAlign||='left';data.animateBar=data.animateBar!==false;data.barHeight=Number(data.barHeight)||18;data.titleGap=Number(data.titleGap)||28;data.symbol||='fas fa-star';data.rotateSymbol=data.rotateSymbol!==false;data.compactThousands=Boolean(data.compactThousands);data.titlePillWidth=Number(data.titlePillWidth)||240
-const themes=[{id:'halloween',label:'Halloween',bg:'#1c102b',text:'#fff1dc',accent:'#ff973e'},{id:'galaxy',label:'Galaxia',bg:'#17102f',text:'#ffffff',accent:'#d946ef'},{id:'nebula',label:'Nebulosa',bg:'#071a3d',text:'#ecfeff',accent:'#22d3ee'},{id:'starlight',label:'Luz estelar',bg:'#fff7ed',text:'#3b174f',accent:'#ff2d95'},{id:'petit-planet',label:'Petit Planet',bg:'#073467',text:'#fff8d6',accent:'#69e6f3'}]
-const symbols=['fas fa-star','fas fa-moon','fas fa-heart','fas fa-bolt','fas fa-crown','fas fa-gamepad']
-const applyTheme=theme=>{data.theme=theme.id;data.bgColor=theme.bg;data.textColor=theme.text;data.barColor=theme.accent;if(theme.id==='halloween'){data.symbol='fas fa-moon'};if(theme.id==='petit-planet'){data.symbol='fas fa-moon';data.sparkles=true;data.animateBar=true}}
+const themes=[{id:'zelda',label:'Zelda \u00b7 Trifuerza',bg:'#0b241b',text:'#fff3ce',accent:'#e8bd55'},{id:'halloween',label:'Halloween',bg:'#1c102b',text:'#fff1dc',accent:'#ff973e'},{id:'galaxy',label:'Galaxia',bg:'#17102f',text:'#ffffff',accent:'#d946ef'},{id:'nebula',label:'Nebulosa',bg:'#071a3d',text:'#ecfeff',accent:'#22d3ee'},{id:'starlight',label:'Luz estelar',bg:'#fff7ed',text:'#3b174f',accent:'#ff2d95'},{id:'petit-planet',label:'Petit Planet',bg:'#073467',text:'#fff8d6',accent:'#69e6f3'}]
+const symbols=['triforce','fas fa-star','fas fa-moon','fas fa-heart','fas fa-bolt','fas fa-crown','fas fa-gamepad']
+const applyTheme=theme=>{data.theme=theme.id;data.bgColor=theme.bg;data.textColor=theme.text;data.barColor=theme.accent;if(data.symbol==='triforce')data.symbol='fas fa-star';if(theme.id==='zelda'){data.symbol='triforce';data.sparkles=true;data.animateBar=true;data.rotateSymbol=false}if(theme.id==='halloween'){data.symbol='fas fa-moon'};if(theme.id==='petit-planet'){data.symbol='fas fa-moon';data.sparkles=true;data.animateBar=true}}
 const setLayout=layout=>{data.layout=layout;if(layout==='starbar'&&data.height>180)data.height=150}
 </script>
 <style scoped>
@@ -37,4 +38,5 @@ const setLayout=layout=>{data.layout=layout;if(layout==='starbar'&&data.height>1
 .theme-option.petit-planet span{background:linear-gradient(135deg,#073467 8%,#18b8d4 58%,#ffe987)}
 
 .theme-option.halloween span{background:linear-gradient(135deg,#1c102b,#8755cc 50%,#ff973e)}
+.theme-option.zelda span{background:linear-gradient(135deg,#0b241b 10%,#6e571d 55%,#ffe5a0)}
 </style>

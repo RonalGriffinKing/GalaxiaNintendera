@@ -1,12 +1,12 @@
 <template>
   <div v-if="data.layout==='starbar'" class="star-goal" :class="[`theme-${data.theme||'galaxy'}`,{compact:isCompact,'no-background':data.showBackground===false,'center-content':data.contentAlign==='center','energy-active':data.animateBar!==false}]" :style="rootStyle">
     <HalloweenDecor v-if="data.theme === 'halloween'" />
-    <div class="star-title" :style="{fontSize:titleFont+'px',width:Math.min(Number(data.titlePillWidth)||240,(Number(data.width)||430)-48)+'px'}"><i :class="data.symbol || 'fas fa-star'"></i><span>{{ data.title }}</span></div>
+    <div class="star-title" :style="{fontSize:titleFont+'px',width:Math.min(Number(data.titlePillWidth)||240,(Number(data.width)||430)-48)+'px'}"><TriforceSymbol v-if="data.symbol==='triforce'" /><i v-else :class="data.symbol || 'fas fa-star'"></i><span>{{ data.title }}</span></div>
     <span v-if="data.sparkles" class="twinkle one">+</span><span v-if="data.sparkles" class="twinkle two">+</span><span v-if="data.sparkles" class="twinkle three">+</span>
     <div class="star-track" :style="{marginTop:(Number(data.titleGap)||28)+'px'}">
       <template v-if="data.sparkles"><span v-for="spark in orbitSparkles" :key="spark.id" class="orbit-spark" :style="spark.style"><i class="fas fa-star"></i></span></template>
       <div class="star-fill" :style="{width:percentage+'%'}"><span class="energy-particles"></span></div>
-      <div class="star-knob" :class="{'rotate-symbol':data.rotateSymbol!==false&&isStarSymbol}" :style="{left:percentage+'%'}"><i :class="data.symbol || 'fas fa-star'"></i></div>
+      <div class="star-knob" :class="{'rotate-symbol':data.rotateSymbol!==false&&isStarSymbol}" :style="{left:percentage+'%'}"><TriforceSymbol v-if="data.symbol==='triforce'" /><i v-else :class="data.symbol || 'fas fa-star'"></i></div>
     </div>
     <div class="star-stats" :style="{fontSize:numberFont+'px'}"><strong>{{ formatValue(data.current) }}</strong><span>{{ percentage }}%</span><strong>{{ formatValue(data.goal) }}</strong></div>
   </div>
@@ -14,13 +14,14 @@
   <div v-else class="goal-card" :class="[`theme-${data.theme||'galaxy'}`,{compact:isCompact,micro:isMicro,'no-background':data.showBackground===false,'center-content':data.contentAlign==='center','energy-active':data.animateBar!==false}]" :style="rootStyle">
     <span v-if="data.sparkles" class="twinkle one">+</span><span v-if="data.sparkles" class="twinkle two">+</span>
     <HalloweenDecor v-if="data.theme === 'halloween'" />
-    <div class="goal-head"><div><span class="eyebrow">{{ data.theme === 'halloween' ? 'META ENCANTADA' : 'OBJETIVO GALACTICO' }}</span><p :style="{fontSize:titleFont+'px'}">{{ data.title }}</p></div><i :class="[data.symbol || 'fas fa-star', {'rotate-card-symbol':data.rotateSymbol!==false&&isStarSymbol}]"></i></div>
+    <div class="goal-head"><div><span class="eyebrow">{{ data.theme === 'zelda' ? 'LA SENDA DEL HEROE' : data.theme === 'halloween' ? 'META ENCANTADA' : 'OBJETIVO GALACTICO' }}</span><p :style="{fontSize:titleFont+'px'}">{{ data.title }}</p></div><TriforceSymbol v-if="data.symbol==='triforce'" class="goal-emblem" /><i v-else :class="[data.symbol || 'fas fa-star', {'rotate-card-symbol':data.rotateSymbol!==false&&isStarSymbol}]"></i></div>
     <div class="numbers" :style="{fontSize:numberFont+'px'}"><strong>{{ formatValue(data.current) }}</strong><span>{{ percentage }}%</span><strong>{{ formatValue(data.goal) }}</strong></div>
     <div class="track"><div class="bar" :style="{width:percentage+'%'}"><span></span></div></div>
     <p v-if="!isCompact" class="remaining">{{ remainingText }}</p>
   </div>
 </template>
 <script setup>
+import TriforceSymbol from '../TriforceSymbol.vue'
 import HalloweenDecor from '../HalloweenDecor.vue'
 import {computed} from 'vue'
 const props=defineProps({widget:Object});const data=computed(()=>props.widget.data||{})
@@ -43,4 +44,23 @@ const orbitSparkles=[{id:1,style:{left:'8%',top:'-19px',animationDelay:'0s'}},{i
 .theme-petit-planet{border-color:rgba(105,230,243,.7);background-color:#073467;background-image:radial-gradient(circle at 72% 86%,rgba(105,230,243,.36),transparent 32%),linear-gradient(155deg,#062951,#084d83 58%,#087b9d);box-shadow:0 18px 44px rgba(1,20,54,.46),inset 0 1px rgba(255,248,214,.2),0 0 24px rgba(105,230,243,.14)}.theme-petit-planet::after{content:"";position:absolute;z-index:1;inset:0;pointer-events:none;background-image:radial-gradient(circle at 10% 24%,#fff7bd 0 2px,transparent 3px),radial-gradient(circle at 18% 76%,#79eff5 0 2px,transparent 3px),radial-gradient(circle at 42% 18%,#ffd98a 0 1.5px,transparent 3px),radial-gradient(circle at 67% 72%,#fff6bd 0 2px,transparent 3px),radial-gradient(circle at 90% 62%,#83ecf4 0 1.5px,transparent 3px)}.theme-petit-planet .star-title,.theme-petit-planet .goal-head,.theme-petit-planet .numbers,.theme-petit-planet .track,.theme-petit-planet .star-track,.theme-petit-planet .star-stats,.theme-petit-planet .remaining{position:relative;z-index:3}.theme-petit-planet .star-title{background:rgba(4,34,73,.86);border-color:#ffe58b;color:#fff8d6}.theme-petit-planet .star-title i{color:#ffe58b;filter:drop-shadow(0 0 7px #ffe58b)}.theme-petit-planet .star-track,.theme-petit-planet .track{background:rgba(2,24,58,.65);box-shadow:inset 0 2px 5px rgba(0,0,0,.3),0 0 12px rgba(105,230,243,.2)}.theme-petit-planet .star-fill,.theme-petit-planet .bar{background:linear-gradient(90deg,#36c8ed,#75f0e7 48%,#ffe78d);box-shadow:0 0 18px #69e6f3}.theme-petit-planet .star-knob{color:#8a5b13;background:radial-gradient(circle at 35% 25%,#fff,#fff2aa 35%,#f5b942);border-color:#fff8d6;box-shadow:0 0 18px #ffe58b}.theme-petit-planet .eyebrow,.theme-petit-planet .remaining{color:#a7f3f5}.theme-petit-planet.no-background::after{opacity:.72}
 
 .theme-halloween{background-color:var(--surface);background-image:radial-gradient(ellipse at 85% 0,#7942a144,transparent 55%);border-color:var(--accent)}.theme-halloween .star-title{background:var(--surface);border-color:var(--accent)}.theme-halloween .star-fill,.theme-halloween .bar{background:linear-gradient(90deg,#8755cc,var(--accent));box-shadow:0 0 18px var(--accent)}.theme-halloween .star-knob{background:radial-gradient(circle at 35% 25%,#fff1cf,#ffbe67 40%,#ed762f);color:#53285e;border-color:#ffe6b5}.theme-halloween .eyebrow,.theme-halloween .remaining{color:#e3c4f7}.theme-halloween .goal-head,.theme-halloween .numbers,.theme-halloween .track,.theme-halloween .remaining,.theme-halloween .star-stats{position:relative;z-index:1}
+.theme-zelda{background-color:var(--surface);background-image:radial-gradient(ellipse at 50% 100%,#ad86242e,transparent 65%),linear-gradient(145deg,#04161044,#163d2944);border-color:#cfa64799;box-shadow:0 12px 32px #020d0a55,inset 0 1px #ffedac33}
+.theme-zelda .star-title{background:linear-gradient(110deg,#071e17f5,#203727f0);border-color:#e8bd55;color:var(--ink);box-shadow:0 0 14px #e8bd5526,inset 0 1px #ffedac22;letter-spacing:.3px}
+.theme-zelda .triforce-symbol{color:#f5ce69;filter:drop-shadow(0 0 5px #e8bd5577)}
+.theme-zelda .star-title .triforce-symbol{font-size:17px}
+.theme-zelda .goal-emblem{font-size:28px}
+.theme-zelda.center-content .goal-emblem{position:absolute;right:22px}
+.theme-zelda.micro .goal-emblem{display:none}
+.theme-zelda .star-track,.theme-zelda .track{background:#041810db;border:1px solid #b18b3d77;box-shadow:inset 0 2px 6px #0008,0 0 9px #e8bd5522}
+.theme-zelda .star-fill,.theme-zelda .bar{background:linear-gradient(90deg,#8b5f1b,var(--accent) 40%,#fff0af 68%,#dfac3d);box-shadow:0 0 17px #efc55b88}
+.theme-zelda .star-knob{background:radial-gradient(circle at 35% 25%,#304c32,#0d271b 65%,#06170f);border-color:#f5ce69;box-shadow:0 0 17px #efc55b88;outline:1px solid #a2782d;outline-offset:3px}
+.theme-zelda .star-knob .triforce-symbol{font-size:25px;transform:translateY(-2px)}
+.theme-zelda.compact .star-knob .triforce-symbol{font-size:20px}
+.theme-zelda .star-stats,.theme-zelda .numbers{color:var(--ink);text-shadow:0 1px 3px #000b}
+.theme-zelda .eyebrow,.theme-zelda .remaining{color:#d1ba78}
+.theme-zelda .twinkle,.theme-zelda .orbit-spark{color:#fff0af;text-shadow:0 0 5px #ffefb2,0 0 12px #e8bd55}
+.theme-zelda .energy-particles{background-image:radial-gradient(circle,#fff5c8 0 1px,transparent 2px),radial-gradient(circle,#ffe094 0 1px,transparent 1.7px),linear-gradient(105deg,transparent 20%,#fff0af77 46%,transparent 72%)}
+.theme-zelda.energy-active .star-knob{animation:zelda-aura 3s ease-in-out infinite}
+@keyframes zelda-aura{0%,100%{box-shadow:0 0 12px #efc55b66}50%{box-shadow:0 0 24px #efc55baa}}
+@media(prefers-reduced-motion:reduce){.theme-zelda.energy-active .star-knob,.theme-zelda .twinkle{animation:none}}
 </style>

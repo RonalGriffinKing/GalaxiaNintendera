@@ -29,7 +29,7 @@
     <div>
       <label class="app-label">Estilo</label>
       <div class="theme-grid">
-        <button v-for="theme in themes" :key="theme.id" :class="['theme-option', theme.id, { active: data.theme === theme.id }]" @click="data.theme = theme.id"><span></span>{{ theme.label }}</button>
+        <button v-for="theme in themes" :key="theme.id" :class="['theme-option', theme.id, { active: data.theme === theme.id }]" @click="applyTheme(theme.id)"><span></span>{{ theme.label }}</button>
       </div>
     </div>
 
@@ -55,7 +55,16 @@ const props = defineProps({ widget: Object })
 const data = props.widget.data
 const minutes = ref(25)
 const seconds = ref(0)
-const themes = [{ id: 'halloween', label: 'Halloween' }, { id: 'galaxy', label: 'Galaxia' }, { id: 'nebula', label: 'Nebulosa' }, { id: 'solar', label: 'Solar' }]
+const themes = [{ id: 'zelda', label: 'Zelda · Trifuerza' }, { id: 'halloween', label: 'Halloween' }, { id: 'galaxy', label: 'Galaxia' }, { id: 'nebula', label: 'Nebulosa' }, { id: 'solar', label: 'Solar' }]
+const zeldaColors = { titleColor: '#fff3ce', numberColor: '#f5ce69', numberGradientStart: '#fff3ce', numberGradientEnd: '#e8bd55' }
+const defaultColors = { titleColor: '#ffffff', numberColor: '#ffffff', numberGradientStart: '#ffffff', numberGradientEnd: '#f0abfc' }
+const applyTheme = theme => {
+  if (theme === 'zelda') Object.assign(data, zeldaColors)
+  else if (data.theme === 'zelda') {
+    for (const key of Object.keys(zeldaColors)) if (data[key] === zeldaColors[key]) data[key] = defaultColors[key]
+  }
+  data.theme = theme
+}
 const animations = [{ id: 'flip', label: 'Giro', icon: 'fas fa-arrows-rotate' }, { id: 'pulse', label: 'Pulso', icon: 'fas fa-wave-square' }, { id: 'slide', label: 'Deslizar', icon: 'fas fa-arrow-down' }, { id: 'none', label: 'Ninguna', icon: 'fas fa-ban' }]
 
 const ensureDefaults = () => {
@@ -91,4 +100,5 @@ onMounted(ensureDefaults)
 .animation-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px}.animation-grid button{display:flex;align-items:center;justify-content:center;gap:6px;height:38px;border:1px solid #dbe1ea;border-radius:8px;background:white;color:#64748b;font-size:10px;font-weight:800}.animation-grid button.active{border-color:#9333ea;color:#7e22ce;box-shadow:0 0 0 2px rgba(147,51,234,.12)}.color-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.color-grid label{display:flex;flex-direction:column;gap:5px;font-size:9px;font-weight:900;color:#64748b}.color-grid input{width:100%;height:34px;border:0}
 
 .theme-option.halloween span{background:linear-gradient(135deg,#1c102b,#8755cc 50%,#ff973e)}
+.theme-option.zelda span{background:linear-gradient(135deg,#0b241b 10%,#6e571d 55%,#ffe5a0)}
 </style>

@@ -1,6 +1,7 @@
 <template>
   <div class="timer-card" :class="[`theme-${data.theme}`,{'no-background':data.showBackground===false,'timer-finished':isFinished}]" :style="cardStyle">
     <HalloweenDecor v-if="data.theme === 'halloween'" />
+    <span v-if="data.theme === 'zelda'" class="timer-relic" aria-hidden="true"><TriforceSymbol /></span>
     <span v-for="star in visibleStars" :key="star.id" class="timer-star" :style="star.style"><i class="fas fa-star"></i></span>
     <div v-if="data.showOrbit!==false" class="timer-orbit" aria-hidden="true"></div>
     <div v-if="isFinished" class="finish-stars" aria-hidden="true"><i v-for="star in finishStars" :key="star.id" class="fas fa-star" :style="star.style"></i></div>
@@ -16,6 +17,7 @@
 
 <script setup>
 import HalloweenDecor from '../HalloweenDecor.vue'
+import TriforceSymbol from '../TriforceSymbol.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = defineProps({ widget: { type: Object, required: true } })
@@ -152,4 +154,13 @@ onUnmounted(() => window.clearInterval(interval))
 @media (prefers-reduced-motion: reduce) { .timer-star, .timer-dots i,.timer-value.gradient-numbers,.timer-value.gradient-numbers::after,.finish-stars i { animation: none; }.timer-value{transition:none!important}.timer-card.timer-finished{animation:none;opacity:0;visibility:hidden} }
 
 .theme-halloween{background:radial-gradient(ellipse at 85% 0,#7942a166,transparent 55%),linear-gradient(135deg,#1c102b,#321744);border:2px solid #ff973e99;box-shadow:0 0 24px #ff973e22,inset 0 0 32px #8755cc22}.theme-halloween .timer-star{color:#ffc775;text-shadow:0 0 8px #ff973e}.theme-halloween .timer-orbit{border-color:#ff973e44;box-shadow:0 0 0 17px #ff973e08,0 0 0 42px #8755cc12}.theme-halloween .timer-dots i{background:#ffb464}
+.theme-zelda{background:radial-gradient(ellipse at 50% 100%,#b58b2433,transparent 65%),linear-gradient(145deg,#061a12,#173b27);border:2px solid #d8b65c99;box-shadow:0 0 22px #e8bd5522,inset 0 1px #ffe7a333}
+.theme-zelda .timer-label{letter-spacing:1.5px}
+.theme-zelda .timer-star{color:#fff0af;text-shadow:0 0 7px #e8bd55,0 0 12px #e8bd5566}
+.theme-zelda .timer-orbit{border-color:#e8bd5555;box-shadow:0 0 0 17px #e8bd5508,0 0 0 42px #e8bd5505}
+.theme-zelda .timer-dots i{background:#f5ce69;box-shadow:0 0 6px #e8bd5566;clip-path:polygon(50% 0,100% 100%,0 100%);border-radius:0;width:8px;height:7px}
+.theme-zelda .timer-date{color:#e1cd95}
+.theme-zelda .finish-stars i{color:#f5ce69;text-shadow:0 0 6px #fff0af,0 0 15px #e8bd55}
+.timer-relic{position:absolute;top:16px;right:20px;z-index:2;display:grid;place-items:center;width:30px;height:30px;color:#f5ce69;font-size:24px;filter:drop-shadow(0 0 7px #e8bd5566);pointer-events:none}
+.timer-relic .triforce-symbol{transform:translateY(-2px)}
 </style>

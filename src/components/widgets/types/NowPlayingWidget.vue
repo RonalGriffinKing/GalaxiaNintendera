@@ -1,5 +1,6 @@
 <script setup>
 import HalloweenDecor from '../HalloweenDecor.vue'
+import TriforceSymbol from '../TriforceSymbol.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { nowPlayingCard, nowPlayingSettings, eventNowPlayingCard, eventStartInfo } from '@/services/nowPlaying'
 import { fetchOverlayEvent } from '@/services/overlayEventClient'
@@ -37,7 +38,7 @@ watch(() => [props.ownerId, settings.value.source, settings.value.eventId, setti
 }, { immediate: true })
 watch(() => [card.value?.game.id, card.value?.game.title,card.value?.game.imageUrl, card.value?.platform, card.value?.playing, settings.value.showLastGame, settings.value.visibleSeconds, settings.value.repeatSeconds, props.widget.data?.replayNonce], reveal)
 onUnmounted(() => { sequence++; clearTimeout(polling); clearAnimation() })
-const style = computed(() => ({ width: settings.value.width + 'px', height: settings.value.height + 'px', '--cover-width': settings.value.coverWidth+'px', '--badge-space': Math.max(0,settings.value.labelSize-12)*1.2+'px', '--label-size': settings.value.labelSize+'px', '--title-size': settings.value.titleSize+'px', '--platform-size': settings.value.platformSize+'px', '--stats-size': settings.value.statsSize+'px', '--slide': settings.value.direction === 'right' ? '60px' : '-60px' }))
+const style = computed(() => ({ width: settings.value.width + 'px', height: settings.value.height + 'px', '--cover-position': settings.value.coverPositionX+'% '+settings.value.coverPositionY+'%', '--cover-zoom': settings.value.coverZoom/100, '--cover-fit': settings.value.coverFit, '--cover-width': settings.value.coverWidth+'px', '--badge-space': Math.max(0,settings.value.labelSize-12)*1.2+'px', '--label-size': settings.value.labelSize+'px', '--title-size': settings.value.titleSize+'px', '--platform-size': settings.value.platformSize+'px', '--stats-size': settings.value.statsSize+'px', '--slide': settings.value.direction === 'right' ? '60px' : '-60px' }))
 </script>
 <template>
   <div class="now-playing-shell" :style="style">
@@ -46,10 +47,11 @@ const style = computed(() => ({ width: settings.value.width + 'px', height: sett
         <HalloweenDecor v-if="settings.theme === 'halloween'" />
         <img v-if="card.game.imageUrl" class="now-playing-backdrop" :src="card.game.imageUrl" alt="" />
         <div v-if="settings.particles" class="now-playing-particles" aria-hidden="true"><span v-for="(particle,index) in particles" :key="index" :style="particle"></span></div>
-        <span class="now-playing-label"><i class="fas fa-gamepad" aria-hidden="true"></i> {{ settings.label }}</span>
-        <img v-if="card.game.imageUrl" class="now-playing-cover" :src="card.game.imageUrl" alt="" /><div v-else class="now-playing-cover cover-empty"><i class="fas fa-gamepad" aria-hidden="true"></i></div>
+        <span class="now-playing-label"><TriforceSymbol v-if="settings.theme === 'zelda'" /><i v-else class="fas fa-gamepad" aria-hidden="true"></i> {{ settings.label }}</span>
+        <div v-if="card.game.imageUrl" class="now-playing-cover"><img class="now-playing-cover-image" :src="card.game.imageUrl" alt="" /></div><div v-else class="now-playing-cover cover-empty"><i class="fas fa-gamepad" aria-hidden="true"></i></div>
         <div class="now-playing-copy"><h3>{{ card.game.title }}</h3><p v-if="settings.source==='event'&&settings.eventShowDescription&&card.eventDescription" class="now-playing-event-description">{{card.eventDescription}}</p><time v-if="settings.source==='event'&&eventStart" class="now-playing-event-start" :datetime="eventStart.iso"><i class="far fa-clock" aria-hidden="true"></i><span>Inicio: {{eventStart.label}}</span></time><span v-if="card.platformLabel" class="now-playing-platform">{{ card.platformLabel }}</span><div v-if="card.stats.length" class="now-playing-stats"><span v-for="stat in card.stats" :key="stat.text"><i :class="stat.icon" aria-hidden="true"></i> {{ stat.text }}</span></div></div>
         <span v-if="settings.theme === 'galaxy'" class="now-playing-star" aria-hidden="true">✦</span>
+        <span v-if="settings.theme === 'zelda'" class="now-playing-relic" aria-hidden="true"><TriforceSymbol /></span>
       </article>
     </Transition>
     <div v-if="preview && !visible" class="now-playing-placeholder"><i class="fas fa-gamepad" aria-hidden="true"></i><strong>{{ !settings.enabled ? 'Widget apagado' : loading ? 'Consultando tus plataformas…' : card ? 'En pausa entre apariciones' : 'Sin juego activo disponible' }}</strong><small>{{ !settings.enabled ? 'Enciende el widget desde el editor para publicarlo en OBS.' : card ? 'Usa «Probar animación» para verlo de nuevo.' : 'Conecta tus sistemas en Editar perfil o permite mostrar el último juego.' }}</small></div>
@@ -78,4 +80,16 @@ const style = computed(() => ({ width: settings.value.width + 'px', height: sett
 
 .halloween{border-color:#ff973eaa;background:#1c102bf5;box-shadow:0 0 20px #ff973e22,inset 0 0 24px #8755cc33}.halloween:before{background:linear-gradient(115deg,#1c102bf0,#321744db)}.halloween .now-playing-label{background:linear-gradient(100deg,#a44816,#713394);box-shadow:0 3px 12px #ff973e33}.halloween .now-playing-cover{border-color:#ffb46488}.halloween .now-playing-stats{color:#fff1dc}.halloween .now-playing-stats i{color:#ffb464}.halloween .now-playing-particles span{background:#ffc775;box-shadow:0 0 6px #ff973e88}
 .now-playing-event-description{margin:0;color:#ede9f0;font-size:var(--stats-size);font-weight:400;line-height:1.4;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}.now-playing-event-start{display:flex;align-items:baseline;gap:6px;color:#ffe3ac;font-size:var(--stats-size);line-height:1.4;font-weight:600}.now-playing-event-start i{flex:none}.now-playing-event-start span{overflow-wrap:anywhere}
+.now-playing-cover{overflow:hidden;background:#080e1c}.now-playing-cover-image{display:block;width:100%;height:100%;object-fit:var(--cover-fit,cover);object-position:var(--cover-position,50% 50%);transform:scale(var(--cover-zoom,1));transform-origin:var(--cover-position,50% 50%)}
+.zelda{color:#fff3ce;border-color:#d8b65caa;background:linear-gradient(115deg,#071d15fa,#122c20f5);box-shadow:0 0 18px #e8bd5526,inset 0 0 24px #d4a84d10}
+.zelda:before{background:linear-gradient(110deg,#081e16ed,#173624d9)}
+.zelda .now-playing-label{color:#fff3ce;border:1px solid #e8bd55aa;background:linear-gradient(110deg,#132f20,#29452a);box-shadow:0 3px 14px #0005,inset 0 1px #ffe7a333}
+.zelda .now-playing-label .triforce-symbol{color:#f5ce69;font-size:15px;transform:translateY(-1px);filter:drop-shadow(0 0 4px #efc55b66)}
+.zelda .now-playing-cover{border-color:#e8bd5588;box-shadow:0 0 12px #e8bd551a;background:#06170f}
+.zelda .now-playing-copy h3{color:#fff3ce}
+.zelda .now-playing-event-description,.zelda .now-playing-stats{color:#e4e6d2}
+.zelda .now-playing-event-start,.zelda .now-playing-stats i{color:#f5ce69}
+.zelda .now-playing-particles span{background:#ffe7a3;box-shadow:0 0 7px #e8bd5588}
+.now-playing-relic{position:absolute;z-index:2;right:16px;top:-15px;display:grid;place-items:center;width:32px;height:32px;font-size:25px;color:#f5ce69;filter:drop-shadow(0 0 7px #efc55b88)}
+.now-playing-relic .triforce-symbol{transform:translateY(-2px)}
 </style>
