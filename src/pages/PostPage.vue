@@ -1309,6 +1309,8 @@ onUnmounted(() => {
 <style scoped>
 /* The section rail must use the reading column, never its intrinsic tab width. */
 .post-article,.article-reading-panel{min-width:0;grid-template-columns:minmax(0,1fr)}
-.article-section-rail{justify-self:stretch;width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+.article-section-rail{justify-self:start;width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+/* Match the editorial reading measure, rather than the wider grid track. */
+.editorial-page .article-section-rail{max-width:860px}
 .article-section-rail .article-section-nav{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
 </style>
