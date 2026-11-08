@@ -1,4 +1,6 @@
 <script setup>
+import { publicUser, publicPostPage } from '@/services/publicContentClient'
+
 import {publicReadingHeaderHidden,requestPublicSearch} from '@/composables/usePublicChromeLoading'
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
@@ -9,7 +11,7 @@ import FeaturedSheen from '@/components/shared/FeaturedSheen.vue'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter } from "firebase/firestore"
+import { collection, getDocs } from "firebase/firestore"
 import { auth, db } from "@/firebase"
 import { resolveAssetUrl } from '@/constants/assets'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
@@ -204,13 +206,8 @@ const loadMorePosts = async ({ requestId = loadRequestId, fillPage = false, repl
 
     while (hasMorePosts.value && requestId === loadRequestId) {
       const direction = sortMode.value === 'oldest' ? 'asc' : 'desc'
-      const constraints = [
-        orderBy('createdAt', direction),
-        limit(FETCH_BATCH_SIZE)
-      ]
-      if (lastPostDoc.value) constraints.splice(1, 0, startAfter(lastPostDoc.value))
 
-      const snap = await getDocs(query(collection(db, 'posts'), ...constraints))
+      const snap = await publicPostPage({direction,limit:FETCH_BATCH_SIZE,cursor:lastPostDoc.value})
       if (requestId !== loadRequestId) return
 
       lastPostDoc.value = snap.docs.at(-1) || lastPostDoc.value
@@ -345,7 +342,7 @@ const loadAuthorProfiles = async (sourcePosts = posts.value, requestId = loadReq
     .filter(id => !authorProfiles.value[id])
   if (!ids.length) return
 
-  const snaps = await Promise.all(ids.map(id => getDoc(doc(db, 'users', id)).catch(() => null)))
+  const snaps = await Promise.all(ids.map(id => publicUser(id).catch(() => null)))
   if (requestId !== loadRequestId) return
   authorProfiles.value = {
     ...authorProfiles.value,

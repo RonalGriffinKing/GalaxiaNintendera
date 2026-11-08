@@ -1,5 +1,10 @@
 # Auditoría de Firestore — GALAXIA NINTENDERA
 
+Actualizaci?n del 8/11/2026: la referencia vigente de seguridad y publicaci?n es
+[firebase-permanente.md](firebase-permanente.md), con reglas completas basadas en UID.
+La regla real confirmada vence el 15/11/2026; las propuestas y fragmentos
+anteriores no deben desplegarse como conjunto final.
+
 Fecha: 11 de octubre de 2026. Etapa: análisis y preparación, sin despliegue.
 
 ## Resultado y límites

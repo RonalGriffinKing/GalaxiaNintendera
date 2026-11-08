@@ -1,3 +1,4 @@
+// SUPERSEDED: use firestore.permanent.rules. Archived proposal, never deploy.
 // PROPOSAL FOR REVIEW ONLY. Do not deploy before completing docs/firestore-security-audit.md.
 // Several existing client flows intentionally require migration; never combine with the open rule.
 rules_version = '2';

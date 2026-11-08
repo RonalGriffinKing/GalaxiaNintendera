@@ -1,3 +1,5 @@
+import { getFirestore } from 'firebase-admin/firestore'
+import { adminApp } from './lib/firebase-admin.js'
 import {cleanGamertag,validXuid,findExactXboxPlayer,xboxProfilePerson,normalizeXboxIdentity} from '../../src/services/xboxIdentity.js'
 const API='https://api.xbl.io/v2'
 const cache=new Map(),pending=new Map(),searches=new Map()
@@ -70,9 +72,9 @@ export async function handler(event){
    if(!user?.localId||user.disabled||user.localId!==params.uid)throw new ApiError(403,'Solo puedes revisar tu propia vinculacion.')
   }
   const result=await (async()=>{
-   const response=await fetch('https://firestore.googleapis.com/v1/projects/'+encodeURIComponent(PROJECT)+'/databases/(default)/documents/users/'+encodeURIComponent(params.uid)+'?key='+FIREBASE_KEY,{headers:token?{Authorization:'Bearer '+token}:{},redirect:'error',signal:AbortSignal.timeout(8000)})
-   if(!response.ok)throw new ApiError(response.status===403?403:404,'No se puede acceder a la vinculación pública de Xbox.')
-   const document=await readJson(response),xuid=document.fields?.socialLinks?.mapValue?.fields?.xbox?.mapValue?.fields?.xuid?.stringValue
+   const document=await getFirestore(adminApp()).doc('users/'+params.uid).get()
+   if(!document.exists || document.data().isBlocked)throw new ApiError(404,'No se puede acceder a esta vinculacion publica.')
+   const xuid=document.data().socialLinks?.xbox?.xuid
    if(!validXuid(xuid))throw new ApiError(404,'Este perfil no tiene Xbox vinculado.')
    if(params.diagnostic){
     const payload=await cached('titles:'+xuid,()=>openxbl('/titles/'+xuid))

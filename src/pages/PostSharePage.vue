@@ -1,4 +1,6 @@
 <script setup>
+import { publicUser } from '@/services/publicContentClient'
+
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, nextTick, onBeforeUpdate, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -915,7 +917,7 @@ async function loadPost() {
 async function loadAuthorProfile() {
   if (!post.value?.authorId) return
 
-  const snap = await getDoc(doc(db, 'users', post.value.authorId)).catch(() => null)
+  const snap = await publicUser(post.value.authorId).catch(() => null)
   if (snap?.exists()) {
     authorProfile.value = { id: snap.id, ...snap.data() }
   }

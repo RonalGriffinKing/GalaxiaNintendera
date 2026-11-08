@@ -1,4 +1,5 @@
 <script setup>
+import { changeCommunityMembership } from '@/services/communityMembership'
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -257,29 +258,7 @@ const joinCommunity = async (community) => {
   isPublishing.value = true
   try {
     const now = Date.now()
-    await Promise.all([
-      setDoc(doc(db, 'users', activeUser.uid, 'communities', community.id), {
-        communityId: community.id,
-        name: community.name || '',
-        description: community.description || '',
-        bannerUrl: community.bannerUrl || '',
-        iconUrl: community.iconUrl || '',
-        role: 'Miembro',
-        joinedAt: now,
-        updatedAt: now
-      }, { merge: true }),
-      setDoc(doc(db, 'communities', community.id, 'members', activeUser.uid), {
-        uid: activeUser.uid,
-        name: displayName.value,
-        imageUrl: currentProfileIcon.value || '',
-        joinedAt: now,
-        updatedAt: now
-      }, { merge: true }),
-      updateDoc(doc(db, 'communities', community.id), {
-        membersCount: increment(1),
-        updatedAt: now
-      }).catch(() => {})
-    ])
+    await changeCommunityMembership(community,true,{name:displayName.value,imageUrl:currentProfileIcon.value})
     joinedCommunityIds.value = [...new Set([...joinedCommunityIds.value, community.id])]
     selectCommunity(community)
   } finally {

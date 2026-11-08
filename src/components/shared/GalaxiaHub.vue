@@ -1,4 +1,8 @@
 <script setup>
+import { sendDirectMessage } from '@/services/directMessage'
+import { authorizedRole } from '@/services/authorizedIdentity'
+
+import { subscribePublicCollection } from '@/services/publicContentClient'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { onAuthStateChanged } from 'firebase/auth'
@@ -408,27 +412,7 @@ const sendHubMessage = async () => {
   chatGiphyOpen.value = false
   resizeChatInput()
   const now = serverTimestamp()
-  const messageRef = await addDoc(collection(db, 'directChats', chatId, 'messages'), {
-    body,
-    gif: gifPayload(gif),
-    authorId: user.uid,
-    authorName: currentProfile.value.name || user.displayName || user.email || 'Usuario',
-    createdAt: now
-  })
-  await setDoc(doc(db, 'directChats', chatId), {
-    participants: [user.uid, other.id],
-    lastMessage: body || 'GIF',
-    lastMessageId: messageRef.id,
-    lastMessageAuthorId: user.uid,
-    updatedAt: now,
-    deletedFor: {
-      [user.uid]: false,
-      [other.id]: false
-    },
-    lastReadBy: {
-      [user.uid]: messageRef.id
-    }
-  }, { merge: true })
+  await sendDirectMessage(other.id,{body,gif:gifPayload(gif),name:currentProfile.value.name||user.displayName||'Usuario',otherName:other.name||'Usuario'})
   scrollHubChatToBottom()
   nextTick(() => {
     chatInputRef.value?.focus?.({ preventScroll: true })
@@ -680,7 +664,7 @@ const loadProfile = async (user) => {
   const saved = snap?.exists?.() ? snap.data() : {}
   currentProfile.value = {
     ...saved,
-    role: saved.isBlocked ? 'user' : (saved.role || 'user'),
+    role: authorizedRole(user.uid, Boolean(saved.isBlocked)),
     canChat: !saved.isBlocked && Boolean(saved.canChat),
     isBlocked: Boolean(saved.isBlocked)
   }
@@ -690,7 +674,7 @@ const subscribeUsers = () => {
   unsubscribeUsers?.()
   users.value = []
   if (!currentUser.value || !canUseChat.value) return
-  unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
+  unsubscribeUsers = subscribePublicCollection('users', (snap) => {
     users.value = snap.docs
       .map(item => ({ id: item.id, ...item.data() }))
       .filter(user => !user.isBlocked)

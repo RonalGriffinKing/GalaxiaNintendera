@@ -193,7 +193,7 @@ const emit = defineEmits([
           </label>
           <label>
             Rol
-            <select v-model="userDraft.role">
+            <select v-model="userDraft.role" disabled title="Los permisos administrativos dependen del UID autorizado">
               <option value="user">Usuario</option>
               <option value="publisher">Publicador</option>
               <option value="admin">Admin</option>

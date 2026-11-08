@@ -1,0 +1,10 @@
+// LOCAL CANDIDATE. Storage availability and historical paths are not confirmed.
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /profile-icons/{file} { allow read: if true; allow write: if false; }
+    // The verified Admin SDK upload bypasses these rules and checks the UID.
+    // No client uploads were found elsewhere in the current repository.
+    match /{path=**} { allow read, write: if false; }
+  }
+}

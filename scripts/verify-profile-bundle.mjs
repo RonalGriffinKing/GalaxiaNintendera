@@ -20,3 +20,14 @@ for(const key of seen){
 }
 if(!manifest['src/components/admin/ProfileRewardsManager.vue']?.isDynamicEntry)throw new Error('Manager must have its own lazy chunk')
 console.log('OK: public profile and its dependencies exclude icon administration; the Global Manager has a separate lazy chunk.')
+const eventStatic=new Set()
+function visitEventStatic(key){
+  if(eventStatic.has(key))return
+  eventStatic.add(key)
+  for(const child of manifest[key]?.imports||[])visitEventStatic(child)
+}
+visitEventStatic('src/pages/EventsPage.vue')
+for(const key of eventStatic){
+  if(/EventEditorModal|EventsBulkImport|EventSharePage/.test(key))throw new Error('Event administration eagerly loaded by public Events: '+key)
+}
+console.log('OK: public Events does not eagerly load its editor, bulk import or social image generator.')

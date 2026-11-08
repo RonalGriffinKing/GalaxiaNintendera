@@ -52,7 +52,7 @@
               :is="activeComponent"
               :user-role="currentRole"
               :show-embedded-tools="activeTab !== 'posts'"
-              :management-only="activeTab === 'communities'"
+              :management-only="['communities','events'].includes(activeTab)"
               embedded
               @loading="handleModuleLoading"
               @ready="handleModuleReady"
@@ -82,6 +82,8 @@
 </template>
 
 <script setup>
+import { authorizedRole } from '@/services/authorizedIdentity'
+
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { doc, getDoc } from 'firebase/firestore'
@@ -96,6 +98,7 @@ const OverlayPanel = defineAsyncComponent(() => import('@/components/shared/Over
 const VisualThemesPanel = defineAsyncComponent(() => import('@/components/posts/VisualThemesPanel.vue'))
 const CommunityPanel = defineAsyncComponent(() => import('@/components/community/CommunityPanel.vue'))
 const ProfileRewardsManager = defineAsyncComponent(() => import('@/components/admin/ProfileRewardsManager.vue'))
+const EventsPanel = defineAsyncComponent(() => import('@/pages/EventsPage.vue'))
 const activeModule=ref(null)
 
 const route = useRoute()
@@ -155,6 +158,9 @@ const tabs = computed(() => [
     kicker: 'Comunidad',
     title: 'Gestion de usuarios',
     description: 'Perfiles, roles, permisos, verificacion y bloqueo de cuentas.'
+  },
+  {
+    id: 'events', label: 'Gestionar eventos', icon: 'fas fa-calendar-days', component: EventsPanel, admin: true, kicker: 'Eventos y directos', title: 'Gestion de eventos', description: 'Herramientas existentes de eventos, importacion y publicaciones sociales.'
   },
   {
     id: 'rewards', label: 'Iconos y logros', icon: 'fas fa-star', component: ProfileRewardsManager, admin: true, kicker: 'Perfiles y recompensas', title: 'Iconos y logros', description: 'Gestiona el catalogo, los requisitos de estrellas y los logros desde el Gestor Global.'
@@ -254,7 +260,7 @@ const loadRole = async () => {
   if (!user) return
 
   const snap = await getDoc(doc(db, 'users', user.uid))
-  currentRole.value = snap.data()?.role || 'user'
+  currentRole.value = authorizedRole(user.uid, Boolean(snap.data()?.isBlocked))
 
   if (!['admin', 'publisher'].includes(currentRole.value)) {
     router.replace('/')

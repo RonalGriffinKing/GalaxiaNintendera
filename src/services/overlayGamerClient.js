@@ -1,5 +1,4 @@
-import { doc, getDoc } from 'firebase/firestore'
-import { db } from '@/firebase'
+import { publicUser } from '@/services/publicContentClient'
 import { fetchXboxProfile, clearXboxProfileCache } from './xboxProfileClient'
 import { fetchNintendoSource, clearNintendoSourceCache } from './nintendoPresenceClient'
 import { combineNintendoSources } from './nxapiPresence'
@@ -7,7 +6,7 @@ import { combineNintendoSources } from './nxapiPresence'
 // Only saved public links belonging to the overlay owner; never persist credentials in widgets.
 export async function fetchOverlayGamer(ownerId, platform = 'auto', { refresh = false } = {}) {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(ownerId || '')) return []
-  const snapshot = await getDoc(doc(db, 'users', ownerId))
+  const snapshot = await publicUser(ownerId)
   if (!snapshot.exists()) return []
   const links = snapshot.data().socialLinks || {}
   if (refresh) {

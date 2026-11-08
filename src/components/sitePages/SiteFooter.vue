@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { FOOTER_COLUMNS, LEGAL_PAGE_SLUGS, listSitePages } from '@/services/sitePages'
+import { FOOTER_COLUMNS, LEGAL_PAGE_SLUGS, listPublishedSitePages } from '@/services/sitePages'
 
 const pages = ref([])
 const managedSlugs = ref(new Set())
@@ -34,7 +34,7 @@ const groupedPages = computed(() => FOOTER_COLUMNS.map(column => ({
 })).filter(group => group.pages.length))
 
 const refreshFooterPages = async () => {
-  const allPages = await listSitePages().catch(() => [])
+  const allPages = await listPublishedSitePages().catch(() => [])
   managedSlugs.value = new Set(allPages.map(page => page.slug).filter(Boolean))
   pages.value = allPages
     .filter(page => page.showInFooter && page.status === 'published')

@@ -1,3 +1,5 @@
+import identities from '../authorized-identities.json' with {type:'json'}
+const ADMIN=identities.adminUids[0]
 import { readFile } from 'node:fs/promises'
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -32,7 +34,7 @@ before(async()=>{
   app=initializeApp({projectId},'participation-tests')
   db=getFirestore(app)
   await db.doc('users/u').set({name:'Reader',email:'u@example.test',emailVerified:true,role:'user',stars:40,participationStars:9,readPostsCount:1,unlockedIcons:['old'],selectedIcon:'old'})
-  await db.doc('users/admin').set({name:'Admin',role:'admin'})
+  await db.doc('users/'+ADMIN).set({name:'Admin',role:'admin'})
   await db.doc('posts/news').set({status:'approved',visibility:'public',releaseAt:0,title:'News',starReward:999})
   await db.doc('profileIcons/custom').set({requiredStars:10,imageUrl:'https://example.test/icon.png',active:true,visible:true})
 })
@@ -47,7 +49,7 @@ test('clients cannot forge points, ownership, read records, sessions or selected
   await assertSucceeds(getDoc(doc(client,'profileIcons/custom')))
   const guest=env.unauthenticatedContext().firestore()
   await assertFails(updateDoc(doc(guest,'users/u'),{participationStars:100}))
-  const admin=env.authenticatedContext('admin').firestore()
+  const admin=env.authenticatedContext(ADMIN).firestore()
   await assertFails(updateDoc(doc(admin,'profileIcons/custom'),{requiredStars:0}))
   await assertFails(setDoc(doc(client,'siteConfig/profileAchievements'),{items:[]}))
   await assertFails(updateDoc(doc(client,'users/u'),{role:'admin'}))
@@ -66,14 +68,14 @@ test('real concurrent Firestore transactions reward only once and preserve perma
   assert.equal(result.filter(r=>r.awarded).length,1)
   const user=(await db.doc('users/u').get()).data()
   assert.equal(user.stars,40);assert.equal(user.participationStars,10);assert.ok(user.unlockedIcons.includes('old'));assert.ok(user.unlockedIcons.includes('custom'))
-  await service('admin',{action:'update-icon',iconId:'custom',requiredStars:500,order:1,name:'Custom',src:'https://example.test/icon.png',active:false,visible:false})
+  await service(ADMIN,{action:'update-icon',iconId:'custom',requiredStars:500,order:1,name:'Custom',src:'https://example.test/icon.png',active:false,visible:false})
   await service('u',{action:'equip',iconId:'custom'})
   assert.equal((await db.doc('users/u').get()).data().selectedIcon,'custom')
   await assert.rejects(service('u',{action:'create-icon',iconId:'custom-illegal'}),/forbidden/)
-  await service('admin',{action:'create-icon',iconId:'custom-unused',requiredStars:500,order:2,name:'Unused',src:'https://example.test/unused.png',active:true,visible:true})
-  await service('admin',{action:'delete-icon',iconId:'custom-unused'})
+  await service(ADMIN,{action:'create-icon',iconId:'custom-unused',requiredStars:500,order:2,name:'Unused',src:'https://example.test/unused.png',active:true,visible:true})
+  await service(ADMIN,{action:'delete-icon',iconId:'custom-unused'})
   assert.equal((await db.doc('profileIcons/custom-unused').get()).exists,false)
-  await assert.rejects(service('admin',{action:'delete-icon',iconId:'custom'}),/icon-in-use/)
-  await service('admin',{action:'save-achievements',items:[{id:'read-10',label:'Reader',description:'Read ten',type:'reads',target:10,iconUrl:''}]})
+  await assert.rejects(service(ADMIN,{action:'delete-icon',iconId:'custom'}),/icon-in-use/)
+  await service(ADMIN,{action:'save-achievements',items:[{id:'read-10',label:'Reader',description:'Read ten',type:'reads',target:10,iconUrl:''}]})
   assert.equal((await db.doc('siteConfig/profileAchievements').get()).data().items[0].target,10)
 })

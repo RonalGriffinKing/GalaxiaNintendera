@@ -1,3 +1,4 @@
+import { authorizedRole } from '@/services/authorizedIdentity'
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { managementDestination } from '@/services/managementNavigation'
@@ -143,6 +144,11 @@ const routes = [
         meta: { adminOnly: true, workspace: true }
       },
       {
+        path: 'admin/eventos',
+        redirect: to => managementDestination('events',to.query),
+        meta: {adminOnly:true,workspace:true}
+      },
+      {
         path: 'admin/recompensas',
         redirect: to => managementDestination('rewards', to.query),
         meta: { adminOnly: true, workspace: true }
@@ -231,7 +237,7 @@ router.beforeEach(async (to) => {
 
   if (to.meta.adminOnly) {
     const snap = await getDoc(doc(db, 'users', user.uid))
-    const role = snap.data()?.role || 'user'
+    const role = authorizedRole(user.uid, Boolean(snap.data()?.isBlocked))
 
     if (role !== 'admin') {
       return '/'
@@ -240,7 +246,7 @@ router.beforeEach(async (to) => {
 
   if (to.meta.publisherOnly) {
     const snap = await getDoc(doc(db, 'users', user.uid))
-    const role = snap.data()?.role || 'user'
+    const role = authorizedRole(user.uid, Boolean(snap.data()?.isBlocked))
 
     if (!['admin', 'publisher'].includes(role)) {
       return '/'
