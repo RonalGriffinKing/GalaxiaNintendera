@@ -143,6 +143,11 @@ const routes = [
         meta: { adminOnly: true, workspace: true }
       },
       {
+        path: 'admin/recompensas',
+        redirect: to => managementDestination('rewards', to.query),
+        meta: { adminOnly: true, workspace: true }
+      },
+      {
         path: 'admin/overlays',
         redirect: to => managementDestination('overlays', to.query),
         meta: { adminOnly: true, workspace: true }

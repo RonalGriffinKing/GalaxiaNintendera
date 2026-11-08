@@ -128,7 +128,7 @@ La eliminación de `src.zip` anterior al trabajo continúa fuera de los commits.
 
 ## Verificacion local
 
-- Suite Vitest: 263 pruebas, 47 archivos aprobados (excluyendo copias antiguas de `.restore-backups`).
+- Suite Vitest: 273 pruebas, 48 archivos aprobados (excluyendo copias antiguas de `.restore-backups`).
 - Emulador Firestore local `demo-galaxia-participation`: 2 pruebas de reglas y transacciones concurrentes aprobadas.
 - Compilaci?n Vite de producci?n aprobada.
 - El emulador se ejecut? en `127.0.0.1:8055`, sin datos reales.

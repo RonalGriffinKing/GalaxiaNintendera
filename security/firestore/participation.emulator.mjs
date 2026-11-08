@@ -10,7 +10,24 @@ const projectId = 'demo-galaxia-participation'
 if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8055') throw new Error('Local demo emulator required')
 let env, app, db
 before(async()=>{
-  env=await initializeTestEnvironment({projectId,firestore:{host:'127.0.0.1',port:8055,rules:await readFile(new URL('./firestore.participation.proposed.rules',import.meta.url),'utf8')}})
+  const fragment=await readFile(new URL('./progress.fragment.rules',import.meta.url),'utf8')
+  // Test-only baseline: verifies the scoped delta without deploying the older,
+  // unrelated full proposal. Production rules still need a verified export.
+  const rules=`rules_version = '2'; service cloud.firestore { match /databases/{database}/documents {
+    ${fragment}
+    match /users/{uid} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == uid && progressSafeProfileCreate();
+      allow update: if request.auth != null && (request.auth.uid == uid || progressAdmin()) && progressSafeProfileUpdate();
+      allow delete: if progressAdmin();
+    }
+    match /users/{uid}/readPosts/{postId} { allow read: if request.auth != null && (request.auth.uid == uid || progressAdmin()); }
+    match /posts/{id} { allow read: if true; }
+    match /communities/{id} { allow read: if true; }
+    match /events/{id} { allow read: if true; }
+    match /liveChats/{id}/messages/{messageId} { allow read: if true; }
+  } }`
+  env=await initializeTestEnvironment({projectId,firestore:{host:'127.0.0.1',port:8055,rules}})
   await env.clearFirestore()
   app=initializeApp({projectId},'participation-tests')
   db=getFirestore(app)
@@ -32,6 +49,12 @@ test('clients cannot forge points, ownership, read records, sessions or selected
   await assertFails(updateDoc(doc(guest,'users/u'),{participationStars:100}))
   const admin=env.authenticatedContext('admin').firestore()
   await assertFails(updateDoc(doc(admin,'profileIcons/custom'),{requiredStars:0}))
+  await assertFails(setDoc(doc(client,'siteConfig/profileAchievements'),{items:[]}))
+  await assertFails(updateDoc(doc(client,'users/u'),{role:'admin'}))
+  const newcomer=env.authenticatedContext('new').firestore()
+  await assertFails(setDoc(doc(newcomer,'users/new'),{name:'New',role:'admin',participationStars:100}))
+  await assertSucceeds(setDoc(doc(newcomer,'users/new'),{name:'New',role:'user',stars:0,selectedIcon:'kirby-01',unlockedIcons:['kirby-01']}))
+  await assertSucceeds(getDoc(doc(client,'posts/news')))
 })
 test('real concurrent Firestore transactions reward only once and preserve permanent rights',async()=>{
   let time=100000
@@ -46,4 +69,11 @@ test('real concurrent Firestore transactions reward only once and preserve perma
   await service('admin',{action:'update-icon',iconId:'custom',requiredStars:500,order:1,name:'Custom',src:'https://example.test/icon.png',active:false,visible:false})
   await service('u',{action:'equip',iconId:'custom'})
   assert.equal((await db.doc('users/u').get()).data().selectedIcon,'custom')
+  await assert.rejects(service('u',{action:'create-icon',iconId:'custom-illegal'}),/forbidden/)
+  await service('admin',{action:'create-icon',iconId:'custom-unused',requiredStars:500,order:2,name:'Unused',src:'https://example.test/unused.png',active:true,visible:true})
+  await service('admin',{action:'delete-icon',iconId:'custom-unused'})
+  assert.equal((await db.doc('profileIcons/custom-unused').get()).exists,false)
+  await assert.rejects(service('admin',{action:'delete-icon',iconId:'custom'}),/icon-in-use/)
+  await service('admin',{action:'save-achievements',items:[{id:'read-10',label:'Reader',description:'Read ten',type:'reads',target:10,iconUrl:''}]})
+  assert.equal((await db.doc('siteConfig/profileAchievements').get()).data().items[0].target,10)
 })

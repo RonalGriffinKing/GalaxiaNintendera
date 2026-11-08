@@ -2,11 +2,9 @@ import { collection, getDocs, query } from 'firebase/firestore'
 import { db } from '@/firebase'
 import iconDefaults from './profileIconDefaults.json'
 import { progressRequest } from './progressClient'
-import { earnedAchievements } from './achievementProgress'
 
 export { READ_REWARD_STARS, READ_REWARD_DELAY_MS } from './starProgress'
 import { READ_REWARD_DELAY_MS } from './starProgress'
-export const STARTER_ICON_LIMIT = 5
 
 const titleFromFileName = (value = '') => String(value)
   .replace(/\.[^.]+$/, '')
@@ -73,7 +71,6 @@ export const achievements = [
 ]
 
 export const fallbackProfileIcon = kirbyIcons[0].src
-export const starterKirbyIcons = kirbyIcons.slice(0, STARTER_ICON_LIMIT)
 export const getReadRewardDelayMs = () => READ_REWARD_DELAY_MS
 
 export const getIconById = (id) => kirbyIcons.find(icon => icon.id === id)
@@ -118,7 +115,6 @@ export const loadUploadedProfileIcons = async ({ includeHidden = false } = {}) =
   return [...localIcons, ...uploadedIcons].filter(icon => icon.src && (includeHidden || (icon.visible && icon.active && !icon.archived))).sort((a,b) => a.order - b.order || a.name.localeCompare(b.name))
 }
 
-export const updateProfileIcon = data => progressRequest('update-icon', data)
 
 export const resolveProfileIcon = (profile = {}) => {
   const selected = getIconById(profile.selectedIcon)
@@ -138,9 +134,6 @@ export const resolveProfileIconMeta = (profile = {}) => {
   }
 }
 
-export const unlockedAchievements = (readCount = 0, items = achievements) => {
-  return earnedAchievements(items.filter(item => !item.type || item.type === 'reads'), { reads: readCount })
-}
 
 export const ensureUserProgress = user => user ? progressRequest('sync') : Promise.resolve()
 export const beginPostRead = ({ user, post }) => user && post?.id ? progressRequest('begin-read', { postId: post.id }) : Promise.resolve()

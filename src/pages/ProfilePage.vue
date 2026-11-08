@@ -17,7 +17,7 @@ import AppNotice from '@/components/shared/AppNotice.vue'
 import ProfileAchievementsPanel from '@/components/profile/ProfileAchievementsPanel.vue'
 import ProfileHeaderCard from '@/components/profile/ProfileHeaderCard.vue'
 import { achievementTarget, achievementValue } from '@/services/achievementProgress'
-const ProfileIconEditor = defineAsyncComponent(() => import('@/components/profile/ProfileIconEditor.vue'))
+const ProfileEditor = defineAsyncComponent(() => import('@/components/profile/ProfileEditor.vue'))
 import ProfileRelationModal from '@/components/profile/ProfileRelationModal.vue'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
@@ -32,11 +32,10 @@ import {
   kirbyIcons,
   loadUploadedProfileIcons,
   resolveProfileIcon,
-  resolveProfileIconMeta,
-  updateProfileIcon
+  resolveProfileIconMeta
 } from '@/services/profileProgress'
 import { canUseIcon, progressStars } from '@/services/starProgress'
-import { ACHIEVEMENT_TYPES, PROFILE_ICON_FILTERS } from '@/constants/profile'
+import { ACHIEVEMENT_TYPES } from '@/constants/profile'
 
 // Supplied by a future consent-aware adapter; never inferred from profile fields.
 const gamerData = defineProps({ gamerIdentities: { type: Array, default: () => [] } })
@@ -109,23 +108,7 @@ const isSavingIcon = ref(false)
 const message = ref('')
 const selectionReset = ref(0)
 const iconPanelOpen = ref(false)
-const iconUploadOpen = ref(false)
-const achievementEditorOpen = ref(false)
-const editingAchievementId = ref('')
 const customIcons = ref([])
-const uploadIconPreview = ref('')
-const isUploadingIcon = ref(false)
-const uploadIconMessage = ref('')
-const editingIconId = ref('')
-const uploadIconDraft = ref({
-  name: '',
-  saga: 'Kirby',
-  rarity: 'normal',
-  requiredStars: 25, order: 0, active: true,
-  visible: true,
-  special: false,
-  effectColor: '#a855f7'
-})
 const editMessage = ref('')
 let profileLoadRequestId = 0
 const profileDraft = ref({
@@ -137,18 +120,11 @@ const profileDraft = ref({
     twitch: ''
   }
 })
-const achievementDraft = ref({
-  label: '',
-  description: '',
-  type: 'reads',
-  target: 10,
-  iconUrl: ''
-})
 const pendingSelectedIcon = ref('')
 
 const isRewardsPage = computed(() => route.name === 'profile-rewards')
 const rewardsTab = computed(() => {
-  const allowed = ['achievements', 'collection', ...(isAdminOwnProfile.value ? ['manage'] : [])]
+  const allowed = ['achievements', 'collection']
   return allowed.includes(route.query.tab) ? route.query.tab : 'achievements'
 })
 const openRewards = (tab = 'achievements') => {
@@ -231,9 +207,8 @@ watch([() => profile.value?.id, () => viewerUid.value], async ([uid, viewer]) =>
 })
 const stars = computed(() => progressStars(profile.value || {}))
 const unlockedIcons = computed(() => profile.value?.unlockedIcons?.length ? profile.value.unlockedIcons : ['kirby-01'])
-const isAdminOwnProfile = computed(() => isOwnProfile.value && profile.value?.role === 'admin')
 const displayStars = computed(() => stars.value)
-const managedAchievements = ref([...achievements])
+const profileAchievements = ref([...achievements])
 const effectiveUnlockedIcons = computed(() => [...new Set([...unlockedIcons.value, ...allProfileIcons.value.filter(icon => canUseIcon(profile.value || {}, icon)).map(icon => icon.id)])])
 const profileIcon = computed(() => {
   if (!profile.value) return fallbackProfileIcon
@@ -262,7 +237,7 @@ const achievementTypeMap = Object.fromEntries(achievementTypes.map(item => [item
 const achievementTypeCounts = computed(() => {
   return achievementTypes.map(type => ({
     ...type,
-    count: managedAchievements.value.filter(achievement => (achievement.type || 'reads') === type.value).length
+    count: profileAchievements.value.filter(achievement => (achievement.type || 'reads') === type.value).length
   })).filter(type => type.count)
 })
 const achievementMetricValue = (achievement) => achievementValue(achievement, {
@@ -270,11 +245,10 @@ const achievementMetricValue = (achievement) => achievementValue(achievement, {
   months: profileActiveMonths.value, icons: effectiveUnlockedIcons.value.length, followers: followersTotal.value
 })
 const achievementTypeMeta = (achievement) => achievementTypeMap[achievement?.type || 'reads'] || achievementTypeMap.reads
-const earnedAchievements = computed(() => managedAchievements.value.filter(item => achievementMetricValue(item) >= achievementTarget(item)))
-const nextAchievement = computed(() => managedAchievements.value.find(item => achievementMetricValue(item) < achievementTarget(item)) || managedAchievements.value[managedAchievements.value.length - 1] || achievements[0])
-const currentAchievement = computed(() => [...earnedAchievements.value].pop() || managedAchievements.value[0] || achievements[0])
-const canManageAchievements = computed(() => viewerProfile.value.role === 'admin')
-const achievementRoadmap = computed(() => managedAchievements.value.map((achievement) => {
+const earnedAchievements = computed(() => profileAchievements.value.filter(item => achievementMetricValue(item) >= achievementTarget(item)))
+const nextAchievement = computed(() => profileAchievements.value.find(item => achievementMetricValue(item) < achievementTarget(item)) || profileAchievements.value[profileAchievements.value.length - 1] || achievements[0])
+const currentAchievement = computed(() => [...earnedAchievements.value].pop() || profileAchievements.value[0] || achievements[0])
+const achievementRoadmap = computed(() => profileAchievements.value.map((achievement) => {
   const currentValue = achievementMetricValue(achievement)
   const target = achievementTarget(achievement)
   const unlocked = currentValue >= target
@@ -318,17 +292,10 @@ const allProfileIcons = computed(() => {
   const managedIcons = [...managedById.values()]
   const icons = [...builtInIcons, ...managedIcons].sort((a,b) => a.order-b.order || a.name.localeCompare(b.name))
 
-  return isAdminOwnProfile.value
-    ? icons
-    : icons.filter(icon => (icon.visible && icon.active !== false && !icon.archived) || unlockedIcons.value.includes(icon.id))
+  return icons.filter(icon => (icon.visible && icon.active !== false && !icon.archived) || unlockedIcons.value.includes(icon.id))
 })
-const manageableProfileIcons = computed(() => allProfileIcons.value)
 const availableProfileIcons = computed(() => allProfileIcons.value.filter(icon => effectiveUnlockedIcons.value.includes(icon.id)))
 const visibleProfileIcons = computed(() => availableProfileIcons.value.slice(0, 8))
-const iconFilters = computed(() => {
-  const dynamic = allProfileIcons.value.map(icon => iconSaga(icon)).filter(Boolean)
-  return ['Todos', 'Especiales', ...new Set([...PROFILE_ICON_FILTERS, ...dynamic])]
-})
 const iconSaga = (icon) => icon.saga || 'Especiales'
 const socialItems = computed(() => [
   { id: 'tiktok', label: 'TikTok', icon: 'fab fa-tiktok', url: profile.value?.socialLinks?.tiktok || '' },
@@ -419,71 +386,6 @@ const normalizeAchievements = (items) => {
     })
 }
 
-const resetAchievementDraft = () => {
-  editingAchievementId.value = ''
-  achievementDraft.value = {
-    label: '',
-    description: '',
-    type: 'reads',
-    target: Math.max(10, Number(nextAchievement.value?.target ?? nextAchievement.value?.reads ?? 0) + 10),
-    iconUrl: ''
-  }
-}
-
-const startCreateAchievement = () => {
-  resetAchievementDraft()
-  achievementEditorOpen.value = true
-}
-
-const editAchievement = (achievement) => {
-  editingAchievementId.value = achievement.id
-  achievementDraft.value = {
-    label: achievement.label,
-    description: achievement.description,
-    type: achievement.type || 'reads',
-    target: achievementTarget(achievement),
-    iconUrl: achievement.iconUrl || ''
-  }
-  achievementEditorOpen.value = true
-}
-
-const saveAchievementsConfig = async (items = managedAchievements.value) => {
-  const normalized = normalizeAchievements(items)
-  managedAchievements.value = normalized
-  await setDoc(doc(db, 'siteConfig', 'profileAchievements'), {
-    items: normalized,
-    updatedAt: Date.now(),
-    updatedBy: auth.currentUser?.uid || ''
-  }, { merge: true })
-}
-
-const saveAchievementDraft = async () => {
-  if (!canManageAchievements.value) return
-  const label = achievementDraft.value.label.trim()
-  const description = achievementDraft.value.description.trim()
-  const type = achievementTypeMap[achievementDraft.value.type] ? achievementDraft.value.type : 'reads'
-  const target = Math.max(1, Number(achievementDraft.value.target || 1))
-  const iconUrl = achievementDraft.value.iconUrl.trim()
-  if (!label || !description) return
-
-  const nextItems = editingAchievementId.value
-    ? managedAchievements.value.map(item => item.id === editingAchievementId.value ? { ...item, label, description, type, target, reads: target, iconUrl } : item)
-    : [...managedAchievements.value, { id: `custom-${Date.now()}`, label, description, type, target, reads: target, iconUrl }]
-
-  await saveAchievementsConfig(nextItems)
-  resetAchievementDraft()
-  achievementEditorOpen.value = false
-}
-
-const deleteAchievement = async (achievement) => {
-  if (!canManageAchievements.value || managedAchievements.value.length <= 1) return
-  await saveAchievementsConfig(managedAchievements.value.filter(item => item.id !== achievement.id))
-  if (editingAchievementId.value === achievement.id) {
-    resetAchievementDraft()
-    achievementEditorOpen.value = false
-  }
-}
-
 const applyProfileData = (userData = {}) => {
   profile.value = {
     id: profileId.value,
@@ -572,7 +474,7 @@ const loadProfileExtras = async (requestId) => {
   if (requestId !== profileLoadRequestId || !profile.value) return
 
   customIcons.value = uploadedIcons
-  managedAchievements.value = normalizeAchievements(
+  profileAchievements.value = normalizeAchievements(
     achievementsSnap.exists?.() ? achievementsSnap.data()?.items : achievements
   )
 
@@ -768,111 +670,7 @@ const toggleIconPanel = async () => {
 
 const closeIconPanel = () => {
   iconPanelOpen.value = false
-  iconUploadOpen.value = false
   editMessage.value = ''
-  resetUploadIconForm()
-}
-
-const openIconUpload = (icon = null) => {
-  if (!isAdminOwnProfile.value) return
-  uploadIconMessage.value = ''
-  resetUploadIconForm()
-  const editableIcon = icon || manageableProfileIcons.value[0]
-  if (!editableIcon) {
-    uploadIconMessage.value = 'No hay iconos cargados para gestionar.'
-    iconUploadOpen.value = true
-    return
-  }
-  editingIconId.value = editableIcon.id
-  uploadIconPreview.value = editableIcon.src
-  uploadIconDraft.value = {
-    name: editableIcon.name,
-    saga: iconSaga(editableIcon),
-    rarity: editableIcon.rarity || (editableIcon.special ? 'epic' : 'normal'),
-    requiredStars: editableIcon.requiredStars, order: editableIcon.order, active: editableIcon.active,
-    visible: Boolean(editableIcon.visible && !editableIcon.archived),
-    special: Boolean(editableIcon.special),
-    effectColor: editableIcon.effectColor || '#a855f7'
-  }
-  iconUploadOpen.value = true
-}
-
-const closeIconUpload = () => {
-  if (isUploadingIcon.value) return
-  iconUploadOpen.value = false
-  resetUploadIconForm()
-}
-
-const resetUploadIconForm = () => {
-  uploadIconPreview.value = ''
-  uploadIconMessage.value = ''
-  editingIconId.value = ''
-  uploadIconDraft.value = {
-    name: '',
-    saga: 'Kirby',
-    rarity: 'normal',
-    requiredStars: 25, order: 0, active: true,
-    visible: true,
-    special: false,
-    effectColor: '#a855f7'
-  }
-}
-
-const saveUploadedIcon = async () => {
-  if (!isAdminOwnProfile.value || isUploadingIcon.value) return
-  const icon = manageableProfileIcons.value.find(item => item.id === editingIconId.value)
-  if (!icon) {
-    uploadIconMessage.value = 'Elige un icono local para gestionarlo.'
-    return
-  }
-
-  isUploadingIcon.value = true
-  uploadIconMessage.value = ''
-
-  try {
-    const saved = await updateProfileIcon({
-      iconId: icon.id,
-      name: uploadIconDraft.value.name,
-      saga: uploadIconDraft.value.saga,
-      rarity: uploadIconDraft.value.rarity,
-      requiredStars: uploadIconDraft.value.requiredStars, order: uploadIconDraft.value.order, active: uploadIconDraft.value.active,
-      visible: uploadIconDraft.value.visible,
-      special: uploadIconDraft.value.special,
-      effectColor: uploadIconDraft.value.effectColor,
-      sourcePath: icon.sourcePath,
-      src: uploadIconPreview.value
-    })
-    const updatedIcon = { ...icon, ...saved, src: uploadIconPreview.value, sourcePath: icon.sourcePath }
-    customIcons.value = customIcons.value.some(item => item.id === icon.id)
-      ? customIcons.value.map(item => (item.id === icon.id ? { ...item, ...updatedIcon } : item))
-      : [...customIcons.value, updatedIcon]
-    if (profile.value?.selectedIcon === icon.id) {
-      const selectedIconEffect = {
-        special: Boolean(updatedIcon.special),
-        effectColor: updatedIcon.effectColor || '#a855f7',
-        saga: iconSaga(updatedIcon)
-      }
-      await equipProfileIcon(icon.id)
-      profile.value = {
-        ...profile.value,
-        selectedIconEffect,
-        updatedAt: Date.now()
-      }
-      window.dispatchEvent(new CustomEvent('galaxy-profile-updated', {
-        detail: {
-          uid: profileId.value,
-          profile: profile.value
-        }
-      }))
-    }
-    iconUploadOpen.value = false
-    resetUploadIconForm()
-    message.value = saved.visible ? 'Icono visible para todo el mundo.' : 'Icono oculto para todo el mundo.'
-  } catch (error) {
-    uploadIconMessage.value = error.message === 'catalog-change-requires-batched-maintenance' ? 'Este cambio requiere conservar derechos de mas de 450 usuarios. Se necesita preparar el mantenimiento por lotes antes de aplicarlo.' : 'No se pudo guardar la ficha del icono. Comprueba los campos y la conexion.'
-  } finally {
-    isUploadingIcon.value = false
-  }
 }
 
 const saveProfile = async () => {
@@ -1119,7 +917,7 @@ watch(message, (value) => {
   if (value) noticeTimer = setTimeout(() => { message.value = '' }, 5000)
 })
 watch(() => route.params.uid, loadProfile)
-watch(() => route.fullPath, () => { closeIconPanel(); achievementEditorOpen.value = false; message.value = '' })
+watch(() => route.fullPath, () => { closeIconPanel(); message.value = '' })
 watch(postActivityItems, (items) => {
   if (recentPostIndex.value >= items.length) recentPostIndex.value = 0
 })
@@ -1128,7 +926,7 @@ watch(activityTab, () => {
   loadPublications()
   showAllRecentPosts.value = false
 })
-watch([iconPanelOpen, iconUploadOpen, relationModal], values => {
+watch([iconPanelOpen, relationModal], values => {
   document.body.style.overflow = values.some(Boolean) ? 'hidden' : ''
 })
 onMounted(() => {
@@ -1160,42 +958,9 @@ onUnmounted(() => {
     </div>
 
     <template v-if="!isLoading && profile">
-      <ProfileRewardsHub v-if="isRewardsPage" :tab="rewardsTab" :profile="{ ...profile, selectedIcon: pendingSelectedIcon || profile.selectedIcon }" :icons="allProfileIcons" :unlocked="effectiveUnlockedIcons" :stars="displayStars" :selection-reset="selectionReset" :own="isOwnProfile" :admin="isAdminOwnProfile" :busy="isSavingIcon" :saga="iconSaga"
-        @tab="changeRewardsTab" @back="router.push({ name: 'profile', params: { uid: profileId } })" @equip="selectIcon" @manage-icon="openIconUpload">
-        <template #achievements>      <ProfileAchievementsPanel
-        v-model:draft="achievementDraft"
-        :open="true" inline
-        :can-manage="isAdminOwnProfile && rewardsTab === 'manage'"
-        :editor-open="achievementEditorOpen"
-        :editing-id="editingAchievementId"
-        :earned-count="earnedAchievements.length"
-        :total-count="managedAchievements.length"
-        :type-counts="achievementTypeCounts"
-        :types="achievementTypes"
-        :roadmap="achievementRoadmap"
-        @start-create="startCreateAchievement"
-        @cancel-edit="achievementEditorOpen = false; resetAchievementDraft()"
-        @save="saveAchievementDraft"
-        @edit="editAchievement"
-        @delete="deleteAchievement"
-      /></template>
-        <template #management>      <ProfileAchievementsPanel
-        v-model:draft="achievementDraft"
-        :open="true" inline
-        :can-manage="isAdminOwnProfile && rewardsTab === 'manage'"
-        :editor-open="achievementEditorOpen"
-        :editing-id="editingAchievementId"
-        :earned-count="earnedAchievements.length"
-        :total-count="managedAchievements.length"
-        :type-counts="achievementTypeCounts"
-        :types="achievementTypes"
-        :roadmap="achievementRoadmap"
-        @start-create="startCreateAchievement"
-        @cancel-edit="achievementEditorOpen = false; resetAchievementDraft()"
-        @save="saveAchievementDraft"
-        @edit="editAchievement"
-        @delete="deleteAchievement"
-      /></template>
+      <ProfileRewardsHub v-if="isRewardsPage" :tab="rewardsTab" :profile="{ ...profile, selectedIcon: pendingSelectedIcon || profile.selectedIcon }" :icons="allProfileIcons" :unlocked="effectiveUnlockedIcons" :stars="displayStars" :selection-reset="selectionReset" :own="isOwnProfile" :busy="isSavingIcon" :saga="iconSaga"
+        @tab="changeRewardsTab" @back="router.push({ name: 'profile', params: { uid: profileId } })" @equip="selectIcon">
+        <template #achievements><ProfileAchievementsPanel :open="true" inline :earned-count="earnedAchievements.length" :total-count="profileAchievements.length" :type-counts="achievementTypeCounts" :roadmap="achievementRoadmap" /></template>
       </ProfileRewardsHub>
       <template v-else>
       <ProfileHeaderCard
@@ -1387,9 +1152,9 @@ onUnmounted(() => {
       </section>
       </template>
       <AppNotice :message="message" :type="message.startsWith('No se') ? 'error' : 'success'" />
-      <ProfileIconEditor :start-systems="connectionsRequested" :systems-busy="systemsBusy" v-if="iconPanelOpen || iconUploadOpen" v-model:profile-draft="profileDraft" v-model:upload-icon-draft="uploadIconDraft" :profile="profile" :profile-icon="profileIcon" :profile-icon-meta="profileIconMeta" :panel-open="iconPanelOpen" :upload-open="iconUploadOpen" :edit-message="editMessage" :is-saving-profile="isSavingProfile" :is-uploading-icon="isUploadingIcon" :editing-icon-id="editingIconId" :upload-icon-preview="uploadIconPreview" :upload-icon-message="uploadIconMessage" :icon-filters="iconFilters" @close-panel="closeIconPanel" @close-upload="closeIconUpload" @save-profile="saveProfile" @open-rewards="openRewards('collection')" @image-url="uploadIconPreview = $event" @save-uploaded-icon="saveUploadedIcon">
+      <ProfileEditor :start-systems="connectionsRequested" :systems-busy="systemsBusy" v-if="iconPanelOpen" v-model:profile-draft="profileDraft" :profile="profile" :profile-icon="profileIcon" :profile-icon-meta="profileIconMeta" :panel-open="iconPanelOpen" :edit-message="editMessage" :is-saving-profile="isSavingProfile" @close-panel="closeIconPanel" @save-profile="saveProfile" @open-rewards="openRewards('collection')">
         <template #systems><ProfileSystemsPanel :xbox-link="xboxLink" :xbox-identity="xboxIdentity" :xbox-loading="xboxLoading" :xbox-error="xboxError" :save-xbox-link="saveXboxLink" :refresh-xbox="refreshXboxProfile" :own="isOwnProfile" :url="nintendoUrl" :profile-url="nintendoProfileUrl" :identity="nintendoIdentity" :loading="nintendoLoading" :error="nintendoError" :save-link="saveNintendoLinks" :refresh="() => nintendoRefresh++" @busy="systemsBusy=$event" /></template>
-      </ProfileIconEditor>
+      </ProfileEditor>
 
 
 

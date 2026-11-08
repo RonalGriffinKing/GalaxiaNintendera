@@ -95,6 +95,7 @@ const UserPanel = defineAsyncComponent(() => import('@/components/shared/UserPan
 const OverlayPanel = defineAsyncComponent(() => import('@/components/shared/OverlayPanel.vue'))
 const VisualThemesPanel = defineAsyncComponent(() => import('@/components/posts/VisualThemesPanel.vue'))
 const CommunityPanel = defineAsyncComponent(() => import('@/components/community/CommunityPanel.vue'))
+const ProfileRewardsManager = defineAsyncComponent(() => import('@/components/admin/ProfileRewardsManager.vue'))
 const activeModule=ref(null)
 
 const route = useRoute()
@@ -154,6 +155,9 @@ const tabs = computed(() => [
     kicker: 'Comunidad',
     title: 'Gestion de usuarios',
     description: 'Perfiles, roles, permisos, verificacion y bloqueo de cuentas.'
+  },
+  {
+    id: 'rewards', label: 'Iconos y logros', icon: 'fas fa-star', component: ProfileRewardsManager, admin: true, kicker: 'Perfiles y recompensas', title: 'Iconos y logros', description: 'Gestiona el catalogo, los requisitos de estrellas y los logros desde el Gestor Global.'
   },
   {
     id: 'overlays',

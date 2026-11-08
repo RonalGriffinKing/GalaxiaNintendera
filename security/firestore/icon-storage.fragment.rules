@@ -1,0 +1,7 @@
+// FRAGMENT ONLY: inside match /b/{bucket}/o. Replace ANY overlapping allow that
+// currently grants writes to this prefix; adding a deny alone cannot override it.
+// Other uploads and Storage policies must remain unchanged.
+match /profile-icons/{fileName} {
+  allow read: if true; // Published catalog images are public.
+  allow write: if false; // Uploads use the verified server and Admin SDK only.
+}

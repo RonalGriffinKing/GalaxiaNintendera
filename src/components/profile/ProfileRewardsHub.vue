@@ -4,10 +4,10 @@ import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { progressSummary } from '@/services/starProgress'
 import ProfileAvatar from './ProfileAvatar.vue'
 import ProfileRewardDialog from './ProfileRewardDialog.vue'
-const props=defineProps({tab:{type:String,default:'achievements'},profile:{type:Object,required:true},icons:{type:Array,default:()=>[]},unlocked:{type:Array,default:()=>[]},stars:{type:Number,default:0},own:Boolean,admin:Boolean,busy:Boolean,selectionReset:Number,saga:Function})
-const emit=defineEmits(['tab','back','equip','manage-icon'])
+const props=defineProps({tab:{type:String,default:'achievements'},profile:{type:Object,required:true},icons:{type:Array,default:()=>[]},unlocked:{type:Array,default:()=>[]},stars:{type:Number,default:0},own:Boolean,busy:Boolean,selectionReset:Number,saga:Function})
+const emit=defineEmits(['tab','back','equip'])
 const search=ref(''),ownership=ref('all'),page=ref(1),selectedId=ref(''),showHelp=ref(false)
-const catalog=computed(()=>props.icons.filter(icon=>props.tab==='manage'||(!icon.archived&&icon.visible!==false)||props.unlocked.includes(icon.id)))
+const catalog=computed(()=>props.icons.filter(icon=>(!icon.archived&&icon.visible!==false&&icon.active!==false)||props.unlocked.includes(icon.id)))
 const summary=computed(()=>progressSummary({...props.profile,participationStars:props.stars},props.icons))
 const ownedCount=computed(()=>catalog.value.filter(icon=>props.unlocked.includes(icon.id)).length)
 const filtered=computed(()=>catalog.value.filter(icon=>(ownership.value==='all'||(ownership.value==='owned')===props.unlocked.includes(icon.id))&&String(icon.name).toLocaleLowerCase('es').includes(search.value.toLocaleLowerCase('es'))).sort((a,b)=>Number(b.id===props.profile.selectedIcon)-Number(a.id===props.profile.selectedIcon)||Number(props.unlocked.includes(b.id))-Number(props.unlocked.includes(a.id))||a.order-b.order))
@@ -18,8 +18,8 @@ onUnmounted(()=>window.removeEventListener('resize',resizeCollection))
 const pages=computed(()=>Math.max(1,Math.ceil(filtered.value.length/pageSize.value)))
 const visible=computed(()=>filtered.value.slice((page.value-1)*pageSize.value,page.value*pageSize.value))
 const selected=computed(()=>props.icons.find(icon=>icon.id===selectedId.value))
-const tabs=computed(()=>[{id:'achievements',label:'Logros',icon:'fas fa-trophy'},{id:'collection',label:'Colección',icon:'fas fa-layer-group'},...(props.admin?[{id:'manage',label:'Administrar',icon:'fas fa-gear'}]:[])])
-function inspect(icon){if(props.busy)return;if(props.tab==='manage')emit('manage-icon',icon);else selectedId.value=icon.id}
+const tabs=computed(()=>[{id:'achievements',label:'Logros',icon:'fas fa-trophy'},{id:'collection',label:'Colección',icon:'fas fa-layer-group'}])
+function inspect(icon){if(props.busy)return;selectedId.value=icon.id}
 function equip(){if(selected.value&&props.own&&props.unlocked.includes(selected.value.id)){emit('equip',selected.value.id);selectedId.value=''}}
 watch([search,ownership],()=>page.value=1)
 watch(()=>[props.tab,props.selectionReset],()=>{page.value=1;selectedId.value='';search.value='';ownership.value='all'})
@@ -34,9 +34,8 @@ watch(pages,value=>page.value=Math.min(page.value,value))
  <nav class="hub-tabs" aria-label="Recompensas"><button v-for="item in tabs" :key="item.id" type="button" :aria-current="tab===item.id?'page':undefined" :class="{active:tab===item.id}" @click="emit('tab',item.id)"><i :class="item.icon" aria-hidden="true"></i>{{ item.label }}</button></nav>
  <slot v-if="tab==='achievements'" name="achievements"/>
  <template v-else>
-  <template v-if="tab==='manage'"><h2>Administrar logros</h2><slot name="management"/></template>
   <section class="collection-panel">
-   <header class="catalog-head"><div><h2>{{ tab==='manage'?'Administrar iconos':'Colección de iconos' }}</h2><p>{{ ownedCount }} de {{ catalog.length }} conseguidos</p></div></header>
+   <header class="catalog-head"><div><h2>Colección de iconos</h2><p>{{ ownedCount }} de {{ catalog.length }} conseguidos</p></div></header>
    <div class="catalog-controls"><label><span class="sr-only">Buscar iconos</span><input v-model="search" placeholder="Buscar iconos" type="search"/></label><label><span class="sr-only">Mostrar iconos</span><select v-model="ownership"><option value="all">Todos</option><option value="owned">Obtenidos</option><option value="missing">Por conseguir</option></select></label></div>
    <div v-if="visible.length" class="rewards-icons"><button v-for="icon in visible" :key="icon.id" type="button" :class="{missing:!unlocked.includes(icon.id),equipped:profile.selectedIcon===icon.id}" @click="inspect(icon)"><ProfileAvatar :src="icon.src" :alt="icon.name" :effect="icon"/><strong>{{ icon.name }}</strong><small>{{ profile.selectedIcon===icon.id?'En uso':unlocked.includes(icon.id)?'Disponible':'Bloqueado: '+icon.requiredStars+' estrellas' }}</small></button></div>
    <p v-else class="catalog-empty">No hay iconos con este filtro.</p>

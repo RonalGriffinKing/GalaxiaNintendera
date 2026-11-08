@@ -6,20 +6,3 @@ export const ACHIEVEMENT_TYPES = [
   { value: 'icons', label: 'Iconos desbloqueados', unit: 'iconos desbloqueados', icon: 'fas fa-icons' },
   { value: 'followers', label: 'Seguidores', unit: 'seguidores', icon: 'fas fa-user-group' }
 ]
-
-export const PROFILE_ICON_FILTERS = [
-  'Kirby',
-  'Mario',
-  'Zelda',
-  'Pokemon',
-  'Animal Crossing',
-  'Splatoon',
-  'Metroid',
-  'Donkey Kong',
-  'Pikmin',
-  'Fire Emblem',
-  'Xenoblade',
-  'Smash Bros',
-  'Nintendo',
-  'Especiales'
-]

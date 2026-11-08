@@ -1,34 +1,11 @@
 <script setup>
 import { vSoftReveal } from '@/directives/softReveal'
 import { computed, ref } from 'vue'
-const draft = defineModel('draft', {
-  type: Object,
-  default: () => ({
-    label: '',
-    description: '',
-    type: 'reads',
-    target: 10,
-    iconUrl: ''
-  })
-})
-
 const props = defineProps({
   inline: Boolean,
   open: {
     type: Boolean,
     default: false
-  },
-  canManage: {
-    type: Boolean,
-    default: false
-  },
-  editorOpen: {
-    type: Boolean,
-    default: false
-  },
-  editingId: {
-    type: String,
-    default: ''
   },
   earnedCount: {
     type: Number,
@@ -42,10 +19,6 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  types: {
-    type: Array,
-    default: () => []
-  },
   roadmap: {
     type: Array,
     default: () => []
@@ -56,14 +29,7 @@ const status = ref('all')
 const category = ref('all')
 const filteredRoadmap = computed(() => props.roadmap.filter(item => (category.value === 'all' || (item.type || 'reads') === category.value) && (status.value === 'all' || (status.value === 'earned' ? item.unlocked : !item.unlocked))))
 
-const emit = defineEmits([
-  'close',
-  'start-create',
-  'cancel-edit',
-  'save',
-  'edit',
-  'delete'
-])
+const emit = defineEmits(['close'])
 </script>
 
 <template>
@@ -80,15 +46,11 @@ const emit = defineEmits([
             <h2>Logros</h2>
           </div>
           <div class="achievement-roadmap-actions">
-            <button v-if="canManage" type="button" @click="emit('start-create')">
-              <i class="fas fa-plus"></i>
-              Agregar logro
-            </button>
             <strong>{{ earnedCount }} / {{ totalCount }} logros</strong>
           </div>
         </div>
 
-        <section v-if="inline && !canManage" class="achievement-summary">
+        <section v-if="inline" class="achievement-summary">
           <span class="summary-star"><i class="fas fa-star" aria-hidden="true"></i></span>
           <div><h3>Progreso general</h3><p>{{ earnedCount }} / {{ totalCount }} logros completados</p><progress :value="earnedCount" :max="totalCount || 1" aria-label="Logros completados"></progress></div>
           <strong>{{ totalCount ? Math.round(earnedCount / totalCount * 100) : 0 }}%</strong>
@@ -106,36 +68,6 @@ const emit = defineEmits([
           </span>
         </div>
 
-        <form v-if="canManage && editorOpen" class="achievement-editor" @submit.prevent="emit('save')">
-          <label class="achievement-field-name">
-            Nombre
-            <input v-model="draft.label" placeholder="Ej: Ganador espacial" />
-          </label>
-          <label class="achievement-field-type">
-            Tipo de logro
-            <select v-model="draft.type">
-              <option v-for="type in types" :key="type.value" :value="type.value">
-                {{ type.label }}
-              </option>
-            </select>
-          </label>
-          <label class="achievement-field-target">
-            Objetivo
-            <input v-model.number="draft.target" type="number" min="1" />
-          </label>
-          <label class="achievement-field-description">
-            Descripcion
-            <input v-model="draft.description" placeholder="Ej: Desbloquear 10 iconos" />
-          </label>
-          <label class="achievement-field-icon">
-            Icono (URL)
-            <input v-model="draft.iconUrl" placeholder="https://..." />
-          </label>
-          <div class="achievement-editor-actions">
-            <button type="button" @click="emit('cancel-edit')">Cancelar</button>
-            <button type="submit">{{ editingId ? 'Guardar logro' : 'Crear logro' }}</button>
-          </div>
-        </form>
 
         <div v-soft-reveal="'.achievement-roadmap-card'" class="achievement-roadmap-grid">
           <article
@@ -158,10 +90,6 @@ const emit = defineEmits([
               <small>
                 {{ achievement.unlocked ? 'Ganado' : `${achievement.currentValue} / ${achievement.target} ${achievement.typeMeta.unit}` }}
               </small>
-              <div v-if="canManage" class="achievement-card-actions">
-                <button type="button" @click="emit('edit', achievement)">Editar</button>
-                <button type="button" @click="emit('delete', achievement)">Eliminar</button>
-              </div>
             </div>
           </article>
         </div>
@@ -319,78 +247,6 @@ const emit = defineEmits([
   color: #ffffff;
 }
 
-.achievement-editor {
-  align-items: end;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(190px, 1.1fr) minmax(170px, 0.9fr) 104px minmax(220px, 1.25fr) minmax(160px, 0.75fr) auto;
-  padding: 14px;
-}
-
-.achievement-editor label {
-  color: #cbd5e1;
-  display: grid;
-  font-size: 10px;
-  font-weight: 950;
-  gap: 5px;
-  min-width: 0;
-  text-transform: uppercase;
-}
-
-.achievement-editor input,
-.achievement-editor select {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 850;
-  min-height: 38px;
-  min-width: 0;
-  outline: none;
-  padding: 0 12px;
-  width: 100%;
-}
-
-.achievement-editor select option {
-  background: #0b1020;
-  color: #ffffff;
-}
-
-.achievement-field-target input {
-  max-width: 100%;
-}
-
-.achievement-editor-actions {
-  align-items: end;
-  display: flex;
-  gap: 8px;
-  grid-column: auto;
-  justify-content: flex-end;
-}
-
-.achievement-editor button {
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 950;
-  min-height: 38px;
-  padding: 0 14px;
-  white-space: nowrap;
-}
-
-.achievement-editor button[type="button"] {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
-.achievement-editor button[type="submit"] {
-  background: linear-gradient(135deg, #9333ea, #ec4899);
-  color: #ffffff;
-}
-
 .achievement-roadmap-grid {
   display: grid;
   gap: 14px;
@@ -502,23 +358,6 @@ const emit = defineEmits([
   margin-top: 7px;
 }
 
-.achievement-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 9px;
-}
-
-.achievement-card-actions button {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  color: #cbd5e1;
-  font-size: 10px;
-  font-weight: 950;
-  min-height: 28px;
-  padding: 0 9px;
-}
-
 .modal-fade-enter-active,
 .modal-fade-leave-active {
   transition: opacity 0.2s ease;
@@ -530,18 +369,6 @@ const emit = defineEmits([
 }
 
 @media (max-width: 960px) {
-  .achievement-editor {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .achievement-field-icon,
-  .achievement-editor-actions {
-    grid-column: 1 / -1;
-  }
-
-  .achievement-editor-actions {
-    justify-content: flex-start;
-  }
 }
 
 @media (max-width: 720px) {
@@ -585,23 +412,6 @@ const emit = defineEmits([
     font-size: 20px;
   }
 
-  .achievement-editor {
-    grid-template-columns: 1fr;
-  }
-
-  .achievement-field-icon,
-  .achievement-editor-actions {
-    grid-column: auto;
-  }
-
-  .achievement-field-target input {
-    max-width: none;
-  }
-
-  .achievement-editor-actions {
-    display: grid;
-  }
-
   .achievement-roadmap-grid {
     grid-template-columns: 1fr;
   }
@@ -616,7 +426,6 @@ const emit = defineEmits([
 .achievement-filters label { display: grid; gap: 8px; color: var(--text-secondary); font-size: 13px; }
 .achievement-filters select { background-color: var(--surface-elevated); color: var(--text-primary); border-color: var(--border); }
 .achievement-empty { color: var(--text-secondary); padding: 16px; }
-.inline .achievement-editor { grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }
 .inline .achievement-roadmap-grid { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
 
 
