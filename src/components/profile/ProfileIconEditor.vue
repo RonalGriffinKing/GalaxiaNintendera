@@ -21,7 +21,7 @@ function trapProfileFocus(event) {
  if(event.shiftKey && document.activeElement===first){event.preventDefault();last?.focus()}
  else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first?.focus()}
 }
-const emit = defineEmits(['close-panel', 'close-upload', 'save-profile', 'open-rewards', 'save-uploaded-icon'])
+const emit = defineEmits(['close-panel', 'close-upload', 'save-profile', 'open-rewards', 'image-url', 'save-uploaded-icon'])
 </script>
 <template>
 <Teleport to="body">
@@ -65,7 +65,7 @@ const emit = defineEmits(['close-panel', 'close-upload', 'save-profile', 'open-r
                 :effect="{ special: uploadIconDraft.special, effectColor: uploadIconDraft.effectColor }"
               />
               <strong>{{ uploadIconDraft.name || 'Icono' }}</strong>
-              <small>{{ uploadIconDraft.saga }} - {{ Math.max(0, Number(uploadIconDraft.cost || 0)) }} estrellas</small>
+              <small>{{ uploadIconDraft.saga }} - {{ Math.max(0, Number(uploadIconDraft.requiredStars || 0)) }} estrellas</small>
             </aside>
 
             <button
@@ -76,7 +76,7 @@ const emit = defineEmits(['close-panel', 'close-upload', 'save-profile', 'open-r
               @click="uploadIconDraft.visible = !uploadIconDraft.visible"
             >
               <i :class="uploadIconDraft.visible ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
-              {{ uploadIconDraft.visible ? 'Visible en la tienda' : 'Oculto para usuarios' }}
+              {{ uploadIconDraft.visible ? 'Visible en la colecci?n' : 'Oculto para usuarios' }}
             </button>
 
             <button
@@ -117,9 +117,13 @@ const emit = defineEmits(['close-panel', 'close-upload', 'save-profile', 'open-r
             </label>
 
             <label>
-              Coste en estrellas
-              <input v-model.number="uploadIconDraft.cost" :disabled="!editingIconId" type="number" min="0" step="1" />
+              Estrellas necesarias
+              <input v-model.number="uploadIconDraft.requiredStars" :disabled="!editingIconId" type="number" min="0" step="1" list="star-thresholds" />
             </label>
+            <datalist id="star-thresholds"><option v-for="n in [0,10,25,50,100]" :key="n" :value="n"/></datalist>
+            <label>Imagen (URL)<input  :value="uploadIconPreview" @input="emit('image-url', $event.target.value)" type="url" /></label>
+            <label>Orden<input v-model.number="uploadIconDraft.order" type="number" min="0" step="1" /></label>
+            <label><input v-model="uploadIconDraft.active" type="checkbox" /> Activo para nuevos desbloqueos</label>
             <label>Rareza visual
               <select v-model="uploadIconDraft.rarity" :disabled="!editingIconId"><option value="normal">Normal</option><option value="rare">Raro</option><option value="epic">Épico</option><option value="legendary">Legendario</option></select>
             </label>

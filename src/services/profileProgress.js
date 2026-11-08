@@ -1,11 +1,11 @@
-import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, updateDoc } from 'firebase/firestore'
+import { collection, getDocs, query } from 'firebase/firestore'
 import { db } from '@/firebase'
+import iconDefaults from './profileIconDefaults.json'
+import { progressRequest } from './progressClient'
 import { earnedAchievements } from './achievementProgress'
 
-export const READ_REWARD_STARS = 10
-export const READ_REWARD_DELAY_MS = 30000
-export const GACHAPON_COST = 20
-export const ICON_COST = 25
+export { READ_REWARD_STARS, READ_REWARD_DELAY_MS } from './starProgress'
+import { READ_REWARD_DELAY_MS } from './starProgress'
 export const STARTER_ICON_LIMIT = 5
 
 const titleFromFileName = (value = '') => String(value)
@@ -55,7 +55,9 @@ export const kirbyIcons = Object.entries(profileIconModules)
       name: `${saga} ${displayName}`,
       src,
       saga,
-      cost: ICON_COST,
+      requiredStars: iconDefaults.find(icon => icon.sourcePath === path.replace('../iconos/', ''))?.requiredStars ?? 25,
+      order: iconDefaults.find(icon => icon.sourcePath === path.replace('../iconos/', ''))?.order ?? 0,
+      active: true,
       builtIn: true,
       sourcePath: path.replace('../iconos/', '')
     }
@@ -79,12 +81,14 @@ export const getIconById = (id) => kirbyIcons.find(icon => icon.id === id)
 export const normalizeProfileIcon = (id, data = {}) => ({
   id,
   name: data.name || 'Icono de comunidad',
-  src: data.src || data.imageUrl || '',
+  src: data.imageUrl || data.src || '',
   saga: data.saga || data.category || 'Especiales',
   special: Boolean(data.special),
   rarity: ['normal', 'rare', 'epic', 'legendary'].includes(data.rarity) ? data.rarity : data.special ? 'epic' : 'normal',
   effectColor: data.effectColor || '#a855f7',
-  cost: Number(data.cost ?? ICON_COST),
+  requiredStars: Number.isSafeInteger(data.requiredStars) && data.requiredStars >= 0 ? data.requiredStars : (iconDefaults.find(icon => icon.id === id)?.requiredStars ?? 25),
+  order: Number.isSafeInteger(data.order) && data.order >= 0 ? data.order : (iconDefaults.find(icon => icon.id === id)?.order ?? 10000),
+  active: data.active !== false,
   builtIn: Boolean(data.builtIn),
   local: Boolean(data.local),
   visible: data.visible === undefined ? true : Boolean(data.visible),
@@ -94,7 +98,7 @@ export const normalizeProfileIcon = (id, data = {}) => ({
 })
 
 export const loadUploadedProfileIcons = async ({ includeHidden = false } = {}) => {
-  const iconsQuery = query(collection(db, 'profileIcons'), orderBy('createdAt', 'desc'))
+  const iconsQuery = query(collection(db, 'profileIcons'))
   const snap = await getDocs(iconsQuery)
   const savedById = new Map(snap.docs.map(item => [item.id, normalizeProfileIcon(item.id, item.data())]))
   const localIcons = kirbyIcons.map(icon => {
@@ -102,7 +106,7 @@ export const loadUploadedProfileIcons = async ({ includeHidden = false } = {}) =
     return normalizeProfileIcon(icon.id, {
       ...icon,
       ...saved,
-      src: icon.src,
+      src: saved?.src || icon.src,
       sourcePath: icon.sourcePath,
       local: true,
       saga: saved?.saga || icon.saga
@@ -111,53 +115,20 @@ export const loadUploadedProfileIcons = async ({ includeHidden = false } = {}) =
 
   const localIds = new Set(localIcons.map(icon => icon.id))
   const uploadedIcons = [...savedById.values()].filter(icon => !localIds.has(icon.id))
-  return [...localIcons, ...uploadedIcons].filter(icon => icon.src && (includeHidden || (icon.visible && !icon.archived)))
+  return [...localIcons, ...uploadedIcons].filter(icon => icon.src && (includeHidden || (icon.visible && icon.active && !icon.archived))).sort((a,b) => a.order - b.order || a.name.localeCompare(b.name))
 }
 
-export const updateProfileIcon = async ({ iconId, name, saga, cost, visible = true, sourcePath = '', src = '', special = false, effectColor = '#a855f7', rarity = 'normal' }) => {
-  if (!iconId) throw new Error('missing-icon')
-
-  const updates = {
-    name: String(name || 'Icono de comunidad').trim(),
-    saga: String(saga || 'Especiales').trim(),
-    special: Boolean(special),
-    rarity: ['normal', 'rare', 'epic', 'legendary'].includes(rarity) ? rarity : 'normal',
-    effectColor: String(effectColor || '#a855f7'),
-    cost: Math.max(0, Number(cost || 0)),
-    visible: Boolean(visible),
-    archived: !visible,
-    local: Boolean(sourcePath),
-    sourcePath,
-    imageUrl: src,
-    updatedAt: Date.now()
-  }
-
-  await setDoc(doc(db, 'profileIcons', iconId), {
-    ...updates,
-    createdAt: Date.now()
-  }, { merge: true })
-  return updates
-}
-
-export const archiveProfileIcon = async ({ iconId }) => {
-  if (!iconId) throw new Error('missing-icon')
-
-  await updateDoc(doc(db, 'profileIcons', iconId), {
-    archived: true,
-    archivedAt: Date.now(),
-    updatedAt: Date.now()
-  })
-}
+export const updateProfileIcon = data => progressRequest('update-icon', data)
 
 export const resolveProfileIcon = (profile = {}) => {
   const selected = getIconById(profile.selectedIcon)
-  return selected?.src || profile.selectedIconUrl || profile.imageUrl || fallbackProfileIcon
+  return profile.selectedIconUrl || selected?.src || profile.imageUrl || fallbackProfileIcon
 }
 
 export const resolveProfileIconMeta = (profile = {}) => {
   const selected = getIconById(profile.selectedIcon)
   const effect = profile.selectedIconEffect || {}
-  const src = selected?.src || profile.selectedIconUrl || profile.imageUrl || fallbackProfileIcon
+  const src = profile.selectedIconUrl || selected?.src || profile.imageUrl || fallbackProfileIcon
 
   return {
     src,
@@ -171,130 +142,7 @@ export const unlockedAchievements = (readCount = 0, items = achievements) => {
   return earnedAchievements(items.filter(item => !item.type || item.type === 'reads'), { reads: readCount })
 }
 
-export const ensureUserProgress = async (user) => {
-  if (!user) return
-
-  const userRef = doc(db, 'users', user.uid)
-  const snap = await getDoc(userRef)
-  const data = snap.exists() ? snap.data() : {}
-
-  await setDoc(userRef, {
-    name: data.name || user.displayName || user.email || 'Usuario',
-    email: data.email || user.email || '',
-    imageUrl: data.imageUrl || user.photoURL || '',
-    stars: Number(data.stars || 0),
-    readPostsCount: Number(data.readPostsCount || 0),
-    unlockedIcons: data.unlockedIcons?.length ? data.unlockedIcons : ['kirby-01'],
-    selectedIcon: data.selectedIcon || 'kirby-01',
-    selectedIconUrl: data.selectedIconUrl || '',
-    updatedAt: Date.now()
-  }, { merge: true })
-}
-
-export const awardPostRead = async ({ user, post }) => {
-  if (!user || !post?.id) return { awarded: false }
-
-  const userRef = doc(db, 'users', user.uid)
-  const readRef = doc(db, 'users', user.uid, 'readPosts', post.id)
-  const configuredReward = Math.max(0, Number(post.starReward || READ_REWARD_STARS))
-  const multiplier = Math.max(0, Number(post.rewardMultiplier || 1))
-  const rewardStars = Math.max(0, Math.round(configuredReward * multiplier))
-
-  return runTransaction(db, async (transaction) => {
-    const readSnap = await transaction.get(readRef)
-    const userSnap = await transaction.get(userRef)
-    const achievementSnap = await transaction.get(doc(db, 'siteConfig', 'profileAchievements'))
-
-    if (readSnap.exists()) {
-      return { awarded: false }
-    }
-
-    const data = userSnap.exists() ? userSnap.data() : {}
-    const nextStars = Number(data.stars || 0) + rewardStars
-    const nextReadCount = Number(data.readPostsCount || 0) + 1
-    const currentUnlocked = data.unlockedIcons?.length ? data.unlockedIcons : ['kirby-01']
-
-    transaction.set(readRef, {
-      postId: post.id,
-      title: post.title || '',
-      category: post.category || 'General',
-      rewardBadges: Array.isArray(post.rewardBadges) ? post.rewardBadges : [],
-      stars: rewardStars,
-      readAt: Date.now()
-    })
-
-    transaction.set(userRef, {
-      stars: nextStars,
-      readPostsCount: nextReadCount,
-      unlockedIcons: currentUnlocked,
-      selectedIcon: data.selectedIcon || 'kirby-01',
-      updatedAt: Date.now()
-    }, { merge: true })
-
-    return {
-      awarded: true,
-      awardedStars: rewardStars,
-      stars: nextStars,
-      readPostsCount: nextReadCount,
-      achievements: unlockedAchievements(nextReadCount, achievementSnap.exists() && Array.isArray(achievementSnap.data().items) ? achievementSnap.data().items : achievements)
-    }
-  })
-}
-
-export const redeemIcon = async ({ userId, iconId, expectedCost }) => {
-  if (!userId || !iconId) throw new Error('missing-icon')
-  return runTransaction(db, async (transaction) => {
-    const userRef = doc(db, 'users', userId)
-    const iconRef = doc(db, 'profileIcons', iconId)
-    const userSnap = await transaction.get(userRef)
-    const iconSnap = await transaction.get(iconRef)
-    if (!userSnap.exists()) throw new Error('missing-user')
-    const user = userSnap.data()
-    const currentUnlocked = user.unlockedIcons?.length ? user.unlockedIcons : ['kirby-01']
-    const balance = Number(user.stars || 0)
-    if (currentUnlocked.includes(iconId)) return { stars: balance, unlockedIcons: currentUnlocked, redeemed: false }
-    const localIcon = kirbyIcons.find(icon => icon.id === iconId)
-    const icon = iconSnap.exists() ? iconSnap.data() : localIcon
-    if (!icon || icon.visible === false || icon.archived) throw new Error('unavailable-icon')
-    const cost = Number(icon.cost ?? ICON_COST)
-    if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(balance)) throw new Error('invalid-cost')
-    if (expectedCost !== undefined && cost !== Number(expectedCost)) throw new Error('price-changed')
-    if (balance < cost) throw new Error('not-enough-stars')
-    const result = { stars: balance - cost, unlockedIcons: [...currentUnlocked, iconId], redeemed: true }
-    transaction.update(userRef, { stars: result.stars, unlockedIcons: result.unlockedIcons, updatedAt: Date.now() })
-    return result
-  })
-}
-
-// Uses the existing entitlement transaction: balance and icon ownership commit together.
-// Excludes already owned icons, including when another tab won one concurrently.
-export async function drawProfileIcon({ userId, expectedCost }) {
-  if (!userId) throw new Error('missing-user')
-  const catalog = await loadUploadedProfileIcons()
-  return runTransaction(db, async transaction => {
-    const userRef = doc(db, 'users', userId)
-    const userSnap = await transaction.get(userRef)
-    const priceSnap = await transaction.get(doc(db, 'siteSettings', 'gachaponPrices'))
-    if (!userSnap.exists()) throw new Error('missing-user')
-    const user = userSnap.data()
-    const balance = Number(user.stars || 0)
-    const cost = priceSnap.exists() ? Number(priceSnap.data().normal) : GACHAPON_COST
-    if (!Number.isSafeInteger(cost) || cost < 1 || cost > 1000000 || !Number.isSafeInteger(balance) || balance < 0) throw new Error('invalid-cost')
-    if (expectedCost !== undefined && cost !== expectedCost) throw new Error('price-changed')
-    if (balance < cost) throw new Error('not-enough-stars')
-    const owned = user.unlockedIcons?.length ? user.unlockedIcons : ['kirby-01']
-    const pool = catalog.filter(icon => icon.visible !== false && !icon.archived && !owned.includes(icon.id))
-    if (!pool.length) throw new Error('collection-complete')
-    const limit = 2 ** 32 - (2 ** 32 % pool.length)
-    const random = new Uint32Array(1)
-    do { globalThis.crypto.getRandomValues(random) } while (random[0] >= limit)
-    const chosen = pool[random[0] % pool.length]
-    const current = await transaction.get(doc(db, 'profileIcons', chosen.id))
-    if (current.exists() && (current.data().visible === false || current.data().archived)) throw new Error('catalog-changed')
-    if (!current.exists() && !kirbyIcons.some(icon => icon.id === chosen.id)) throw new Error('catalog-changed')
-    const icon = current.exists() ? normalizeProfileIcon(chosen.id, { ...current.data(), ...(chosen.local ? { src: chosen.src } : {}) }) : chosen
-    const result = { icon, stars: balance - cost, unlockedIcons: [...owned, chosen.id], cost }
-    transaction.update(userRef, { stars: result.stars, unlockedIcons: result.unlockedIcons, updatedAt: Date.now() })
-    return result
-  })
-}
+export const ensureUserProgress = user => user ? progressRequest('sync') : Promise.resolve()
+export const beginPostRead = ({ user, post }) => user && post?.id ? progressRequest('begin-read', { postId: post.id }) : Promise.resolve()
+export const awardPostRead = ({ user, post }) => user && post?.id ? progressRequest('award-read', { postId: post.id }) : Promise.resolve({ awarded: false })
+export const equipProfileIcon = iconId => progressRequest('equip', { iconId })

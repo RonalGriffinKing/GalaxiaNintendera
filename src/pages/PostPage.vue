@@ -7,7 +7,7 @@ import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from "firebase/fi
 import { auth, db } from "@/firebase"
 import { resolveAssetUrl } from '@/constants/assets'
 import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
-import { READ_REWARD_STARS, awardPostRead, getReadRewardDelayMs, resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
+import { beginPostRead, awardPostRead, getReadRewardDelayMs, resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { renderRichText } from '@/services/richText'
 import AnalysisRatingCard from '@/components/posts/AnalysisRatingCard.vue'
 import ReaderActions from '@/components/posts/ReaderActions.vue'
@@ -87,11 +87,6 @@ const richText = (value) => renderRichText(value)
 const sectionSubtitle = (section = {}) => String(section.subtitle || '').trim()
 const postReleaseTime = computed(() => getTime(post.value.releaseAt || post.value.scheduledAt))
 const isUpcomingPost = computed(() => postReleaseTime.value > Date.now())
-const readRewardStars = computed(() => {
-  const configuredReward = Math.max(0, Number(post.value.starReward || READ_REWARD_STARS))
-  const multiplier = Math.max(0, Number(post.value.rewardMultiplier || 1))
-  return Math.max(0, Math.round(configuredReward * multiplier))
-})
 const authorIcon = computed(() => authorProfile.value ? resolveProfileIcon(authorProfile.value) : '')
 const authorIconMeta = computed(() => authorProfile.value ? resolveProfileIconMeta(authorProfile.value) : {})
 const normalizeCategory = (value) => String(value || '')
@@ -149,7 +144,7 @@ const analysisTier = computed(() => {
 const analysisPros = computed(() => Array.isArray(post.value.analysis?.pros) ? post.value.analysis.pros : [])
 const analysisCons = computed(() => Array.isArray(post.value.analysis?.cons) ? post.value.analysis.cons : [])
 const readBadgeText = computed(() => {
-  if (readStatus.value.awarded) return `Visto +${readRewardStars.value}`
+  if (readStatus.value.awarded) return 'Lectura recompensada'
   if (readStatus.value.viewed) return 'Visto'
   return 'No visto'
 })
@@ -361,10 +356,15 @@ const loadReadStatus = async (requestId = loadRequestId) => {
   readStatus.value = { viewed: viewed || snap.exists(), awarded: snap.exists() }
 }
 
-const startReadRewardTimer = () => {
+const startReadRewardTimer = async () => {
   const user = auth.currentUser
   if (!user || !post.value.id) return
 
+  const readingPostId = post.value.id
+  const requestId = loadRequestId
+  try { await beginPostRead({ user, post: post.value }) }
+  catch { return }
+  if (requestId !== loadRequestId || readingPostId !== post.value.id || auth.currentUser?.uid !== user.uid) return
   readTimer = setTimeout(() => {
     readDelayPassed.value = true
     tryAwardRead()
@@ -394,7 +394,7 @@ const tryAwardRead = async () => {
       readStatus.value = { viewed: true, awarded: true }
       rewardToast.value = {
         show: true,
-        message: `Has ganado ${result.awardedStars || readRewardStars.value} estrellas`
+        message: 'Has ganado 1 estrella de participación'
       }
       setTimeout(() => {
         rewardToast.value.show = false

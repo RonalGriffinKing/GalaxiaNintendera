@@ -257,25 +257,25 @@ export const STARTER_PAGE_TEMPLATES = [
     icon: 'fas fa-star',
     accent: '#facc15',
     type: 'guide',
-    description: 'Como ganar, ver y canjear Puntos Estrella dentro de Galaxia Nintendera.',
+    description: 'Como ganar estrellas permanentes y desbloquear iconos en Galaxia Nintendera.',
     blocks: [
       block('text', {
         body: 'Los Puntos Estrella son una forma de reconocer la participacion dentro de Galaxia Nintendera. Puedes conseguirlos al leer articulos en la web y participar en experiencias que iremos ampliando con el tiempo.\n\nLa idea es que tu actividad tenga una recompensa visible y que tu perfil muestre parte de tu recorrido dentro de la comunidad.'
       }),
       block('rewards', { title: 'Como se consiguen', items: [
-        { id: id(), value: '+10', label: 'Por leer articulos disponibles en la web', icon: 'far fa-newspaper' },
+        { id: id(), value: '+1', label: 'Por noticia leida, una sola vez', icon: 'far fa-newspaper' },
         { id: id(), value: 'Perfil', label: 'Puedes ver tu acumulado desde tu perfil', icon: 'far fa-user' },
-        { id: id(), value: 'Canje', label: 'Cada cierta cantidad puedes desbloquear iconos', icon: 'fas fa-gift' }
+        { id: id(), value: 'Progreso', label: 'Cada cierta cantidad puedes desbloquear iconos', icon: 'fas fa-gift' }
       ] }),
       block('timeline', { title: 'Como funciona', items: [
         { id: id(), title: 'Lee articulos', text: 'Al entrar y leer contenido compatible, el sistema puede sumar Puntos Estrella a tu cuenta.' },
         { id: id(), title: 'Revisa tu perfil', text: 'Tu perfil muestra tu progreso, recompensas e iconos desbloqueados.' },
-        { id: id(), title: 'Canjea iconos', text: 'Cuando tengas suficientes puntos, podras canjear iconos para personalizar tu presencia en la comunidad.' },
+        { id: id(), title: 'Desbloquea iconos', text: 'Cada noticia leida otorga 1 estrella permanente. Los iconos se desbloquean automaticamente al alcanzar sus requisitos.' },
         { id: id(), title: 'Mas usos en el futuro', text: 'No descartamos nuevas implementaciones, recompensas, beneficios, eventos o dinamicas especiales.' }
       ] }),
       block('faq', { title: 'Preguntas frecuentes', items: [
         { id: id(), question: 'Para que sirven los Puntos Estrella?', answer: 'Sirven para desbloquear recompensas del perfil, como iconos, y para reflejar tu participacion en la web.' },
-        { id: id(), question: 'Puedo perder mis puntos?', answer: 'La idea es que sean progresivos. Si en el futuro hay cambios importantes, se comunicaran dentro de la web.' },
+        { id: id(), question: 'Puedo perder mis puntos?', answer: 'No se gastan: son puntos permanentes de participacion.' },
         { id: id(), question: 'Habra mas recompensas?', answer: 'Si. El sistema queda preparado para nuevas recompensas e implementaciones cuando la comunidad crezca.' }
       ] })
     ]

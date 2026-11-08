@@ -1,10 +1,10 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import ProfileAvatar from './ProfileAvatar.vue'
-const props = defineProps({ pending: Object, result: Object, busy: Boolean, saving: Boolean, stars: Number, cost: Function, simulated: Boolean, error: String, inspect: Boolean, own: Boolean, equipped: Boolean, obtained: Boolean, saga: String })
-const emit = defineEmits(['close', 'use', 'gachapon'])
+const props = defineProps({ result: Object, busy: Boolean, saving: Boolean, own: Boolean, equipped: Boolean, obtained: Boolean, saga: String })
+const emit = defineEmits(['close', 'use'])
 const card = ref(null)
-const icon = computed(() => props.result?.icon || props.pending?.icon)
+const icon = computed(() => props.result?.icon)
 const previousFocus = document.activeElement
 const focus = async () => { await nextTick(); (card.value?.querySelector('button.primary:not(:disabled)') || card.value?.querySelector('button:not(:disabled)'))?.focus() }
 watch(() => props.result, focus)
@@ -28,17 +28,13 @@ onUnmounted(() => { document.body.style.overflow = ''; document.removeEventListe
       <section ref="card" class="reward-dialog" role="dialog" aria-modal="true" aria-labelledby="reward-title" :aria-busy="busy || saving">
         <button class="close" type="button" aria-label="Cerrar" :disabled="busy || saving" @click="emit('close')">×</button>
         <div class="reward-art">
-          <span v-if="result && !inspect" class="celebration" aria-hidden="true"><i v-for="n in 12" :key="n" class="fas fa-star" :style="{ '--angle': `${n * 30}deg`, '--delay': `${n % 3 * 70}ms` }"></i></span>
           <ProfileAvatar :src="icon.src" :alt="icon.name" :effect="icon" />
         </div>
-        <p v-if="simulated" class="simulation">Simulación · saldo de prueba</p>
         <h2 id="reward-title">{{ icon.name }}</h2>
         <p>{{ saga }} · {{ { normal: 'Normal', rare: 'Raro', epic: 'Épico', legendary: 'Legendario' }[icon.rarity] || (icon.special ? 'Épico' : 'Normal') }}</p>
-        <p>{{ equipped ? 'Este es tu icono actual.' : obtained ? 'Obtenido · Disponible en tu colección' : 'Pendiente · Puede salir en una tirada aleatoria del gachapón.' }}</p>
+        <p>{{ equipped ? 'Este es tu icono actual.' : obtained ? 'Obtenido · Disponible en tu colección' : 'Se desbloquea con ' + icon.requiredStars + ' estrellas.' }}</p>
         <button v-if="own && obtained && !equipped" class="primary" type="button" :disabled="saving" @click="emit('use', icon.id)">{{ saving ? 'Guardando…' : 'Usar icono' }}</button>
-        <button v-if="own && !obtained" class="primary" type="button" @click="emit('gachapon')">Buscar en el gachapon</button>
         <button type="button" :disabled="saving" @click="emit('close')">Volver a la colección</button>
-        <p v-if="error" role="alert" class="error">{{ error }}</p>
       </section>
     </div>
   </Teleport>
@@ -50,11 +46,6 @@ onUnmounted(() => { document.body.style.overflow = ''; document.removeEventListe
 .reward-dialog h2 { font-size: 20px; line-height: 1.3; }.reward-dialog p { line-height: 1.6; color: var(--text-secondary); }
 .reward-dialog button { min-height: 44px; padding: 10px 16px; border-radius: 10px; background: var(--surface); color: var(--text-primary); }.reward-dialog .primary { background: var(--accent); color: white; }.reward-dialog .close { position: absolute; right: 8px; top: 8px; font-size: 24px; }.reward-dialog button:disabled { opacity: .55; }
 .reward-art { position: relative; display: grid; place-items: center; padding: 12px; }.reward-art :deep(.profile-avatar-ui) { --avatar-size: 72px; }
-.celebration { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }.celebration i { position: absolute; color: #facc15; font-size: 20px; animation: reward-star 1.1s ease-out var(--delay) both; }
-.reward-dialog .simulation { color: #facc15; }.reward-dialog .error { color: #fca5a5; }
-@keyframes reward-star { from { opacity: 0; transform: rotate(var(--angle)) translateY(20px) scale(.2); } 20% { opacity: 1; } to { opacity: 0; transform: rotate(var(--angle)) translateY(95px) scale(1.1); } }
-@media (prefers-reduced-motion: reduce) { .celebration i { animation: none; display: none; } }
-.reward-dialog .close { z-index: 5; display: grid; place-items: center; width: 48px; height: 48px; min-height: 48px; padding: 0; line-height: 1; cursor: pointer; touch-action: manipulation; }
 .reward-dialog .close:disabled { cursor: wait; }
 .reward-dialog .close:focus-visible { outline: 2px solid #c084fc; outline-offset: 2px; }
 .reward-dialog .close:hover:not(:disabled) { background: #a855f733; }

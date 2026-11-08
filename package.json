@@ -11,6 +11,7 @@
   "dependencies": {
     "@netlify/blobs": "^11.1.5",
     "firebase": "^12.12.1",
+    "firebase-admin": "^14.5.0",
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
     "mediabunny": "^1.61.6",

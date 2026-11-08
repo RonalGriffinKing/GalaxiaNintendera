@@ -27,7 +27,7 @@ defineProps({
     type: String,
     default: ''
   },
-  redeemedIconCount: {
+  availableIconCount: {
     type: Number,
     default: 0
   },
@@ -42,10 +42,6 @@ defineProps({
   displayStars: {
     type: Number,
     default: 0
-  },
-  isSpending: {
-    type: Boolean,
-    default: false
   },
   iconPanelOpen: {
     type: Boolean,
@@ -66,7 +62,6 @@ defineProps({
 })
 
 const emit = defineEmits([
-  'open-gachapon',
   'toggle-rewards',
   'toggle-icon-panel',
   'open-icon-collection',
@@ -148,10 +143,10 @@ const emit = defineEmits([
 
 
 
-    <aside class="hero-side"><div class="star-wallet" :class="{ spending: isSpending }">
+    <aside class="hero-side"><div class="star-wallet">
       <i class="fas fa-star"></i>
-      <strong>{{ displayStars }}</strong>
-      <span>estrellas</span>
+      <strong>{{ displayStars }} <small v-if="displayStars >= 100" :aria-label="'Prestigio '+Math.floor(displayStars/100)">&#9733; {{ Math.floor(displayStars/100) }}</small></strong>
+      <span>estrellas de participacion</span><small v-if="Number(profile.stars || 0) > 0 && profile.progressMigrationVersion !== 2">Historial pendiente: {{ profile.stars }} estrellas anteriores conservadas.</small>
       <small>Gana mas leyendo noticias y participando en la galaxia.</small>
       <button v-if="nextProgress" class="hero-next-goal" type="button" @click="emit('toggle-rewards')">
         <span>Siguiente logro</span><strong>{{ nextProgress.label }}</strong>
@@ -161,7 +156,7 @@ const emit = defineEmits([
     </div><div class="hero-rewards-panel">
       <button type="button" @click.stop.prevent="emit('open-icon-collection')">
         <i class="fas fa-icons"></i>
-        <span>{{ redeemedIconCount }} iconos</span>
+        <span>{{ availableIconCount }} iconos</span>
       </button>
       <div v-if="visibleProfileIcons.length" class="hero-icon-stack">
         <ProfileAvatar
@@ -201,7 +196,6 @@ const emit = defineEmits([
         <i class="fas fa-share-nodes"></i>
         Compartir perfil
       </button>
-      <button v-if="isOwnProfile" type="button" class="profile-gachapon-action" @click="emit('open-gachapon')">⭐ Obtener iconos</button>
     </div></aside>
   </section>
 </template>
@@ -234,7 +228,7 @@ button:focus-visible,a:focus-visible { outline:2px solid #c084fc; outline-offset
 .hero-side .profile-actions > .ghost:first-child { display: none; }
 .profile-actions > button i { flex-shrink: 0; font-size: 13px; }
 .profile-actions-three .profile-share-action { grid-column: 1 / -1; }
-.hero-side .profile-actions > .profile-gachapon-action { grid-column:1 / -1; border-color:#c084fc80; background:linear-gradient(120deg,#6427a4,#993d91); }
+
 .hero-rewards-panel > button { display: flex; align-items: center; gap: 6px; font-weight: 500; }
 @media(max-width:1100px) and (min-width:761px) { .profile-hero { grid-template-columns: 120px minmax(0,1fr) 260px; } }
 @media(prefers-reduced-motion:no-preference) { .profile-actions > button { transition: background-color 160ms ease, border-color 160ms ease; } }

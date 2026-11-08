@@ -4,7 +4,7 @@ import { vSoftReveal } from '@/directives/softReveal'
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { onAuthStateChanged, updateProfile } from 'firebase/auth'
-import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc, where, onSnapshot } from 'firebase/firestore'
+import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { fetchXboxProfile, clearXboxProfileCache } from '@/services/xboxProfileClient'
 import { cleanGamertag, validXuid } from '@/services/xboxIdentity'
@@ -25,9 +25,8 @@ import ProfileFavoritesPreview from '@/components/shared/ProfileFavoritesPreview
 import { resolveAssetUrl } from '@/constants/assets'
 import { notifyNewFollower } from '@/services/notifications'
 import {
-  ICON_COST,
-  GACHAPON_COST,
-  drawProfileIcon,
+  ensureUserProgress,
+  equipProfileIcon,
   achievements,
   fallbackProfileIcon,
   kirbyIcons,
@@ -36,6 +35,7 @@ import {
   resolveProfileIconMeta,
   updateProfileIcon
 } from '@/services/profileProgress'
+import { canUseIcon, progressStars } from '@/services/starProgress'
 import { ACHIEVEMENT_TYPES, PROFILE_ICON_FILTERS } from '@/constants/profile'
 
 // Supplied by a future consent-aware adapter; never inferred from profile fields.
@@ -43,27 +43,6 @@ const gamerData = defineProps({ gamerIdentities: { type: Array, default: () => [
 const route = useRoute()
 const router = useRouter()
 const profile = ref(null)
-const gachaponPrice=ref(GACHAPON_COST)
-let unsubscribeGachaponPrices
-onMounted(()=>{unsubscribeGachaponPrices=onSnapshot(doc(db,'siteSettings','gachaponPrices'),snapshot=>{const value=Number(snapshot.data?.()?.normal);gachaponPrice.value=Number.isSafeInteger(value)&&value>=1&&value<=1000000?value:GACHAPON_COST},()=>{})})
-onUnmounted(()=>unsubscribeGachaponPrices?.())
-const gachaponOpen = ref(false)
-const openGachapon = () => { if (isOwnProfile.value) gachaponOpen.value = true }
-const viewGachaponCollection = () => { gachaponOpen.value = false; openRewards('collection') }
-const GachaponModal = defineAsyncComponent(() => import('@/components/profile/gachapon/GachaponModal.vue'))
-const gachaponRemaining = computed(() => allProfileIcons.value.filter(icon => icon.visible !== false && !icon.archived && !unlockedIcons.value.includes(icon.id)).length)
-async function drawGachapon(){
- const uid=profileId.value
- if(!isOwnProfile.value||auth.currentUser?.uid!==uid)throw Error('Inicia sesión en tu perfil.')
- try{
-  const result=await drawProfileIcon({userId:uid,expectedCost:gachaponPrice.value})
-  if(profileId.value===uid&&profile.value?.id===uid)profile.value={...profile.value,stars:result.stars,unlockedIcons:result.unlockedIcons}
-  return result
- }catch(error){
-  const messages={'not-enough-stars':'No tienes suficientes estrellas.','collection-complete':'Ya tienes todos los iconos disponibles.','price-changed':'El precio ha cambiado. Vuelve a abrir el gachapón.','catalog-changed':'El catálogo ha cambiado. Vuelve a intentarlo.'}
-  throw Error(messages[error.message]||'No se pudo confirmar el canje. Revisa tu saldo y tu conexión.')
- }
-}
 const favorites = ref([])
 const threads = ref([])
 const posts = ref([])
@@ -142,7 +121,7 @@ const uploadIconDraft = ref({
   name: '',
   saga: 'Kirby',
   rarity: 'normal',
-  cost: ICON_COST,
+  requiredStars: 25, order: 0, active: true,
   visible: true,
   special: false,
   effectColor: '#a855f7'
@@ -170,7 +149,6 @@ const pendingSelectedIcon = ref('')
 const isRewardsPage = computed(() => route.name === 'profile-rewards')
 const rewardsTab = computed(() => {
   const allowed = ['achievements', 'collection', ...(isAdminOwnProfile.value ? ['manage'] : [])]
-  if (route.query.tab === 'redeem') return 'collection'
   return allowed.includes(route.query.tab) ? route.query.tab : 'achievements'
 })
 const openRewards = (tab = 'achievements') => {
@@ -246,12 +224,17 @@ async function saveNintendoLinks({presenceUrl, profileUrl}) {
  profile.value = {...profile.value, socialLinks:links}
 }
 const readCount = computed(() => Number(profile.value?.readPostsCount || 0))
-const stars = computed(() => Number(profile.value?.stars || 0))
+watch([() => profile.value?.id, () => viewerUid.value], async ([uid, viewer]) => {
+  if (!uid || uid !== viewer) return
+  try { const progress = await ensureUserProgress(auth.currentUser); if (profile.value?.id === uid) profile.value = { ...profile.value, ...progress } }
+  catch { message.value = 'El progreso seguro no esta disponible. Tus datos anteriores se conservan.' }
+})
+const stars = computed(() => progressStars(profile.value || {}))
 const unlockedIcons = computed(() => profile.value?.unlockedIcons?.length ? profile.value.unlockedIcons : ['kirby-01'])
 const isAdminOwnProfile = computed(() => isOwnProfile.value && profile.value?.role === 'admin')
 const displayStars = computed(() => stars.value)
 const managedAchievements = ref([...achievements])
-const effectiveUnlockedIcons = computed(() => unlockedIcons.value)
+const effectiveUnlockedIcons = computed(() => [...new Set([...unlockedIcons.value, ...allProfileIcons.value.filter(icon => canUseIcon(profile.value || {}, icon)).map(icon => icon.id)])])
 const profileIcon = computed(() => {
   if (!profile.value) return fallbackProfileIcon
   const selectedId = isOwnProfile.value ? pendingSelectedIcon.value || profile.value.selectedIcon : profile.value.selectedIcon
@@ -284,7 +267,7 @@ const achievementTypeCounts = computed(() => {
 })
 const achievementMetricValue = (achievement) => achievementValue(achievement, {
   reads: readCount.value, posts: Math.min(6, posts.value.length), communities: userCommunities.value.length,
-  months: profileActiveMonths.value, icons: unlockedIcons.value.length, followers: followersTotal.value
+  months: profileActiveMonths.value, icons: effectiveUnlockedIcons.value.length, followers: followersTotal.value
 })
 const achievementTypeMeta = (achievement) => achievementTypeMap[achievement?.type || 'reads'] || achievementTypeMap.reads
 const earnedAchievements = computed(() => managedAchievements.value.filter(item => achievementMetricValue(item) >= achievementTarget(item)))
@@ -322,7 +305,7 @@ const allProfileIcons = computed(() => {
     return {
       ...icon,
       ...saved,
-      src: icon.src,
+      src: saved?.src || icon.src,
       sourcePath: icon.sourcePath,
       builtIn: true,
       local: true,
@@ -333,21 +316,20 @@ const allProfileIcons = computed(() => {
     }
   })
   const managedIcons = [...managedById.values()]
-  const icons = [...builtInIcons, ...managedIcons]
+  const icons = [...builtInIcons, ...managedIcons].sort((a,b) => a.order-b.order || a.name.localeCompare(b.name))
 
   return isAdminOwnProfile.value
     ? icons
-    : icons.filter(icon => (icon.visible && !icon.archived) || unlockedIcons.value.includes(icon.id))
+    : icons.filter(icon => (icon.visible && icon.active !== false && !icon.archived) || unlockedIcons.value.includes(icon.id))
 })
 const manageableProfileIcons = computed(() => allProfileIcons.value)
-const redeemedProfileIcons = computed(() => allProfileIcons.value.filter(icon => unlockedIcons.value.includes(icon.id)))
-const visibleProfileIcons = computed(() => redeemedProfileIcons.value.slice(0, 8))
+const availableProfileIcons = computed(() => allProfileIcons.value.filter(icon => effectiveUnlockedIcons.value.includes(icon.id)))
+const visibleProfileIcons = computed(() => availableProfileIcons.value.slice(0, 8))
 const iconFilters = computed(() => {
   const dynamic = allProfileIcons.value.map(icon => iconSaga(icon)).filter(Boolean)
   return ['Todos', 'Especiales', ...new Set([...PROFILE_ICON_FILTERS, ...dynamic])]
 })
 const iconSaga = (icon) => icon.saga || 'Especiales'
-const iconCost = (icon) => Math.max(0, Number(icon?.cost ?? ICON_COST))
 const socialItems = computed(() => [
   { id: 'tiktok', label: 'TikTok', icon: 'fab fa-tiktok', url: profile.value?.socialLinks?.tiktok || '' },
   { id: 'youtube', label: 'YouTube', icon: 'fab fa-youtube', url: profile.value?.socialLinks?.youtube || '' },
@@ -807,7 +789,7 @@ const openIconUpload = (icon = null) => {
     name: editableIcon.name,
     saga: iconSaga(editableIcon),
     rarity: editableIcon.rarity || (editableIcon.special ? 'epic' : 'normal'),
-    cost: iconCost(editableIcon),
+    requiredStars: editableIcon.requiredStars, order: editableIcon.order, active: editableIcon.active,
     visible: Boolean(editableIcon.visible && !editableIcon.archived),
     special: Boolean(editableIcon.special),
     effectColor: editableIcon.effectColor || '#a855f7'
@@ -829,7 +811,7 @@ const resetUploadIconForm = () => {
     name: '',
     saga: 'Kirby',
     rarity: 'normal',
-    cost: ICON_COST,
+    requiredStars: 25, order: 0, active: true,
     visible: true,
     special: false,
     effectColor: '#a855f7'
@@ -853,14 +835,14 @@ const saveUploadedIcon = async () => {
       name: uploadIconDraft.value.name,
       saga: uploadIconDraft.value.saga,
       rarity: uploadIconDraft.value.rarity,
-      cost: uploadIconDraft.value.cost,
+      requiredStars: uploadIconDraft.value.requiredStars, order: uploadIconDraft.value.order, active: uploadIconDraft.value.active,
       visible: uploadIconDraft.value.visible,
       special: uploadIconDraft.value.special,
       effectColor: uploadIconDraft.value.effectColor,
       sourcePath: icon.sourcePath,
-      src: icon.src
+      src: uploadIconPreview.value
     })
-    const updatedIcon = { ...icon, ...saved, src: icon.src, sourcePath: icon.sourcePath }
+    const updatedIcon = { ...icon, ...saved, src: uploadIconPreview.value, sourcePath: icon.sourcePath }
     customIcons.value = customIcons.value.some(item => item.id === icon.id)
       ? customIcons.value.map(item => (item.id === icon.id ? { ...item, ...updatedIcon } : item))
       : [...customIcons.value, updatedIcon]
@@ -870,10 +852,7 @@ const saveUploadedIcon = async () => {
         effectColor: updatedIcon.effectColor || '#a855f7',
         saga: iconSaga(updatedIcon)
       }
-      await updateDoc(doc(db, 'users', profileId.value), {
-        selectedIconEffect,
-        updatedAt: Date.now()
-      })
+      await equipProfileIcon(icon.id)
       profile.value = {
         ...profile.value,
         selectedIconEffect,
@@ -890,7 +869,7 @@ const saveUploadedIcon = async () => {
     resetUploadIconForm()
     message.value = saved.visible ? 'Icono visible para todo el mundo.' : 'Icono oculto para todo el mundo.'
   } catch (error) {
-    uploadIconMessage.value = 'No se pudo guardar la ficha del icono.'
+    uploadIconMessage.value = error.message === 'catalog-change-requires-batched-maintenance' ? 'Este cambio requiere conservar derechos de mas de 450 usuarios. Se necesita preparar el mantenimiento por lotes antes de aplicarlo.' : 'No se pudo guardar la ficha del icono. Comprueba los campos y la conexion.'
   } finally {
     isUploadingIcon.value = false
   }
@@ -939,47 +918,19 @@ const saveProfile = async () => {
 
 const selectIcon = async (iconId) => {
   if (!isOwnProfile.value || !effectiveUnlockedIcons.value.includes(iconId) || isSavingIcon.value) return
-
-
+  const uid = profileId.value
   isSavingIcon.value = true
   message.value = ''
-  const selectedCatalogIcon = allProfileIcons.value.find(icon => icon.id === iconId)
-  const selectedIconUrl = selectedCatalogIcon?.builtIn ? '' : selectedCatalogIcon?.src || ''
-  const selectedIconEffect = {
-    special: Boolean(selectedCatalogIcon?.special),
-    effectColor: selectedCatalogIcon?.effectColor || '#a855f7',
-    saga: iconSaga(selectedCatalogIcon || {})
-  }
-  const previousProfile = profile.value
-  const nextProfile = {
-    ...profile.value,
-    selectedIcon: iconId,
-    selectedIconUrl,
-    selectedIconEffect,
-    updatedAt: Date.now()
-  }
-  profile.value = nextProfile
-  pendingSelectedIcon.value = iconId
-  window.dispatchEvent(new CustomEvent('galaxy-profile-updated', {
-    detail: {
-      uid: profileId.value,
-      profile: nextProfile
-    }
-  }))
-
   try {
-    await updateDoc(doc(db, 'users', profileId.value), {
-      selectedIcon: iconId,
-      selectedIconUrl,
-      selectedIconEffect,
-      updatedAt: Date.now()
-    })
+    const saved = await equipProfileIcon(iconId)
+    if (profileId.value !== uid || auth.currentUser?.uid !== uid) return false
+    profile.value = { ...profile.value, ...saved }
+    pendingSelectedIcon.value = saved.selectedIcon
+    window.dispatchEvent(new CustomEvent('galaxy-profile-updated', { detail: { uid, profile: profile.value } }))
     message.value = 'Icono actualizado.'
     return true
-  } catch (error) {
-    profile.value = previousProfile
-    pendingSelectedIcon.value = previousProfile?.selectedIcon || 'kirby-01'
-    message.value = 'No se pudo guardar el icono.'
+  } catch {
+    message.value = 'No se pudo guardar el icono. Comprueba la conexion y su disponibilidad.'
     return false
   } finally {
     isSavingIcon.value = false
@@ -1168,8 +1119,6 @@ watch(message, (value) => {
   if (value) noticeTimer = setTimeout(() => { message.value = '' }, 5000)
 })
 watch(() => route.params.uid, loadProfile)
-watch(() => route.fullPath, () => { gachaponOpen.value = false })
-watch(isOwnProfile, own => { if (!own) gachaponOpen.value = false })
 watch(() => route.fullPath, () => { closeIconPanel(); achievementEditorOpen.value = false; message.value = '' })
 watch(postActivityItems, (items) => {
   if (recentPostIndex.value >= items.length) recentPostIndex.value = 0
@@ -1211,8 +1160,8 @@ onUnmounted(() => {
     </div>
 
     <template v-if="!isLoading && profile">
-      <ProfileRewardsHub v-if="isRewardsPage" :tab="rewardsTab" :profile="{ ...profile, selectedIcon: pendingSelectedIcon || profile.selectedIcon }" :icons="allProfileIcons" :unlocked="effectiveUnlockedIcons" :stars="displayStars" :selection-reset="selectionReset" :own="isOwnProfile" :admin="isAdminOwnProfile" :busy="isSavingIcon" :cost="iconCost" :saga="iconSaga"
-        @tab="changeRewardsTab" @back="router.push({ name: 'profile', params: { uid: profileId } })" @equip="selectIcon" @gachapon="openGachapon" @manage-icon="openIconUpload">
+      <ProfileRewardsHub v-if="isRewardsPage" :tab="rewardsTab" :profile="{ ...profile, selectedIcon: pendingSelectedIcon || profile.selectedIcon }" :icons="allProfileIcons" :unlocked="effectiveUnlockedIcons" :stars="displayStars" :selection-reset="selectionReset" :own="isOwnProfile" :admin="isAdminOwnProfile" :busy="isSavingIcon" :saga="iconSaga"
+        @tab="changeRewardsTab" @back="router.push({ name: 'profile', params: { uid: profileId } })" @equip="selectIcon" @manage-icon="openIconUpload">
         <template #achievements>      <ProfileAchievementsPanel
         v-model:draft="achievementDraft"
         :open="true" inline
@@ -1257,7 +1206,7 @@ onUnmounted(() => {
         :next-progress="achievementRoadmap.find(item => item.isNext || !item.unlocked)"
         :is-own-profile="isOwnProfile"
         :member-since="memberSince"
-        :redeemed-icon-count="redeemedProfileIcons.length"
+        :available-icon-count="availableProfileIcons.length"
         :visible-profile-icons="visibleProfileIcons"
         :social-items="socialItems"
         :display-stars="displayStars"
@@ -1267,7 +1216,6 @@ onUnmounted(() => {
         :is-following="isFollowing"
         :can-use-direct-chat="canUseDirectChat"
         @toggle-rewards="openRewards()"
-        @open-gachapon="openGachapon()"
         @toggle-icon-panel="toggleIconPanel"
         @open-icon-collection="openRewards('collection')"
         @toggle-follow="toggleFollow"
@@ -1439,8 +1387,7 @@ onUnmounted(() => {
       </section>
       </template>
       <AppNotice :message="message" :type="message.startsWith('No se') ? 'error' : 'success'" />
-      <GachaponModal v-if="gachaponOpen && isOwnProfile" :stars="stars" :cost="gachaponPrice" :remaining="gachaponRemaining" :draw="drawGachapon" :equip="selectIcon" @collection="viewGachaponCollection" @close="gachaponOpen = false" />
-      <ProfileIconEditor :start-systems="connectionsRequested" :systems-busy="systemsBusy" v-if="iconPanelOpen || iconUploadOpen" v-model:profile-draft="profileDraft" v-model:upload-icon-draft="uploadIconDraft" :profile="profile" :profile-icon="profileIcon" :profile-icon-meta="profileIconMeta" :panel-open="iconPanelOpen" :upload-open="iconUploadOpen" :edit-message="editMessage" :is-saving-profile="isSavingProfile" :is-uploading-icon="isUploadingIcon" :editing-icon-id="editingIconId" :upload-icon-preview="uploadIconPreview" :upload-icon-message="uploadIconMessage" :icon-filters="iconFilters" @close-panel="closeIconPanel" @close-upload="closeIconUpload" @save-profile="saveProfile" @open-rewards="openRewards('collection')" @save-uploaded-icon="saveUploadedIcon">
+      <ProfileIconEditor :start-systems="connectionsRequested" :systems-busy="systemsBusy" v-if="iconPanelOpen || iconUploadOpen" v-model:profile-draft="profileDraft" v-model:upload-icon-draft="uploadIconDraft" :profile="profile" :profile-icon="profileIcon" :profile-icon-meta="profileIconMeta" :panel-open="iconPanelOpen" :upload-open="iconUploadOpen" :edit-message="editMessage" :is-saving-profile="isSavingProfile" :is-uploading-icon="isUploadingIcon" :editing-icon-id="editingIconId" :upload-icon-preview="uploadIconPreview" :upload-icon-message="uploadIconMessage" :icon-filters="iconFilters" @close-panel="closeIconPanel" @close-upload="closeIconUpload" @save-profile="saveProfile" @open-rewards="openRewards('collection')" @image-url="uploadIconPreview = $event" @save-uploaded-icon="saveUploadedIcon">
         <template #systems><ProfileSystemsPanel :xbox-link="xboxLink" :xbox-identity="xboxIdentity" :xbox-loading="xboxLoading" :xbox-error="xboxError" :save-xbox-link="saveXboxLink" :refresh-xbox="refreshXboxProfile" :own="isOwnProfile" :url="nintendoUrl" :profile-url="nintendoProfileUrl" :identity="nintendoIdentity" :loading="nintendoLoading" :error="nintendoError" :save-link="saveNintendoLinks" :refresh="() => nintendoRefresh++" @busy="systemsBusy=$event" /></template>
       </ProfileIconEditor>
 

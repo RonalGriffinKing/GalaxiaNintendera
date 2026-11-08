@@ -392,20 +392,7 @@
               <i :class="isAccordionOpen('extras') ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
             </button>
             <div v-show="isAccordionOpen('extras')" class="accordion-body">
-              <div class="field-grid-2">
-                <label class="field-group">
-                  <span>Puntos estrella</span>
-                  <input v-model.number="post.starReward" type="number" min="0" />
-                </label>
-                <label class="field-group">
-                  <span>Multiplicador</span>
-                  <select v-model="post.rewardMultiplier">
-                    <option value="1">x1</option>
-                    <option value="1.5">x1.5</option>
-                    <option value="2">x2</option>
-                  </select>
-                </label>
-              </div>
+              <p>Cada noticia le?da otorga 1 estrella permanente, una sola vez por usuario.</p>
               <label class="field-group">
                 <span>Badges / misiones relacionadas</span>
                 <input v-model="post.rewardBadgesText" placeholder="kirby-day, direct-live, guia-pro" />
@@ -780,7 +767,6 @@ import { addDoc, collection, deleteField, doc, getDocs, updateDoc, writeBatch } 
 import { auth, db } from '@/firebase'
 import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
 import { loadPostCategories } from '@/services/postCategories'
-import { READ_REWARD_STARS } from '@/services/profileProgress'
 import { renderRichText } from '@/services/richText'
 import { playPublishSound } from '@/services/uiSounds'
 
@@ -886,8 +872,6 @@ const post = ref({
   canonicalUrl: '',
   visibility: 'public',
   indexGoogle: true,
-  starReward: READ_REWARD_STARS,
-  rewardMultiplier: '1',
   rewardBadgesText: '',
   releaseAt: 0,
   teaserVisible: true,
@@ -1089,8 +1073,6 @@ onMounted(async () => {
     post.value.visibility = post.value.visibility || 'public'
     post.value.indexGoogle = post.value.indexGoogle !== false
     post.value.homePriority = post.value.homePriority || 'normal'
-    post.value.starReward = Number(post.value.starReward || READ_REWARD_STARS)
-    post.value.rewardMultiplier = String(post.value.rewardMultiplier || '1')
     releaseAtInput.value = toLocalDateTimeInput(post.value.releaseAt || post.value.scheduledAt)
     post.value.teaserVisible = post.value.teaserVisible !== false
     const savedGame = post.value.game || {}
@@ -1573,8 +1555,6 @@ const savePost = async (targetStatus = 'pending') => {
     cleanPost.extraMedia = String(cleanPost.extraMediaText || '').split('\n').map(item => item.trim()).filter(Boolean)
     cleanPost.keywords = String(cleanPost.keywordsText || autoKeywords.value).split(',').map(item => item.trim()).filter(Boolean)
     cleanPost.rewardBadges = String(cleanPost.rewardBadgesText || '').split(',').map(item => item.trim()).filter(Boolean)
-    cleanPost.starReward = Number(cleanPost.starReward || READ_REWARD_STARS)
-    cleanPost.rewardMultiplier = String(cleanPost.rewardMultiplier || '1')
     cleanPost.slug = String(cleanPost.slug || autoSlug.value).trim()
     cleanPost.metaDescription = String(cleanPost.metaDescription || autoMetaDescription.value).trim()
     cleanPost.placement = isHeroMode.value ? 'hero' : 'news'

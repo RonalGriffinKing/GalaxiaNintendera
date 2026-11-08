@@ -7,7 +7,7 @@ Ejemplos:
 - `Especiales/evento.png`
 - `Pokemon/pikachu.png`
 
-Al reiniciar o recompilar la app, el panel de admin los detecta. No se muestran en la tienda hasta que el admin active "Mostrar en la tienda de iconos" y guarde la ficha.
+Al reiniciar o recompilar la app, el panel de admin los detecta. Su visibilidad, estado, orden y requisito de estrellas se configuran desde el gestor de iconos.
 
 Carpetas preparadas:
 

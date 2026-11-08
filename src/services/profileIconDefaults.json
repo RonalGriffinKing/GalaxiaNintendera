@@ -1,0 +1,418 @@
+[
+  {
+    "id": "kirby-01",
+    "requiredStars": 0,
+    "order": 0,
+    "sourcePath": "iconosKirby/01.png",
+    "name": "Kirby 01",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-02",
+    "requiredStars": 0,
+    "order": 1,
+    "sourcePath": "iconosKirby/02.png",
+    "name": "Kirby 02",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-03",
+    "requiredStars": 0,
+    "order": 2,
+    "sourcePath": "iconosKirby/03.png",
+    "name": "Kirby 03",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-04",
+    "requiredStars": 0,
+    "order": 3,
+    "sourcePath": "iconosKirby/04.png",
+    "name": "Kirby 04",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-05",
+    "requiredStars": 0,
+    "order": 4,
+    "sourcePath": "iconosKirby/05.png",
+    "name": "Kirby 05",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-06",
+    "requiredStars": 10,
+    "order": 5,
+    "sourcePath": "iconosKirby/06.png",
+    "name": "Kirby 06",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-07",
+    "requiredStars": 10,
+    "order": 6,
+    "sourcePath": "iconosKirby/07.png",
+    "name": "Kirby 07",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-08",
+    "requiredStars": 10,
+    "order": 7,
+    "sourcePath": "iconosKirby/08.png",
+    "name": "Kirby 08",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-09",
+    "requiredStars": 10,
+    "order": 8,
+    "sourcePath": "iconosKirby/09.png",
+    "name": "Kirby 09",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-10",
+    "requiredStars": 10,
+    "order": 9,
+    "sourcePath": "iconosKirby/10.png",
+    "name": "Kirby 10",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-11",
+    "requiredStars": 10,
+    "order": 10,
+    "sourcePath": "iconosKirby/11.png",
+    "name": "Kirby 11",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-12",
+    "requiredStars": 10,
+    "order": 11,
+    "sourcePath": "iconosKirby/12.png",
+    "name": "Kirby 12",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-13",
+    "requiredStars": 10,
+    "order": 12,
+    "sourcePath": "iconosKirby/13.png",
+    "name": "Kirby 13",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-14",
+    "requiredStars": 10,
+    "order": 13,
+    "sourcePath": "iconosKirby/14.png",
+    "name": "Kirby 14",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-15",
+    "requiredStars": 10,
+    "order": 14,
+    "sourcePath": "iconosKirby/15.png",
+    "name": "Kirby 15",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-16",
+    "requiredStars": 25,
+    "order": 15,
+    "sourcePath": "iconosKirby/16.png",
+    "name": "Kirby 16",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-17",
+    "requiredStars": 25,
+    "order": 16,
+    "sourcePath": "iconosKirby/17.png",
+    "name": "Kirby 17",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-18",
+    "requiredStars": 25,
+    "order": 17,
+    "sourcePath": "iconosKirby/18.png",
+    "name": "Kirby 18",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-19",
+    "requiredStars": 25,
+    "order": 18,
+    "sourcePath": "iconosKirby/19.png",
+    "name": "Kirby 19",
+    "saga": "Kirby"
+  },
+  {
+    "id": "kirby-20",
+    "requiredStars": 25,
+    "order": 19,
+    "sourcePath": "iconosKirby/20.png",
+    "name": "Kirby 20",
+    "saga": "Kirby"
+  },
+  {
+    "id": "zelda-01",
+    "requiredStars": 25,
+    "order": 20,
+    "sourcePath": "iconosZelda/01.png",
+    "name": "Zelda 01",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-02",
+    "requiredStars": 25,
+    "order": 21,
+    "sourcePath": "iconosZelda/02.png",
+    "name": "Zelda 02",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-03",
+    "requiredStars": 25,
+    "order": 22,
+    "sourcePath": "iconosZelda/03.png",
+    "name": "Zelda 03",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-04",
+    "requiredStars": 25,
+    "order": 23,
+    "sourcePath": "iconosZelda/04.png",
+    "name": "Zelda 04",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-05",
+    "requiredStars": 25,
+    "order": 24,
+    "sourcePath": "iconosZelda/05.png",
+    "name": "Zelda 05",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-06",
+    "requiredStars": 50,
+    "order": 25,
+    "sourcePath": "iconosZelda/06.png",
+    "name": "Zelda 06",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-07",
+    "requiredStars": 50,
+    "order": 26,
+    "sourcePath": "iconosZelda/07.png",
+    "name": "Zelda 07",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-08",
+    "requiredStars": 50,
+    "order": 27,
+    "sourcePath": "iconosZelda/08.png",
+    "name": "Zelda 08",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-09",
+    "requiredStars": 50,
+    "order": 28,
+    "sourcePath": "iconosZelda/09.png",
+    "name": "Zelda 09",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-10",
+    "requiredStars": 50,
+    "order": 29,
+    "sourcePath": "iconosZelda/10.png",
+    "name": "Zelda 10",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-11",
+    "requiredStars": 50,
+    "order": 30,
+    "sourcePath": "iconosZelda/11.png",
+    "name": "Zelda 11",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-12",
+    "requiredStars": 50,
+    "order": 31,
+    "sourcePath": "iconosZelda/12.png",
+    "name": "Zelda 12",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-13",
+    "requiredStars": 50,
+    "order": 32,
+    "sourcePath": "iconosZelda/13.png",
+    "name": "Zelda 13",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-14",
+    "requiredStars": 50,
+    "order": 33,
+    "sourcePath": "iconosZelda/14.png",
+    "name": "Zelda 14",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-15",
+    "requiredStars": 50,
+    "order": 34,
+    "sourcePath": "iconosZelda/15.png",
+    "name": "Zelda 15",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-16",
+    "requiredStars": 100,
+    "order": 35,
+    "sourcePath": "iconosZelda/16.png",
+    "name": "Zelda 16",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-17",
+    "requiredStars": 100,
+    "order": 36,
+    "sourcePath": "iconosZelda/17.png",
+    "name": "Zelda 17",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-418",
+    "requiredStars": 100,
+    "order": 37,
+    "sourcePath": "iconosZelda/418.png",
+    "name": "Zelda 418",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-518",
+    "requiredStars": 100,
+    "order": 38,
+    "sourcePath": "iconosZelda/518.png",
+    "name": "Zelda 518",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-618",
+    "requiredStars": 100,
+    "order": 39,
+    "sourcePath": "iconosZelda/618.png",
+    "name": "Zelda 618",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-718",
+    "requiredStars": 100,
+    "order": 40,
+    "sourcePath": "iconosZelda/718.png",
+    "name": "Zelda 718",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-818",
+    "requiredStars": 100,
+    "order": 41,
+    "sourcePath": "iconosZelda/818.png",
+    "name": "Zelda 818",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-918",
+    "requiredStars": 100,
+    "order": 42,
+    "sourcePath": "iconosZelda/918.png",
+    "name": "Zelda 918",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-1018",
+    "requiredStars": 100,
+    "order": 43,
+    "sourcePath": "iconosZelda/1018.png",
+    "name": "Zelda 1018",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-1118",
+    "requiredStars": 100,
+    "order": 44,
+    "sourcePath": "iconosZelda/1118.png",
+    "name": "Zelda 1118",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-1218",
+    "requiredStars": 10,
+    "order": 45,
+    "sourcePath": "iconosZelda/1218.png",
+    "name": "Zelda 1218",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-1318",
+    "requiredStars": 10,
+    "order": 46,
+    "sourcePath": "iconosZelda/1318.png",
+    "name": "Zelda 1318",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-1418",
+    "requiredStars": 10,
+    "order": 47,
+    "sourcePath": "iconosZelda/1418.png",
+    "name": "Zelda 1418",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-1518",
+    "requiredStars": 10,
+    "order": 48,
+    "sourcePath": "iconosZelda/1518.png",
+    "name": "Zelda 1518",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-1618",
+    "requiredStars": 10,
+    "order": 49,
+    "sourcePath": "iconosZelda/1618.png",
+    "name": "Zelda 1618",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-1718",
+    "requiredStars": 10,
+    "order": 50,
+    "sourcePath": "iconosZelda/1718.png",
+    "name": "Zelda 1718",
+    "saga": "Zelda"
+  },
+  {
+    "id": "zelda-1818",
+    "requiredStars": 10,
+    "order": 51,
+    "sourcePath": "iconosZelda/1818.png",
+    "name": "Zelda 1818",
+    "saga": "Zelda"
+  }
+]
