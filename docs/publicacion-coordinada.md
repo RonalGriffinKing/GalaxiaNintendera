@@ -3,6 +3,12 @@
 Solo preparación local. No se autorizan ni ejecutan cambios en Netlify/Firebase,
 respaldos de datos reales, despliegues, creación de buckets ni activación de progreso.
 
+**Decisión final del propietario (08/11/2026):** detener el respaldo de datos y
+preparar la publicación sin seguir desarrollándolo. La lectura se ha detenido;
+no existe una copia completa verificada de Firestore. La copia de datos deja de
+ser un requisito de este procedimiento por instrucción posterior del propietario.
+No se ejecutará ningún despliegue hasta recibir su aprobación expresa.
+
 ## 1. Lo que configura el propietario en Netlify
 
 Abrir el proyecto correcto → **Project configuration → Environment variables →
@@ -53,6 +59,18 @@ autorización independiente y un proyecto Firebase de pruebas sin datos reales.
 
 ## 3. Respaldos: preparar ahora, ejecutar solo tras autorización
 
+Esta sección describe alternativas históricas. El respaldo de Firestore está
+detenido por petición expresa; no volver a ejecutarlo durante la publicación.
+Para recuperación del código se han conservado el tag local
+`recovery/antes-publicar-firebase-20261108`, el código anterior de `main` y el
+paquete compatible en `.restore-backups/firebase-release-20261108/` (ignorado por
+Git). El paquete incluye `dist`, las nueve funciones empaquetadas y las reglas
+completas, además de los manifiestos de dependencias/configuración. Los recursos
+públicos actuales descargados son una referencia adicional, no una exportación
+del despliegue de Netlify. Antes del despliegue autorizado registrar su ID actual
+en Netlify Deploys y conservarlo como referencia histórica. La versión antigua
+no debe reactivarse sin verificar compatibilidad con las reglas restrictivas.
+
 Alternativa local preparada posteriormente: [respaldo local cifrado](respaldo-local-firestore.md).
 Permite evitar bucket y activación de facturación, con lectura Admin SDK durante
 una ventana sin escrituras. La copia real sigue pendiente de autorización;
@@ -75,9 +93,9 @@ Los requisitos de bucket/Blaze siguientes aplican solo a la alternativa administ
 
 ## 4. Orden de publicación, sujeto a aprobación expresa
 
-1. Confirmar respaldo válido, proyecto/UID correctos, variables privadas y
+1. Confirmar proyecto/UID correctos, variables privadas y
    `PROGRESS_ENABLED=false`; acordar una ventana breve y conservar versión segura
-   compatible para reversión. No publicar si falla el respaldo o la configuración.
+   compatible para reversión. No publicar reglas si falla la configuración.
 2. Publicar juntos el cliente y las funciones compatibles: `public-content`,
    `seo-files`, `xbox-profile`, `profile-progress` (esta última desactivada).
 3. Comprobar que la función pública responde y filtra datos privados, carga una
@@ -93,6 +111,40 @@ Los requisitos de bucket/Blaze siguientes aplican solo a la alternativa administ
 6. Si falla: mantener reglas restrictivas y volver solo a un paquete compatible
    previamente validado. Si no existe uno, pausar el módulo afectado; no restaurar
    el permiso global abierto ni la web antigua que depende de él.
+
+### Comandos preparados: no ejecutados
+
+Desde `audit/estrellas-sin-gacha`, con autorización expresa y sesión Netlify
+disponible. Revisar en su interfaz que las tres variables incluyen alcance
+Functions/contexto Production y que el proyecto es `warm-flan-768d6e`. Las rutas
+públicas actuales de las nuevas funciones devuelven HTML de la SPA, no sus
+respuestas JSON: esto no demuestra todavía que reciban las variables en runtime.
+No mostrar ni pasar el JSON privado como argumento de consola.
+
+```powershell
+npx netlify-cli deploy --prod --context production --site warm-flan-768d6e
+```
+
+El comando actual de Netlify compila y publica cliente y funciones conjuntamente.
+No usar subida manual de `dist` sin funciones. Después comprobar como mínimo:
+
+- `GET /.netlify/functions/profile-progress`: JSON 503 `progress-not-configured`.
+- `GET /.netlify/functions/public-content?collection=sitePages`: JSON 200 sin
+  borradores ni datos privados; verificar además una noticia y un perfil público.
+- Verificar sitemap, imágenes existentes y pantalla administrativa del UID
+  confirmado. Si falla, **detener aquí y no publicar reglas**.
+
+Solo con esas comprobaciones correctas, aplicar el archivo completo, sin Storage,
+índices, migraciones ni ampliación de la fecha abierta:
+
+```powershell
+firebase deploy --project widget-dreams --config security/firebase.release.json --only firestore:rules
+```
+
+Guardar el ID del nuevo despliegue compatible: será la versión de recuperación
+con las reglas restrictivas activas. Una corrección posterior de reglas debe
+mantener la denegación por defecto y los campos privados protegidos; nunca usar
+el archivo histórico abierto como rollback. Ningún comando anterior se ha ejecutado.
 
 Vencimiento vigente: **15/11/2026, 01:00 Madrid**. No ampliar la regla abierta.
 
