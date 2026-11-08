@@ -295,7 +295,7 @@ const selectFilter = async (filter) => {
   await nextTick()
   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))
   if(request!==filterScrollRequest)return
-  const results=document.querySelector('.listing-layout'),bar=document.querySelector('.listing-filter-navigation')
+  const results=document.querySelector('.listing-layout'),bar=document.querySelector('.listing-filter-bar')
   if(!results||!bar)return
   const resultTop=window.scrollY+results.getBoundingClientRect().top
   const height=bar.getBoundingClientRect().height
@@ -3205,4 +3205,16 @@ watch(() => route.fullPath, () => {
  .listing-search-trigger:focus-visible{outline:2px solid #e9b4ff;outline-offset:2px}
  .listing-sort-combobox{margin-bottom:24px;width:100%;min-width:0}
 }
+</style>
+<style scoped>
+/* One bounded toolbar: filters and ordering move together on every screen. */
+.listing-filter-bar{display:flex;align-items:center;gap:4px;position:sticky;top:calc(var(--public-nav-offset,64px) + 8px);z-index:30;width:100%;max-width:100%;min-width:0;margin:0 0 20px;padding:4px;border:1px solid #b78bfa66;border-radius:999px;background:#111024f5;box-shadow:0 6px 20px #0003;box-sizing:border-box}
+.listing-header-hidden .listing-filter-bar{top:calc(12px + env(safe-area-inset-top,0px))}
+.listing-filter-navigation{position:static;flex:1;min-width:0;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.listing-filter-navigation .category-filter-rail{width:100%;border:0;background:transparent;box-shadow:none}
+.listing-sort-combobox{flex:0 0 auto;width:auto;min-width:155px;margin:0}
+.listing-sort-trigger{min-height:42px;height:auto;background:transparent;border:0;border-left:1px solid #b78bfa30;border-radius:0;padding:10px 14px;box-shadow:none}
+.listing-sort-trigger:hover,.listing-sort-trigger[aria-expanded=true]{background:#a78bfa12;box-shadow:none}
+.listing-sort-menu{top:calc(100% + 10px);border-radius:14px;background:#17132b;border:1px solid #b78bfa55}
+@media(max-width:859px){.listing-filter-bar{margin-bottom:14px}.listing-sort-combobox{min-width:112px;max-width:42%}.listing-sort-trigger{font-size:11px;padding:10px 9px;gap:8px}.listing-search-trigger{flex:0 0 34px;width:34px;height:34px;margin:0}.listing-search-trigger svg{width:17px;height:17px}}
 </style>

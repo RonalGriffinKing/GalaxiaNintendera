@@ -5,6 +5,7 @@ defineProps({
   sort: { type: String, default: '' },
   sortOptions: { type: Array, default: () => [] },
   pageSize: { type: Number, default: 20 },
+  showPageSize: { type: Boolean, default: true },
   pageSizeOptions: { type: Array, default: () => [10, 20, 25] }
 })
 
@@ -31,7 +32,7 @@ const emit = defineEmits(['update:search', 'update:sort', 'update:pageSize'])
       </option>
     </select>
 
-    <select :value="pageSize" @change="emit('update:pageSize', Number($event.target.value))">
+    <select v-if="showPageSize" :value="pageSize" @change="emit('update:pageSize', Number($event.target.value))">
       <option v-for="option in pageSizeOptions" :key="option" :value="option">
         {{ option }} por página
       </option>

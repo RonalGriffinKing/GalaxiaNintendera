@@ -1,6 +1,10 @@
 <script setup>
 import EventCountdown from './EventCountdown.vue'
 import { defaultBannerUrl, defaultLogoUrl, resolveAssetUrl } from '@/constants/assets'
+import { eventState, eventReplayLink } from '@/services/eventPresentation'
+import { useEventClock } from '@/composables/useEventClock'
+const now=useEventClock()
+const replay=event=>eventReplayLink(event,import.meta.env.VITE_YOUTUBE_HANDLE)
 
 defineProps({
   event: {
@@ -14,14 +18,10 @@ defineProps({
   notified: {
     type: Boolean,
     default: false
-  },
-  isAdmin: {
-    type: Boolean,
-    default: false
   }
 })
 
-const emit = defineEmits(['close', 'notify', 'calendar', 'edit', 'delete'])
+const emit = defineEmits(['close', 'notify', 'calendar'])
 
 const formatDate = (value) => new Intl.DateTimeFormat('es-ES', {
   weekday: 'long',
@@ -40,7 +40,7 @@ const typeClass = (type = '') => String(type || 'evento').toLowerCase()
     <Transition name="event-detail">
       <div class="event-detail-modal">
         <button class="event-detail-backdrop" type="button" aria-label="Cerrar detalle" @click="emit('close')"></button>
-        <section class="event-detail-card">
+        <section class="event-detail-card" role="dialog" aria-modal="true" aria-labelledby="event-detail-title" @keydown.esc="emit('close')">
           <button class="event-detail-close" type="button" aria-label="Cerrar" @click="emit('close')">
             <i class="fas fa-xmark"></i>
           </button>
@@ -51,7 +51,7 @@ const typeClass = (type = '') => String(type || 'evento').toLowerCase()
           </div>
 
           <div class="event-detail-copy">
-            <h2>{{ event.title }}</h2>
+            <h2 id="event-detail-title">{{ event.title }}</h2>
             <p>{{ event.description || 'Evento de Galaxia Nintendera para toda la comunidad.' }}</p>
 
             <div class="event-detail-meta">
@@ -67,17 +67,19 @@ const typeClass = (type = '') => String(type || 'evento').toLowerCase()
               </span>
             </div>
 
-            <EventCountdown :starts-at="event.startsAt" />
+            <EventCountdown v-if="eventState(event,now)!=='past'" :starts-at="event.startsAt" />
+            <p v-else class="event-finished">Evento finalizado</p>
 
             <div class="event-detail-actions">
-              <a v-if="event.url" :href="event.url" target="_blank" rel="noreferrer">Abrir link</a>
-              <button type="button" @click="emit('calendar')">Agregar calendario</button>
-              <button type="button" @click="emit('notify')">
+              <slot name="actions">
+              <a v-if="eventState(event,now)==='past'" :href="replay(event).href" target="_blank" rel="noopener noreferrer"><i class="fab fa-youtube" aria-hidden="true"></i> {{ replay(event).label }}</a>
+              <a v-else-if="event.url" :href="event.url" target="_blank" rel="noreferrer">Abrir link</a>
+              <button v-if="eventState(event,now)!=='past'" type="button" @click="emit('calendar')">Agregar calendario</button>
+              <button v-if="eventState(event,now)!=='past'" type="button" @click="emit('notify')">
                 <i :class="notified ? 'fas fa-bell' : 'far fa-bell'"></i>
                 {{ notified ? 'Notificando' : 'Notificarme' }}
               </button>
-              <button v-if="isAdmin" type="button" @click="emit('edit')">Editar</button>
-              <button v-if="isAdmin" type="button" class="danger" @click="emit('delete')">Borrar</button>
+              </slot>
             </div>
           </div>
         </section>

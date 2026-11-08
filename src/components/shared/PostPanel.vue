@@ -37,6 +37,7 @@
         v-model:search="searchQuery"
         v-model:sort="sortMode"
         :page-size="POST_PAGE_SIZE"
+        :show-page-size="false"
         :page-size-options="[POST_PAGE_SIZE]"
         search-placeholder="Buscar publicaciones..."
         :sort-options="postSortOptions"
@@ -79,13 +80,13 @@
     </div>
 
     <p v-if="isAdmin" class="pin-help">Pineados en la lista cargada: {{ pinnedPosts.length }} / 6. La última publicación entra automáticamente; puedes quitarle el pin. Una nueva publicación sustituye al pin más antiguo si se llena el carrusel.</p>
-    <button v-if="!allPostsLoaded" class="post-create-btn" type="button" :disabled="isLoadingPosts" @click="loadPosts(true)">Cargar todas las publicaciones</button>
     <ContentLoading v-if="isLoadingPosts" variant="cards" />
 
     <div v-else-if="loadError" class="post-empty-results">
       <i class="fas fa-triangle-exclamation"></i>
       <strong>No se pudieron cargar las publicaciones</strong>
       <span>{{ loadError }}</span>
+      <button type="button" class="post-create-btn" @click="loadPosts()">Reintentar</button>
     </div>
 
     <div v-else-if="filteredPosts.length" class="post-table-wrap">
@@ -263,7 +264,7 @@ import { vSoftReveal } from '@/directives/softReveal'
 import AppNotice from '@/components/shared/AppNotice.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, query, orderBy, limit, deleteDoc, deleteField, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
+import { collection, deleteDoc, deleteField, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { resolveAssetUrl } from '@/constants/assets'
 import ListControls from '@/components/shared/ListControls.vue'
@@ -318,7 +319,7 @@ async function togglePin(post) {
   } catch (error) { console.error(error); showToast('No se pudo guardar el pin', 'delete') }
   finally { pinSaving.value = false }
 }
-const isLoadingPosts = ref(false)
+const isLoadingPosts = ref(true)
 const loadError = ref('')
 const filter = ref('all')
 const categoryFilter = ref('all')
@@ -372,12 +373,15 @@ const postSortOptions = [
 ]
 
 const allPostsLoaded = ref(false)
-const loadPosts = async (all = allPostsLoaded.value) => {
+let postsRequest = null
+const loadPosts = () => {
+  if (postsRequest) return postsRequest
+  postsRequest = (async () => {
   isLoadingPosts.value = true
   loadError.value = ''
   try {
-    const snap = await getDocs(all ? collection(db, 'posts') : query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(3)))
-    allPostsLoaded.value = all
+    const snap = await getDocs(collection(db, 'posts'))
+    allPostsLoaded.value = true
     posts.value = snap.docs.map(d => ({ id: d.id, ...d.data() }))
   } catch (error) {
     console.error(error)
@@ -385,7 +389,10 @@ const loadPosts = async (all = allPostsLoaded.value) => {
     posts.value = []
   } finally {
     isLoadingPosts.value = false
+    postsRequest = null
   }
+  })()
+  return postsRequest
 }
 
 const loadCategories = async () => {
@@ -500,7 +507,7 @@ watch(isAdmin, (admin) => {
   if (!admin && filter.value === 'all') filter.value = 'mine'
 }, { immediate: true })
 
-watch([searchQuery, filter, categoryFilter, sortMode], () => { postPager.resetPage(); if (!allPostsLoaded.value) loadPosts(true) })
+watch([searchQuery, filter, categoryFilter, sortMode], () => { postPager.resetPage() })
 
 watch(() => route.query.create, (createTarget) => {
   if (createTarget === 'post') openCreate()

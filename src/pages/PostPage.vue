@@ -1306,3 +1306,9 @@ onUnmounted(() => {
 </style>
 
 <style scoped src="@/assets/styles/editorial-reading.css"></style>
+<style scoped>
+/* The section rail must use the reading column, never its intrinsic tab width. */
+.post-article,.article-reading-panel{min-width:0;grid-template-columns:minmax(0,1fr)}
+.article-section-rail{justify-self:stretch;width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+.article-section-rail .article-section-nav{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+</style>

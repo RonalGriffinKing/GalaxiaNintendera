@@ -8,16 +8,19 @@
       </div>
     </header>
 
-    <nav class="global-manager-tabs" aria-label="Modulos del gestor global">
+    <nav class="global-manager-groups" aria-label="Categorías del gestor">
+      <button v-for="group in managementGroups" :key="group.id" type="button" :class="{active:activeGroup.id===group.id}" :aria-pressed="activeGroup.id===group.id" @click="selectGroup(group)"><i :class="group.icon" aria-hidden="true"></i><span>{{ group.label }}</span></button>
+    </nav>
+    <nav class="global-manager-tabs" :aria-label="'Secciones de '+activeGroup.label">
       <button
-        v-for="tab in visibleTabs"
+        v-for="tab in activeGroup.tabs"
         :key="tab.id"
         type="button"
         :class="{ active: activeTab === tab.id }"
         @click="setActiveTab(tab.id)"
       >
         <i :class="tab.icon"></i>
-        {{ tab.label }}
+        {{ moduleLabel(tab) }}
       </button>
     </nav>
 
@@ -31,19 +34,20 @@
 
         <div v-if="activeActions.length" class="module-actions">
           <button
-            v-for="action in activeActions"
+            v-for="action in activeActions.slice(0,1)"
             :key="action.id"
             type="button"
-            :disabled="action.id === 'theme' && !activeModule"
+            :disabled="!activeModule || isContentLoading"
             @click="runAction(action)"
           >
             <i :class="action.icon"></i>
             {{ action.label }}
           </button>
+          <details v-if="activeActions.length>1" ref="toolsMenu" class="module-tools"><summary>Herramientas <i class="fas fa-chevron-down" aria-hidden="true"></i></summary><div class="module-tools-menu"><button v-for="action in activeActions.slice(1)" :key="action.id" type="button" :disabled="!activeModule || isContentLoading" @click="runAction(action)"><i :class="action.icon" aria-hidden="true"></i>{{ action.label }}</button></div></details>
         </div>
       </header>
 
-        <section class="module-panel" :class="{ 'is-loading': isContentLoading }">
+        <section class="module-panel" :class="{ 'is-loading': isContentLoading && !['posts','events'].includes(activeTab) }">
           <Transition name="manager-fade" mode="out-in">
           <KeepAlive>
             <component
@@ -62,7 +66,7 @@
 
           <Transition name="content-loading-fade">
             <ContentLoading
-              v-if="isInlineLoading"
+              v-if="isInlineLoading && !['posts','events'].includes(activeTab)"
               :module="activeTab"
               variant="inline"
               class="module-loading-layer"
@@ -71,7 +75,7 @@
 
           <Transition name="content-loading-fade">
             <ContentLoading
-              v-if="isSkeletonLoading"
+              v-if="isSkeletonLoading && !['posts','events'].includes(activeTab)"
               :module="activeTab"
               class="module-loading-layer"
             />
@@ -96,8 +100,9 @@ const OverlayPanel = defineAsyncComponent(() => import('@/components/shared/Over
 const VisualThemesPanel = defineAsyncComponent(() => import('@/components/posts/VisualThemesPanel.vue'))
 const CommunityPanel = defineAsyncComponent(() => import('@/components/community/CommunityPanel.vue'))
 const ProfileRewardsManager = defineAsyncComponent(() => import('@/components/admin/ProfileRewardsManager.vue'))
-const EventsPanel = defineAsyncComponent(() => import('@/pages/EventsPage.vue'))
+const EventsPanel = defineAsyncComponent(() => import('@/components/events/EventsManager.vue'))
 const activeModule=ref(null)
+const toolsMenu=ref(null)
 
 const route = useRoute()
 const router = useRouter()
@@ -183,8 +188,22 @@ const visibleTabs = computed(() => tabs.value.filter(tab => {
 
 const activeMeta = computed(() => visibleTabs.value.find(tab => tab.id === activeTab.value) || visibleTabs.value[0] || tabs.value[0])
 const activeComponent = computed(() => activeMeta.value.component)
+const managementGroups=computed(()=>[
+  {id:'content',label:'Contenido',icon:'far fa-file-lines',ids:['posts','pages','communities','events']},
+  {id:'community',label:'Comunidad',icon:'fas fa-users',ids:['users','rewards']},
+  {id:'visual',label:'Diseño y directos',icon:'fas fa-palette',ids:['themes','overlays']}
+].map(group=>({...group,tabs:visibleTabs.value.filter(tab=>group.ids.includes(tab.id))})).filter(group=>group.tabs.length))
+const activeGroup=computed(()=>managementGroups.value.find(group=>group.tabs.some(tab=>tab.id===activeTab.value))||managementGroups.value[0]||{id:'',label:'',tabs:[]})
+const rememberedTabs={}
+const moduleLabel=tab=>({posts:'Posts',pages:'Páginas',communities:'Comunidades',events:'Eventos',users:'Usuarios',rewards:'Iconos y logros',themes:'Temas visuales',overlays:'Overlays'})[tab.id]||tab.label
+function selectGroup(group){setActiveTab(group.tabs.find(tab=>tab.id===rememberedTabs[group.id])?.id||group.tabs[0].id)}
 
 const activeActions = computed(() => {
+  if(activeTab.value==='events' && isAdmin.value) return [
+    {id:'event-create',label:'Crear evento',icon:'fas fa-plus',create:'event'},
+    {id:'event-json',label:'Importar JSON',icon:'fas fa-file-code',create:'event-json'},
+    {id:'event-carousel',label:'Generador mágico',icon:'fas fa-wand-magic-sparkles'}
+  ]
   if(activeTab.value==='themes' && isAdmin.value) return [{id:'theme',label:'Crear tema',icon:'fas fa-plus'}]
   if (activeTab.value === 'posts') {
     const actions = [
@@ -219,6 +238,8 @@ const normalizeTab = (value) => {
 }
 
 const setActiveTab = (tab) => {
+  if(toolsMenu.value)toolsMenu.value.open=false
+  if(activeGroup.value.id)rememberedTabs[activeGroup.value.id]=activeTab.value
   const nextTab = normalizeTab(tab)
   if (nextTab === activeTab.value && route.query.view === nextTab) return
   activeTab.value = nextTab
@@ -226,6 +247,8 @@ const setActiveTab = (tab) => {
 }
 
 const runAction = (action) => {
+  if(toolsMenu.value)toolsMenu.value.open=false
+  if(action.id==='event-carousel'){router.push('/admin/event-share/agenda');return}
   if(action.id==='theme') {activeModule.value?.createTheme();return}
   const query = { view: activeTab.value }
   if (action.create) query.create = action.create
@@ -283,6 +306,8 @@ onMounted(loadRole)
 </script>
 
 <style scoped>
+button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}.global-manager-shell{--control-surface:#10182a;--control-border:#a6b1cf30;--control-text:#d7dfef}.global-manager-shell :deep(.list-controls select){background-color:var(--control-surface);border:1px solid var(--control-border);color:var(--control-text);border-radius:12px;min-height:42px;padding:0 30px 0 12px}
+.global-manager-groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-width:1280px;margin:0 auto 10px}.global-manager-groups button{display:flex;align-items:center;justify-content:center;gap:9px;min-height:48px;padding:11px;border:1px solid var(--border);border-radius:12px;background:var(--admin-surface);color:var(--text-muted);font-size:13px;font-weight:750}.global-manager-groups button.active{border-color:#a78bfa70;color:var(--text-primary);background:linear-gradient(120deg,#a78bfa24,#a78bfa08)}.global-manager-groups button:focus-visible,.module-tools summary:focus-visible{outline:2px solid #c4b5fd;outline-offset:3px}.module-tools{position:relative}.module-tools summary{display:flex;align-items:center;gap:12px;min-height:42px;padding:12px 16px;border:1px solid var(--border);border-radius:12px;color:var(--text-primary);font-size:12px;font-weight:750;list-style:none;cursor:pointer}.module-tools summary::-webkit-details-marker{display:none}.module-tools-menu{position:absolute;right:0;top:calc(100% + 8px);display:grid;gap:4px;padding:7px;min-width:215px;max-width:calc(100vw - 60px);background:var(--admin-surface,#141b2e);border:1px solid #a78bfa40;border-radius:13px;box-shadow:0 15px 40px #0006;z-index:30}.module-actions .module-tools-menu button{background:transparent;justify-content:flex-start;box-shadow:none;color:var(--text-primary);border-radius:8px}.module-actions .module-tools-menu button:hover{background:#a78bfa20}@media(max-width:560px){.global-manager-groups button{font-size:11px;gap:6px;flex-direction:column;line-height:1.3}.global-manager-tabs button{padding:0 11px;font-size:12px}.global-manager-tabs{gap:3px}.module-head{align-items:flex-start}.module-tools-menu{min-width:190px}}
 .global-manager-page {
   background:
     radial-gradient(circle at top left, rgba(168, 85, 247, 0.16), transparent 30%),
@@ -341,7 +366,7 @@ onMounted(loadRole)
   display: flex;
   gap: 8px;
   margin-bottom: 18px;
-  overflow-x: auto;
+  flex-wrap: wrap;
   padding: 8px;
 }
 

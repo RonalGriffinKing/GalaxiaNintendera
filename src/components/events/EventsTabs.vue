@@ -3,17 +3,18 @@ import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
 defineProps({
   modelValue: {
     type: String,
-    default: 'calendar'
+    default: 'upcoming'
   }
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 const tabs = [
-  { id: 'calendar', label: 'Calendario', icon: 'far fa-calendar-days' },
-  { id: 'list', label: 'Lista', icon: 'fas fa-list' },
+  { id: 'all', label: 'Todos', icon: 'fas fa-border-all' },
+  { id: 'upcoming', label: 'Próximos', icon: 'far fa-clock' },
   { id: 'featured', label: 'Destacados', icon: 'far fa-star' },
-  { id: 'communities', label: 'Comunidades', icon: 'fas fa-people-group' }
+  { id: 'communities', label: 'Comunidades', icon: 'fas fa-people-group' },
+  { id: 'past', label: 'Anteriores', icon: 'fas fa-clock-rotate-left' }
 ]
 </script>
 
