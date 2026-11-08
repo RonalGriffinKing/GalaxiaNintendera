@@ -2337,13 +2337,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="community-panel">
+  <div class="community-panel" :class="{ 'is-management': props.managementOnly }">
     <p v-if="managementError" role="alert">{{ managementError }}</p>
     <section v-if="props.managementOnly && isAdmin" class="community-management">
       <div class="management-row"><input v-model="managementSearch" type="search" aria-label="Buscar comunidades" placeholder="Buscar comunidades" /><button type="button" @click="openCreateCommunity">Crear comunidad</button></div>
       <article v-for="community in managedCommunities" :key="community.id" class="management-row">
         <div><h3>{{ community.name }}</h3><p>{{ community.description }}</p><small>{{ community.membersCount || 0 }} miembros <span v-if="community.isOfficial"> ? Oficial</span></small></div>
-        <div><button type="button" @click="startEditCommunity(community)">Editar</button><button v-if="!community.isOfficial && community.id !== OFFICIAL_COMMUNITY_ID" type="button" :disabled="isDeleting" @click="triggerDeleteCommunity(community)">Eliminar</button></div>
+        <div class="management-actions"><button type="button" @click="startEditCommunity(community)">Editar</button><button v-if="!community.isOfficial && community.id !== OFFICIAL_COMMUNITY_ID" type="button" class="management-delete" :disabled="isDeleting" @click="triggerDeleteCommunity(community)">Eliminar</button></div>
       </article>
       <p v-if="!isCommunitiesLoading && !managedCommunities.length">No hay comunidades que coincidan.</p>
     </section>
@@ -5252,4 +5252,33 @@ onUnmounted(() => {
   }
 }
 @media(min-width:761px) { .community-panel { width:var(--public-content-width); max-width:100%; margin-inline:auto; box-sizing:border-box; } }
+
+.community-panel.is-management {
+  background: transparent;
+  color: var(--text-primary);
+  padding: 0;
+  min-height: 0;
+  width: 100%;
+}
+.community-management { display: grid; gap: 12px; min-width: 0; }
+.community-management .management-row {
+  background: var(--admin-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  margin: 0;
+}
+.community-management .management-row:first-child { padding: 0 0 6px; border: 0; }
+.community-management h3 { color: var(--text-primary); font-size: 18px; font-weight: 850; line-height: 1.4; margin: 0 0 6px; }
+.community-management p { color: var(--text-muted); line-height: 1.6; margin: 0 0 6px; }
+.community-management small { color: var(--text-muted); }
+.management-row > div:first-child { flex: 1 1 280px; min-width: 0; overflow-wrap: anywhere; }
+.management-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.community-management button { margin: 0; font-weight: 750; min-height: 42px; }
+.community-management .management-delete { background: transparent; border: 1px solid #f87171; color: #f87171; }
+.community-management button:disabled { opacity: .5; cursor: wait; }
+.community-management input { width: min(100%, 360px); min-height: 44px; }
+.community-management input::placeholder { color: var(--text-muted); }
+.community-management :is(button,input):focus-visible { outline: 2px solid var(--accent,#9333ea); outline-offset: 3px; }
+@media(max-width:600px) { .management-actions { width: 100%; } .management-actions button { flex: 1; } }
 </style>
