@@ -4,19 +4,19 @@
 
 [functions."profile-progress"]
   node_bundler = "esbuild"
-  external_node_modules = ["firebase-admin"]
+  external_node_modules = ["@google-cloud/firestore", "@google-cloud/storage"]
 
 [functions."public-content"]
   node_bundler = "esbuild"
-  external_node_modules = ["firebase-admin"]
+  external_node_modules = ["@google-cloud/firestore", "@google-cloud/storage"]
 
 [functions."seo-files"]
   node_bundler = "esbuild"
-  external_node_modules = ["firebase-admin"]
+  external_node_modules = ["@google-cloud/firestore", "@google-cloud/storage"]
 
 [functions."xbox-profile"]
   node_bundler = "esbuild"
-  external_node_modules = ["firebase-admin"]
+  external_node_modules = ["@google-cloud/firestore", "@google-cloud/storage"]
 
 [build.environment]
   NODE_VERSION = "22"
