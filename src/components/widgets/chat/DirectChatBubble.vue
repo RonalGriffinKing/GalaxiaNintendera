@@ -24,9 +24,7 @@ const currentProfile = ref({ role: 'user', canChat: false, imageUrl: '' })
 const users = ref([])
 const activeUser = ref(null)
 const messages = ref([])
-const liveMessages = ref([])
-const liveChatInfo = ref({ active: false })
-const liveGoals = ref([])
+
 const draft = ref('')
 const replyTarget = ref(null)
 const isSending = ref(false)
@@ -35,15 +33,13 @@ const chatError = ref('')
 const listRef = ref(null)
 const dockRaised = ref(false)
 const communityDock = ref(false)
-const chatMode = ref('direct')
+
 const unreadMessages = ref(0)
 const unreadByChat = ref({})
 const hiddenBefore = ref({})
 let unsubscribeAuth = null
 let unsubscribeMessages = null
-let unsubscribeLiveMessages = null
-let unsubscribeLiveChatInfo = null
-let unsubscribeLiveGoals = null
+
 let unsubscribeInbox = null
 let unsubscribeUsers = null
 let dockObserver = null
@@ -54,7 +50,6 @@ let previousLastMessageIds = new Map()
 let previousBodyOverflow = ''
 let previousBodyOverscroll = ''
 let previousHtmlOverflow = ''
-const LIVE_CHAT_ID = 'galaxia-oficial'
 
 const canUseChat = computed(() => (
   currentUser.value &&
@@ -62,28 +57,9 @@ const canUseChat = computed(() => (
   (['admin', 'publisher'].includes(currentProfile.value.role) || currentProfile.value.canChat)
 ))
 const visibleMessages = computed(() => {
-  if (chatMode.value === 'live') return liveMessages.value
   const hiddenAt = hiddenBefore.value[chatId.value] || 0
   return messages.value.filter(message => getMillis(message.createdAt) > hiddenAt)
 })
-const isLiveChat = computed(() => chatMode.value === 'live')
-const liveChatActive = computed(() => Boolean(liveChatInfo.value.active))
-const liveGoalCards = computed(() => liveGoals.value.map(goal => {
-  const isMission = goal.type === 'mission'
-  const target = Math.max(1, Number(goal.target || 1))
-  const likesBy = goal.likesBy || {}
-  const current = isMission
-    ? (goal.checklist || []).filter(item => item.done).length
-    : Object.values(likesBy).reduce((total, count) => total + Number(count || 0), 0)
-  const nextTarget = isMission ? Math.max(1, (goal.checklist || []).length || target) : target
-  return {
-    ...goal,
-    current,
-    target: nextTarget,
-    progress: Math.min(100, Math.round((current / nextTarget) * 100))
-  }
-}))
-const currentLiveGoal = computed(() => liveGoalCards.value.find(goal => goal.type !== 'mission' && goal.progress < 100) || liveGoalCards.value.find(goal => goal.type !== 'mission') || null)
 
 const chatId = computed(() => {
   if (!currentUser.value || !activeUser.value) return ''
@@ -132,7 +108,6 @@ const profileIconEffect = (user) => resolveProfileIconMeta(user)
 const openChat = async (user = null) => {
   if (!canUseChat.value) return
   open.value = true
-  chatMode.value = 'direct'
 
   if (user?.id) {
     const liveUser = users.value.find(item => item.id === user.id)
@@ -154,7 +129,6 @@ const handleExternalPanelOpen = (event) => {
 
 const backToUsers = () => {
   activeUser.value = null
-  chatMode.value = 'direct'
   draft.value = ''
   replyTarget.value = null
   unsubscribeMessages?.()
@@ -162,7 +136,6 @@ const backToUsers = () => {
 }
 
 const selectUser = (user) => {
-  chatMode.value = 'direct'
   activeUser.value = user
   draft.value = ''
   replyTarget.value = null
@@ -171,7 +144,7 @@ const selectUser = (user) => {
 }
 
 const setReplyTarget = (message) => {
-  if (!message || isLiveChat.value) return
+  if (!message) return
   replyTarget.value = message
 }
 
@@ -210,68 +183,6 @@ const subscribeMessages = () => {
   })
 }
 
-const subscribeLiveMessages = () => {
-  unsubscribeLiveMessages?.()
-  liveMessages.value = []
-  if (!currentUser.value || !canUseChat.value) return
-
-  const messagesQuery = query(
-    collection(db, 'liveChats', LIVE_CHAT_ID, 'messages'),
-    orderBy('createdAt', 'asc'),
-    limit(120)
-  )
-
-  unsubscribeLiveMessages = onSnapshot(messagesQuery, async (snap) => {
-    liveMessages.value = snap.docs.map(item => ({ ...item.data(), id: item.id }))
-    await nextTick()
-    scrollToLatestMessage('smooth')
-  }, (error) => {
-    console.error(error)
-    chatError.value = 'No se pudo cargar el chat en live. Revisa permisos o intenta de nuevo.'
-  })
-}
-
-const subscribeLiveChatInfo = () => {
-  unsubscribeLiveChatInfo?.()
-  liveChatInfo.value = { active: false }
-  if (!currentUser.value || !canUseChat.value) return
-
-  unsubscribeLiveChatInfo = onSnapshot(doc(db, 'liveChats', LIVE_CHAT_ID), (snap) => {
-    liveChatInfo.value = {
-      active: false,
-      ...(snap.data() || {})
-    }
-  }, (error) => {
-    console.error(error)
-  })
-}
-
-const subscribeLiveGoals = () => {
-  unsubscribeLiveGoals?.()
-  liveGoals.value = []
-  if (!currentUser.value || !canUseChat.value) return
-
-  const goalsQuery = query(
-    collection(db, 'liveGoals'),
-    orderBy('createdAt', 'desc'),
-    limit(8)
-  )
-
-  unsubscribeLiveGoals = onSnapshot(goalsQuery, (snap) => {
-    liveGoals.value = snap.docs.map(item => ({
-      id: item.id,
-      type: 'likes',
-      target: 1,
-      checklist: [],
-      likesBy: {},
-      likerProfiles: {},
-      ...item.data()
-    }))
-  }, (error) => {
-    console.error(error)
-  })
-}
-
 const getMillis = (value) => {
   if (!value) return 0
   if (typeof value === 'number') return value
@@ -282,33 +193,12 @@ const getMillis = (value) => {
 const sendMessage = async () => {
   const body = draft.value.trim()
   if (!body || !currentUser.value || !canUseChat.value || isSending.value) return
-  if (!isLiveChat.value && !activeUser.value) return
-  if (isLiveChat.value && !liveChatActive.value) {
-    chatError.value = 'El chat se habilita cuando inicia el live.'
-    return
-  }
+  if (!activeUser.value) return
 
   isSending.value = true
   chatError.value = ''
 
   try {
-    if (isLiveChat.value) {
-      await addDoc(collection(db, 'liveChats', LIVE_CHAT_ID, 'messages'), {
-        body,
-        authorId: currentUser.value.uid,
-        author: currentUser.value.displayName || currentUser.value.email || 'Usuario',
-        authorImage: currentProfile.value.imageUrl || currentUser.value.photoURL || '',
-        createdAt: serverTimestamp()
-      })
-      await setDoc(doc(db, 'liveChats', LIVE_CHAT_ID), {
-        title: 'Chat en live',
-        lastMessagePreview: body,
-        lastMessageAuthorId: currentUser.value.uid,
-        updatedAt: serverTimestamp()
-      }, { merge: true })
-      draft.value = ''
-      return
-    }
 
     await setDoc(doc(db, 'directChats', chatId.value), {
       participants: [currentUser.value.uid, activeUser.value.id],
@@ -357,30 +247,6 @@ const sendMessage = async () => {
   }
 }
 
-const addLiveGoalLike = async () => {
-  const goal = currentLiveGoal.value
-  const user = currentUser.value
-  if (!goal?.id || !user || !canUseChat.value || !liveChatActive.value) return
-
-  const likesBy = {
-    ...(goal.likesBy || {}),
-    [user.uid]: Number(goal.likesBy?.[user.uid] || 0) + 1
-  }
-  const likerProfiles = {
-    ...(goal.likerProfiles || {}),
-    [user.uid]: {
-      name: user.displayName || user.email || 'Usuario',
-      imageUrl: currentProfile.value.imageUrl || user.photoURL || ''
-    }
-  }
-
-  await setDoc(doc(db, 'liveGoals', goal.id), {
-    likesBy,
-    likerProfiles,
-    updatedAt: Date.now()
-  }, { merge: true })
-}
-
 const markMessagesSeen = async () => {
   if (!open.value || !chatId.value || !currentUser.value || !activeUser.value) return
 
@@ -420,7 +286,6 @@ const getOnlineLabel = (user) => {
 }
 
 const messageStatus = (message) => {
-  if (isLiveChat.value) return ''
   if (message.authorId !== currentUser.value?.uid) return ''
   return message.readBy?.[activeUser.value?.id] ? 'Visto' : 'Enviado'
 }
@@ -452,7 +317,6 @@ const stopPresence = async () => {
 }
 
 const clearConversation = async () => {
-  if (isLiveChat.value) return
   if (!chatId.value || !currentUser.value || isClearing.value) return
   if (!window.confirm('Quieres limpiar esta conversacion solo para ti?')) return
 
@@ -630,7 +494,7 @@ watch(open, async (isOpen) => {
     lockPageScroll()
     await nextTick()
     scrollToLatestMessage()
-    if (!isLiveChat.value) await markMessagesSeen()
+    await markMessagesSeen()
     return
   }
 
@@ -638,13 +502,6 @@ watch(open, async (isOpen) => {
 })
 
 watch(activeUser, markMessagesSeen)
-
-watch(chatMode, async (mode) => {
-  if (mode !== 'live') return
-  subscribeLiveMessages()
-  await nextTick()
-  scrollToLatestMessage()
-})
 
 watch(() => visibleMessages.value.length, async () => {
   if (!open.value) return
@@ -655,13 +512,7 @@ watch(() => visibleMessages.value.length, async () => {
 watch(canUseChat, (value) => {
   document.body.classList.toggle('direct-chat-available', Boolean(value))
   if (!value) open.value = false
-  if (value) {
-    subscribeLiveChatInfo()
-    subscribeLiveGoals()
-  } else {
-    unsubscribeLiveChatInfo?.()
-    unsubscribeLiveGoals?.()
-  }
+
 }, { immediate: true })
 
 onMounted(() => {
@@ -674,8 +525,6 @@ onMounted(() => {
     subscribeUsers()
     startPresence()
     subscribeInbox()
-    subscribeLiveChatInfo()
-    subscribeLiveGoals()
   })
 
   window.addEventListener('open-direct-chat', handleOpenRequest)
@@ -700,9 +549,6 @@ onMounted(() => {
 onUnmounted(() => {
   unsubscribeAuth?.()
   unsubscribeMessages?.()
-  unsubscribeLiveMessages?.()
-  unsubscribeLiveChatInfo?.()
-  unsubscribeLiveGoals?.()
   unsubscribeInbox?.()
   unsubscribeUsers?.()
   stopPresence()
@@ -737,11 +583,11 @@ onUnmounted(() => {
     <section
       v-if="open && canUseChat"
       class="direct-chat-panel"
-      :class="{ raised: dockRaised, community: communityDock, 'has-active-chat': activeUser || isLiveChat, 'is-live-chat': isLiveChat }"
+      :class="{ raised: dockRaised, community: communityDock, 'has-active-chat': activeUser }"
     >
       <header class="direct-chat-head">
         <button
-          v-if="activeUser || isLiveChat"
+          v-if="activeUser"
           class="direct-back-btn"
           type="button"
           aria-label="Volver a conversaciones"
@@ -750,7 +596,7 @@ onUnmounted(() => {
           <i class="fas fa-arrow-left"></i>
         </button>
 
-          <div class="direct-chat-title" :class="{ active: activeUser || isLiveChat }">
+          <div class="direct-chat-title" :class="{ active: activeUser }">
             <ProfileAvatar
               v-if="activeUser"
               class="direct-chat-title-avatar"
@@ -768,7 +614,7 @@ onUnmounted(() => {
 
         <div class="direct-chat-head-actions">
           <button
-            v-if="activeUser && !isLiveChat"
+            v-if="activeUser"
             class="direct-clear-btn"
             type="button"
             :disabled="isClearing"
@@ -780,7 +626,7 @@ onUnmounted(() => {
         </div>
       </header>
 
-      <div class="direct-chat-body" :class="{ 'has-active-chat': activeUser || isLiveChat }">
+      <div class="direct-chat-body" :class="{ 'has-active-chat': activeUser }">
         <aside class="direct-chat-users">
           <button
             v-for="user in users"
@@ -810,14 +656,8 @@ onUnmounted(() => {
         </aside>
 
         <main class="direct-chat-room">
-          <div v-if="isLiveChat && currentLiveGoal" class="direct-live-goal-chip">
-            <span><i class="fas fa-heart"></i></span>
-            <strong>{{ currentLiveGoal.title }}</strong>
-            <em>{{ currentLiveGoal.current }} / {{ currentLiveGoal.target }}</em>
-            <i :style="{ width: currentLiveGoal.progress + '%' }"></i>
-          </div>
 
-          <div v-if="activeUser || isLiveChat" ref="listRef" class="direct-message-list" :class="{ live: isLiveChat }">
+          <div v-if="activeUser" ref="listRef" class="direct-message-list">
             <article
               v-for="message in visibleMessages"
               :key="message.id"
@@ -829,13 +669,13 @@ onUnmounted(() => {
                 <span v-if="messageStatus(message)"> - {{ messageStatus(message) }}</span>
               </small>
               <p>{{ message.body }}</p>
-              <button v-if="!isLiveChat" type="button" class="direct-reply-action" @click.stop="setReplyTarget(message)">
+              <button  type="button" class="direct-reply-action" @click.stop="setReplyTarget(message)">
                 Responder
               </button>
             </article>
 
             <div v-if="!visibleMessages.length" class="direct-chat-empty">
-              {{ isLiveChat ? (liveChatActive ? 'Todavia no hay mensajes en este live.' : 'El chat se abre cuando el live inicia.') : 'Todavia no hay mensajes con esta persona.' }}
+              Todavia no hay mensajes con esta persona.
             </div>
           </div>
 
@@ -843,7 +683,7 @@ onUnmounted(() => {
             Selecciona un usuario para enviar un mensaje privado.
           </div>
 
-          <div v-if="replyTarget && activeUser && !isLiveChat" class="direct-reply-bar">
+          <div v-if="replyTarget && activeUser" class="direct-reply-bar">
             <span class="direct-reply-avatar">
               <img v-if="replyTarget.authorImage" :src="replyTarget.authorImage" alt="" />
               <b v-else>{{ (replyTarget.author || 'U').charAt(0).toUpperCase() }}</b>
@@ -857,24 +697,16 @@ onUnmounted(() => {
             </button>
           </div>
 
-          <form class="direct-chat-composer" :class="{ 'has-live-like': isLiveChat && currentLiveGoal, 'has-reply': replyTarget && !isLiveChat }" @submit.prevent="sendMessage">
+          <form class="direct-chat-composer" :class="{ 'has-reply': replyTarget }" @submit.prevent="sendMessage">
             <p v-if="chatError" class="direct-chat-error">{{ chatError }}</p>
             <input
               v-model="draft"
-              :disabled="(!activeUser && !isLiveChat) || (isLiveChat && !liveChatActive) || isSending"
+              :disabled="(!activeUser) || isSending"
               maxlength="240"
-              :placeholder="isLiveChat ? (liveChatActive ? 'Escribe en el chat del live...' : 'Esperando que inicie el live...') : 'Escribe un mensaje privado...'"
+              :placeholder="'Escribe un mensaje privado...'"
             />
-            <button
-              v-if="isLiveChat && currentLiveGoal"
-              class="live-like-composer-btn"
-              type="button"
-              :disabled="!liveChatActive"
-              @click="addLiveGoalLike"
-            >
-              <i class="fas fa-heart"></i>
-            </button>
-            <button :disabled="!draft.trim() || (!activeUser && !isLiveChat) || (isLiveChat && !liveChatActive) || isSending">
+
+            <button :disabled="!draft.trim() || (!activeUser) || isSending">
               <i class="fas fa-paper-plane"></i>
             </button>
           </form>
@@ -1144,61 +976,6 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-.direct-chat-panel.is-live-chat .direct-chat-room {
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.direct-live-goal-chip {
-  align-items: center;
-  background: linear-gradient(135deg, rgba(255, 241, 242, 0.98), rgba(245, 243, 255, 0.98));
-  border-bottom: 1px solid #ede9fe;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
-  min-height: 44px;
-  overflow: hidden;
-  padding: 8px 12px;
-  position: relative;
-}
-
-.direct-live-goal-chip span {
-  align-items: center;
-  background: linear-gradient(135deg, #ec4899, #f43f5e);
-  border-radius: 999px;
-  color: #ffffff;
-  display: flex;
-  height: 28px;
-  justify-content: center;
-  width: 28px;
-}
-
-.direct-live-goal-chip strong {
-  color: #111827;
-  font-size: 12px;
-  font-weight: 950;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.direct-live-goal-chip em {
-  color: #7c3aed;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 950;
-  white-space: nowrap;
-}
-
-.direct-live-goal-chip > i:last-child {
-  background: linear-gradient(90deg, #9333ea, #ec4899, #f59e0b);
-  bottom: 0;
-  display: block;
-  height: 3px;
-  left: 0;
-  position: absolute;
-  transition: width 0.3s ease;
-}
-
 .direct-message-list {
   align-content: start;
   display: grid;
@@ -1387,11 +1164,6 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-.direct-chat-composer .live-like-composer-btn {
-  background: linear-gradient(135deg, #ec4899, #f43f5e);
-  box-shadow: 0 10px 20px rgba(236, 72, 153, 0.22);
-}
-
 .direct-chat-composer button:disabled,
 .direct-chat-composer input:disabled {
   cursor: not-allowed;
@@ -1460,11 +1232,6 @@ onUnmounted(() => {
     max-height: none;
   }
 
-  .direct-chat-panel.is-live-chat.has-active-chat {
-    height: var(--direct-chat-vvh, 100dvh);
-    max-height: none;
-  }
-
   .direct-chat-panel.raised {
     bottom: 0;
   }
@@ -1475,18 +1242,8 @@ onUnmounted(() => {
     max-height: none;
   }
 
-  .direct-chat-panel.community.is-live-chat {
-    height: var(--direct-chat-vvh, 100dvh);
-    max-height: none;
-  }
-
   :global(body.community-quick-nav-active) .direct-chat-panel {
     bottom: 0;
-    height: var(--direct-chat-vvh, 100dvh);
-    max-height: none;
-  }
-
-  :global(body.community-quick-nav-active) .direct-chat-panel.is-live-chat {
     height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
@@ -1596,11 +1353,6 @@ onUnmounted(() => {
     bottom: 58px;
   }
 
-  .direct-live-goal-chip {
-    min-height: 40px;
-    padding: 7px 10px;
-  }
-
 }
 
 @media (max-width: 420px) {
@@ -1615,19 +1367,8 @@ onUnmounted(() => {
     max-height: none;
   }
 
-  .direct-chat-panel.is-live-chat.has-active-chat {
-    height: var(--direct-chat-vvh, 100dvh);
-    max-height: none;
-  }
-
   .direct-chat-panel.community,
   .direct-chat-panel.community.has-active-chat {
-    height: var(--direct-chat-vvh, 100dvh);
-    max-height: none;
-  }
-
-  .direct-chat-panel.community.is-live-chat,
-  .direct-chat-panel.community.is-live-chat.has-active-chat {
     height: var(--direct-chat-vvh, 100dvh);
     max-height: none;
   }
@@ -1705,14 +1446,8 @@ onUnmounted(() => {
 }
 
 .direct-chat-users strong,
-.direct-live-goal-chip strong,
 .direct-reply-bar strong {
   color: #ffffff;
-}
-
-.direct-live-goal-chip {
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(236, 72, 153, 0.16));
-  border-bottom-color: rgba(216, 180, 254, 0.18);
 }
 
 .direct-message-list article {
@@ -1774,7 +1509,7 @@ onUnmounted(() => {
 .direct-chat-panel .direct-chat-room { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
 .direct-chat-panel .direct-message-list { flex: 1 1 0; min-height: 0; overflow-y: auto; }
 .direct-chat-panel .direct-chat-room > .direct-chat-empty { flex: 1 1 0; min-height: 0; }
-.direct-chat-panel .direct-chat-composer,.direct-chat-panel .direct-reply-bar,.direct-chat-panel .direct-live-goal-chip { flex: 0 0 auto; position: static; }
+.direct-chat-panel .direct-chat-composer,.direct-chat-panel .direct-reply-bar { flex: 0 0 auto; position: static; }
 .direct-chat-panel .direct-chat-composer { min-height: 66px; padding-bottom: max(12px,env(safe-area-inset-bottom)); }
 .direct-chat-panel .direct-chat-composer input { min-width: 0; min-height: 42px; font-size: 16px; }
 .direct-chat-body { min-height: 0; overflow: hidden; }

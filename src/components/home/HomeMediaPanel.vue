@@ -2,6 +2,7 @@
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { proxiedImageUrl } from '@/constants/assets'
 import { useTimedCarousel } from '@/composables/useTimedCarousel'
 
@@ -22,6 +23,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['open-community', 'open-item'])
+const router = useRouter()
 
 const channelId = import.meta.env.VITE_YOUTUBE_CHANNEL_ID || ''
 const channelHandle = String(import.meta.env.VITE_YOUTUBE_HANDLE || 'GalaxiaNintendera').replace(/^@+/, '')
@@ -135,11 +137,7 @@ const activeCommunityLabel = computed(() => (
   || (activeVideo.value?.streamKind === 'live-now' ? 'Live global del canal' : 'Galaxia Nintendera')
 ))
 const activeCommunity = computed(() => selectedCommunityOption.value?.community || officialCommunity.value || null)
-const activeEmbedUrl = computed(() => {
-  if (!activeVideo.value?.id) return ''
-  const params = new URLSearchParams({ rel: '0', modestbranding: '1', playsinline: '1' })
-  return `https://www.youtube.com/embed/${activeVideo.value.id}?${params.toString()}`
-})
+
 const activeVideoUrl = computed(() => activeVideo.value?.url || (activeVideo.value?.id ? `https://www.youtube.com/watch?v=${activeVideo.value.id}` : ''))
 
 const channelUrl = computed(() => `https://www.youtube.com/@${channelHandle}`)
@@ -229,26 +227,10 @@ const loadYoutubeFeed = async () => {
   }
 }
 
-const openActive = () => {
-  if (activeVideo.value) {
-    emit('open-item', {
-      id: activeVideo.value.id,
-      title: activeVideo.value.title,
-      description: activeVideo.value.description,
-      type: activeVideo.value.streamKind === 'live-now' ? 'Live' : 'Video',
-      startsAt: activeVideo.value.publishedAt,
-      url: activeVideoUrl.value
-    })
-    return
-  }
-
-  if (activeFallbackItem.value) {
-    emit('open-item', activeFallbackItem.value)
-    return
-  }
-
-  emit('open-community', activeCommunity.value)
+const openCommunityVideo = (video) => {
+  router.push({path:'/comunidad',query:{id:activeCommunity.value?.id || 'galaxia-oficial',...(video?.id ? {v:video.id} : {})}})
 }
+const openActive = () => openCommunityVideo(activeVideo.value)
 const selectCommunity = (communityId) => {
   selectedCommunityId.value = communityId
 }
@@ -281,7 +263,7 @@ onMounted(() => {
       </button>
     </div>
 
-    <div class="media-hero-card" :class="{ 'has-video': activeEmbedUrl }">
+    <div class="media-hero-card" :class="{ 'has-video': Boolean(activeVideo) }">
       <div class="media-spotlight">
         <div class="media-copy">
           <span><i :class="activeVideo?.streamKind === 'live-now' ? 'fas fa-tower-broadcast' : 'fas fa-satellite-dish'"></i> {{ activeCommunityLabel }}</span>
@@ -289,7 +271,7 @@ onMounted(() => {
           <p>{{ activeDescription }}</p>
           <div class="media-actions">
             <button type="button" @click="openActive">
-              {{ activeVideo ? 'Ver ahora' : 'Ir a la comunidad oficial' }}
+              Ver en la comunidad
               <i class="fas fa-arrow-right"></i>
             </button>
             <a :href="channelUrl" target="_blank" rel="noreferrer">
@@ -300,14 +282,7 @@ onMounted(() => {
         </div>
 
         <div class="media-preview">
-          <iframe
-            v-if="activeEmbedUrl"
-            :src="activeEmbedUrl"
-            :title="activeTitle"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowfullscreen
-          ></iframe>
-          <img v-else-if="activeVideo?.thumbnail" :src="activeVideo.thumbnail" alt="" />
+          <img v-if="activeVideo?.thumbnail" :src="activeVideo.thumbnail" alt="" />
           <div v-else class="media-preview-empty"><ContentLoading v-if="youtubeLoading" /><template v-else><i class="fab fa-youtube"></i><strong>Preview del canal</strong></template></div>
           <button type="button" class="media-play-orb" aria-label="Ver video" @click="openActive">
             <i class="fas fa-play"></i>
@@ -356,7 +331,7 @@ onMounted(() => {
         :key="item.id"
         type="button"
         class="media-row"
-        @click="item.url ? emit('open-item', { ...item, type: item.streamKind === 'live-now' ? 'Live' : item.type || 'Video', startsAt: item.publishedAt || item.startsAt }) : emit('open-item', item)"
+        @click="openCommunityVideo(item)"
       >
         <span class="media-row-thumb">
           <img v-if="item.thumbnail" :src="item.thumbnail" alt="" />

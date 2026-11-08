@@ -132,9 +132,7 @@ watch(() => [route.path, route.query.id], ensureOfficialCommunityRoute)
     <MobileNavigationHint />
     <router-view v-slot="{ Component, route: viewRoute }">
       <Transition name="page-soft" mode="out-in">
-        <KeepAlive include="CommunityPage">
           <component :is="Component" :key="viewRoute.name || viewRoute.path" />
-        </KeepAlive>
       </Transition>
     </router-view>
     <SiteFooter v-if="showSiteFooter" />

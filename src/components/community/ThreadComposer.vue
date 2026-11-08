@@ -18,7 +18,7 @@ const props = defineProps({
   autofocus: Boolean
 })
 
-const emit = defineEmits(['published'])
+const emit = defineEmits(['published', 'ready'])
 
 const router = useRouter()
 const isLoading = ref(false)
@@ -33,7 +33,7 @@ const imageUrl = ref('')
 const selectedGif = ref(null)
 const spoiler = ref(false)
 const pollOpen = ref(false)
-const communityPickerOpen = ref(false)
+
 const giphyOpen = ref(false)
 const textAreaRef = ref(null)
 const caretIndex = ref(0)
@@ -71,7 +71,7 @@ const allowedCommunities = computed(() => {
     return joined.has(community.id)
   })
 })
-const selectedCommunity = computed(() => allowedCommunities.value.find(item => item.id === selectedCommunityId.value) || allowedCommunities.value[0] || null)
+const selectedCommunity = computed(() => allowedCommunities.value.find(item => item.id === props.initialCommunityId && item.id === selectedCommunityId.value) || null)
 const topics = computed(() => normalizeTopics(selectedCommunity.value?.threadTopics || defaultTopics))
 const selectedTopicMeta = computed(() => topicMeta(selectedTopic.value || 'Posts'))
 const activeHashtags = computed(() => extractHashtags(body.value))
@@ -180,15 +180,8 @@ const loadContext = async () => {
 
 const pickInitialCommunity = () => {
   const initial = props.initialCommunityId && allowedCommunities.value.find(item => item.id === props.initialCommunityId)
-  selectedCommunityId.value = initial?.id || allowedCommunities.value[0]?.id || ''
+  selectedCommunityId.value = initial?.id || ''
   selectedTopic.value = normalizeTopics(selectedCommunity.value?.threadTopics || defaultTopics)[0]
-}
-
-const selectCommunity = (community) => {
-  selectedCommunityId.value = community.id
-  selectedTopic.value = normalizeTopics(community.threadTopics || defaultTopics)[0]
-  communityPickerOpen.value = false
-  focusComposer()
 }
 
 const focusComposer = () => nextTick(() => textAreaRef.value?.focus())
@@ -363,25 +356,25 @@ onMounted(async () => {
   await loadContext()
   await nextTick()
   resizeTextarea()
+  emit('ready')
   const isMobileViewport = typeof window !== 'undefined' && window.matchMedia('(max-width: 859px)').matches
   if (props.autofocus && !isMobileViewport) textAreaRef.value?.focus()
 })
 </script>
 
 <template>
-  <section class="thread-composer" :class="[`is-${variant}`, { 'picker-open': communityPickerOpen, 'sticker-open': giphyOpen }]">
+  <section class="thread-composer" :class="[`is-${variant}`, { 'sticker-open': giphyOpen }]">
     <ContentLoading v-if="isLoading" variant="inline" />
 
-    <template v-else-if="allowedCommunities.length">
+    <template v-else-if="selectedCommunity">
       <div class="composer-shell">
-        <button class="community-select" type="button" @click="communityPickerOpen = true">
+        <div class="community-select">
           <span>
             <img v-if="selectedCommunity?.iconUrl" :src="resolveAssetUrl(selectedCommunity.iconUrl)" alt="" />
             <b v-else>{{ selectedCommunity?.name?.slice(0, 2).toUpperCase() }}</b>
           </span>
           <strong>{{ selectedCommunity?.name }}</strong>
-          <i class="fas fa-chevron-down"></i>
-        </button>
+        </div>
 
         <div class="composer-content">
         <div class="composer-row">
@@ -457,41 +450,10 @@ onMounted(async () => {
         </div>
       </div>
 
-      <aside class="community-picker-panel">
-        <div class="picker-head">
-          <strong>Elige comunidad</strong>
-          <button type="button" aria-label="Cerrar comunidades" @click="communityPickerOpen = false">
-            <i class="fas fa-xmark"></i>
-          </button>
-        </div>
-        <div class="community-list">
-          <button
-            v-for="community in allowedCommunities"
-            :key="community.id"
-            type="button"
-            :class="{ active: community.id === selectedCommunityId }"
-            @click="selectCommunity(community)"
-          >
-            <span>
-              <img v-if="community.iconUrl" :src="resolveAssetUrl(community.iconUrl)" alt="" />
-              <b v-else>{{ community.name.slice(0, 2).toUpperCase() }}</b>
-            </span>
-            <div>
-              <strong>{{ community.name }}</strong>
-              <small>{{ community.description || 'Comunidad de Galaxia Nintendera.' }}</small>
-            </div>
-            <i class="fas fa-circle-check"></i>
-          </button>
-        </div>
-        <button class="explore-btn" type="button" @click="exploreCommunities">
-          <i class="fas fa-search"></i>
-          Explorar comunidades
-        </button>
-      </aside>
     </template>
 
     <div v-else class="composer-empty">
-      <strong>No tienes comunidades disponibles</strong>
+      <strong>No puedes publicar en esta comunidad</strong>
       <p>Únete a una comunidad para publicar hilos.</p>
       <button type="button" @click="exploreCommunities">Explorar comunidades</button>
     </div>
@@ -604,7 +566,6 @@ onMounted(async () => {
 }
 
 .community-select span,
-.community-list button > span,
 .composer-avatar {
   background: linear-gradient(135deg, #7c3aed, #ec4899);
   border-radius: 999px;
@@ -618,8 +579,7 @@ onMounted(async () => {
   width: 34px;
 }
 
-.community-select img,
-.community-list img {
+.community-select img {
   height: 100%;
   object-fit: cover;
   width: 100%;
@@ -855,111 +815,6 @@ onMounted(async () => {
   cursor: not-allowed;
   filter: grayscale(0.2);
   opacity: 0.45;
-}
-
-.community-picker-panel {
-  background:
-    radial-gradient(circle at 24% 0%, rgba(168, 85, 247, 0.18), transparent 32%),
-    rgba(8, 12, 30, 0.98);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 22px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
-  display: grid;
-  gap: 12px;
-  max-height: min(560px, calc(100dvh - 80px));
-  opacity: 0;
-  padding: 16px;
-  pointer-events: none;
-  position: absolute;
-  right: 0;
-  top: 0;
-  transform: translateY(8px) scale(0.98);
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  width: min(520px, 100%);
-  z-index: 8;
-}
-
-.thread-composer.picker-open .community-picker-panel {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0) scale(1);
-}
-
-.picker-head {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-}
-
-.picker-head strong {
-  color: #fff;
-  font-size: 18px;
-  font-weight: 950;
-}
-
-.picker-head button {
-  color: #cbd5e1;
-  height: 34px;
-  width: 34px;
-}
-
-.community-list {
-  display: grid;
-  gap: 8px;
-  max-height: 360px;
-  overflow-y: auto;
-}
-
-.community-list button {
-  align-items: center;
-  border: 1px solid transparent;
-  border-radius: 16px;
-  color: #fff;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 46px minmax(0, 1fr) 22px;
-  min-height: 66px;
-  padding: 8px;
-  text-align: left;
-}
-
-.community-list button > span {
-  height: 46px;
-  width: 46px;
-}
-
-.community-list strong,
-.community-list small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.community-list strong {
-  font-size: 13px;
-  font-weight: 950;
-  white-space: nowrap;
-}
-
-.community-list small {
-  color: #aeb8d3;
-  font-size: 11px;
-  font-weight: 750;
-  line-height: 1.25;
-}
-
-.community-list button > i {
-  color: #a78bfa;
-  opacity: 0;
-}
-
-.community-list button.active {
-  background: rgba(124, 58, 237, 0.22);
-  border-color: rgba(192, 132, 252, 0.54);
-}
-
-.community-list button.active > i {
-  opacity: 1;
 }
 
 .explore-btn,

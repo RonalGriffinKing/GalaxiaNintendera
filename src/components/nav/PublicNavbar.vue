@@ -8,7 +8,6 @@ import { addDoc, collection, doc, getDoc, getDocs, increment, limit, onSnapshot,
 import { deleteApp, initializeApp } from 'firebase/app'
 import { auth, db, firebaseConfig } from '@/firebase'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
-import { resetPlayerSession } from '@/services/playerState'
 import PublicCreateSheet from '@/components/nav/PublicCreateSheet.vue'
 import NotificationDropdown from '@/components/nav/NotificationDropdown.vue'
 import PublicQuickAdminModals from '@/components/nav/PublicQuickAdminModals.vue'
@@ -624,7 +623,6 @@ const logout = async () => {
   isLoggingOut.value = true
 
   try {
-    resetPlayerSession()
     await signOut(auth)
     confirmLogoutOpen.value = false
     accountMenuOpen.value = false
@@ -943,7 +941,6 @@ const openNotification = async (notification) => {
 onMounted(() => {
   loadRecentSearches()
   unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-    if (!user) resetPlayerSession()
     currentUser.value = user
     await loadUserRole(user)
     subscribeNotifications(user)

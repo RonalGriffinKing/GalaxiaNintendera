@@ -117,6 +117,7 @@ const {
 })
 
 const emit = defineEmits([
+  'composer-ready',
   'open-thread',
   'create-thread',
   'like-thread',
@@ -219,9 +220,11 @@ const deleteComment = (thread, comment) => {
 <template>
   <main class="community-feed" :style="backgroundStyle">
     <ThreadComposer
+      :key="initialCommunityId"
       v-if="canCreate"
       class="community-thread-composer"
       variant="inline"
+      @ready="emit('composer-ready')"
       :initial-community-id="initialCommunityId"
       :user-role="userRole"
     />

@@ -7,11 +7,7 @@ import { auth, db } from '@/firebase'
 import GiphyPicker from '@/components/shared/GiphyPicker.vue'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
-import {
-  playerState,
-  setCurrentTime,
-  setPlaybackStatus
-} from '@/services/playerState'
+
 import { resolveAssetUrl } from '@/constants/assets'
 import officialLogo from '@/iconos/logo.png'
 
@@ -49,25 +45,17 @@ const chatMessagesRef = ref(null)
 const chatInputRef = ref(null)
 const hubContentRef = ref(null)
 const hubContentHeight = ref(0)
-const liveFrameRef = ref(null)
-const liveChatMessagesRef = ref(null)
-const liveChatInputRef = ref(null)
+
 const showJumpToBottom = ref(false)
 const keyboardOffset = ref(0)
 const keyboardOpen = ref(false)
-const liveChatDraft = ref('')
-const selectedLiveGif = ref(null)
-const liveGiphyOpen = ref(false)
-const liveMessages = ref([])
-const liveUnreadCount = ref(0)
-const liveChatPinnedToBottom = ref(true)
-const liveEmbedSrc = ref('')
+
 let unsubscribeAuth = null
 let unsubscribeUsers = null
 let unsubscribeFollowing = null
 let unsubscribeInbox = null
 let unsubscribeHubMessages = null
-let unsubscribeLiveMessages = null
+
 let iconTimer = null
 let previousBodyOverflow = ''
 let previousHtmlOverflow = ''
@@ -79,28 +67,11 @@ const canUseChat = computed(() => (
   (['admin', 'publisher'].includes(currentProfile.value.role) || currentProfile.value.canChat)
 ))
 
-const hasLivePlayer = computed(() => Boolean(playerState.currentVideo?.id && playerState.allowFloatingPlayback))
 const hubTabs = computed(() => [
   { key: 'communities', label: 'Comunidades' },
   { key: 'chat', label: 'Chat' },
-  ...(hasLivePlayer.value ? [{ key: 'live', label: 'Live' }] : [])
 ])
 const activeHubTabIndex = computed(() => Math.max(0, hubTabs.value.findIndex(tab => tab.key === activeTab.value)))
-const buildLiveEmbedSrc = (video = playerState.currentVideo) => {
-  if (!video?.id) return ''
-  const params = new URLSearchParams({
-    autoplay: '1',
-    rel: '0',
-    playsinline: '1',
-    enablejsapi: '1',
-    origin: typeof window === 'undefined' ? '' : window.location.origin
-  })
-  const startAt = Math.max(0, Math.floor(Number(video.startedAt ?? playerState.currentTime ?? 0)))
-  if (startAt > 0) params.set('start', String(startAt))
-  return `https://www.youtube.com/embed/${video.id}?${params.toString()}`
-}
-const liveTitle = computed(() => playerState.currentVideo?.title || 'Video de Galaxia Nintendera')
-const liveStatusLabel = computed(() => playerState.isPlaying ? 'Reproduciendo en segundo plano' : 'Pausado')
 
 const officialCommunity = computed(() => ({
   id: OFFICIAL_COMMUNITY_ID,
@@ -152,11 +123,9 @@ const chatPreview = computed(() => {
 
 const iconCycle = computed(() => {
   if (unreadCount.value) return { key: 'chat', icon: 'fas fa-comment-dots', label: 'Chat' }
-  if (hasLivePlayer.value) return { key: 'live', icon: 'fas fa-circle-play', label: 'Live' }
   const icons = [
     { key: 'communities', icon: 'fas fa-users', label: 'Comunidades' },
     { key: 'chat', icon: 'fas fa-comment-dots', label: 'Chat' },
-    ...(hasLivePlayer.value ? [{ key: 'live', icon: 'fas fa-circle-play', label: 'Live' }] : [])
   ]
   return icons[iconIndex.value % icons.length]
 })
@@ -228,7 +197,7 @@ const messageReadLabel = (message) => {
 }
 
 const openHub = (tab = iconCycle.value.key) => {
-  activeTab.value = ['communities', 'chat', 'live'].includes(tab) ? tab : 'communities'
+  activeTab.value = ['communities', 'chat'].includes(tab) ? tab : 'communities'
   open.value = true
 }
 
@@ -239,8 +208,6 @@ const closeHub = () => {
   chatDraft.value = ''
   selectedChatGif.value = null
   chatGiphyOpen.value = false
-  selectedLiveGif.value = null
-  liveGiphyOpen.value = false
   chatMenuOpen.value = false
   pendingChatAction.value = ''
   unsubscribeHubMessages?.()
@@ -347,18 +314,6 @@ const handleChatGiphySelect = (item) => {
   selectedChatGif.value = item
   chatGiphyOpen.value = false
   nextTick(() => chatInputRef.value?.focus?.({ preventScroll: true }))
-}
-
-const handleLiveGiphySelect = (item) => {
-  if (item.type === 'emoji') {
-    liveChatDraft.value = `${liveChatDraft.value}${item.text}`.slice(0, 280)
-    liveGiphyOpen.value = false
-    nextTick(() => liveChatInputRef.value?.focus?.({ preventScroll: true }))
-    return
-  }
-  selectedLiveGif.value = item
-  liveGiphyOpen.value = false
-  nextTick(() => liveChatInputRef.value?.focus?.({ preventScroll: true }))
 }
 
 let lastMarkedRead = ''
@@ -511,168 +466,6 @@ const resetKeyboardViewport = () => {
   document.documentElement.classList.remove('hub-keyboard-open')
 }
 
-const isLiveChatAtBottom = () => {
-  const container = liveChatMessagesRef.value
-  if (!container) return true
-  return container.scrollHeight - container.scrollTop - container.clientHeight < 48
-}
-
-const scrollLiveChatToBottom = (behavior = 'smooth') => {
-  const container = liveChatMessagesRef.value
-  if (!container) return
-  container.scrollTo({ top: container.scrollHeight, behavior })
-  liveUnreadCount.value = 0
-  liveChatPinnedToBottom.value = true
-}
-
-const handleLiveChatScroll = () => {
-  liveChatPinnedToBottom.value = isLiveChatAtBottom()
-  if (liveChatPinnedToBottom.value) liveUnreadCount.value = 0
-}
-
-const formatLiveTime = (seconds) => {
-  const safe = Math.max(0, Math.floor(Number(seconds || 0)))
-  const minutes = Math.floor(safe / 60)
-  const rest = String(safe % 60).padStart(2, '0')
-  return `${minutes}:${rest}`
-}
-
-const postLiveCommand = (func, args = []) => {
-  liveFrameRef.value?.contentWindow?.postMessage(JSON.stringify({
-    event: 'command',
-    func,
-    args
-  }), '*')
-}
-
-const registerLiveFrame = () => {
-  const frame = liveFrameRef.value
-  if (!frame?.contentWindow) return
-  frame.contentWindow.postMessage(JSON.stringify({
-    event: 'listening',
-    id: 'galaxia-hub-live-player'
-  }), '*')
-}
-
-const syncLivePlayerAfterLoad = () => {
-  registerLiveFrame()
-  const startAt = Math.max(0, Math.floor(Number(playerState.currentTime ?? playerState.currentVideo?.startedAt ?? 0)))
-  const sync = () => {
-    registerLiveFrame()
-    if (startAt > 0) postLiveCommand('seekTo', [startAt, true])
-    if (playerState.isPlaying) postLiveCommand('playVideo')
-  }
-  window.setTimeout(sync, 350)
-  window.setTimeout(sync, 1100)
-}
-
-const openLiveTheater = () => {
-  if (!playerState.currentVideo?.id) return
-  postLiveCommand('pauseVideo')
-  closeHub()
-  window.dispatchEvent(new CustomEvent('galaxia-live-return-community', {
-    detail: { theater: true }
-  }))
-  router.push(`/comunidad?id=${OFFICIAL_COMMUNITY_ID}&v=${encodeURIComponent(playerState.currentVideo.id)}&theater=1`)
-}
-
-const returnToLiveCommunity = () => {
-  if (!playerState.currentVideo?.id) return
-  postLiveCommand('pauseVideo')
-  closeHub()
-  window.dispatchEvent(new CustomEvent('galaxia-live-return-community'))
-  router.push(`/comunidad?id=${OFFICIAL_COMMUNITY_ID}&v=${encodeURIComponent(playerState.currentVideo.id)}`)
-}
-
-const subscribeLiveMessages = (videoId) => {
-  unsubscribeLiveMessages?.()
-  unsubscribeLiveMessages = null
-  liveMessages.value = []
-  liveUnreadCount.value = 0
-  liveChatPinnedToBottom.value = true
-  if (!videoId) return
-  unsubscribeLiveMessages = onSnapshot(
-    query(collection(db, 'videoChats', videoId, 'messages'), orderBy('createdAt', 'asc')),
-    (snap) => {
-      const wasPinned = liveChatPinnedToBottom.value || isLiveChatAtBottom()
-      const previousCount = liveMessages.value.length
-      const nextMessages = snap.docs.map(item => ({ id: item.id, ...item.data() }))
-      liveMessages.value = nextMessages
-      nextTick(() => {
-        if (wasPinned || previousCount === 0) {
-          scrollLiveChatToBottom('auto')
-          return
-        }
-        const addedMessages = Math.max(0, nextMessages.length - previousCount)
-        if (addedMessages > 0) liveUnreadCount.value += addedMessages
-      })
-    },
-    (error) => {
-      console.error('Hub live chat:', error)
-      liveMessages.value = []
-    }
-  )
-}
-
-const sendLiveMessage = async () => {
-  const body = liveChatDraft.value.trim()
-  const gif = selectedLiveGif.value
-  const video = playerState.currentVideo
-  const user = currentUser.value
-  if ((!body && !gif) || !video?.id || !user) return
-
-  liveChatDraft.value = ''
-  selectedLiveGif.value = null
-  liveGiphyOpen.value = false
-  liveChatPinnedToBottom.value = true
-  liveUnreadCount.value = 0
-  await addDoc(collection(db, 'videoChats', video.id, 'messages'), {
-    videoId: video.id,
-    videoTitle: video.title || 'Video de Galaxia Nintendera',
-    videoSecond: Math.max(0, Math.floor(Number(playerState.currentTime || 0))),
-    body: body.slice(0, 280),
-    gif: gifPayload(gif),
-    authorId: user.uid,
-    author: currentProfile.value.name || user.displayName || user.email || 'Usuario',
-    authorImage: currentProfile.value.imageUrl || user.photoURL || '',
-    likedBy: [],
-    likes: 0,
-    replies: [],
-    kind: 'live-message',
-    createdAt: Date.now()
-  })
-  await nextTick()
-  liveChatInputRef.value?.focus({ preventScroll: true })
-  updateKeyboardOffset()
-}
-
-const handleOpenLiveHub = () => {
-  if (!hasLivePlayer.value) return
-  openHub('live')
-}
-
-const handleYoutubePlayerMessage = (event) => {
-  if (!String(event.origin || '').includes('youtube.com')) return
-  let payload = event.data
-  if (typeof payload === 'string') {
-    try {
-      payload = JSON.parse(payload)
-    } catch (error) {
-      return
-    }
-  }
-  if (payload?.event !== 'infoDelivery') return
-  if (Number.isFinite(Number(payload.info?.currentTime))) {
-    setCurrentTime(Number(payload.info.currentTime))
-  }
-  const state = payload.info?.playerState
-  if (state === 1) {
-    setPlaybackStatus('playing')
-  }
-  if (state === 2) setPlaybackStatus('paused')
-  if (state === 0) setPlaybackStatus('stopped')
-}
-
 const loadProfile = async (user) => {
   currentProfile.value = { role: 'user', canChat: false }
   if (!user) return
@@ -772,7 +565,7 @@ watch(open, (isOpen) => {
 })
 
 watch(chatDraft, resizeChatInput)
-watch([activeTab, activeChatUser, hasLivePlayer], measureHubContent)
+watch([activeTab, activeChatUser], measureHubContent)
 
 watch(activeChatUser, (user) => {
   showJumpToBottom.value = false
@@ -787,21 +580,10 @@ watch(activeChatRecord, (record) => {
   if (activeChatUser.value && record?.unread) markActiveChatAsRead(record.lastMessageId)
 })
 
-watch(() => playerState.currentVideo?.id, (videoId) => {
-  subscribeLiveMessages(videoId)
-  liveEmbedSrc.value = videoId ? buildLiveEmbedSrc(playerState.currentVideo) : ''
-}, { immediate: true })
-
-watch(hasLivePlayer, (available) => {
-  if (!available && activeTab.value === 'live') activeTab.value = 'communities'
-})
-
 onMounted(() => {
   iconTimer = window.setInterval(() => {
     iconIndex.value += 1
   }, 3200)
-  window.addEventListener('open-galaxia-hub-live', handleOpenLiveHub)
-  window.addEventListener('message', handleYoutubePlayerMessage)
   window.visualViewport?.addEventListener('resize', updateKeyboardOffset)
   window.visualViewport?.addEventListener('scroll', updateKeyboardOffset)
   window.addEventListener('resize', updateKeyboardOffset)
@@ -824,8 +606,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.clearInterval(iconTimer)
-  window.removeEventListener('open-galaxia-hub-live', handleOpenLiveHub)
-  window.removeEventListener('message', handleYoutubePlayerMessage)
   window.visualViewport?.removeEventListener('resize', updateKeyboardOffset)
   window.visualViewport?.removeEventListener('scroll', updateKeyboardOffset)
   window.removeEventListener('resize', updateKeyboardOffset)
@@ -835,7 +615,6 @@ onUnmounted(() => {
   unsubscribeFollowing?.()
   unsubscribeInbox?.()
   unsubscribeHubMessages?.()
-  unsubscribeLiveMessages?.()
   hubResizeObserver?.disconnect?.()
   resetKeyboardViewport()
   if (open.value) {
@@ -866,7 +645,6 @@ onUnmounted(() => {
           'hub-hidden': !open,
           'communities-active': activeTab === 'communities',
           'chat-active': activeTab === 'chat' && activeChatUser,
-          'live-active': activeTab === 'live',
           'keyboard-open': keyboardOpen
         }"
         :style="{ '--hub-content-height': hubContentHeight ? `${hubContentHeight}px` : 'auto' }"
@@ -1072,97 +850,6 @@ onUnmounted(() => {
             </div>
           </section>
 
-          <section class="hub-section live" :class="{ 'tab-hidden': activeTab !== 'live' }">
-            <template v-if="hasLivePlayer">
-              <div class="hub-live-player">
-                <iframe
-                  v-if="liveEmbedSrc"
-                  ref="liveFrameRef"
-                  :src="liveEmbedSrc"
-                  title="Video de Galaxia Nintendera"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowfullscreen
-                  @load="syncLivePlayerAfterLoad"
-                ></iframe>
-              </div>
-              <div class="hub-live-meta">
-                <span>
-                  <strong>{{ liveTitle }}</strong>
-                  <small>{{ liveStatusLabel }} · {{ formatLiveTime(playerState.currentTime) }}</small>
-                </span>
-              </div>
-              <div class="hub-live-controls">
-                <button type="button" @click="returnToLiveCommunity">
-                  <i class="fas fa-house"></i>
-                  <span>Comunidad</span>
-                </button>
-                <button type="button" class="desktop-only" @click="openLiveTheater">
-                  <i class="fas fa-up-right-and-down-left-from-center"></i>
-                  <span>Ver grande</span>
-                </button>
-              </div>
-              <div class="hub-live-chat-shell">
-                <div ref="liveChatMessagesRef" class="hub-live-chat-list" @scroll="handleLiveChatScroll">
-                  <article v-for="message in liveMessages" :key="message.id">
-                    <img v-if="message.authorImage" :src="message.authorImage" alt="" @error="fallbackImage" />
-                    <b v-else>{{ String(message.author || 'GN').slice(0, 2).toUpperCase() }}</b>
-                    <span>
-                      <small><strong>{{ message.author }}</strong> {{ formatLiveTime(message.videoSecond) }}</small>
-                      <p v-if="message.body">{{ message.body }}</p>
-                      <div v-if="message.gif?.url" class="hub-message-media live">
-                        <img
-                          class="hub-message-gif"
-                          :src="message.gif.url"
-                          :alt="message.gif.title || 'GIF'"
-                          loading="lazy"
-                        />
-                      </div>
-                    </span>
-                  </article>
-                  <div v-if="!liveMessages.length" class="hub-chat-placeholder">
-                    Aún no hay mensajes en este vídeo.
-                  </div>
-                </div>
-                <button
-                  v-if="liveUnreadCount"
-                  type="button"
-                  class="hub-live-new-messages"
-                  @click="scrollLiveChatToBottom()"
-                >
-                  <i class="fas fa-arrow-down"></i>
-                  {{ liveUnreadCount }} {{ liveUnreadCount === 1 ? 'mensaje nuevo' : 'mensajes nuevos' }}
-                </button>
-              </div>
-              <figure v-if="selectedLiveGif" class="hub-media-preview live">
-                <img :src="selectedLiveGif.previewUrl || selectedLiveGif.url" :alt="selectedLiveGif.title || 'GIF'" />
-                <figcaption>{{ selectedLiveGif.title || 'GIF' }}</figcaption>
-                <button type="button" aria-label="Quitar GIF" @click="selectedLiveGif = null">
-                  <i class="fas fa-xmark"></i>
-                </button>
-              </figure>
-              <form class="hub-live-composer" @submit.prevent="sendLiveMessage">
-                <input ref="liveChatInputRef" v-model="liveChatDraft" maxlength="280" placeholder="Escribe en el chat..." @focus="updateKeyboardOffset" />
-                <button
-                  type="button"
-                  class="hub-giphy-btn"
-                  :class="{ active: liveGiphyOpen }"
-                  aria-label="GIFs y stickers"
-                  @click="liveGiphyOpen = !liveGiphyOpen"
-                >
-                  <i class="far fa-face-smile"></i>
-                </button>
-                <button type="submit" :disabled="!liveChatDraft.trim() && !selectedLiveGif" aria-label="Enviar mensaje" @pointerdown.prevent>
-                  <i class="fas fa-paper-plane"></i>
-                </button>
-                <GiphyPicker :open="liveGiphyOpen" @close="liveGiphyOpen = false" @select="handleLiveGiphySelect" />
-              </form>
-            </template>
-            <div v-else class="hub-empty">
-              <i class="fas fa-circle-play"></i>
-              <strong>No hay video en segundo plano</strong>
-              <p>Minimiza un directo o vídeo desde comunidad para verlo aquí.</p>
-            </div>
-          </section>
           </div>
         </div>
       </section>
@@ -1302,11 +989,6 @@ onUnmounted(() => {
   display: none;
 }
 
-.galaxia-hub-panel.live-active {
-  grid-template-rows: auto auto minmax(0, 1fr);
-  width: min(560px, calc(100vw - 36px));
-}
-
 .hub-head {
   align-items: center;
   display: flex;
@@ -1406,8 +1088,7 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-.galaxia-hub-panel.chat-active .hub-content,
-.galaxia-hub-panel.live-active .hub-content {
+.galaxia-hub-panel.chat-active .hub-content {
   height: auto;
   overflow: hidden;
   padding-right: 0;
@@ -1430,222 +1111,12 @@ onUnmounted(() => {
   position: relative;
 }
 
-.hub-section.live {
-  gap: 10px;
-  grid-template-rows: auto auto auto minmax(140px, 1fr) auto;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.hub-section.live.tab-hidden {
-  height: 1px;
-  left: -10000px;
-  min-height: 1px;
-  opacity: 0;
-  pointer-events: none;
-  position: absolute;
-  top: 0;
-  visibility: hidden;
-  width: 1px;
-}
-
-.hub-live-player {
-  aspect-ratio: 16 / 9;
-  background: #020617;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 18px;
-  overflow: hidden;
-}
-
-.galaxia-hub-panel.live-active .hub-live-player {
-  max-height: min(38vh, 300px);
-}
-
-.hub-live-player iframe {
-  border: 0;
-  display: block;
-  height: 100%;
-  width: 100%;
-}
-
-.hub-live-meta {
-  align-items: start;
-  display: block;
-  min-width: 0;
-}
-
-.hub-live-meta span {
-  min-width: 0;
-}
-
-.hub-live-meta strong,
-.hub-live-meta small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hub-live-meta strong {
-  font-size: 15px;
-  font-weight: 950;
-}
-
-.hub-live-meta small {
-  color: #aeb8d3;
-  font-size: 11px;
-  font-weight: 850;
-}
-
-.hub-live-controls {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-}
-
-.hub-live-controls button {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.07);
-  border-radius: 14px;
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 950;
-  gap: 7px;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 10px;
-}
-
-.hub-live-controls button:first-child {
-  background: linear-gradient(135deg, #7c3aed, #c026d3);
-}
-
-.hub-live-chat-shell {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.hub-live-chat-list {
-  background: rgba(4, 7, 18, 0.46);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
-  display: grid;
-  gap: 9px;
-  height: 100%;
-  min-height: 0;
-  max-height: 100%;
-  overflow-y: auto;
-  padding: 12px 12px 42px;
-  scrollbar-gutter: stable;
-}
-
-.hub-live-chat-list article {
-  display: grid;
-  gap: 9px;
-  grid-template-columns: 34px minmax(0, 1fr);
-}
-
-.hub-live-chat-list img,
-.hub-live-chat-list b {
-  align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #ec4899);
-  border-radius: 999px;
-  color: #ffffff;
-  display: flex;
-  font-size: 11px;
-  font-weight: 950;
-  height: 34px;
-  justify-content: center;
-  object-fit: cover;
-  width: 34px;
-}
-
-.hub-live-chat-list small {
-  color: #aeb8d3;
-  display: block;
-  font-size: 11px;
-  font-weight: 850;
-}
-
-.hub-live-chat-list small strong {
-  color: #ffffff;
-}
-
-.hub-live-chat-list p {
-  color: #e2e8f0;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-
-.hub-live-new-messages {
-  align-items: center;
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.96), rgba(192, 38, 211, 0.96));
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
-  bottom: 10px;
-  box-shadow: 0 12px 26px rgba(3, 6, 18, 0.34);
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 950;
-  gap: 7px;
-  left: 50%;
-  min-height: 34px;
-  padding: 0 13px;
-  position: absolute;
-  transform: translateX(-50%);
-  z-index: 3;
-}
-
-.hub-live-composer {
-  background: rgba(11, 16, 34, 0.98);
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) 46px 46px;
-  margin-top: 0;
-  padding-top: 0;
-  position: relative;
-  z-index: 2;
-}
-
-.hub-live-composer input {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 800;
-  height: 46px;
-  min-height: 46px;
-  min-width: 0;
-  padding: 0 13px;
-}
-
-.hub-live-composer button {
-  background: linear-gradient(135deg, #7c3aed, #c026d3);
-  border-radius: 14px;
-  color: #ffffff;
-  height: 46px;
-}
-
-.hub-live-composer button:disabled {
-  opacity: 0.48;
-}
-
-.hub-live-composer .hub-giphy-btn,
 .hub-chat-composer .hub-giphy-btn {
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: #e9d5ff;
 }
 
-.hub-live-composer .hub-giphy-btn.active,
 .hub-chat-composer .hub-giphy-btn.active {
   background: rgba(124, 58, 237, 0.28);
   border-color: rgba(192, 132, 252, 0.34);
@@ -1672,19 +1143,6 @@ onUnmounted(() => {
   height: 100%;
   max-height: none;
   max-width: 100%;
-  object-fit: contain;
-  width: 100%;
-}
-
-.hub-live-chat-list .hub-message-media {
-  height: 180px;
-  max-width: min(280px, 100%);
-  width: 100%;
-}
-
-.hub-live-chat-list .hub-message-gif {
-  height: 100%;
-  min-height: 0;
   object-fit: contain;
   width: 100%;
 }
@@ -2060,8 +1518,7 @@ onUnmounted(() => {
   position: relative;
 }
 
-.hub-chat-composer :deep(.giphy-picker),
-.hub-live-composer :deep(.giphy-picker) {
+.hub-chat-composer :deep(.giphy-picker) {
   bottom: calc(100% + 10px);
   max-height: min(360px, 54dvh);
   right: 0;
@@ -2262,15 +1719,6 @@ onUnmounted(() => {
     width: 100vw;
   }
 
-  .galaxia-hub-panel.live-active {
-    grid-template-rows: auto auto auto minmax(0, 1fr);
-    height: var(--hub-vvh, 100dvh);
-    max-height: var(--hub-vvh, 100dvh);
-    overflow: hidden;
-    padding: calc(12px + env(safe-area-inset-top, 0px)) 10px calc(16px + env(safe-area-inset-bottom, 0px));
-    width: 100vw;
-  }
-
   .hub-community-grid {
     overflow-x: auto;
     grid-auto-columns: 86px;
@@ -2308,8 +1756,7 @@ onUnmounted(() => {
     padding-bottom: 10px;
   }
 
-  .galaxia-hub-panel.chat-active .hub-content,
-  .galaxia-hub-panel.live-active .hub-content {
+  .galaxia-hub-panel.chat-active .hub-content {
     min-height: 0;
     overflow: hidden;
     padding-bottom: 0;
@@ -2317,112 +1764,6 @@ onUnmounted(() => {
 
   .hub-section.chat-room {
     gap: 8px;
-  }
-
-  .hub-section.live {
-    gap: 8px;
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-    height: 100%;
-    min-height: 0;
-  }
-
-  .hub-live-player {
-    border-radius: 14px;
-    max-height: 30vh;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open {
-    bottom: 0;
-    height: var(--hub-vvh, 100dvh);
-    max-height: var(--hub-vvh, 100dvh);
-    padding: 8px 8px 0;
-    top: 0;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-content,
-  .galaxia-hub-panel.live-active.keyboard-open .hub-section.live {
-    height: 100%;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-section.live {
-    grid-template-rows: minmax(92px, 34%) minmax(58px, 1fr) auto;
-    gap: 6px;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-head {
-    display: none;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-segments {
-    display: none;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-live-player {
-    max-height: none;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-live-meta,
-  .galaxia-hub-panel.live-active.keyboard-open .hub-live-controls {
-    display: none;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-live-chat-list {
-    border-radius: 14px;
-    min-height: 0;
-    padding: 8px 10px 36px;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-live-new-messages {
-    bottom: 8px;
-    min-height: 30px;
-    padding: 0 11px;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-live-chat-list article {
-    gap: 7px;
-    grid-template-columns: 30px minmax(0, 1fr);
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-live-chat-list img,
-  .galaxia-hub-panel.live-active.keyboard-open .hub-live-chat-list b {
-    height: 30px;
-    width: 30px;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-live-composer {
-    align-items: stretch;
-    background: rgba(11, 16, 34, 0.99);
-    grid-template-columns: minmax(0, 1fr) 52px 52px;
-    padding-bottom: 0;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-live-composer input {
-    border-radius: 14px;
-    min-height: 52px;
-  }
-
-  .galaxia-hub-panel.live-active.keyboard-open .hub-live-composer button {
-    border-radius: 14px;
-    height: 52px;
-  }
-
-  .hub-live-controls {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .hub-live-controls .desktop-only {
-    display: none;
-  }
-
-  .hub-live-chat-list {
-    min-height: 0;
-    max-height: none;
-    padding: 10px 10px 38px;
-  }
-
-  .hub-live-composer {
-    margin-bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
-    padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
   }
 
   .hub-chat-room-head {
