@@ -1,4 +1,5 @@
 ﻿<script setup>
+import { communityPath } from '@/services/communityRoutes'
 import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
@@ -21,7 +22,7 @@ async function load(){
   communities.value=all.docs.map(d=>({...d.data(),id:d.id})).filter(c=>c.id===OFFICIAL_COMMUNITY_ID||c.isOfficial?canManage:ids.has(c.id))
  }catch{error.value='No se pudieron cargar tus comunidades. Vuelve a intentarlo.'}finally{loading.value=false}
 }
-async function choose(community){await router.push({path:'/comunidad',query:{id:community.id,create:'thread'}});emit('close')}
+async function choose(community){await router.push({path:communityPath(community,communities.value),query:{create:'thread'}});emit('close')}
 onMounted(load)
 </script>
 <template>

@@ -399,6 +399,8 @@ watch(() => route.fullPath, () => {
 
       </header>
 
+      <section class="listing-layout">
+        <div>
       <div class="listing-filter-bar">
         <div class="listing-filter-navigation"><ScrollTabRail class="category-filter-rail"><div class="filter-row">
           <button
@@ -415,8 +417,7 @@ watch(() => route.fullPath, () => {
 
       </div>
 
-      <section class="listing-layout">
-        <div>
+
           <div
             v-if="displayedPosts.length"
             class="news-list"
@@ -3074,4 +3075,9 @@ watch(() => route.fullPath, () => {
 
 <style scoped>
 @media(max-width:1100px){.listing-filter-bar{grid-template-columns:minmax(0,1fr)}}
+</style>
+
+<style scoped>
+.listing-filter-bar{grid-template-columns:minmax(0,1fr)}
+@media(min-width:1101px){.listing-sidebar{top:var(--listing-sticky-top)}}
 </style>

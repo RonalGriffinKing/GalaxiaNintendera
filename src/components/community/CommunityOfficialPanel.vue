@@ -2,29 +2,9 @@
 import { defaultBannerUrl, resolveAssetUrl } from '@/constants/assets'
 
 defineProps({
-  youtubeLiveUrl: {
-    type: String,
-    default: ''
-  },
-  youtubeChannelUrl: {
-    type: String,
-    default: ''
-  },
-  isOfficial: {
-    type: Boolean,
-    default: false
-  },
-  isAdmin: {
-    type: Boolean,
-    default: false
-  },
   upcomingEvents: {
     type: Array,
     default: () => []
-  },
-  canManageOfficialContent: {
-    type: Boolean,
-    default: false
   },
   activeUsers: {
     type: Array,
@@ -42,10 +22,6 @@ defineProps({
     type: Function,
     default: () => false
   },
-  avatarInitial: {
-    type: Function,
-    default: () => ''
-  }
 })
 
 const emit = defineEmits([
@@ -152,80 +128,25 @@ const emit = defineEmits([
 }
 
 .side-box {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: #121026;
+  border: 1px solid #a78bfa35;
   border-radius: 18px;
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
   padding: 18px;
 }
 
 .side-box h2 {
-  color: #111827;
+  color: #f2edff;
   font-size: 15px;
   font-weight: 900;
 }
 
 .side-box p {
-  color: #64748b;
+  color: #b9b0ca;
   font-size: 12px;
   font-weight: 700;
   line-height: 1.55;
   margin-top: 8px;
-}
-
-.live-box {
-  background: #ffffff;
-  color: #111827;
-}
-
-.live-box h2,
-.live-box p {
-  color: #111827;
-}
-
-.live-pill {
-  align-items: center;
-  background: #fee2e2;
-  border-radius: 999px;
-  color: #dc2626;
-  display: inline-flex;
-  font-size: 11px;
-  font-weight: 900;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding: 6px 10px;
-  text-transform: uppercase;
-}
-
-.live-pill i {
-  color: #ef4444;
-  font-size: 8px;
-}
-
-.side-live-frame {
-  aspect-ratio: 16 / 9;
-  background: #020617;
-  border-radius: 14px;
-  margin: 12px 0;
-  overflow: hidden;
-}
-
-.side-live-frame iframe {
-  border: 0;
-  height: 100%;
-  width: 100%;
-}
-
-.live-box a {
-  align-items: center;
-  background: linear-gradient(to right, #7c3aed, #c026d3);
-  border-radius: 12px;
-  color: #ffffff;
-  display: flex;
-  font-size: 12px;
-  font-weight: 950;
-  justify-content: center;
-  min-height: 40px;
 }
 
 .side-box-head {
@@ -383,15 +304,15 @@ const emit = defineEmits([
 }
 
 .live-like-ranking > strong {
-  color: #111827;
+  color: #f2edff;
   font-size: 11px;
   font-weight: 950;
 }
 
 .live-like-ranking > button {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: #121026;
+  border: 1px solid #a78bfa35;
   border-radius: 12px;
   display: grid;
   gap: 8px;
@@ -410,7 +331,7 @@ const emit = defineEmits([
 }
 
 .live-like-ranking em {
-  color: #111827;
+  color: #f2edff;
   font-size: 11px;
   font-style: normal;
   font-weight: 900;
@@ -429,7 +350,7 @@ const emit = defineEmits([
 }
 
 .live-like-ranking p {
-  color: #64748b;
+  color: #b9b0ca;
   font-size: 11px;
   font-weight: 850;
   margin: 0;
@@ -487,7 +408,7 @@ const emit = defineEmits([
 }
 
 .user-row strong {
-  color: #111827;
+  color: #f2edff;
   display: block;
   font-size: 12px;
   font-weight: 900;
@@ -520,7 +441,7 @@ const emit = defineEmits([
 }
 
 .rules-box ol {
-  color: #64748b;
+  color: #b9b0ca;
   display: grid;
   font-size: 12px;
   font-weight: 750;

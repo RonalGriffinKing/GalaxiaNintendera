@@ -1,4 +1,5 @@
 <script setup>
+import { communityPath } from '@/services/communityRoutes'
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -1089,7 +1090,7 @@ onUnmounted(() => {
               v-for="community in communityCards"
               :key="community.name"
               type="button"
-              @click="router.push(`/comunidad?id=${community.id}`)"
+              @click="router.push(communityPath(community))"
             >
               <img v-if="community.iconUrl || community.bannerUrl" :src="resolveAssetUrl(community.iconUrl || community.bannerUrl)" alt="" />
               <span v-else class="community-letter">{{ community.name?.slice(0, 2).toUpperCase() }}</span>

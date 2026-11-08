@@ -1007,3 +1007,7 @@ const deleteComment = (thread, comment) => {
 <style scoped>
 .topic-tabs button{background:#17132c;border-color:#a78bfa40;color:#c5bad9}.topic-tabs button.active,.topic-tabs button:hover{background:#6d28a845;border-color:#bb8bea;color:#f2e7ff}.community-feed :deep(.community-empty.community-empty-threads){background:linear-gradient(135deg,#1b1232,#0d1020);border:1px solid #a78bfa40;color:#c6b9d8}.community-feed :deep(.community-empty-threads h2){color:#f2eaff}.community-feed :deep(.community-empty-threads p){color:#bbb0cd}
 </style>
+
+<style scoped>
+.community-feed{display:grid;grid-template-columns:minmax(0,1fr);gap:22px;align-content:start;min-width:0}.community-thread-composer{margin:0;width:100%;min-width:0}.topic-tabs{margin:0;align-items:center;gap:8px}.community-feed :deep(.community-empty-threads){margin:0}.thread-card{margin:0}@media(max-width:760px){.community-feed{gap:18px}}
+</style>

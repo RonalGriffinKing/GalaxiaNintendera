@@ -69,7 +69,7 @@ const routes = [
         component: () => import('@/pages/CommunitiesPage.vue')
       },
       {
-        path: 'comunidad',
+        path: 'comunidad/:slug?',
         name: 'community',
         component: () => import('@/pages/CommunityPage.vue')
       },

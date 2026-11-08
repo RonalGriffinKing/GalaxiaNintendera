@@ -1,7 +1,7 @@
 <script setup>
 import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
 import { vSoftReveal } from '@/directives/softReveal'
-import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from "firebase/firestore"
 import { auth, db } from "@/firebase"
@@ -20,7 +20,6 @@ import SeasonalThemeDecor from '@/components/posts/SeasonalThemeDecor.vue'
 import { themeDecoration, postWebThemeCss } from '@/services/visualThemes'
 import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
 
-const PostComments = defineAsyncComponent(() => import('@/components/posts/PostComments.vue'))
 const route = useRoute()
 const router = useRouter()
 const post = ref({ sections: [] })
@@ -145,8 +144,7 @@ const analysisTier = computed(() => {
 const analysisPros = computed(() => Array.isArray(post.value.analysis?.pros) ? post.value.analysis.pros : [])
 const analysisCons = computed(() => Array.isArray(post.value.analysis?.cons) ? post.value.analysis.cons : [])
 const readBadgeText = computed(() => {
-  if (readStatus.value.awarded) return 'Lectura recompensada'
-  if (readStatus.value.viewed) return 'Visto'
+  if (readStatus.value.awarded || readStatus.value.viewed) return 'Visto'
   return 'No visto'
 })
 
@@ -745,7 +743,6 @@ onUnmounted(() => {
 
 
         </div>
-        <PostComments v-if="post.id && !isUpcomingPost && post.status === 'approved'" :key="post.id" :post-id="post.id" />
       </article>
 
       <aside class="post-sidebar">

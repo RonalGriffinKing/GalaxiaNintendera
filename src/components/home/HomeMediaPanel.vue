@@ -1,4 +1,5 @@
 <script setup>
+import { communityPath } from '@/services/communityRoutes'
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -228,7 +229,7 @@ const loadYoutubeFeed = async () => {
 }
 
 const openCommunityVideo = (video) => {
-  router.push({path:'/comunidad',query:{id:activeCommunity.value?.id || 'galaxia-oficial',...(video?.id ? {v:video.id} : {})}})
+  router.push({path:communityPath(activeCommunity.value || {id:'galaxia-oficial',name:'Galaxia Nintendera'}),query:{...(video?.id ? {v:video.id} : {})}})
 }
 const openActive = () => openCommunityVideo(activeVideo.value)
 const selectCommunity = (communityId) => {

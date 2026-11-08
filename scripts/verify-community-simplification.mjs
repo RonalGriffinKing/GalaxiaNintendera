@@ -9,8 +9,11 @@ try{
  await nav('/composer','.thread-destination');await until('document.querySelectorAll(".destination-list button").length>0');
  check(await ev('!document.querySelector("textarea")&&document.querySelector(".destination-list").textContent.includes("Comunidad local")'),'global create asks for a community before showing the editor');
  await ev('document.querySelector(".destination-list button").click()');await until('!!document.querySelector(".thread-composer textarea")');await wait(300);
- check(await ev('location.pathname==="/comunidad"&&new URLSearchParams(location.search).get("id")==="lab-community"'),'selection opens the chosen community');
+ check(await ev('location.pathname==="/comunidad/comunidad-local"&&!new URLSearchParams(location.search).has("id")'),'selection opens the chosen community');
+ await ev('window.themeLab.router.replace({path:"/comunidad",query:{id:"lab-community",thread:"sample-thread"}})');await until('location.pathname==="/comunidad/comunidad-local"&&!new URLSearchParams(location.search).has("id")');
+ check(await ev('new URLSearchParams(location.search).get("thread")==="sample-thread"'),'legacy ID links canonicalize to names while preserving thread links');
  check(await ev('!document.querySelector("button.community-select")&&!document.querySelector(".community-picker-panel")&&document.querySelector(".community-select").textContent.includes("Comunidad local")'),'inline composer fixes the destination with no community selector');
+ check(await ev('(()=>{const v=document.querySelector(".community-videos").getBoundingClientRect(),c=document.querySelector(".thread-composer").getBoundingClientRect(),t=document.querySelector(".topic-tabs").getBoundingClientRect(),e=document.querySelector(".community-empty-threads").getBoundingClientRect();return c.top-v.bottom>=18&&t.top-c.bottom>=18&&e.top-t.bottom>=18})()'),'community sections and filter pills have clear vertical spacing');
  check(await ev('!!document.querySelector(".community-videos")&&!document.querySelector(".hub-live-player,.hub-live-chat-shell,.live-stage-chat,.community-media-theater")'),'community media has no floating, theater or video chat controls');
  check(await ev('!window.themeLab.reads.some(r=>["liveChats","videoChats","liveGoals"].includes(r))&&!document.querySelector(".live-goals-box,.live-goal-manager-card")'),'community does not load live chat or live goals');
  await ev('(()=>{const t=document.querySelector(".thread-composer textarea");t.value="Local isolated thread";t.dispatchEvent(new Event("input",{bubbles:true}))})()');await wait(100);
@@ -20,11 +23,14 @@ try{
  check(await ev('document.documentElement.scrollWidth<=innerWidth+1'),'community has no horizontal overflow on mobile');
  check(await ev('(()=>{const e=document.querySelector(".community-thread-composer"),p=document.querySelector(".community-select");return e&&getComputedStyle(e).display!=="none"&&e.getBoundingClientRect().height>100&&p.getBoundingClientRect().width<=e.getBoundingClientRect().width&&!!e.querySelector("textarea")})()'),'mobile shows the inline thread editor with a compact community pill');
  check(await ev('(()=>{const e=document.querySelector(".community-empty-threads"),s=getComputedStyle(e);return s.backgroundImage.includes("gradient")&&s.backgroundColor!=="rgb(255, 255, 255)"&&getComputedStyle(document.querySelector(".topic-tabs button")).backgroundColor!=="rgb(255, 255, 255)"})()'),'empty community and filters use the dark site palette');
+ check(await ev('!!document.querySelector(".community-member-page")&&[...document.querySelectorAll(".side-box")].every(e=>getComputedStyle(e).backgroundColor!=="rgb(255, 255, 255)")'),'full community page and sidebar cards have no white overrides');
+ fs.mkdirSync('.netlify/community-final',{recursive:true});let pageShot=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync('.netlify/community-final/page-mobile.png',Buffer.from(pageShot.result.data,'base64'));
  await ev('document.querySelector(".thread-composer textarea").click()');await until('!!document.querySelector(".thread-composer.is-expanded")');await wait(150);
  check(await ev('document.querySelector(".thread-composer.is-expanded").parentElement===document.body&&document.body.style.overflow==="hidden"&&document.querySelector(".thread-composer").getAttribute("role")==="dialog"'),'mobile focus expands the same editor above the page and locks background scrolling');
  await ev('(()=>{const t=document.querySelector(".thread-composer textarea");t.value="Preserved mobile draft";t.dispatchEvent(new Event("input",{bubbles:true}))})()');
  await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:480,deviceScaleFactor:1,mobile:true});await wait(200);
  check(await ev('(()=>{const e=document.querySelector(".thread-composer.is-expanded"),r=e.getBoundingClientRect(),b=e.querySelector(".publish-btn").getBoundingClientRect();return r.height<=480&&b.bottom<=480&&document.documentElement.scrollWidth<=innerWidth+1})()'),'expanded editor and publish action fit the reduced keyboard viewport');
+ check(await ev('parseFloat(getComputedStyle(document.querySelector(".is-expanded textarea")).borderRadius)>=16'),'mobile writing field has rounded corners');
  fs.mkdirSync('.netlify/mobile-editor',{recursive:true});const capture=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync('.netlify/mobile-editor/expanded.png',Buffer.from(capture.result.data,'base64'));
  await ev('document.querySelector(".immersive-composer-header button").click()');await until('!document.querySelector(".thread-composer.is-expanded")');
  check(await ev('document.querySelector(".thread-composer textarea").value==="Preserved mobile draft"&&document.body.style.overflow!=="hidden"'),'closing the expanded editor preserves its draft and restores page scrolling');
@@ -40,6 +46,7 @@ try{
  check(await ev('document.documentElement.scrollWidth<=innerWidth+1'),'mobile destination picker stays inside the viewport');
  await ev('window.themeLab.router.push("/inline-unjoined")');await until('!!document.querySelector(".composer-empty")');
  check(await ev('!document.querySelector(".thread-composer textarea")'),'unjoined destination cannot silently fall back to another community');
+ await ev('window.themeLab.router.push("/comunidad/does-not-exist")');await wait(250);check(await ev('!document.querySelector(".thread-composer textarea")'),'unknown named communities cannot open another community composer');
  check(errors.length===0,'community and destination picker have no runtime exceptions');
 }finally{if(errors.length)console.log(errors);ws.close();edge.kill()}
 

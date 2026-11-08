@@ -26,6 +26,7 @@ import {
   where
 } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
+import { communityPath, resolveCommunityRoute } from '@/services/communityRoutes'
 import { notifyThreadLike, notifyThreadReply } from '@/services/notifications'
 
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
@@ -61,7 +62,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['ready'])
+const emit = defineEmits(['ready', 'community-selected'])
 const managementSearch = ref('')
 const managementError = ref('')
 const managedCommunities = computed(() => communities.value.filter(c => (c.name || '').toLowerCase().includes(managementSearch.value.trim().toLowerCase())))
@@ -81,7 +82,7 @@ function selectEventImage(image){Object.assign(eventDraft.value,eventImageSelect
 
 const replyDraft = ref('')
 const selectedTopic = ref('Inicio')
-const selectedCommunityId = ref(peekPublicPage('community-panel-directory')?.length ? (props.initialCommunityId || route.query.id || peekPublicPage('community-panel-directory')[0].id) : '')
+const selectedCommunityId = ref(resolveCommunityRoute(peekPublicPage('community-panel-directory') || [], {slug:route.params.slug,id:route.query.id || props.initialCommunityId})?.id || '')
 const openThreadId = ref(null)
 const defaultThreadTopics = DEFAULT_THREAD_TOPICS
 const contentTabIcons = CONTENT_TAB_ICONS
@@ -142,7 +143,7 @@ const youtubeHandle = computed(() => String(liveSettings.value.youtubeHandle || 
 const youtubeChannelId = computed(() => liveSettings.value.youtubeChannelId || '')
 const youtubeApiKey = computed(() => liveSettings.value.youtubeApiKey || '')
 const youtubeChannelUrl = computed(() => `https://www.youtube.com/@${youtubeHandle.value}`)
-const youtubeEmbedOrigin = computed(() => (typeof window === 'undefined' ? '' : window.location.origin))
+
 const youtubeVideosUrl = computed(() => `${youtubeChannelUrl.value}/streams`)
 const youtubeLiveStreamEmbedUrl = computed(() => {
   if (!youtubeChannelId.value) return ''
@@ -150,17 +151,11 @@ const youtubeLiveStreamEmbedUrl = computed(() => {
     channel: youtubeChannelId.value,
     autoplay: '0',
     rel: '0',
-    enablejsapi: '1',
     playsinline: '1',
-    origin: youtubeEmbedOrigin.value
   })
   return `https://www.youtube.com/embed/live_stream?${params.toString()}`
 })
-const youtubeLiveUrl = computed(() => (
-  youtubeLiveVideo.value?.id
-    ? `https://www.youtube.com/embed/${youtubeLiveVideo.value.id}?autoplay=0&rel=0&enablejsapi=1&playsinline=1&origin=${encodeURIComponent(youtubeEmbedOrigin.value)}`
-    : ''
-))
+
 const youtubeLiveFallbackVideo = computed(() => {
   if (!isOfficialSelectedCommunity.value || youtubeApiKey.value || !youtubeChannelId.value || selectedYoutubeVideo.value || youtubeLiveVideo.value) return null
   return {
@@ -186,19 +181,11 @@ const featuredYoutubeEmbedUrl = computed(() => {
   const params = new URLSearchParams({
     autoplay: selectedYoutubeVideo.value ? '1' : '0',
     rel: '0',
-    enablejsapi: '1',
     playsinline: '1',
-    origin: youtubeEmbedOrigin.value
   })
-  const startAt = Math.max(0, Math.floor(Number(selectedYoutubeVideo.value?.startedAt ?? 0)))
-  if (selectedYoutubeVideo.value && startAt > 0) params.set('start', String(startAt))
   return `https://www.youtube.com/embed/${featuredYoutubeVideo.value.id}?${params.toString()}`
 })
-const youtubeUploadsUrl = computed(() => (
-  youtubeChannelId.value?.startsWith('UC')
-    ? `https://www.youtube.com/embed/videoseries?list=UU${youtubeChannelId.value.slice(2)}`
-    : ''
-))
+
 const youtubeStageEmbedUrl = computed(() => {
   if (featuredYoutubeVideo.value?.isFallbackLive) return youtubeLiveStreamEmbedUrl.value
   return featuredYoutubeEmbedUrl.value
@@ -370,7 +357,7 @@ const communityRef = collection(db, 'communityThreads')
 const communitiesRef = collection(db, 'communities')
 const eventsRef = collection(db, 'galaxyEvents')
 
-const selectedCommunity = computed(() => communities.value.find(item => item.id === selectedCommunityId.value) || communities.value[0] || null)
+const selectedCommunity = computed(() => communities.value.find(item => item.id === selectedCommunityId.value) || null)
 const normalizeThreadTopics = (items = []) => {
   const seen = new Set()
   const normalized = items
@@ -1246,14 +1233,9 @@ const mapYoutubeSearchItem = (item) => ({
 
 const playYoutubeVideo = (video) => {
   if (!video?.id) return
-  const resumeAt = Number(video.startedAt || 0)
-  const nextVideo = {
-    ...video,
-    startedAt: resumeAt
-  }
-  selectedYoutubeVideo.value = nextVideo
+  selectedYoutubeVideo.value = video
   skipNextVideoRouteScroll = route.query.v !== video.id
-  router.replace({ path: route.path, query: { ...route.query, id: selectedCommunityId.value, v: video.id, live: undefined, reload: undefined } })
+  router.replace({ path: communityPath(selectedCommunity.value, communities.value), query: { ...route.query, id: undefined, v: video.id, live: undefined, reload: undefined } })
   scrollToLiveStage()
 }
 
@@ -1627,7 +1609,7 @@ const subscribeThreads = () => {
 }
 
 const subscribeCommunities = () => {
-  const communitiesQuery = props.managementOnly ? query(communitiesRef, orderBy('createdAt', 'asc')) : query(communitiesRef, orderBy('createdAt', 'asc'), limit(30))
+  const communitiesQuery = query(communitiesRef, orderBy('createdAt', 'asc'))
   unsubscribeCommunities = onSnapshot(communitiesQuery, (snap) => {
     const savedCommunities = snap.docs.map(item => ({ id: item.id, membersCount: 0, ...item.data() }))
     const savedOfficial = savedCommunities.find(item => item.id === OFFICIAL_COMMUNITY_ID)
@@ -1636,14 +1618,12 @@ const subscribeCommunities = () => {
       { ...officialCommunity, ...savedOfficial, id: OFFICIAL_COMMUNITY_ID, isOfficial: true, lockedMembership: true, adminOnlyThreads: true },
       ...customCommunities
     ]
-    if (!selectedCommunityId.value && communities.value[0]) {
-      if (props.initialCommunityId && communities.value.some(c => c.id === props.initialCommunityId)) {
-        selectedCommunityId.value = props.initialCommunityId
-      } else if (route.query.id && communities.value.some(c => c.id === route.query.id)) {
-        selectedCommunityId.value = route.query.id
-      } else {
-        selectedCommunityId.value = communities.value[0].id
-      }
+    const destination = resolveCommunityRoute(communities.value, { slug: route.params.slug, id: route.query.id || (!route.params.slug ? props.initialCommunityId : '') })
+    selectedCommunityId.value = destination?.id || ''
+    if (destination && !props.managementOnly) {
+      emit('community-selected', destination)
+      const path = communityPath(destination, communities.value)
+      if (route.path !== path || route.query.id) router.replace({ path, query: { ...route.query, id: undefined } })
     }
     storePublicPage('community-panel-directory', communities.value)
     isCommunitiesLoading.value = false
@@ -1696,16 +1676,19 @@ watch(() => route.query.explore, (exploreTarget) => {
   router.replace({ path: route.path, query: { ...route.query, explore: undefined } })
 })
 
-watch(selectedCommunityId, (id) => {
-  if (props.managementOnly || !id || route.query.id === id) return
-  router.replace({ path: route.path, query: { ...route.query, id } })
+watch(selectedCommunityId, id => {
+ const community = communities.value.find(item => item.id === id)
+ if (!community || props.managementOnly) return
+ emit('community-selected', community)
+ const path = communityPath(community, communities.value)
+ if (route.path !== path || route.query.id) router.replace({ path, query: { ...route.query, id: undefined } })
 })
-
-watch(() => route.query.id, (id) => {
-  if (!id || selectedCommunityId.value === id) return
-  if (communities.value.some(community => community.id === id)) {
-    selectedCommunityId.value = id
-  }
+watch(() => [route.params.slug, route.query.id], () => {
+ if (props.managementOnly || !communities.value.length) return
+ const community = resolveCommunityRoute(communities.value, { slug: route.params.slug, id: route.query.id })
+ selectedCommunityId.value = community?.id || ''
+ emit('community-selected', community)
+ if (community) { const path = communityPath(community, communities.value); if (route.path !== path || route.query.id) router.replace({path,query:{...route.query,id:undefined}}) }
 })
 
 watch([() => route.query.thread, threads], () => {
@@ -1715,7 +1698,6 @@ watch([() => route.query.thread, threads], () => {
 watch([() => route.query.v, youtubeRecentVideos, youtubePastLives, youtubeLiveVideo], ([videoId]) => {
   if (!videoId) return
   const id = String(videoId)
-  const resumeAt = Number(selectedYoutubeVideo.value?.id === id ? selectedYoutubeVideo.value.startedAt || 0 : 0)
   const video = [
     youtubeLiveVideo.value,
     ...youtubeRecentVideos.value,
@@ -1727,12 +1709,6 @@ watch([() => route.query.v, youtubeRecentVideos, youtubePastLives, youtubeLiveVi
     title: 'Video de Galaxia Nintendera',
     thumbnail: resolveAssetUrl(selectedCommunity.value?.bannerUrl, defaultBannerUrl),
     url: `https://www.youtube.com/watch?v=${id}`
-  }
-  if (resumeAt > 0) {
-    selectedYoutubeVideo.value = {
-      ...selectedYoutubeVideo.value,
-      startedAt: resumeAt
-    }
   }
   if (skipNextVideoRouteScroll) {
     skipNextVideoRouteScroll = false
@@ -1794,8 +1770,8 @@ onUnmounted(() => {
     </section>
     <ContentLoading v-if="isCommunitiesLoading" variant="inline" />
 
-    <div v-else-if="!communities.length" class="community-empty">
-      Todavia no hay comunidades creadas.
+    <div v-else-if="!communities.length || !selectedCommunity" class="community-empty">
+      {{ communities.length ? 'No encontramos esta comunidad. Vuelve al directorio para elegir una.' : 'Todavia no hay comunidades creadas.' }}
     </div>
 
     <template v-else-if="!props.managementOnly">
@@ -1863,17 +1839,11 @@ onUnmounted(() => {
       </div>
 
       <CommunityOfficialPanel
-        :youtube-live-url="youtubeLiveUrl"
-        :youtube-channel-url="youtubeChannelUrl"
-        :is-official="isOfficialSelectedCommunity"
-        :is-admin="isAdmin"
         :upcoming-events="upcomingEvents"
-        :can-manage-official-content="canManageOfficialContent"
         :active-users="activeUsers"
         :trending-topics="trendingTopics"
         :format-event-date="formatEventDate"
         :is-event-notified="isEventNotified"
-        :avatar-initial="avatarInitial"
         @open-events="router.push('/eventos')"
         @open-event="(event) => router.push(`/eventos?id=${event.id}`)"
         @toggle-event-notify="toggleEventNotify"
@@ -4606,4 +4576,8 @@ onUnmounted(() => {
 .community-management input::placeholder { color: var(--text-muted); }
 .community-management :is(button,input):focus-visible { outline: 2px solid var(--accent,#9333ea); outline-offset: 3px; }
 @media(max-width:600px) { .management-actions { width: 100%; } .management-actions button { flex: 1; } }
+</style>
+
+<style scoped>
+.community-main-column{display:flex;flex-direction:column;gap:24px;min-width:0}.community-main-column>*{min-width:0}.community-stage{align-items:start}@media(max-width:760px){.community-main-column{gap:18px}}
 </style>

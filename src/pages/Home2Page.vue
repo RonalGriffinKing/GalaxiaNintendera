@@ -1,4 +1,5 @@
 <script setup>
+import { communityPath } from '@/services/communityRoutes'
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { compactPostCategory } from '@/services/postCategoryDisplay'
 import { vSoftReveal } from '@/directives/softReveal'
@@ -250,7 +251,7 @@ const goPost = (post) => {
   if (post?.id) router.push(postPath(post))
 }
 const goCommunity = (community) => {
-  router.push(community?.id ? `/comunidad?id=${encodeURIComponent(community.id)}` : '/comunidad')
+  router.push(community?.id ? communityPath(community) : '/comunidad')
 }
 const communityForThread = (thread) => {
   if (!thread) return officialCommunity.value

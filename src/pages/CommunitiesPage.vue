@@ -1,4 +1,5 @@
 <script setup>
+import { communityPath } from '@/services/communityRoutes'
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
@@ -58,7 +59,7 @@ onMounted(load)
     <template v-if="!loading && communities.length">
       <p class="result-count" role="status">{{ filtered.length }} comunidades</p>
       <div v-soft-reveal="'.community-card'" class="community-grid">
-        <RouterLink v-for="item in visibleCommunities" :key="page + ':' + item.id" class="community-card" :to="{ path: '/comunidad', query: { id: item.id } }">
+        <RouterLink v-for="item in visibleCommunities" :key="page + ':' + item.id" class="community-card" :to="communityPath(item, communities)">
           <img class="community-banner" @load="$event.currentTarget.classList.add('ready')" :src="resolveAssetUrl(item.bannerUrl, defaultBannerUrl)" alt="" loading="lazy" @error="fallbackImage($event, defaultBannerUrl)" />
           <div class="community-card-body"><img class="community-icon" :src="resolveAssetUrl(item.iconUrl, defaultLogoUrl)" alt="" loading="lazy" /><div><h2>{{ item.name || 'Comunidad' }}</h2><span v-if="item.isOfficial" class="official">Oficial</span></div><p>{{ item.description || 'Descubre sus publicaciones y conversa con la comunidad.' }}</p><footer><span><i class="fas fa-users" aria-hidden="true"></i> {{ Number(item.membersCount || 0) }} miembros</span><strong>Explorar <i class="fas fa-arrow-right" aria-hidden="true"></i></strong></footer></div>
         </RouterLink>

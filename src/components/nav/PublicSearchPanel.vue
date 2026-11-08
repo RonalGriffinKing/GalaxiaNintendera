@@ -115,7 +115,7 @@ const isFollowing = (user) => props.followingIds?.has?.(user.id)
 const canFollow = (user) => props.currentUserId && user.id !== props.currentUserId && !isFollowing(user)
 
 const openPost = (post) => emit('open-result', { type: 'post', id: post.slug || post.id })
-const openCommunity = (community) => emit('open-result', { type: 'community', id: community.id })
+const openCommunity = (community) => emit('open-result', { type: 'community', id: community.id, community })
 const openUser = (user) => emit('open-result', { type: 'user', id: user.id })
 </script>
 

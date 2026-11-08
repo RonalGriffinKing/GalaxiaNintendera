@@ -1,4 +1,5 @@
 <script setup>
+import { communityPath, resolveCommunityRoute } from '@/services/communityRoutes'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, getDocs } from 'firebase/firestore'
@@ -42,7 +43,7 @@ const favoriteCommunities = computed(() => {
 const suggestedCommunities = computed(() => communities.value
   .filter(community => community.id !== OFFICIAL_COMMUNITY_ID && !favoriteCommunityIds.value.includes(community.id))
 )
-const activeCommunityId = computed(() => String(route.query.id || OFFICIAL_COMMUNITY_ID))
+const activeCommunityId = computed(() => String(resolveCommunityRoute(communities.value,{slug:route.params.slug,id:route.query.id})?.id || OFFICIAL_COMMUNITY_ID))
 
 const loadFavoriteCommunities = () => {
   if (typeof window === 'undefined') return
@@ -82,7 +83,7 @@ const loadCommunities = async () => {
   const savedOfficial = savedCommunities.find(item => item.id === OFFICIAL_COMMUNITY_ID)
   communities.value = [
     {
-      id: OFFICIAL_COMMUNITY_ID,
+      id: undefined,
       name: 'Galaxia Nintendera Oficial',
       iconUrl: defaultLogoUrl,
       isOfficial: true,
@@ -95,7 +96,7 @@ const loadCommunities = async () => {
 
 const openCommunity = (community) => {
   if (!community?.id) return
-  router.push(`/comunidad?id=${encodeURIComponent(community.id)}`)
+  router.push(communityPath(community,communities.value))
 }
 
 const openExplore = () => {
@@ -104,13 +105,7 @@ const openExplore = () => {
 
 const ensureOfficialCommunityRoute = () => {
   if (route.path !== '/comunidad' || route.query.id) return
-  router.replace({
-    path: '/comunidad',
-    query: {
-      ...route.query,
-      id: OFFICIAL_COMMUNITY_ID
-    }
-  })
+  router.replace({path:communityPath(officialCommunity.value || {id:OFFICIAL_COMMUNITY_ID,name:'Galaxia Nintendera'},communities.value),query:{...route.query,id:undefined}})
 }
 
 onMounted(() => {

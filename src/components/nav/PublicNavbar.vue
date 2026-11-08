@@ -1,4 +1,5 @@
 <script setup>
+import { communityPath } from '@/services/communityRoutes'
 import { createReadingNavigation } from '@/services/readingNavigation'
 import { publicChromeLoading, publicNavigationOverlayOpen, publicReadingControlsHidden, publicReadingHeaderHidden, publicSearchRequest } from '@/composables/usePublicChromeLoading'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -393,13 +394,13 @@ const closeSearch = () => {
   nextTick(()=>requestAnimationFrame(()=>searchTrigger.value?.focus({preventScroll:true})))
 }
 
-const goSearchResult = ({ type, id }) => {
+const goSearchResult = ({ type, id, community }) => {
   if (!id) return
   saveRecentSearch(searchQuery.value)
   closeSearch()
 
   if (type === 'community') {
-    router.push(`/comunidad?id=${encodeURIComponent(id)}`)
+    router.push(community ? communityPath(community) : `/comunidad?id=${encodeURIComponent(id)}`)
     return
   }
 
