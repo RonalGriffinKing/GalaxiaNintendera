@@ -1,6 +1,4 @@
 <script setup>
-import { publicUser, publicPosts, publicEvents } from '@/services/publicContentClient'
-
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { compactPostCategory } from '@/services/postCategoryDisplay'
 import { vSoftReveal } from '@/directives/softReveal'
@@ -138,7 +136,7 @@ const liveItems = computed(() => {
 
 const loadData = async () => {
   const postRequest = requestPublicPage('home-posts',async()=>{
-    const snapshot=await publicPosts()
+    const snapshot=await getDocs(collection(db,'posts'))
     return snapshot.docs.map(item=>({id:item.id,...item.data()})).filter(post=>post.status==='approved'&&post.visibility!=='private'&&post.visibility!=='unlisted')
   })
   loadCommunities()
@@ -168,7 +166,7 @@ const loadCommunityThreads = async () => {
 }
 
 const loadEvents = async () => {
-  try {events.value = (await requestPublicPage('home-events',async()=>{const snap=await publicEvents();return snap.docs.map(item=>({id:item.id,...item.data()}))}))
+  try {events.value = (await requestPublicPage('home-events',async()=>{const snap=await getDocs(collection(db,'galaxyEvents'));return snap.docs.map(item=>({id:item.id,...item.data()}))}))
     .filter(item => getTime(item.startsAt) >= Date.now() || item.featured)
     .sort((a, b) => getTime(a.startsAt) - getTime(b.startsAt))
   }catch{}
@@ -188,7 +186,7 @@ const loadAuthorProfiles = async () => {
   const ids = [...new Set([...posts.value, ...mainEntries.value].map(post => post.authorId).filter(Boolean))]
   if (!ids.length) return
   const profiles = await Promise.all(ids.map(async (id) => {
-    const profile=await requestPublicPage(`home-author:${id}`,async()=>{const snap=await publicUser(id);return snap.exists()?{id,...snap.data()}:null}).catch(()=>null)
+    const profile=await requestPublicPage(`home-author:${id}`,async()=>{const snap=await getDoc(doc(db,'users',id));return snap.exists()?{id,...snap.data()}:null}).catch(()=>null)
     return profile?[id,profile]:null
   }))
   authorProfiles.value = Object.fromEntries(profiles.filter(Boolean))

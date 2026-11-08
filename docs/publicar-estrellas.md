@@ -1,10 +1,5 @@
 # Publicar estrellas e iconos: pasos pendientes
 
-Actualizaci?n del 8/11/2026: la referencia vigente de seguridad y publicaci?n es
-[firebase-permanente.md](firebase-permanente.md), con reglas completas basadas en UID.
-La regla real confirmada vence el 15/11/2026; las propuestas y fragmentos
-anteriores no deben desplegarse como conjunto final.
-
 Preparación local del 8 de noviembre de 2026. No se publicaron reglas, código,
 imágenes ni datos. Servicio desactivado por defecto. Recuperación:
 `recovery/antes-centralizar-iconos` y commits de la rama `audit/estrellas-sin-gacha`.

@@ -1,6 +1,4 @@
 <script setup>
-import { authorizedRole } from '@/services/authorizedIdentity'
-
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
@@ -29,7 +27,7 @@ const loadRole = async (user) => {
 
   const snap = await getDoc(doc(db, 'users', user.uid))
   const profile = snap.data() || {}
-  currentRole.value = authorizedRole(user.uid, Boolean(profile.isBlocked))
+  currentRole.value = profile.isBlocked ? 'user' : (profile.role || 'user')
 }
 
 onMounted(() => {

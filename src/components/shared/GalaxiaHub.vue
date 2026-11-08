@@ -1,9 +1,4 @@
 <script setup>
-import { safePublicName } from '@/services/publicIdentity'
-import { sendDirectMessage } from '@/services/directMessage'
-import { authorizedRole } from '@/services/authorizedIdentity'
-
-import { subscribePublicCollection } from '@/services/publicContentClient'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { onAuthStateChanged } from 'firebase/auth'
@@ -413,7 +408,27 @@ const sendHubMessage = async () => {
   chatGiphyOpen.value = false
   resizeChatInput()
   const now = serverTimestamp()
-  await sendDirectMessage(other.id,{body,gif:gifPayload(gif),name:currentProfile.value.name||user.displayName||'Usuario',otherName:other.name||'Usuario'})
+  const messageRef = await addDoc(collection(db, 'directChats', chatId, 'messages'), {
+    body,
+    gif: gifPayload(gif),
+    authorId: user.uid,
+    authorName: currentProfile.value.name || user.displayName || user.email || 'Usuario',
+    createdAt: now
+  })
+  await setDoc(doc(db, 'directChats', chatId), {
+    participants: [user.uid, other.id],
+    lastMessage: body || 'GIF',
+    lastMessageId: messageRef.id,
+    lastMessageAuthorId: user.uid,
+    updatedAt: now,
+    deletedFor: {
+      [user.uid]: false,
+      [other.id]: false
+    },
+    lastReadBy: {
+      [user.uid]: messageRef.id
+    }
+  }, { merge: true })
   scrollHubChatToBottom()
   nextTick(() => {
     chatInputRef.value?.focus?.({ preventScroll: true })
@@ -618,7 +633,7 @@ const sendLiveMessage = async () => {
     body: body.slice(0, 280),
     gif: gifPayload(gif),
     authorId: user.uid,
-    author: safePublicName(currentProfile.value.name, user.displayName),
+    author: currentProfile.value.name || user.displayName || user.email || 'Usuario',
     authorImage: currentProfile.value.imageUrl || user.photoURL || '',
     likedBy: [],
     likes: 0,
@@ -665,7 +680,7 @@ const loadProfile = async (user) => {
   const saved = snap?.exists?.() ? snap.data() : {}
   currentProfile.value = {
     ...saved,
-    role: authorizedRole(user.uid, Boolean(saved.isBlocked)),
+    role: saved.isBlocked ? 'user' : (saved.role || 'user'),
     canChat: !saved.isBlocked && Boolean(saved.canChat),
     isBlocked: Boolean(saved.isBlocked)
   }
@@ -675,7 +690,7 @@ const subscribeUsers = () => {
   unsubscribeUsers?.()
   users.value = []
   if (!currentUser.value || !canUseChat.value) return
-  unsubscribeUsers = subscribePublicCollection('users', (snap) => {
+  unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
     users.value = snap.docs
       .map(item => ({ id: item.id, ...item.data() }))
       .filter(user => !user.isBlocked)

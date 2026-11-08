@@ -1,5 +1,3 @@
-import { getFirestore } from 'firebase-admin/firestore'
-import { adminApp } from './lib/firebase-admin.js'
 export const handler = async (event) => {
   const siteUrl = resolveSiteUrl(event)
   const type = String(event.queryStringParameters?.type || '').toLowerCase()
@@ -49,8 +47,34 @@ function resolveSiteUrl(event) {
 }
 
 async function loadPublicPosts() {
-  const snapshot=await getFirestore(adminApp()).collection('posts').where('status','==','approved').get()
-  return snapshot.docs.map(document=>({...document.data(),id:document.id})).filter(isPublicPost).sort((a,b)=>toTime(b.updatedAt||b.createdAt)-toTime(a.updatedAt||a.createdAt))
+  const FIREBASE_PROJECT_ID = globalThis.Netlify?.env?.get('FIREBASE_PROJECT_ID') ?? process.env.FIREBASE_PROJECT_ID
+  const FIREBASE_API_KEY = globalThis.Netlify?.env?.get('FIREBASE_API_KEY') ?? process.env.FIREBASE_API_KEY
+  if (!FIREBASE_PROJECT_ID || !FIREBASE_API_KEY) throw new Error('Firebase configuration is missing')
+  const posts = []
+  let pageToken = ''
+
+  do {
+    const endpoint = new URL(`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/posts`)
+    endpoint.searchParams.set('pageSize', '300')
+    endpoint.searchParams.set('key', FIREBASE_API_KEY)
+    if (pageToken) endpoint.searchParams.set('pageToken', pageToken)
+
+    const response = await fetch(endpoint, { headers: { accept: 'application/json' } })
+    if (!response.ok) throw new Error(`Firestore sitemap request failed: ${response.status}`)
+    const payload = await response.json()
+
+    for (const document of payload.documents || []) {
+      const post = Object.fromEntries(
+        Object.entries(document.fields || {}).map(([key, value]) => [key, decodeValue(value)])
+      )
+      post.id = document.name?.split('/').pop() || ''
+      if (isPublicPost(post)) posts.push(post)
+    }
+
+    pageToken = payload.nextPageToken || ''
+  } while (pageToken)
+
+  return posts.sort((a, b) => toTime(b.updatedAt || b.createdAt) - toTime(a.updatedAt || a.createdAt))
 }
 
 function isPublicPost(post) {
@@ -64,9 +88,21 @@ function isPublicPost(post) {
     && (!releaseTime || releaseTime <= Date.now())
 }
 
+function decodeValue(value = {}) {
+  if ('stringValue' in value) return value.stringValue
+  if ('timestampValue' in value) return value.timestampValue
+  if ('booleanValue' in value) return value.booleanValue
+  if ('integerValue' in value) return Number(value.integerValue)
+  if ('doubleValue' in value) return Number(value.doubleValue)
+  if ('nullValue' in value) return null
+  if (value.arrayValue) return (value.arrayValue.values || []).map(decodeValue)
+  if (value.mapValue) {
+    return Object.fromEntries(Object.entries(value.mapValue.fields || {}).map(([key, item]) => [key, decodeValue(item)]))
+  }
+  return ''
+}
+
 function toTime(value) {
-  if (value?.toMillis) return value.toMillis()
-  if (typeof value === 'number') return value
   const parsed = Date.parse(String(value || ''))
   return Number.isFinite(parsed) ? parsed : 0
 }

@@ -22,8 +22,6 @@
   },
   "devDependencies": {
     "@chromatic-com/storybook": "^5.2.1",
-    "@google-cloud/firestore": "^9.4.0",
-    "@grpc/grpc-js": "^1.14.7",
     "@storybook/addon-a11y": "^10.4.0",
     "@storybook/vue3-vite": "^10.4.0",
     "@tailwindcss/postcss": "^4.2.4",

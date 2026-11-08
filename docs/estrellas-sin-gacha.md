@@ -1,10 +1,5 @@
 # Estrellas permanentes: implementación local y publicación pendiente
 
-Actualizaci?n del 8/11/2026: la referencia vigente de seguridad y publicaci?n es
-[firebase-permanente.md](firebase-permanente.md), con reglas completas basadas en UID.
-La regla real confirmada vence el 15/11/2026; las propuestas y fragmentos
-anteriores no deben desplegarse como conjunto final.
-
 Rama: `audit/estrellas-sin-gacha`. Recuperación inicial: etiqueta
 `recovery/antes-redisenio-estrellas`. No se han modificado datos ni reglas activas.
 

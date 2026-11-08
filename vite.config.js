@@ -6,7 +6,6 @@ import { handler as nintendoPresenceHandler } from './netlify/functions/nintendo
 import { handler as igdbHandler } from './netlify/functions/igdb.js'
 import { handler as imageProxyHandler } from './netlify/functions/image-proxy.js'
 import { handler as youtubeFeedHandler } from './netlify/functions/youtube-feed.js'
-import { handler as publicContentHandler } from './netlify/functions/public-content.js'
 import { handler as progressHandler } from './netlify/functions/profile-progress.js'
 import { createVacationHandler } from './netlify/functions/vacations.js'
 import { createVacationDevStore } from './scripts/vacation-dev-store.mjs'
@@ -55,7 +54,6 @@ const netlifyFunctionsDev = () => ({
       res.end(result.body || '')
     }
 
-    server.middlewares.use('/.netlify/functions/public-content',async(req,res)=>{try{await runFunction(publicContentHandler,req,res)}catch{res.statusCode=503;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({error:'public-content-not-configured'}))}})
     server.middlewares.use('/.netlify/functions/profile-progress', async (req,res) => {
       try { await runFunction(progressHandler,req,res) } catch { res.statusCode=503; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({error:'progress-not-configured'})) }
     })

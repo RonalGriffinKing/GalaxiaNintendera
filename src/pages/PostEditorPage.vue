@@ -1,6 +1,4 @@
 <script setup>
-import { authorizedRole } from '@/services/authorizedIdentity'
-
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -28,7 +26,7 @@ async function loadEditor() {
   const user=auth.currentUser
   if (!user) throw new Error('Inicia sesión para editar publicaciones.')
   const profile=await getDoc(doc(db,'users',user.uid))
-  const role=authorizedRole(user.uid,Boolean(profile.data()?.isBlocked))
+  const role=profile.data()?.role
   if (!['admin','publisher'].includes(role)) throw new Error('No tienes permiso para crear publicaciones.')
   const savedCategories=await loadPostCategories().catch(()=>DEFAULT_POST_CATEGORIES)
   let data=null

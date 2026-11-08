@@ -1,6 +1,4 @@
 ﻿<script setup>
-import { authorizedRole } from '@/services/authorizedIdentity'
-
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed,nextTick,onMounted,onUnmounted,ref,watch } from 'vue'
 import { useRoute,useRouter } from 'vue-router'
@@ -133,7 +131,7 @@ onMounted(async()=>{
   previewResizeFrame=requestAnimationFrame(()=>{if(!disposed)previewWidth.value=width})
  })
  if(previewBox.value)observer.observe(previewBox.value)
- if(auth.currentUser){const user=await getDoc(doc(db,'users',auth.currentUser.uid)).catch(()=>null);canManage.value=authorizedRole(auth.currentUser.uid,Boolean(user?.data()?.isBlocked))==='admin'}
+ if(auth.currentUser){const user=await getDoc(doc(db,'users',auth.currentUser.uid)).catch(()=>null);canManage.value=user?.data()?.role==='admin'}
  await loadEvents(true)
  await nextTick();measurePreviewTop()
 })

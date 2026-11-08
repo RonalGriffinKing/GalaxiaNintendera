@@ -1,19 +1,12 @@
 <script setup>
-import { publicEvents, subscribePublicCollection } from '@/services/publicContentClient'
-const props=defineProps({managementOnly:Boolean})
-const emit=defineEmits(['loading','ready'])
-import { authorizedRole } from '@/services/authorizedIdentity'
-
 import { isEventActive } from '@/services/eventInvitation'
 import { useEventClock } from '@/composables/useEventClock'
-const EventsBulkImport = defineAsyncComponent(() => import('@/components/events/EventsBulkImport.vue'))
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth, db } from '@/firebase'
-const EventEditorModal = defineAsyncComponent(() => import('@/components/modals/EventEditorModal.vue'))
 import EventDetailModal from '@/components/events/EventDetailModal.vue'
 import EventPremiumCard from '@/components/events/EventPremiumCard.vue'
 import EventsCalendar from '@/components/events/EventsCalendar.vue'
@@ -23,6 +16,10 @@ import EventsTabs from '@/components/events/EventsTabs.vue'
 import FloatingBackButton from '@/components/shared/FloatingBackButton.vue'
 import { peekPublicPage, storePublicPage } from '@/services/publicPageCache'
 const EventsHistory = defineAsyncComponent(() => import('@/components/events/EventsHistory.vue'))
+const EventsBulkImport = defineAsyncComponent(() => import('@/components/events/EventsBulkImport.vue'))
+const EventEditorModal = defineAsyncComponent(() => import('@/components/modals/EventEditorModal.vue'))
+const props = defineProps({ managementOnly: { type: Boolean, default: false } })
+const emit = defineEmits(['ready'])
 
 const eventNow = useEventClock()
 const route = useRoute()
@@ -201,14 +198,14 @@ onMounted(() => {
     currentRole.value = 'user'
     if (user) {
       const snap = await getDoc(doc(db, 'users', user.uid)).catch(() => null)
-      if (currentUser.value?.uid === user.uid) currentRole.value = authorizedRole(user.uid, Boolean(snap?.data()?.isBlocked))
+      if (currentUser.value?.uid === user.uid) currentRole.value = snap?.data()?.role || 'user'
     }
   })
 
-  const watchEvents = props.managementOnly ? (callback)=>onSnapshot(query(collection(db,'galaxyEvents'),orderBy('startsAt','asc')),callback) : (callback)=>subscribePublicCollection('galaxyEvents',callback)
-  unsubscribeEvents = watchEvents( (snap) => {
-    events.value = [...snap.docs].sort((a,b)=>Number(a.data().startsAt)-Number(b.data().startsAt)).map(item => ({ id: item.id, notifyBy: [], ...item.data(), startsAt: getMillis(item.data().startsAt) }))
-    eventsReady.value = true; emit('ready','events')
+  unsubscribeEvents = onSnapshot(query(collection(db, 'galaxyEvents'), orderBy('startsAt', 'asc')), (snap) => {
+    events.value = snap.docs.map(item => ({ id: item.id, notifyBy: [], ...item.data(), startsAt: getMillis(item.data().startsAt) }))
+    eventsReady.value = true
+    emit('ready', 'events')
     storePublicPage('events-live-list', events.value.map(({ notifyBy, ...event }) => ({ ...event, notifyBy: [] })))
     if (route.query.id) {
       const found = events.value.find(event => event.id === route.query.id)
@@ -373,7 +370,6 @@ onUnmounted(() => {
 
 <style scoped>
 .events-page-premium.is-manager{padding:0;min-height:0;background:transparent}.is-manager .events-page-inner{padding:0}
-
 .event-delete-dialog{position:fixed;inset:0;z-index:4600;display:grid;place-items:center;background:#020617cc;padding:24px;color:#fff}
 .event-delete-dialog section{max-width:480px;background:#141027;border:1px solid #a855f755;padding:24px;border-radius:20px}
 .event-delete-dialog h2{font-size:22px;font-weight:800}.event-delete-dialog p{margin:16px 0;line-height:1.6;color:#ddd6fe}

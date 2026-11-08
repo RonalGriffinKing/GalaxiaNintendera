@@ -1,8 +1,4 @@
 <script setup>
-import { authorizedRole } from '@/services/authorizedIdentity'
-
-import { publicPosts, publicUsers } from '@/services/publicContentClient'
-
 import { createReadingNavigation } from '@/services/readingNavigation'
 import { publicChromeLoading, publicNavigationOverlayOpen, publicReadingControlsHidden, publicReadingHeaderHidden, publicSearchRequest } from '@/composables/usePublicChromeLoading'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -337,9 +333,9 @@ const loadSearchIndex = async () => {
 
   try {
     const [postsSnap, communitiesSnap, usersSnap, followingSnap] = await Promise.all([
-      publicPosts().catch(() => ({ docs: [] })),
+      getDocs(collection(db, 'posts')).catch(() => ({ docs: [] })),
       getDocs(collection(db, 'communities')).catch(() => ({ docs: [] })),
-      publicUsers().catch(() => ({ docs: [] })),
+      getDocs(collection(db, 'users')).catch(() => ({ docs: [] })),
       currentUser.value ? getDocs(collection(db, 'users', currentUser.value.uid, 'following')).catch(() => ({ docs: [] })) : Promise.resolve({ docs: [] })
     ])
 
@@ -479,7 +475,9 @@ const followSearchUser = async (user) => {
     setDoc(doc(db, 'users', viewer.uid, 'following', user.id), {
       userId: user.id,
       createdAt: Date.now()
-    }, { merge: true })
+    }, { merge: true }),
+    updateDoc(doc(db, 'users', user.id), { followersCount: increment(1) }).catch(() => {}),
+    updateDoc(doc(db, 'users', viewer.uid), { followingCount: increment(1) }).catch(() => {})
   ])
 }
 
@@ -585,7 +583,7 @@ const loadUserRole = async (user) => {
     const snap = await getDoc(doc(db, 'users', user.uid))
     const data = snap.data() || {}
     currentProfile.value = data
-    currentRole.value = authorizedRole(user.uid, Boolean(data.isBlocked))
+    currentRole.value = data.isBlocked ? 'user' : (data.role || 'user')
     currentCanChat.value = !data.isBlocked && Boolean(data.canChat)
   } catch (error) {
     console.error(error)
@@ -600,7 +598,7 @@ const syncCurrentProfile = (event) => {
     ...currentProfile.value,
     ...(event.detail.profile || {})
   }
-  currentRole.value = authorizedRole(auth.currentUser?.uid, Boolean(currentProfile.value.isBlocked))
+  currentRole.value = currentProfile.value.isBlocked ? 'user' : (currentProfile.value.role || currentRole.value || 'user')
   currentCanChat.value = !currentProfile.value.isBlocked && Boolean(currentProfile.value.canChat)
 }
 
@@ -876,8 +874,8 @@ const saveQuickUser = async () => {
         description: quickUserDraft.value.description.trim(),
         imageUrl: quickUserDraft.value.imageUrl.trim(),
         provider: 'password',
-        role: 'user',
-        canChat: Boolean(quickUserDraft.value.canChat),
+        role: quickUserDraft.value.role,
+        canChat: ['admin', 'publisher'].includes(quickUserDraft.value.role) || Boolean(quickUserDraft.value.canChat),
         adminCreated: true,
         emailVerified: true,
         emailVerificationRequired: false,

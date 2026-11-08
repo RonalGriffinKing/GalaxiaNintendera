@@ -1,15 +1,10 @@
 <script setup>
-import { safePublicName } from '@/services/publicIdentity'
-import { authorizedRole } from '@/services/authorizedIdentity'
-
-import { visibleProfile, publicUser, publicUsers, publicPostPage } from '@/services/publicContentClient'
-
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { onAuthStateChanged, updateProfile } from 'firebase/auth'
-import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, getCountFromServer, increment, limit, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore'
+import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { fetchXboxProfile, clearXboxProfileCache } from '@/services/xboxProfileClient'
 import { cleanGamertag, validXuid } from '@/services/xboxIdentity'
@@ -83,7 +78,7 @@ async function loadPublications() {
  const requestId=profileLoadRequestId
  try {
  const [postSnap,threadSnap,savedSnap,readsSnap]=await Promise.all([
- publicPostPage({author:profileId.value,limit:120}),
+ getDocs(query(collection(db,'posts'),where('authorId','==',profileId.value),limit(120))),
  getDocs(query(collection(db,'communityThreads'),where('authorId','==',profileId.value),limit(80))),
  isOwnProfile.value?getDocs(query(collection(db,'users',profileId.value,'favorites'),limit(6))):Promise.resolve({docs:[]}),
  getDocs(query(collection(db,'users',profileId.value,'readPosts'),orderBy('readAt','desc'),limit(12))).catch(()=>({docs:[]}))])
@@ -393,14 +388,14 @@ const normalizeAchievements = (items) => {
 
 const applyProfileData = (userData = {}) => {
   profile.value = {
+    id: profileId.value,
+    role: 'user',
     description: 'Miembro de la comunidad',
     stars: 0,
     readPostsCount: 0,
     unlockedIcons: ['kirby-01'],
     selectedIcon: 'kirby-01',
-    ...userData,
-    id: profileId.value,
-    role: authorizedRole(profileId.value,Boolean(userData.isBlocked))
+    ...userData
   }
   profileDraft.value = {
     name: profile.value.name || auth.currentUser?.displayName || '',
@@ -436,7 +431,7 @@ const loadProfile = async () => {
   followingList.value = []
 
   try {
-    const userSnap = await visibleProfile(profileId.value)
+    const userSnap = await getDoc(doc(db, 'users', profileId.value))
     if (requestId !== profileLoadRequestId) return
 
     if (!userSnap.exists()) {
@@ -457,11 +452,11 @@ const loadProfile = async () => {
 }
 
 const loadProfileExtras = async (requestId) => {
-  const [favoritesSnap, threadsSnap, postsSnap, usersSnap, communitiesSnap, followersSnap, followingSnap, followSnap, viewerSnap, uploadedIcons, achievementsSnap, readsSnap, followerCountSnap, followingCountSnap] = await Promise.all([
+  const [favoritesSnap, threadsSnap, postsSnap, usersSnap, communitiesSnap, followersSnap, followingSnap, followSnap, viewerSnap, uploadedIcons, achievementsSnap, readsSnap] = await Promise.all([
     Promise.resolve({ docs: [] }),
     Promise.resolve({ docs: [] }),
-    publicPostPage({author:profileId.value,limit:6}).catch(() => ({ docs: [] })),
-    publicUsers().catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'posts'), where('authorId', '==', profileId.value), limit(6))).catch(() => ({ docs: [] })),
+    getDocs(query(collection(db, 'users'), limit(120))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'users', profileId.value, 'communities'), limit(12))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'users', profileId.value, 'followers'), limit(500))).catch(() => ({ docs: [] })),
     getDocs(query(collection(db, 'users', profileId.value, 'following'), limit(500))).catch(() => ({ docs: [] })),
@@ -473,9 +468,7 @@ const loadProfileExtras = async (requestId) => {
       : Promise.resolve({ exists: () => false, data: () => ({}) }),
     loadUploadedProfileIcons({ includeHidden: true }).catch(() => []),
     getDoc(doc(db, 'siteConfig', 'profileAchievements')).catch(() => ({ exists: () => false, data: () => ({}) })),
-    Promise.resolve({ docs: [] }),
-    getCountFromServer(collection(db,'users',profileId.value,'followers')).catch(()=>null),
-    getCountFromServer(collection(db,'users',profileId.value,'following')).catch(()=>null)
+    Promise.resolve({ docs: [] })
   ])
 
   if (requestId !== profileLoadRequestId || !profile.value) return
@@ -487,14 +480,14 @@ const loadProfileExtras = async (requestId) => {
 
   const viewerData = typeof viewerSnap.exists === 'function' && viewerSnap.exists() ? viewerSnap.data() : {}
   viewerProfile.value = {
-    role: authorizedRole(auth.currentUser?.uid,Boolean(viewerData.isBlocked)),
+    role: viewerData.role || 'user',
     canChat: Boolean(viewerData.canChat)
   }
 
   favorites.value = favoritesSnap.docs.map(item => ({ id: item.id, ...item.data() }))
   userCommunities.value = communitiesSnap.docs.map(item => ({ id: item.id, ...item.data() }))
-  followersTotal.value = followerCountSnap?.data()?.count ?? followersSnap.docs.length
-  followingTotal.value = followingCountSnap?.data()?.count ?? followingSnap.docs.length
+  followersTotal.value = Number(profile.value.followersCount ?? followersSnap.docs.length)
+  followingTotal.value = Number(profile.value.followingCount ?? followingSnap.docs.length)
   isFollowing.value = followSnap.exists()
   const usersById = new Map(usersSnap.docs.map(item => [item.id, { id: item.id, ...item.data() }]))
   const allThreads = threadsSnap.docs.map(item => ({ id: item.id, ...item.data() }))
@@ -506,7 +499,7 @@ const loadProfileExtras = async (requestId) => {
     followingIds
   })
   const missingUserIds = [...connectedIds].filter(id => id && !usersById.has(id)).slice(0, 24)
-  const missingUserSnaps = await Promise.all(missingUserIds.map(id => publicUser(id).catch(() => null)))
+  const missingUserSnaps = await Promise.all(missingUserIds.map(id => getDoc(doc(db, 'users', id)).catch(() => null)))
   missingUserSnaps.forEach((snap, index) => {
     if (snap?.exists?.()) {
       usersById.set(missingUserIds[index], { id: missingUserIds[index], ...snap.data() })
@@ -557,7 +550,7 @@ const relationFromDoc = (item, usersById) => {
 
   return {
     id,
-    name: safePublicName(liveProfile.name, liveProfile.displayName, data.name),
+    name: data.name || liveProfile.name || liveProfile.displayName || liveProfile.email || 'Usuario',
     username: liveProfile.username || '',
     email: liveProfile.email || '',
     role: liveProfile.role || data.role || 'user',
@@ -775,7 +768,15 @@ const toggleFollow = async () => {
     if (isFollowing.value) {
       await Promise.all([
         deleteDoc(followerRef),
-        deleteDoc(followingRef)
+        deleteDoc(followingRef),
+        updateDoc(doc(db, 'users', profileId.value), {
+          followersCount: increment(-1),
+          updatedAt: now
+        }).catch(() => {}),
+        updateDoc(doc(db, 'users', user.uid), {
+          followingCount: increment(-1),
+          updatedAt: now
+        }).catch(() => {})
       ])
       isFollowing.value = false
       followersTotal.value = Math.max(0, followersTotal.value - 1)
@@ -786,22 +787,30 @@ const toggleFollow = async () => {
     await Promise.all([
       setDoc(followerRef, {
         userId: user.uid,
-        name: safePublicName(user.displayName),
+        name: user.displayName || user.email || 'Usuario',
         imageUrl: auth.currentUser?.photoURL || '',
         followedAt: now
       }),
       setDoc(followingRef, {
         userId: profileId.value,
-        name: safePublicName(profile.value.name),
+        name: profile.value.name || profile.value.email || 'Usuario',
         imageUrl: profileIcon.value,
         followedAt: now
-      })
+      }),
+      updateDoc(doc(db, 'users', profileId.value), {
+        followersCount: increment(1),
+        updatedAt: now
+      }).catch(() => {}),
+      updateDoc(doc(db, 'users', user.uid), {
+        followingCount: increment(1),
+        updatedAt: now
+      }).catch(() => {})
     ])
     await notifyNewFollower({
       targetUserId: profileId.value,
       actor: {
         uid: user.uid,
-        name: safePublicName(user.displayName)
+        name: user.displayName || user.email || 'Usuario'
       }
     })
     isFollowing.value = true
@@ -809,7 +818,7 @@ const toggleFollow = async () => {
     followersList.value = [
       {
         id: user.uid,
-        name: safePublicName(user.displayName),
+        name: user.displayName || user.email || 'Usuario',
         email: user.email || '',
         role: 'user',
         imageUrl: auth.currentUser?.photoURL || fallbackProfileIcon,
@@ -875,7 +884,7 @@ const openDirectMessage = () => {
     detail: {
       source: 'galaxia-hub',
       id: profileId.value,
-      name: safePublicName(profile.value.name),
+      name: profile.value.name || profile.value.email || 'Usuario',
       email: profile.value.email || '',
       imageUrl: profileIcon.value,
       role: profile.value.role || 'user',

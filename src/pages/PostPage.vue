@@ -1,6 +1,4 @@
 <script setup>
-import { publicUser, publicPost, publicPosts } from '@/services/publicContentClient'
-
 import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -166,10 +164,10 @@ const loadPost = async () => {
   post.value = { sections: [] }
 
   try {
-    let snap = await publicPost(route.params.id)
+    let snap = await getDoc(doc(db, "posts", route.params.id))
 
     if (!snap.exists()) {
-      const postsSnap = await publicPosts()
+      const postsSnap = await getDocs(collection(db, "posts"))
       const slugMatch = postsSnap.docs.find(item => String(item.data()?.slug || '') === String(route.params.id || ''))
       if (slugMatch) {
         snap = slugMatch
@@ -226,7 +224,7 @@ const loadAuthorProfile = async (requestId = loadRequestId) => {
   authorProfile.value = null
   if (!post.value.authorId) return
 
-  const snap = await publicUser(post.value.authorId)
+  const snap = await getDoc(doc(db, 'users', post.value.authorId))
   if (requestId !== loadRequestId) return
   if (snap.exists()) {
     authorProfile.value = { id: snap.id, ...snap.data() }
@@ -244,7 +242,7 @@ const loadFavorite = async (requestId = loadRequestId) => {
 }
 
 const loadRelatedPosts = async (requestId = loadRequestId) => {
-  const snap = await publicPosts()
+  const snap = await getDocs(collection(db, "posts"))
   if (requestId !== loadRequestId) return
   const category = post.value.category || ''
 

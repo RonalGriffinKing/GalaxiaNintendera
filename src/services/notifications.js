@@ -11,7 +11,7 @@ const now = () => Date.now()
 export const createUserNotification = async (userId, payload) => {
   if (!userId) return
 
-  const notificationRef = doc(db, 'users', userId, 'notifications', [payload.type,payload.targetId,payload.actorId,payload.comment?.id||''].join('-'))
+  const notificationRef = doc(collection(db, 'users', userId, 'notifications'))
   const batch = writeBatch(db)
 
   batch.set(notificationRef, {
@@ -20,7 +20,7 @@ export const createUserNotification = async (userId, payload) => {
     createdAt: now()
   })
 
-  await batch.commit().catch(error=>{if(error.code!=='permission-denied')throw error})
+  await batch.commit()
 }
 
 export const notifyThreadLike = async ({ thread, actor }) => {
@@ -42,7 +42,6 @@ export const notifyThreadReply = async ({ thread, actor, comment }) => {
 
   await createUserNotification(thread.authorId, {
     type: 'thread-reply',
-    comment,
     title: 'Nueva respuesta en tu hilo',
     message: `${actor.name} respondio: "${comment.body}".`,
     actorId: actor.uid,

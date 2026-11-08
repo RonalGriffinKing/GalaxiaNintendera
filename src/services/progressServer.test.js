@@ -1,5 +1,3 @@
-import identities from '../../security/authorized-identities.json'
-const ADMIN=identities.adminUids[0]
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createProgressHandler } from '../../netlify/functions/profile-progress.js'
 import { createProgressService } from '../../netlify/functions/lib/progress-service.js'
@@ -28,7 +26,7 @@ describe('verified participation service',()=>{
   let db,service,time
   beforeEach(()=>{
     time=100000
-    db=store({'users/u':{stars:40,readPostsCount:7,unlockedIcons:['old'],participationStars:9},['users/'+ADMIN]:{role:'admin'},'posts/news':{status:'approved',visibility:'public',title:'News',starReward:999,rewardMultiplier:99},'profileIcons/custom':{requiredStars:10,imageUrl:'https://example.test/icon.png',visible:true,active:true}})
+    db=store({'users/u':{stars:40,readPostsCount:7,unlockedIcons:['old'],participationStars:9},'users/admin':{role:'admin'},'posts/news':{status:'approved',visibility:'public',title:'News',starReward:999,rewardMultiplier:99},'profileIcons/custom':{requiredStars:10,imageUrl:'https://example.test/icon.png',visible:true,active:true}})
     service=createProgressService(db,()=>time)
   })
   it('awards exactly one future star, ignores browser reward data, keeps legacy balance and historical reads',async()=>{
@@ -66,46 +64,46 @@ describe('verified participation service',()=>{
     db.data['users/u'].participationStars=10
     const body={action:'update-icon',iconId:'custom',name:'Custom',src:'https://example.test/icon.png',order:3,requiredStars:100,visible:true,active:true}
     await expect(service('u',body)).rejects.toThrow('forbidden')
-    await service(ADMIN,body)
+    await service('admin',body)
     expect(db.data['users/u'].unlockedIcons).toContain('custom')
     expect(db.data['profileIcons/custom'].requiredStars).toBe(100)
     await service('u',{action:'equip',iconId:'custom'})
   })
   it('rejects malformed configuration without writes',async()=>{
     const before=JSON.stringify(db.data)
-    await expect(service(ADMIN,{action:'update-icon',iconId:'custom',requiredStars:-1})).rejects.toThrow('invalid-stars')
+    await expect(service('admin',{action:'update-icon',iconId:'custom',requiredStars:-1})).rejects.toThrow('invalid-stars')
     expect(JSON.stringify(db.data)).toBe(before)
   })
   it('creates custom icons and makes free icons available without any purchase',async()=>{
     const input={action:'create-icon',iconId:'custom-new',name:'New',src:'https://example.test/new.png',requiredStars:0,order:8,visible:true,active:true}
     await expect(service('u',input)).rejects.toThrow('forbidden')
-    await service(ADMIN,input)
+    await service('admin',input)
     expect(db.data['profileIcons/custom-new']).toMatchObject({requiredStars:0,createdAt:time})
     expect((await service('u',{action:'sync'})).unlockedIcons).toContain('custom-new')
-    await expect(service(ADMIN,input)).rejects.toThrow('icon-already-exists')
-    await expect(service(ADMIN,{action:'delete-icon',iconId:'custom-new'})).rejects.toThrow('icon-in-use')
+    await expect(service('admin',input)).rejects.toThrow('icon-already-exists')
+    await expect(service('admin',{action:'delete-icon',iconId:'custom-new'})).rejects.toThrow('icon-in-use')
   })
   it('deletes only unused custom catalog entries, preserving images, historical records and built-ins',async()=>{
     const custom='profileIcons/custom'
     db.data[custom].requiredStars=500
     db.data['users/u/readPosts/old-news']={stars:10}
-    await service(ADMIN,{action:'delete-icon',iconId:'custom'})
+    await service('admin',{action:'delete-icon',iconId:'custom'})
     expect(db.data[custom]).toBeUndefined()
     expect(db.data['users/u/readPosts/old-news']).toEqual({stars:10})
-    await expect(service(ADMIN,{action:'delete-icon',iconId:'kirby-01'})).rejects.toThrow('built-in-icon')
+    await expect(service('admin',{action:'delete-icon',iconId:'kirby-01'})).rejects.toThrow('built-in-icon')
   })
   it('refuses access-reducing catalog changes above 450 users without partial writes',async()=>{
     for(let n=0;n<450;n++)db.data['users/other'+n]={participationStars:10,unlockedIcons:[]}
     const before=JSON.stringify(db.data)
-    await expect(service(ADMIN,{action:'update-icon',iconId:'custom',name:'Custom',src:'https://example.test/i.png',order:1,requiredStars:100})).rejects.toThrow('catalog-change-requires-batched-maintenance')
+    await expect(service('admin',{action:'update-icon',iconId:'custom',name:'Custom',src:'https://example.test/i.png',order:1,requiredStars:100})).rejects.toThrow('catalog-change-requires-batched-maintenance')
     expect(JSON.stringify(db.data)).toBe(before)
   })
   it('moves achievement writes behind verified administrator permission',async()=>{
     const input={action:'save-achievements',items:[{id:'a',label:'Reader',description:'Read ten',type:'reads',target:10,iconUrl:''}]}
     await expect(service('u',input)).rejects.toThrow('forbidden')
-    await service(ADMIN,input)
+    await service('admin',input)
     expect(db.data['siteConfig/profileAchievements'].items[0]).toMatchObject({id:'a',target:10})
-    await expect(service(ADMIN,{...input,items:[{...input.items[0],target:-1}]})).rejects.toThrow('invalid-achievements')
+    await expect(service('admin',{...input,items:[{...input.items[0],target:-1}]})).rejects.toThrow('invalid-achievements')
   })
   it('requires an authenticated admin before validating or storing an uploaded image',async()=>{
     let uploads=0
@@ -113,8 +111,8 @@ describe('verified participation service',()=>{
     const input={action:'upload-icon-image',contentType:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6HcAAAAASUVORK5CYII='}
     await expect(uploadService('u',input)).rejects.toThrow('forbidden')
     expect(uploads).toBe(0)
-    await expect(uploadService(ADMIN,{...input,contentType:'image/svg+xml'})).rejects.toThrow('invalid-image')
-    expect((await uploadService(ADMIN,input)).imageUrl).toContain('https://')
+    await expect(uploadService('admin',{...input,contentType:'image/svg+xml'})).rejects.toThrow('invalid-image')
+    expect((await uploadService('admin',input)).imageUrl).toContain('https://')
     expect(uploads).toBe(1)
   })
 })

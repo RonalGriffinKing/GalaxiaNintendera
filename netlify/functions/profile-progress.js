@@ -1,4 +1,4 @@
-import { adminApp } from './lib/firebase-admin.js'
+import { getApps, initializeApp, applicationDefault, cert } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getStorage, getDownloadURL } from 'firebase-admin/storage'
 import { createIconImageUploader } from './lib/icon-image.js'
@@ -23,5 +23,10 @@ export function createProgressHandler({ enabled, verify, service }) {
       return respond(error.message === 'forbidden' ? 403 : known.includes(error.message) ? 409 : 503, { error: known.includes(error.message) ? error.message : 'progress-unavailable' })
     }
   }
+}
+function adminApp() {
+  const existing = getApps().find(app => app.name === 'participation')
+  if (existing) return existing
+  return initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID, storageBucket: process.env.FIREBASE_STORAGE_BUCKET, credential: process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT ? cert(JSON.parse(process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT)) : applicationDefault() }, 'participation')
 }
 export const handler = createProgressHandler({ enabled: () => process.env.PROGRESS_ENABLED === 'true', verify: token => getAuth(adminApp()).verifyIdToken(token, true), service: (uid, body) => createProgressService(getFirestore(adminApp()), Date.now, process.env.FIREBASE_STORAGE_BUCKET ? createIconImageUploader(getStorage(adminApp()).bucket(), getDownloadURL) : undefined)(uid, body) })

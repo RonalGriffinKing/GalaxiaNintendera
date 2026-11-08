@@ -1,8 +1,4 @@
 <script setup>
-import { safePublicName } from '@/services/publicIdentity'
-import { changeCommunityMembership } from '@/services/communityMembership'
-import { publicUser, publicPosts, subscribePublicCollection } from '@/services/publicContentClient'
-
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { eventGameNames, eventImageSelection } from '@/services/eventGame'
 import GameImagePicker from '@/components/shared/GameImagePicker.vue'
@@ -415,7 +411,7 @@ const pagedOfficialVideos = computed(() => {
   return filteredOfficialVideos.value.slice(start, start + officialVideoPageSize)
 })
 
-const displayName = computed(() => safePublicName(auth.currentUser?.displayName))
+const displayName = computed(() => auth.currentUser?.displayName || auth.currentUser?.email || 'Usuario')
 const currentUserId = computed(() => auth.currentUser?.uid || '')
 const actor = computed(() => ({
   uid: currentUserId.value,
@@ -557,7 +553,6 @@ const toggleEventNotify = async (event) => {
   await updateDoc(doc(db, 'galaxyEvents', event.id), {
     notifyBy: isEventNotified(event) ? arrayRemove(uid) : arrayUnion(uid)
   })
-  event.notifyBy=isEventNotified(event)?[]:[uid]
 }
 const liveGoalCards = computed(() => liveGoals.value.map(goal => {
   const isMission = goal.type === 'mission'
@@ -743,7 +738,7 @@ const loadThreadAuthorProfiles = async (ids = []) => {
     }
 
     try {
-      const snap = await publicUser(uid)
+      const snap = await getDoc(doc(db, 'users', uid))
       if (!snap.exists()) return
       const profile = { uid, id: uid, ...snap.data() }
       authorProfileCache.set(uid, profile)
@@ -827,9 +822,9 @@ const openUserProfile = async (source) => {
 
   try {
     const [userSnap, favoritesSnap, postsSnap] = await Promise.all([
-      publicUser(seed.uid),
+      getDoc(doc(db, 'users', seed.uid)),
       getDocs(query(collection(db, 'users', seed.uid, 'favorites'), limit(4))).catch(() => ({ docs: [] })),
-      publicPosts().catch(() => ({ docs: [] }))
+      getDocs(query(collection(db, 'posts'), limit(80))).catch(() => ({ docs: [] }))
     ])
 
     const saved = userSnap.exists() ? userSnap.data() : {}
@@ -1165,12 +1160,40 @@ const joinSelectedCommunity = async () => {
 
   try {
     if (isJoinedSelectedCommunity.value) {
-      await changeCommunityMembership(community,false)
+      await Promise.all([
+        deleteDoc(doc(db, 'users', user.uid, 'communities', community.id)),
+        deleteDoc(doc(db, 'communities', community.id, 'members', user.uid)),
+        updateDoc(doc(db, 'communities', community.id), {
+          membersCount: increment(-1),
+          updatedAt: now
+        }).catch(() => {})
+      ])
       joinedCommunityIds.value = joinedCommunityIds.value.filter(id => id !== community.id)
       return
     }
 
-    await changeCommunityMembership(community,true,{name:displayName.value,imageUrl:currentUserImage.value})
+    await Promise.all([
+      setDoc(doc(db, 'users', user.uid, 'communities', community.id), {
+        communityId: community.id,
+        name: community.name,
+        description: community.description || '',
+        bannerUrl: community.bannerUrl || '',
+        iconUrl: community.iconUrl || '',
+        role: 'Miembro',
+        joinedAt: now,
+        updatedAt: now
+      }),
+      setDoc(doc(db, 'communities', community.id, 'members', user.uid), {
+        userId: user.uid,
+        name: displayName.value,
+        imageUrl: currentUserImage.value,
+        joinedAt: now
+      }),
+      updateDoc(doc(db, 'communities', community.id), {
+        membersCount: increment(1),
+        updatedAt: now
+      })
+    ])
 
     joinedCommunityIds.value = [...new Set([...joinedCommunityIds.value, community.id])]
   } finally {
@@ -2058,7 +2081,8 @@ const subscribeCommunities = () => {
 }
 
 const subscribeEvents = () => {
-  unsubscribeEvents = subscribePublicCollection('galaxyEvents', (snap) => {
+  const eventsQuery = query(eventsRef, orderBy('startsAt', 'asc'), limit(30))
+  unsubscribeEvents = onSnapshot(eventsQuery, (snap) => {
     galaxyEvents.value = snap.docs.map(item => ({ id: item.id, ...item.data() }))
   }, (error) => {
     console.error(error)

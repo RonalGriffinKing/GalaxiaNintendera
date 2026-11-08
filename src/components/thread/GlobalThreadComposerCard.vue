@@ -1,6 +1,4 @@
 <script setup>
-import { safePublicName } from '@/services/publicIdentity'
-import { changeCommunityMembership } from '@/services/communityMembership'
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -54,7 +52,7 @@ const officialFallback = {
 const user = computed(() => auth.currentUser)
 const canManageOfficial = computed(() => ['admin', 'publisher'].includes(props.userRole))
 const isCurrentUserBlocked = computed(() => Boolean(currentProfile.value?.isBlocked))
-const displayName = computed(() => safePublicName(currentProfile.value?.name, user.value?.displayName))
+const displayName = computed(() => currentProfile.value?.name || user.value?.displayName || user.value?.email || 'Usuario')
 const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const currentProfileIcon = computed(() => resolveProfileIcon({
   ...currentProfile.value,
@@ -259,7 +257,29 @@ const joinCommunity = async (community) => {
   isPublishing.value = true
   try {
     const now = Date.now()
-    await changeCommunityMembership(community,true,{name:displayName.value,imageUrl:currentProfileIcon.value})
+    await Promise.all([
+      setDoc(doc(db, 'users', activeUser.uid, 'communities', community.id), {
+        communityId: community.id,
+        name: community.name || '',
+        description: community.description || '',
+        bannerUrl: community.bannerUrl || '',
+        iconUrl: community.iconUrl || '',
+        role: 'Miembro',
+        joinedAt: now,
+        updatedAt: now
+      }, { merge: true }),
+      setDoc(doc(db, 'communities', community.id, 'members', activeUser.uid), {
+        uid: activeUser.uid,
+        name: displayName.value,
+        imageUrl: currentProfileIcon.value || '',
+        joinedAt: now,
+        updatedAt: now
+      }, { merge: true }),
+      updateDoc(doc(db, 'communities', community.id), {
+        membersCount: increment(1),
+        updatedAt: now
+      }).catch(() => {})
+    ])
     joinedCommunityIds.value = [...new Set([...joinedCommunityIds.value, community.id])]
     selectCommunity(community)
   } finally {

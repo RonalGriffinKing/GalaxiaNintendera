@@ -82,8 +82,6 @@
 </template>
 
 <script setup>
-import { authorizedRole } from '@/services/authorizedIdentity'
-
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { doc, getDoc } from 'firebase/firestore'
@@ -160,7 +158,7 @@ const tabs = computed(() => [
     description: 'Perfiles, roles, permisos, verificacion y bloqueo de cuentas.'
   },
   {
-    id: 'events', label: 'Gestionar eventos', icon: 'fas fa-calendar-days', component: EventsPanel, admin: true, kicker: 'Eventos y directos', title: 'Gestion de eventos', description: 'Herramientas existentes de eventos, importacion y publicaciones sociales.'
+    id: 'events', label: 'Gestionar eventos', icon: 'fas fa-calendar-days', component: EventsPanel, admin: true, kicker: 'Eventos y directos', title: 'Gestion de eventos', description: 'Gestiona eventos, importaciones y publicaciones sociales.'
   },
   {
     id: 'rewards', label: 'Iconos y logros', icon: 'fas fa-star', component: ProfileRewardsManager, admin: true, kicker: 'Perfiles y recompensas', title: 'Iconos y logros', description: 'Gestiona el catalogo, los requisitos de estrellas y los logros desde el Gestor Global.'
@@ -260,7 +258,7 @@ const loadRole = async () => {
   if (!user) return
 
   const snap = await getDoc(doc(db, 'users', user.uid))
-  currentRole.value = authorizedRole(user.uid, Boolean(snap.data()?.isBlocked))
+  currentRole.value = snap.data()?.role || 'user'
 
   if (!['admin', 'publisher'].includes(currentRole.value)) {
     router.replace('/')

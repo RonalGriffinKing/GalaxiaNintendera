@@ -1,9 +1,4 @@
 <script setup>
-import { safePublicName } from '@/services/publicIdentity'
-import { sendDirectMessage, sendLiveChatMessage } from '@/services/directMessage'
-import { authorizedRole } from '@/services/authorizedIdentity'
-
-import { subscribePublicCollection } from '@/services/publicContentClient'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onAuthStateChanged } from 'firebase/auth'
 import {
@@ -111,7 +106,7 @@ const loadProfile = async (user) => {
   const saved = snap.exists() ? snap.data() : {}
   currentProfile.value = {
     ...saved,
-    role: authorizedRole(user.uid, Boolean(saved.isBlocked)),
+    role: saved.isBlocked ? 'user' : (saved.role || 'user'),
     canChat: !saved.isBlocked && Boolean(saved.canChat),
     isBlocked: Boolean(saved.isBlocked),
     imageUrl: saved.imageUrl || user.photoURL || ''
@@ -123,7 +118,7 @@ const subscribeUsers = () => {
   users.value = []
   if (!currentUser.value) return
 
-  unsubscribeUsers = subscribePublicCollection('users', (snap) => {
+  unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
     users.value = snap.docs
       .map(item => ({ ...item.data(), id: item.id }))
       .filter(user => !user.isBlocked && user.id !== currentUser.value.uid)
@@ -298,12 +293,59 @@ const sendMessage = async () => {
 
   try {
     if (isLiveChat.value) {
-      await sendLiveChatMessage(LIVE_CHAT_ID,{body,name:currentProfile.value.name||currentUser.value.displayName||'Usuario',imageUrl:currentProfile.value.imageUrl||currentUser.value.photoURL||''})
+      await addDoc(collection(db, 'liveChats', LIVE_CHAT_ID, 'messages'), {
+        body,
+        authorId: currentUser.value.uid,
+        author: currentUser.value.displayName || currentUser.value.email || 'Usuario',
+        authorImage: currentProfile.value.imageUrl || currentUser.value.photoURL || '',
+        createdAt: serverTimestamp()
+      })
+      await setDoc(doc(db, 'liveChats', LIVE_CHAT_ID), {
+        title: 'Chat en live',
+        lastMessagePreview: body,
+        lastMessageAuthorId: currentUser.value.uid,
+        updatedAt: serverTimestamp()
+      }, { merge: true })
       draft.value = ''
       return
     }
 
-    await sendDirectMessage(activeUser.value.id,{body,name:currentProfile.value.name||currentUser.value.displayName||'Usuario',otherName:activeUser.value.name||'Usuario'})
+    await setDoc(doc(db, 'directChats', chatId.value), {
+      participants: [currentUser.value.uid, activeUser.value.id],
+      participantNames: {
+        [currentUser.value.uid]: currentUser.value.displayName || currentUser.value.email || 'Usuario',
+        [activeUser.value.id]: activeUser.value.name || activeUser.value.email || 'Usuario'
+      },
+      updatedAt: serverTimestamp()
+    }, { merge: true })
+
+    const messageRef = await addDoc(collection(db, 'directChats', chatId.value, 'messages'), {
+      body,
+      authorId: currentUser.value.uid,
+      author: currentUser.value.displayName || currentUser.value.email || 'Usuario',
+      createdAt: serverTimestamp(),
+      readBy: {
+        [currentUser.value.uid]: true
+      },
+      seenAt: {
+        [currentUser.value.uid]: serverTimestamp()
+      }
+    })
+
+    await setDoc(doc(db, 'directChats', chatId.value), {
+      participants: [currentUser.value.uid, activeUser.value.id],
+      participantNames: {
+        [currentUser.value.uid]: currentUser.value.displayName || currentUser.value.email || 'Usuario',
+        [activeUser.value.id]: activeUser.value.name || activeUser.value.email || 'Usuario'
+      },
+      lastMessageId: messageRef.id,
+      lastMessageAuthorId: currentUser.value.uid,
+      lastMessagePreview: body,
+      lastReadBy: {
+        [currentUser.value.uid]: messageRef.id
+      },
+      updatedAt: serverTimestamp()
+    }, { merge: true })
 
     draft.value = ''
     replyTarget.value = null
@@ -327,7 +369,7 @@ const addLiveGoalLike = async () => {
   const likerProfiles = {
     ...(goal.likerProfiles || {}),
     [user.uid]: {
-      name: safePublicName(user.displayName),
+      name: user.displayName || user.email || 'Usuario',
       imageUrl: currentProfile.value.imageUrl || user.photoURL || ''
     }
   }

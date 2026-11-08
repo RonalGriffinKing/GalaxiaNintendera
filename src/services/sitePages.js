@@ -1,4 +1,3 @@
-import { publicPages } from './publicContentClient'
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, query, setDoc, where } from 'firebase/firestore'
 import { db } from '@/firebase'
 
@@ -429,19 +428,14 @@ export const normalizeSitePage = (data = {}) => ({
   blocks: Array.isArray(data.blocks) ? data.blocks : []
 })
 
-export const listPublishedSitePages = async () => {
-  const snap=await publicPages()
-  return snap.docs.map(item=>({id:item.id,...normalizeSitePage(item.data())}))
-}
-
 export const listSitePages = async () => {
   const snap = await getDocs(collection(db, 'sitePages'))
   return snap.docs.map(item => ({ id: item.id, ...normalizeSitePage(item.data()) }))
 }
 
 export const getSitePageBySlug = async (slug) => {
-  const all = await publicPages()
-  const snap = {docs: all.docs.filter(item=>item.data().slug===slug).slice(0,1)}
+  const pageQuery = query(collection(db, 'sitePages'), where('slug', '==', slug), limit(1))
+  const snap = await getDocs(pageQuery)
   const first = snap.docs[0]
   return first ? { id: first.id, ...normalizeSitePage(first.data()) } : null
 }
@@ -517,9 +511,10 @@ export const seedMissingStarterPages = async ({ publish = false } = {}) => {
 }
 
 export const listFooterPages = async () => {
-  const snap = await publicPages()
+  const footerQuery = query(collection(db, 'sitePages'), where('showInFooter', '==', true))
+  const snap = await getDocs(footerQuery)
   return snap.docs
     .map(item => ({ id: item.id, ...normalizeSitePage(item.data()) }))
-    .filter(page => page.status === 'published' && page.showInFooter)
+    .filter(page => page.status === 'published')
     .sort((a, b) => Number(a.footerOrder || 0) - Number(b.footerOrder || 0))
 }

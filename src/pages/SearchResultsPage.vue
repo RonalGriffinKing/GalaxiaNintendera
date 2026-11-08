@@ -1,6 +1,4 @@
 <script setup>
-import { publicPosts } from '@/services/publicContentClient'
-
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -80,7 +78,7 @@ const submit = () => {
 const loadPosts = async () => {
   loading.value = true
   try {
-    const snap = await publicPosts()
+    const snap = await getDocs(collection(db, 'posts'))
     posts.value = snap.docs
       .map(item => ({ id: item.id, ...item.data() }))
       .filter(post => post.status === 'approved' && post.visibility !== 'private' && post.visibility !== 'unlisted' && post.placement !== 'hero' && !post.isMainEntry)

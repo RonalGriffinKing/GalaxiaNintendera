@@ -170,7 +170,7 @@
 
           <label class="field">
             Rol
-            <select v-model="form.role" disabled title="Los roles autorizados dependen de la lista de UID confirmada">
+            <select v-model="form.role">
               <option value="user">Usuario</option>
               <option value="publisher">Publicador</option>
               <option value="admin">Admin</option>
@@ -267,8 +267,6 @@
 </template>
 
 <script setup>
-import { authorizedRole } from '@/services/authorizedIdentity'
-
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import { vSoftReveal } from '@/directives/softReveal'
 import AppNotice from '@/components/shared/AppNotice.vue'
@@ -393,15 +391,35 @@ const loadUsers = async () => {
   loadError.value = ''
   try {
     const snap = await getDocs(collection(db, 'users'))
-    users.value = snap.docs.map(d => ({ ...d.data(), id: d.id, role: authorizedRole(d.id) }))
+    users.value = snap.docs.map(d => ({ ...d.data(), id: d.id }))
 
     const user = auth.currentUser
     if (!user) return
 
     const currentSnap = await getDoc(doc(db, 'users', user.uid))
 
+    if (!currentSnap.exists() && users.value.length === 0) {
+      currentRole.value = 'admin'
+      await setDoc(doc(db, 'users', user.uid), {
+        name: user.displayName || 'Admin',
+        email: user.email || '',
+        description: 'admin',
+        imageUrl: user.photoURL || '',
+        role: 'admin',
+        canChat: true,
+        adminCreated: true,
+        emailVerified: true,
+        emailVerificationRequired: false,
+        emailOptIn: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }, { merge: true })
+      await loadUsers()
+      return
+    }
+
     const currentProfile = currentSnap.data() || {}
-    currentRole.value = authorizedRole(user.uid, Boolean(currentProfile.isBlocked))
+    currentRole.value = currentProfile.isBlocked ? 'user' : (currentProfile.role || 'user')
   } catch (error) {
     console.error(error)
     users.value = []
@@ -448,7 +466,7 @@ const openEdit = (user) => {
     password: '',
     description: user.description || '',
     imageUrl: user.imageUrl || '',
-    role: authorizedRole(user.id),
+    role: user.role || 'user',
     canChat: Boolean(user.canChat),
     emailVerified: Boolean(user.emailVerified),
     isBlocked: Boolean(user.isBlocked),
@@ -536,7 +554,7 @@ const userPayload = (source) => ({
   name: source.name.trim(),
   description: source.description.trim(),
   imageUrl: source.imageUrl.trim(),
-  role: authorizedRole(source.id),
+  role: source.role,
   canChat: !source.isBlocked && (['admin', 'publisher'].includes(source.role) || Boolean(source.canChat)),
   emailVerified: Boolean(source.emailVerified),
   emailVerificationRequired: !source.emailVerified,
@@ -589,7 +607,7 @@ onMounted(async () => {
     if (user) {
       const snapshot = await getDoc(doc(db, 'users', user.uid))
       const profile = snapshot.data() || {}
-      currentRole.value = authorizedRole(user.uid, Boolean(profile.isBlocked))
+      currentRole.value = profile.isBlocked ? 'user' : (profile.role || 'user')
     }
   } finally {
     emit('ready', 'users')

@@ -1,4 +1,3 @@
-import { isAuthorizedAdmin } from '../../../src/services/authorizedIdentity.js'
 import { decodeIconImage } from './icon-image.js'
 import defaults from '../../../src/services/profileIconDefaults.json' with { type: 'json' }
 import { canUseIcon, progressStars, retainUnlocked, starCount, READ_REWARD_DELAY_MS } from '../../../src/services/starProgress.js'
@@ -13,14 +12,14 @@ export function createProgressService(db, now = Date.now, uploadImage) {
     const userRef = db.doc(`users/${uid}`)
     if (body.action === 'upload-icon-image') {
       const actor = await db.doc('users/'+uid).get()
-      if (!actor.exists || !isAuthorizedAdmin(uid)) throw new Error('forbidden')
+      if (!actor.exists || actor.data().role !== 'admin' || actor.data().isBlocked) throw new Error('forbidden')
       decodeIconImage(body)
       if (!uploadImage) throw new Error('storage-not-configured')
       return uploadImage(body)
     }
     if (body.action === 'save-achievements') return db.runTransaction(async tx => {
       const actor = await tx.get(userRef)
-      if (!actor.exists || !isAuthorizedAdmin(uid)) throw new Error('forbidden')
+      if (!actor.exists || actor.data().role !== 'admin' || actor.data().isBlocked) throw new Error('forbidden')
       const types = ['reads','posts','communities','months','icons','followers']
       if (!Array.isArray(body.items) || !body.items.length || body.items.length > 200) throw new Error('invalid-achievements')
       const items = body.items.map(item => {
@@ -34,7 +33,7 @@ export function createProgressService(db, now = Date.now, uploadImage) {
     })
     if (['create-icon','update-icon','delete-icon'].includes(body.action)) return db.runTransaction(async tx => {
       const actor = await tx.get(userRef)
-      if (!actor.exists || !isAuthorizedAdmin(uid)) throw new Error('forbidden')
+      if (!actor.exists || actor.data().role !== 'admin' || actor.data().isBlocked) throw new Error('forbidden')
       const iconId = id(body.iconId)
       const catalogSnap = await tx.get(db.collection('profileIcons'))
       const catalog = mergeCatalog(catalogSnap)
