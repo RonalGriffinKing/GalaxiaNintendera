@@ -19,6 +19,16 @@ try{
  await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await wait(180);
  check(await ev('document.documentElement.scrollWidth<=innerWidth+1'),'community has no horizontal overflow on mobile');
  check(await ev('(()=>{const e=document.querySelector(".community-thread-composer"),p=document.querySelector(".community-select");return e&&getComputedStyle(e).display!=="none"&&e.getBoundingClientRect().height>100&&p.getBoundingClientRect().width<=e.getBoundingClientRect().width&&!!e.querySelector("textarea")})()'),'mobile shows the inline thread editor with a compact community pill');
+ check(await ev('(()=>{const e=document.querySelector(".community-empty-threads"),s=getComputedStyle(e);return s.backgroundImage.includes("gradient")&&s.backgroundColor!=="rgb(255, 255, 255)"&&getComputedStyle(document.querySelector(".topic-tabs button")).backgroundColor!=="rgb(255, 255, 255)"})()'),'empty community and filters use the dark site palette');
+ await ev('document.querySelector(".thread-composer textarea").click()');await until('!!document.querySelector(".thread-composer.is-expanded")');await wait(150);
+ check(await ev('document.querySelector(".thread-composer.is-expanded").parentElement===document.body&&document.body.style.overflow==="hidden"&&document.querySelector(".thread-composer").getAttribute("role")==="dialog"'),'mobile focus expands the same editor above the page and locks background scrolling');
+ await ev('(()=>{const t=document.querySelector(".thread-composer textarea");t.value="Preserved mobile draft";t.dispatchEvent(new Event("input",{bubbles:true}))})()');
+ await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:480,deviceScaleFactor:1,mobile:true});await wait(200);
+ check(await ev('(()=>{const e=document.querySelector(".thread-composer.is-expanded"),r=e.getBoundingClientRect(),b=e.querySelector(".publish-btn").getBoundingClientRect();return r.height<=480&&b.bottom<=480&&document.documentElement.scrollWidth<=innerWidth+1})()'),'expanded editor and publish action fit the reduced keyboard viewport');
+ fs.mkdirSync('.netlify/mobile-editor',{recursive:true});const capture=await cdp('Page.captureScreenshot',{format:'png'});fs.writeFileSync('.netlify/mobile-editor/expanded.png',Buffer.from(capture.result.data,'base64'));
+ await ev('document.querySelector(".immersive-composer-header button").click()');await until('!document.querySelector(".thread-composer.is-expanded")');
+ check(await ev('document.querySelector(".thread-composer textarea").value==="Preserved mobile draft"&&document.body.style.overflow!=="hidden"'),'closing the expanded editor preserves its draft and restores page scrolling');
+ await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
  await ev('window.__labAllowPresence=true;window.themeLab.router.push("/chat-tools")');await until('!!document.querySelector(".galaxia-hub-orb")');await wait(250);
  await ev('document.querySelector(".galaxia-hub-orb").click()');await wait(150);
  check(await ev('document.querySelectorAll(".hub-segments button").length===2&&!document.querySelector(".hub-live-player,.hub-section.live")'),'global Hub retains communities and private chats only');

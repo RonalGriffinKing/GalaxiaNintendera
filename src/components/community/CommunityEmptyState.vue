@@ -42,7 +42,7 @@ const emit = defineEmits(['create'])
 </template>
 
 <style scoped>
-.community-empty {
+.community-empty.community-empty-threads {
   background: linear-gradient(135deg, #15102a, #0d1020);
   border: 1px solid rgba(167, 139, 250, 0.3);
   border-radius: 22px;

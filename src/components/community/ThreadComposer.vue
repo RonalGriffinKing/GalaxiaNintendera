@@ -1,6 +1,6 @@
 <script setup>
 import ContentLoading from "@/components/shared/ContentLoading.vue"
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { addDoc, collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
@@ -11,6 +11,7 @@ import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profilePr
 import { playPublishSound } from '@/services/uiSounds'
 import officialLogo from '@/iconos/logo.png'
 
+defineOptions({ inheritAttrs: false })
 const props = defineProps({
   variant: { type: String, default: 'inline' },
   initialCommunityId: { type: String, default: '' },
@@ -18,6 +19,50 @@ const props = defineProps({
   autofocus: Boolean
 })
 
+const expanded = ref(false), editorRef = ref(null), placeholderHeight = ref(0)
+const viewport = ref({ top: 0, height: 0 })
+let previousBodyOverflow = '', previousHtmlOverflow = '', savedScrollY = 0
+const expandedStyle = computed(() => expanded.value ? { '--composer-viewport-height': viewport.value.height + 'px', '--composer-viewport-top': viewport.value.top + 'px' } : {})
+function measureViewport() {
+ if (!expanded.value) return
+ if (!window.matchMedia('(max-width: 859px)').matches) { collapseComposer(); return }
+ viewport.value = { top: window.visualViewport?.offsetTop || 0, height: window.visualViewport?.height || window.innerHeight }
+}
+async function expandComposer() {
+ if (expanded.value || !window.matchMedia('(max-width: 859px)').matches) return
+ placeholderHeight.value = editorRef.value?.getBoundingClientRect().height || 280
+ savedScrollY = window.scrollY
+ previousBodyOverflow = document.body.style.overflow
+ previousHtmlOverflow = document.documentElement.style.overflow
+ document.body.style.overflow = 'hidden'; document.documentElement.style.overflow = 'hidden'
+ const start = textAreaRef.value?.selectionStart, end = textAreaRef.value?.selectionEnd
+ expanded.value = true; measureViewport()
+ await nextTick()
+ textAreaRef.value?.focus({ preventScroll: true })
+ if (start != null) textAreaRef.value?.setSelectionRange(start, end)
+}
+function releaseScroll() {
+ document.body.style.overflow = previousBodyOverflow
+ document.documentElement.style.overflow = previousHtmlOverflow
+}
+async function collapseComposer() {
+ if (!expanded.value) return
+ textAreaRef.value?.blur(); giphyOpen.value = false
+ expanded.value = false; releaseScroll()
+ await nextTick()
+ window.scrollTo({ top: savedScrollY, behavior: 'instant' })
+ editorRef.value?.focus({ preventScroll: true })
+ resizeTextarea()
+}
+function immersiveKeys(event) {
+ if (!expanded.value) return
+ if (event.key === 'Escape') { event.preventDefault(); if (giphyOpen.value) giphyOpen.value = false; else if (!isPublishing.value) collapseComposer(); return }
+ if (event.key !== 'Tab') return
+ const controls = [...editorRef.value.querySelectorAll('button:not(:disabled),textarea,input,a[href]')].filter(el => el.getClientRects().length)
+ const first = controls[0], last = controls.at(-1)
+ if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+ else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+}
 const emit = defineEmits(['published', 'ready'])
 
 const router = useRouter()
@@ -334,6 +379,7 @@ const publish = async () => {
     giphyOpen.value = false
     playPublishSound()
     emit('published')
+    if (expanded.value) collapseComposer()
   } finally {
     isPublishing.value = false
   }
@@ -353,6 +399,9 @@ watch(topics, (next) => {
 watch(body, () => nextTick(resizeTextarea))
 
 onMounted(async () => {
+  window.addEventListener('resize', measureViewport)
+  window.visualViewport?.addEventListener('resize', measureViewport)
+  window.visualViewport?.addEventListener('scroll', measureViewport)
   await loadContext()
   await nextTick()
   resizeTextarea()
@@ -360,14 +409,23 @@ onMounted(async () => {
   const isMobileViewport = typeof window !== 'undefined' && window.matchMedia('(max-width: 859px)').matches
   if (props.autofocus && !isMobileViewport) textAreaRef.value?.focus()
 })
+onBeforeUnmount(() => {
+ window.removeEventListener('resize', measureViewport)
+ window.visualViewport?.removeEventListener('resize', measureViewport)
+ window.visualViewport?.removeEventListener('scroll', measureViewport)
+ if (expanded.value) releaseScroll()
+})
 </script>
 
 <template>
-  <section class="thread-composer" :class="[`is-${variant}`, { 'sticker-open': giphyOpen }]">
+  <div v-if="expanded" aria-hidden="true" :style="{ height: placeholderHeight + 'px' }"></div>
+  <Teleport to="body" :disabled="!expanded">
+  <section ref="editorRef" v-bind="$attrs" class="thread-composer" :class="[`is-${variant}`, { 'sticker-open': giphyOpen, 'is-expanded': expanded }]" :style="expandedStyle" :role="expanded ? 'dialog' : undefined" :aria-modal="expanded ? true : undefined" :aria-label="expanded ? 'Crear hilo' : undefined" tabindex="-1" @keydown="immersiveKeys">
     <ContentLoading v-if="isLoading" variant="inline" />
 
     <template v-else-if="selectedCommunity">
       <div class="composer-shell">
+        <header v-if="expanded" class="immersive-composer-header"><strong>Crear hilo</strong><button type="button" :disabled="isPublishing" @click="collapseComposer">Volver</button></header>
         <div class="community-select">
           <span>
             <img v-if="selectedCommunity?.iconUrl" :src="resolveAssetUrl(selectedCommunity.iconUrl)" alt="" />
@@ -387,7 +445,8 @@ onMounted(async () => {
               v-model="body"
               maxlength="240"
               :placeholder="placeholder"
-              @click="syncCaret"
+              @focus="expandComposer"
+              @click="syncCaret($event); expandComposer()"
               @keyup="syncCaret"
               @select="syncCaret"
               @input="handleComposerInput"
@@ -458,6 +517,7 @@ onMounted(async () => {
       <button type="button" @click="exploreCommunities">Explorar comunidades</button>
     </div>
   </section>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -853,4 +913,8 @@ onMounted(async () => {
 
 <style scoped>
 .community-select{min-height:38px;padding:4px 12px 4px 4px;gap:8px}.community-select span{width:28px;height:28px}.community-select strong{font-size:12px;font-weight:750}.thread-composer{min-width:0;box-sizing:border-box}.composer-shell{box-sizing:border-box;min-width:0}.composer-textarea textarea{width:100%;min-width:0;box-sizing:border-box}@media(max-width:780px){.composer-shell{padding:14px;border-radius:20px;gap:12px}.composer-row{grid-template-columns:36px minmax(0,1fr);gap:9px}.composer-avatar{width:36px;height:36px;min-width:36px;min-height:36px}.composer-textarea textarea{font-size:16px;min-height:88px}.composer-footer{flex-wrap:wrap;gap:10px}.tool-row{gap:4px}.tool-row button{min-width:36px;width:36px;height:36px}.publish-btn{min-height:40px;padding:0 16px}.composer-sticker-overlay{padding:12px;min-height:320px}.thread-composer.sticker-open .composer-shell{min-height:420px}}
+</style>
+
+<style scoped>
+.thread-composer:focus{outline:none}.immersive-composer-header{display:flex;justify-content:space-between;align-items:center;gap:12px;color:#f4edff;flex-shrink:0}.immersive-composer-header strong{font-size:18px;font-weight:750}.immersive-composer-header button{border:1px solid #a78bfa50;border-radius:999px;padding:9px 16px;background:#33204d;color:#eee2ff;font-size:13px;font-weight:700}.thread-composer.is-expanded{position:fixed;inset:var(--composer-viewport-top,0px) 0 auto;z-index:1800;width:100%;height:var(--composer-viewport-height,100dvh);margin:0!important;padding:0;box-sizing:border-box;background:#0b0b1c;overscroll-behavior:contain}.is-expanded .composer-shell{display:flex;flex-direction:column;width:100%;height:100%;min-height:0!important;box-sizing:border-box;border:0;border-radius:0;padding:calc(14px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));gap:12px;overflow-y:auto;overscroll-behavior:contain;background:radial-gradient(ellipse at 0 0,#61238b30,transparent 65%),#0b0b1c}.is-expanded .community-select{flex-shrink:0}.is-expanded .composer-content{flex:1;display:flex;flex-direction:column;min-height:120px}.is-expanded .composer-row{flex:1;min-height:100px;align-items:stretch}.is-expanded .composer-textarea{display:flex;flex-direction:column;min-height:100px}.is-expanded .composer-textarea textarea{flex:1;height:auto!important;max-height:none;min-height:100px;resize:none;font-size:16px;line-height:1.7;padding:4px 0}.is-expanded .composer-textarea small{align-self:flex-end}.is-expanded .composer-footer,.is-expanded .quick-tags,.is-expanded .active-tags{flex-shrink:0}.is-expanded .composer-image{max-height:140px}.is-expanded .composer-sticker-overlay{min-height:0;padding:12px;z-index:26}.is-expanded :is(button,textarea):focus-visible{outline:2px solid #d8b4fe;outline-offset:3px}
 </style>

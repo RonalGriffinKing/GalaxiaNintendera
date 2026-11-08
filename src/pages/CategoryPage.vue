@@ -1,5 +1,5 @@
 <script setup>
-import {publicReadingHeaderHidden,requestPublicSearch} from '@/composables/usePublicChromeLoading'
+import {publicReadingHeaderHidden} from '@/composables/usePublicChromeLoading'
 import ContentLoading from "@/components/shared/ContentLoading.vue"
 import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
 import { compactPostCategory } from '@/services/postCategoryDisplay'
@@ -28,8 +28,8 @@ const authorProfiles = ref({})
 const isLoading = ref(true)
 const filters = ref(['Todas',...DEFAULT_POST_CATEGORIES])
 const displayFilters = computed(()=>uniqueCategories([...filters.value,selectedFilter.value]))
-const sortMode = ref('recent')
-const sortOpen = ref(false)
+
+
 const isLoadingMore = ref(false)
 const isShowingMoreLoader = ref(false)
 const hasMorePosts = ref(true)
@@ -38,10 +38,7 @@ const visiblePostLimit = ref(10)
 let loadRequestId = 0
 const PAGE_SIZE = 10
 const FETCH_BATCH_SIZE = 18
-const sortOptions = [
-  { value: 'recent', label: 'Mas recientes' },
-  { value: 'oldest', label: 'Mas antiguas' }
-]
+
 
 const pageConfig = computed(() => {
   if (route.name === 'news') {
@@ -113,7 +110,7 @@ const matchingPosts = computed(() => {
   return [...filtered].sort((a, b) => {
     const left = postSortTime(a)
     const right = postSortTime(b)
-    return sortMode.value === 'recent' ? right - left : left - right
+    return right - left
   })
 })
 
@@ -122,7 +119,7 @@ const displayedPosts = computed(() => matchingPosts.value.slice(0, visiblePostLi
 const canLoadMoreVisiblePosts = computed(() => hasMorePosts.value || matchingPosts.value.length > displayedPosts.value.length)
 const showLoadMoreDots = computed(() => isLoadingMore.value || isShowingMoreLoader.value)
 
-const sortLabel = computed(() => sortOptions.find(option => option.value === sortMode.value)?.label || 'Mas recientes')
+
 
 const popularPosts = computed(() => [...posts.value].sort((a, b) => postSortTime(b) - postSortTime(a)).slice(0, 4))
 const latestPublishedPosts = computed(() => [...posts.value].sort((a,b)=>(getTime(b.publishedAt)||getTime(b.createdAt))-(getTime(a.publishedAt)||getTime(a.createdAt))).slice(0,4))
@@ -145,7 +142,7 @@ function saveListingCache(){
 onUnmounted(()=>{loadRequestId++})
 const loadPosts = async () => {
   const requestId = ++loadRequestId
-  const cacheKey=`listing:feed:${sortMode.value}`
+  const cacheKey='listing:feed:recent'
   const cached=peekPublicPage(cacheKey)
   activeListingKey=cacheKey
   const homeSeed=peekPublicPage('home-posts')
@@ -201,7 +198,7 @@ const loadMorePosts = async ({ requestId = loadRequestId, fillPage = false, repl
     let attempts = 0
 
     while (hasMorePosts.value && requestId === loadRequestId) {
-      const direction = sortMode.value === 'oldest' ? 'asc' : 'desc'
+      const direction = 'desc'
       const constraints = [
         orderBy('createdAt', direction),
         limit(FETCH_BATCH_SIZE)
@@ -303,11 +300,7 @@ const selectFilter = async (filter) => {
   window.scrollTo({top:Math.max(0,resultTop-height-top-16),behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'})
 }
 
-const selectSort = (value) => {
-  sortMode.value = value
-  sortOpen.value = false
-  loadPosts()
-}
+
 
 const goPurpleAction = () => {
   router.push(pageConfig.value.type === 'category' ? '/noticias' : '/comunidades')
@@ -390,7 +383,7 @@ watch(() => route.fullPath, () => {
 </script>
 
 <template>
-  <div class="listing-page" :class="{'listing-header-hidden':publicReadingHeaderHidden}" @click="sortOpen = false">
+  <div class="listing-page" :class="{'listing-header-hidden':publicReadingHeaderHidden}">
     <GalaxyAtmosphere />
     <main v-soft-reveal="'.news-row,.popular-card,.recent-post'" class="listing-shell" :aria-busy="isLoading">
       <header class="listing-header">
@@ -418,34 +411,8 @@ watch(() => route.fullPath, () => {
             <i :class="categoryIcon(filter)"></i>
             {{ filter }}
           </button>
-        </div></ScrollTabRail><button type="button" class="listing-search-trigger" aria-label="Buscar noticias" @click.stop="requestPublicSearch($event.currentTarget)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></button></div>
+        </div></ScrollTabRail></div>
 
-        <div class="listing-sort-combobox" @click.stop>
-          <button
-            type="button"
-            class="listing-sort-trigger"
-            :aria-expanded="sortOpen"
-            aria-haspopup="listbox"
-            @click="sortOpen = !sortOpen"
-          >
-            <span>{{ sortLabel }}</span>
-            <i :class="sortOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-          </button>
-
-          <div v-if="sortOpen" class="listing-sort-menu" role="listbox">
-            <button
-              v-for="option in sortOptions"
-              :key="option.value"
-              type="button"
-              :class="{ active: sortMode === option.value }"
-              role="option"
-              :aria-selected="sortMode === option.value"
-              @click="selectSort(option.value)"
-            >
-              {{ option.label }}
-            </button>
-          </div>
-        </div>
       </div>
 
       <section class="listing-layout">
@@ -700,69 +667,6 @@ watch(() => route.fullPath, () => {
 .filter-row button.active,.filter-row button:hover {
   background: #f3e8ff;
   border-color: #d8b4fe;
-  color: #7c3aed;
-}
-
-.listing-sort-combobox {
-  min-width: 172px;
-  position: relative;
-  z-index: 10;
-}
-
-.listing-sort-trigger {
-  align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  color: #475569;
-  display: grid;
-  font-size: 12px;
-  font-weight: 900;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 44px;
-  padding: 0 14px 0 16px;
-  text-align: left;
-  width: 100%;
-}
-
-.listing-sort-trigger span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.listing-sort-trigger i {
-  color: #a78bfa;
-  font-size: 11px;
-}
-
-.listing-sort-menu {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 24px 58px rgba(15, 23, 42, 0.2);
-  display: grid;
-  gap: 4px;
-  left: 0;
-  margin-top: 8px;
-  padding: 6px;
-  position: absolute;
-  right: 0;
-}
-
-.listing-sort-menu button {
-  border-radius: 9px;
-  color: #475569;
-  font-size: 12px;
-  font-weight: 900;
-  min-height: 36px;
-  padding: 0 10px;
-  text-align: left;
-}
-
-.listing-sort-menu button.active,.listing-sort-menu button:hover {
-  background: #f3e8ff;
   color: #7c3aed;
 }
 
@@ -1205,11 +1109,6 @@ watch(() => route.fullPath, () => {
     grid-template-columns: 1fr;
   }
 
-  .listing-sort-combobox {
-    min-width: 0;
-    width: 100%;
-  }
-
   .news-row .post-sticker,.post-sticker {
     left: auto;
     right: 14px;
@@ -1430,41 +1329,6 @@ watch(() => route.fullPath, () => {
 .filter-row button.active,.filter-row button:hover {
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.92), rgba(91, 33, 182, 0.82));
   border-color: rgba(196, 181, 253, 0.48);
-  color: #ffffff;
-}
-
-.listing-sort-combobox {
-  min-width: 180px;
-}
-
-.listing-sort-trigger {
-  backdrop-filter: blur(14px);
-  background: rgba(11, 16, 32, 0.76);
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 14px;
-  color: #f8fafc;
-  min-height: 44px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-}
-
-.listing-sort-trigger:hover,.listing-sort-trigger[aria-expanded="true"] {
-  background: rgba(15, 23, 42, 0.9);
-  border-color: rgba(196, 181, 253, 0.72);
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
-}
-
-.listing-sort-menu {
-  background: rgba(10, 14, 31, 0.98);
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
-}
-
-.listing-sort-menu button {
-  color: #cbd5e1;
-}
-
-.listing-sort-menu button.active,.listing-sort-menu button:hover {
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.78), rgba(190, 24, 147, 0.46));
   color: #ffffff;
 }
 
@@ -2011,11 +1875,6 @@ watch(() => route.fullPath, () => {
 
   .listing-filter-bar {
     grid-template-columns: 1fr;
-  }
-
-  .listing-sort-combobox {
-    min-width: 0;
-    width: 100%;
   }
 
   .listing-header h1 {
@@ -3192,16 +3051,11 @@ watch(() => route.fullPath, () => {
 
 <style scoped>
 .listing-filter-navigation{display:flex;align-items:center;min-width:0;gap:6px}
-.listing-search-trigger{display:none}
 @media(max-width:859px){
  .listing-filter-bar{display:contents}
  .listing-filter-navigation{position:sticky;top:calc(var(--public-nav-offset,64px) + 8px);z-index:30;margin-bottom:14px;padding:3px;border:1px solid #b78bfa66;border-radius:999px;background:#111024f5;box-shadow:0 6px 20px #0003;isolation:isolate;box-sizing:border-box}
  .listing-header-hidden .listing-filter-navigation{top:calc(12px + env(safe-area-inset-top,0px))}
  .listing-filter-navigation .category-filter-rail{border:0;box-shadow:none;background:transparent}
- .listing-search-trigger{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;margin-right:3px;border:1px solid #c4b5fd55;border-radius:50%;background:#7c3aed22;color:#e3d5ff;cursor:pointer}
- .listing-search-trigger svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
- .listing-search-trigger:focus-visible{outline:2px solid #e9b4ff;outline-offset:2px}
- .listing-sort-combobox{margin-bottom:24px;width:100%;min-width:0}
 }
 </style>
 <style scoped>
@@ -3212,12 +3066,12 @@ watch(() => route.fullPath, () => {
 .listing-header-hidden .listing-filter-bar{top:var(--listing-sticky-top)}
 .listing-filter-navigation{position:static;min-width:0;margin:0;padding:3px;border:1px solid #b78bfa66;border-radius:999px;background:#111024;box-shadow:none;box-sizing:border-box}
 .listing-filter-navigation .category-filter-rail{width:100%;min-width:0;border:0;background:transparent;box-shadow:none}
-.listing-sort-combobox{width:100%;min-width:0;max-width:100%;margin:0}
-.listing-sort-trigger{width:100%;min-height:52px;height:auto;background:#111024;border:1px solid #b78bfa66;border-radius:18px;padding:12px 18px;box-shadow:none;box-sizing:border-box}
-.listing-sort-trigger:hover,.listing-sort-trigger[aria-expanded=true]{background:#1a1530;box-shadow:none}
-.listing-sort-menu{top:calc(100% + 8px);width:100%;min-width:0;box-sizing:border-box;border-radius:14px;background:#17132b;border:1px solid #b78bfa55}
 @media(min-width:1101px){.listing-layout{grid-template-columns:minmax(0,1fr) var(--listing-side-width);gap:var(--listing-column-gap)}.listing-sidebar{top:calc(var(--listing-sticky-top) + 88px);align-self:start}}
 @media(min-width:1101px) and (max-width:1440px),(min-width:1101px) and (max-height:900px){.listing-shell{--listing-side-width:280px;--listing-column-gap:16px}}
 @media(max-width:1100px){.listing-filter-bar{grid-template-columns:minmax(0,1fr) 180px;gap:12px}}
-@media(max-width:600px){.listing-filter-bar{grid-template-columns:minmax(0,1fr) 124px;gap:8px;margin-bottom:14px}.listing-sort-trigger{font-size:11px;min-height:48px;padding:10px;gap:6px}.listing-search-trigger{flex:0 0 34px;width:34px;height:34px;margin:0}.listing-search-trigger svg{width:17px;height:17px}}
+@media(max-width:600px){.listing-filter-bar{grid-template-columns:minmax(0,1fr) 124px;gap:8px;margin-bottom:14px}}
+</style>
+
+<style scoped>
+@media(max-width:1100px){.listing-filter-bar{grid-template-columns:minmax(0,1fr)}}
 </style>
