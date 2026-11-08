@@ -53,6 +53,12 @@ autorización independiente y un proyecto Firebase de pruebas sin datos reales.
 
 ## 3. Respaldos: preparar ahora, ejecutar solo tras autorización
 
+Alternativa local preparada posteriormente: [respaldo local cifrado](respaldo-local-firestore.md).
+Permite evitar bucket y activación de facturación, con lectura Admin SDK durante
+una ventana sin escrituras. La copia real sigue pendiente de autorización;
+no es una instantánea transaccional ni un respaldo de Authentication/configuración.
+Los requisitos de bucket/Blaze siguientes aplican solo a la alternativa administrada.
+
 1. Conservar commit/tag local, artefacto cliente/funciones compatible, IDs de
    despliegue Netlify y copia de reglas efectivas. Guardar configuración y secretos
    únicamente en almacenamiento privado; no adjuntarlos al informe ni a Git.

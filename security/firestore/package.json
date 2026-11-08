@@ -5,7 +5,8 @@
   "scripts": {
     "test": "node --test rules.emulator.mjs",
     "test:permanent": "node --test --test-timeout=45000 permanent.emulator.mjs",
-    "test:storage": "node --test --test-timeout=30000 storage.emulator.mjs"
+    "test:storage": "node --test --test-timeout=30000 storage.emulator.mjs",
+    "test:backup": "node --test --test-timeout=60000 backup.emulator.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.0",
