@@ -1,4 +1,5 @@
 <script setup>
+import { safePublicName } from '@/services/publicIdentity'
 import { changeCommunityMembership } from '@/services/communityMembership'
 import { publicUser, publicPosts, subscribePublicCollection } from '@/services/publicContentClient'
 
@@ -414,7 +415,7 @@ const pagedOfficialVideos = computed(() => {
   return filteredOfficialVideos.value.slice(start, start + officialVideoPageSize)
 })
 
-const displayName = computed(() => auth.currentUser?.displayName || auth.currentUser?.email || 'Usuario')
+const displayName = computed(() => safePublicName(auth.currentUser?.displayName))
 const currentUserId = computed(() => auth.currentUser?.uid || '')
 const actor = computed(() => ({
   uid: currentUserId.value,

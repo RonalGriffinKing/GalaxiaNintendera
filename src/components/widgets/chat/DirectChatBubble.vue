@@ -1,4 +1,5 @@
 <script setup>
+import { safePublicName } from '@/services/publicIdentity'
 import { sendDirectMessage, sendLiveChatMessage } from '@/services/directMessage'
 import { authorizedRole } from '@/services/authorizedIdentity'
 
@@ -326,7 +327,7 @@ const addLiveGoalLike = async () => {
   const likerProfiles = {
     ...(goal.likerProfiles || {}),
     [user.uid]: {
-      name: user.displayName || user.email || 'Usuario',
+      name: safePublicName(user.displayName),
       imageUrl: currentProfile.value.imageUrl || user.photoURL || ''
     }
   }

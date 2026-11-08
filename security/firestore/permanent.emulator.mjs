@@ -3,9 +3,11 @@ import { readFile } from 'node:fs/promises'
 import { before, after, beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing'
-import { doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, writeBatch, serverTimestamp } from 'firebase/firestore'
+import { doc, collection, getDoc, getDocs, getCountFromServer, onSnapshot, limit, setDoc, updateDoc, deleteDoc, query, where, orderBy, writeBatch, serverTimestamp } from 'firebase/firestore'
 import { initializeApp, deleteApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
+import { getStorage, getDownloadURL } from 'firebase-admin/storage'
+import { createIconImageUploader } from '../../netlify/functions/lib/icon-image.js'
 import identities from '../authorized-identities.json' with {type:'json'}
 import { createPublicContentHandler } from '../../netlify/functions/lib/public-content.js'
 import { createProgressService } from '../../netlify/functions/lib/progress-service.js'
@@ -47,6 +49,33 @@ beforeEach(async()=>{
   const batch=server.batch();for(const [path,data]of Object.entries(fixtures))batch.set(server.doc(path),data);await batch.commit()
 })
 after(async()=>{await env?.cleanup();if(app)await deleteApp(app)})
+
+test('frontend public relation queries, counts and comment/OBS listeners work with the exact candidate',async()=>{
+  const batch=server.batch()
+  batch.set(server.doc('users/bob/followers/alice'),{userId:'alice',name:'Alice',imageUrl:'https://example.test/avatar.png'})
+  batch.set(server.doc('users/alice/following/bob'),{userId:'bob',name:'Bob'})
+  batch.set(server.doc('users/alice/communities/club'),{communityId:'club',name:'Club',role:'Miembro'})
+  batch.set(server.doc('communities/club/members/alice'),{userId:'alice',name:'Alice'})
+  batch.update(server.doc('communityThreads/thread'),{updatedAt:1,comments:[{id:'c',authorId:'alice',author:'Alice',authorImage:'https://example.test/avatar.png',body:'Public comment'}],replies:1})
+  await batch.commit()
+  for(const db of [guest(),user('alice')]){
+    for(const [path,size] of [['users/bob/followers',500],['users/alice/following',500],['users/alice/communities',12],['communities/club/members',500]]){
+      const result=await assertSucceeds(getDocs(query(collection(db,path),limit(size))))
+      assert.equal(result.size,1)
+      assert.equal(JSON.stringify(result.docs.map(item=>item.data())).includes('@example.test'),false)
+    }
+    assert.equal((await assertSucceeds(getCountFromServer(collection(db,'users/bob/followers')))).data().count,1)
+    assert.equal((await assertSucceeds(getDocs(query(collection(db,'communityThreads'),where('authorId','==','bob'),limit(80))))).size,1)
+    await new Promise((resolve,reject)=>{
+      let stop=()=>{}
+      stop=onSnapshot(query(collection(db,'communityThreads'),orderBy('updatedAt','desc'),limit(40)),snapshot=>{stop();try{assert.equal(snapshot.docs[0].data().comments[0].body,'Public comment');resolve()}catch(error){reject(error)}},reject)
+    })
+    await new Promise((resolve,reject)=>{
+      let stop=()=>{}
+      stop=onSnapshot(ref(db,`overlays/${ADMIN}/items/scene`),snapshot=>{stop();try{assert.equal(snapshot.data().name,'OBS');resolve()}catch(error){reject(error)}},reject)
+    })
+  }
+})
 test('private users and unregistered collections are never public',async()=>{
   for(const db of [guest(),user('bob'),user('forged')])await assertFails(getDoc(ref(db,'users/alice')))
   await assertFails(getDocs(collection(user('alice'),'users')))
@@ -188,4 +217,18 @@ test('the privileged progress function checks the UID independently of Firestore
   assert.equal(results.filter(result=>result.awarded).length,1)
   const saved=(await server.doc('users/alice').get()).data();assert.equal(saved.stars,40);assert.equal(saved.participationStars,10)
   assert.ok(saved.unlockedIcons.includes('custom'))
+})
+
+test('the real admin image service uploads locally and rejects forged admins before writing Storage',async()=>{
+  assert.equal(process.env.FIREBASE_STORAGE_EMULATOR_HOST,'127.0.0.1:9199','local Storage required')
+  process.env.STORAGE_EMULATOR_HOST='http://127.0.0.1:9199'
+  const bucket=getStorage(app).bucket('demo-galaxia-permanent.appspot.com')
+  const service=createProgressService(server,Date.now,createIconImageUploader(bucket,getDownloadURL))
+  const image={action:'upload-icon-image',contentType:'image/png',data:Buffer.from([137,80,78,71,13,10,26,10]).toString('base64')}
+  await assert.rejects(service('forged',image),/forbidden/)
+  const result=await service(ADMIN,image)
+  assert.ok(result.imageUrl.includes('profile-icons'))
+  const [files]=await bucket.getFiles({prefix:'profile-icons/'})
+  assert.ok(files.length>0)
+  await assert.rejects(service(ADMIN,{...image,data:'aW52YWxpZA=='}),/invalid-image/)
 })

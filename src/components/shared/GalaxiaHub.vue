@@ -1,4 +1,5 @@
 <script setup>
+import { safePublicName } from '@/services/publicIdentity'
 import { sendDirectMessage } from '@/services/directMessage'
 import { authorizedRole } from '@/services/authorizedIdentity'
 
@@ -617,7 +618,7 @@ const sendLiveMessage = async () => {
     body: body.slice(0, 280),
     gif: gifPayload(gif),
     authorId: user.uid,
-    author: currentProfile.value.name || user.displayName || user.email || 'Usuario',
+    author: safePublicName(currentProfile.value.name, user.displayName),
     authorImage: currentProfile.value.imageUrl || user.photoURL || '',
     likedBy: [],
     likes: 0,

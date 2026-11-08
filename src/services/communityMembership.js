@@ -1,5 +1,6 @@
 import { doc, runTransaction } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
+import { safePublicName } from './publicIdentity'
 export async function changeCommunityMembership(community, join, profile={}) {
   const user=auth.currentUser
   if(!user || !community?.id)throw Error('authentication-required')
@@ -11,7 +12,7 @@ export async function changeCommunityMembership(community, join, profile={}) {
     if(!saved.exists() || community.id==='galaxia-oficial' || saved.data().lockedMembership)throw Error('locked-community')
     const now=Date.now()
     if(join){
-      tx.set(memberRef,{userId:user.uid,name:profile.name||user.displayName||'Usuario',imageUrl:profile.imageUrl||user.photoURL||'',joinedAt:now})
+      tx.set(memberRef,{userId:user.uid,name:safePublicName(profile.name,user.displayName),imageUrl:profile.imageUrl||user.photoURL||'',joinedAt:now})
       tx.set(userRef,{communityId:community.id,name:saved.data().name||'',description:saved.data().description||'',bannerUrl:saved.data().bannerUrl||'',iconUrl:saved.data().iconUrl||'',role:'Miembro',joinedAt:now,updatedAt:now})
     }else{tx.delete(memberRef);tx.delete(userRef)}
     if(join!==member.exists())tx.update(communityRef,{membersCount:Math.max(0,Number(saved.data().membersCount||0)+(join?1:-1)),updatedAt:now})

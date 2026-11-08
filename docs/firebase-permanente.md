@@ -70,10 +70,28 @@ una candidata de Storage a ciegas ni borrar imágenes existentes.
 Configuración local: `security/firebase.emulators.json`. Arrancar con proyecto
 `demo-galaxia-permanent`, nunca el proyecto real. No es un archivo de despliegue.
 Los tests se niegan a ejecutarse contra hosts ajenos a los emuladores previstos.
-Resultado local: **284 pruebas de código con Node 22**, **15 pruebas de Firestore**
+Resultado local: **286 pruebas de código con Node 22**, **17 pruebas de Firestore/servicios**
 y **3 de Storage** aprobadas; compilación real con Node **22.23.4**, cuatro
 funciones empaquetadas y separación del bundle público comprobadas. Esto valida
 código/fixtures locales, no datos ni configuración desconocidos de producción.
+
+Comprobación final: el cliente real recorre 451 perfiles paginados a través de la
+función real de lectura; conserva nombres/avatares y excluye correo, contraseña y
+permisos privados. Se prueban las consultas del frontend de seguidores/seguidos,
+contadores, membresías y autores, y listeners de comentarios y OBS con las reglas
+exactas. La subida real mediante Admin SDK y el servicio de iconos se prueba solo
+contra Storage local, incluyendo rechazo de un falso administrador y una imagen
+inválida. Se ha retirado el fallback al correo en autores/miembros/seguidores.
+
+Bloqueo de datos históricos: las reglas leen documentos completos. Los documentos
+públicos antiguos de miembros, relaciones, hilos y comentarios podrían contener
+campos privados o correos incrustados durante la etapa de reglas abiertas. Sin
+acceso autorizado a esos datos no se puede certificar su ausencia ni prometer
+compatibilidad total con todas sus variantes. Antes de publicar, autorizar una
+comprobación de solo lectura de esos campos y de las rutas reales de imágenes.
+Si aparecen datos privados, presentar la corrección mínima para aprobación
+independiente; no borrarlos ni migrarlos automáticamente. La proyección pública
+de `users` ya excluye campos privados incluso en documentos antiguos.
 
 ```powershell
 firebase emulators:start --project demo-galaxia-permanent --config security/firebase.emulators.json --only firestore,storage

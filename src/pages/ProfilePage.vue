@@ -1,4 +1,5 @@
 <script setup>
+import { safePublicName } from '@/services/publicIdentity'
 import { authorizedRole } from '@/services/authorizedIdentity'
 
 import { visibleProfile, publicUser, publicUsers, publicPostPage } from '@/services/publicContentClient'
@@ -556,7 +557,7 @@ const relationFromDoc = (item, usersById) => {
 
   return {
     id,
-    name: data.name || liveProfile.name || liveProfile.displayName || liveProfile.email || 'Usuario',
+    name: safePublicName(liveProfile.name, liveProfile.displayName, data.name),
     username: liveProfile.username || '',
     email: liveProfile.email || '',
     role: liveProfile.role || data.role || 'user',
@@ -785,13 +786,13 @@ const toggleFollow = async () => {
     await Promise.all([
       setDoc(followerRef, {
         userId: user.uid,
-        name: user.displayName || user.email || 'Usuario',
+        name: safePublicName(user.displayName),
         imageUrl: auth.currentUser?.photoURL || '',
         followedAt: now
       }),
       setDoc(followingRef, {
         userId: profileId.value,
-        name: profile.value.name || profile.value.email || 'Usuario',
+        name: safePublicName(profile.value.name),
         imageUrl: profileIcon.value,
         followedAt: now
       })
@@ -800,7 +801,7 @@ const toggleFollow = async () => {
       targetUserId: profileId.value,
       actor: {
         uid: user.uid,
-        name: user.displayName || user.email || 'Usuario'
+        name: safePublicName(user.displayName)
       }
     })
     isFollowing.value = true
@@ -808,7 +809,7 @@ const toggleFollow = async () => {
     followersList.value = [
       {
         id: user.uid,
-        name: user.displayName || user.email || 'Usuario',
+        name: safePublicName(user.displayName),
         email: user.email || '',
         role: 'user',
         imageUrl: auth.currentUser?.photoURL || fallbackProfileIcon,
@@ -874,7 +875,7 @@ const openDirectMessage = () => {
     detail: {
       source: 'galaxia-hub',
       id: profileId.value,
-      name: profile.value.name || profile.value.email || 'Usuario',
+      name: safePublicName(profile.value.name),
       email: profile.value.email || '',
       imageUrl: profileIcon.value,
       role: profile.value.role || 'user',
