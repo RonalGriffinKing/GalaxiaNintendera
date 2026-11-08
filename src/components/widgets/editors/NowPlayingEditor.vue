@@ -35,6 +35,8 @@ async function persistControl(changes) {
 </script>
 <template>
   <div class="now-playing-editor">
+    <label><input type="checkbox" :checked="data.clickToToggle!==false" @change="data.clickToToggle=$event.target.checked"/> Mostrar u ocultar al pulsar en OBS</label>
+    <p>En OBS → Interactuar: pulsa la tarjeta para ocultarla hasta que tú decidas. Pulsa la misma zona para mostrarla y retomar sus tiempos automáticos de aparición y desaparición. No consulta de nuevo el juego ni cambia lo guardado en la web.</p>
     <div class="live-controls"><button type="button" :class="{off:data.enabled===false}" :disabled="saving" :aria-pressed="data.enabled!==false" @click="persistControl({enabled:data.enabled===false})">{{ data.enabled===false?'Encender widget':'Apagar widget' }}</button><button type="button" :disabled="saving||data.enabled===false" @click="persistControl({refreshNonce:Date.now()})">Actualizar juego</button></div>
     <p>Estos botones guardan el overlay y se aplican al enlace de OBS. Apagado no consulta las APIs de juegos.</p>
     <p v-if="notice" role="status">{{ notice }}</p>

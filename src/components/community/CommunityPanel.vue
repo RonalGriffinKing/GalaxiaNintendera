@@ -22,7 +22,8 @@ import {
   orderBy,
   query,
   setDoc,
-  updateDoc
+  updateDoc,
+  where
 } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { notifyThreadLike, notifyThreadReply } from '@/services/notifications'
@@ -53,6 +54,7 @@ import {
 const router = useRouter()
 const route = useRoute()
 const props = defineProps({
+  managementOnly: Boolean,
   userRole: {
     type: String,
     default: 'user'
@@ -67,6 +69,10 @@ const props = defineProps({
   }
 })
 
+const emit = defineEmits(['ready'])
+const managementSearch = ref('')
+const managementError = ref('')
+const managedCommunities = computed(() => communities.value.filter(c => (c.name || '').toLowerCase().includes(managementSearch.value.trim().toLowerCase())))
 const draft = ref('')
 const draftImageUrl = ref('')
 const draftSpoiler = ref(false)
@@ -1089,6 +1095,9 @@ const saveCommunity = async () => {
     })
     selectedCommunityId.value = created.id
     finishCommunityEditor()
+  } catch (error) {
+    console.error(error)
+    managementError.value = 'No se pudo guardar la comunidad. Vuelve a intentarlo.'
   } finally {
     isSavingCommunity.value = false
   }
@@ -1112,20 +1121,25 @@ const deleteCommunity = async (community) => {
   isDeleting.value = true
 
   try {
-    const membersSnap = await getDocs(collection(db, 'communities', community.id, 'members')).catch(() => ({ docs: [] }))
-    const relatedThreads = threads.value.filter(thread => thread.communityId === community.id)
+    if (community.id === OFFICIAL_COMMUNITY_ID || community.isOfficial) return
+    const membersSnap = await getDocs(collection(db, 'communities', community.id, 'members'))
+    const relatedThreads = (await getDocs(query(communityRef, where('communityId', '==', community.id)))).docs
 
     await Promise.all([
       ...membersSnap.docs.map(member => deleteDoc(doc(db, 'communities', community.id, 'members', member.id))),
-      ...membersSnap.docs.map(member => deleteDoc(doc(db, 'users', member.id, 'communities', community.id)).catch(() => {})),
-      ...relatedThreads.map(thread => deleteDoc(threadRef(thread.id))),
-      deleteDoc(doc(db, 'communities', community.id))
+      ...membersSnap.docs.map(member => deleteDoc(doc(db, 'users', member.id, 'communities', community.id))),
+      ...relatedThreads.map(thread => deleteDoc(threadRef(thread.id)))
     ])
 
+    await deleteDoc(doc(db, 'communities', community.id))
     if (selectedCommunityId.value === community.id) {
       selectedCommunityId.value = communities.value.find(item => item.id !== community.id)?.id || ''
     }
     if (editingCommunityId.value === community.id) resetCommunityDraft()
+    confirmDialog.value.show = false
+  } catch (error) {
+    console.error(error)
+    managementError.value = 'No se pudo eliminar la comunidad por completo. Vuelve a intentarlo.'
     confirmDialog.value.show = false
   } finally {
     isDeleting.value = false
@@ -2038,7 +2052,7 @@ const subscribeThreads = () => {
 }
 
 const subscribeCommunities = () => {
-  const communitiesQuery = query(communitiesRef, orderBy('createdAt', 'asc'), limit(30))
+  const communitiesQuery = props.managementOnly ? query(communitiesRef, orderBy('createdAt', 'asc')) : query(communitiesRef, orderBy('createdAt', 'asc'), limit(30))
   unsubscribeCommunities = onSnapshot(communitiesQuery, (snap) => {
     const savedCommunities = snap.docs.map(item => ({ id: item.id, membersCount: 0, ...item.data() }))
     const savedOfficial = savedCommunities.find(item => item.id === OFFICIAL_COMMUNITY_ID)
@@ -2058,9 +2072,11 @@ const subscribeCommunities = () => {
     }
     storePublicPage('community-panel-directory', communities.value)
     isCommunitiesLoading.value = false
+    emit('ready', 'communities')
   }, (error) => {
     console.error(error)
     isCommunitiesLoading.value = false
+    emit('ready', 'communities')
   })
 }
 
@@ -2151,6 +2167,7 @@ watch([communityEditorOpen, discoverModalOpen, eventManagerOpen, liveGoalManager
 })
 
 watch(() => route.query.create, (createTarget) => {
+  if (props.managementOnly && route.query.view !== 'communities') return
   if (createTarget === 'community') openCreateCommunity()
   if (createTarget === 'thread') openThreadComposer()
 })
@@ -2162,7 +2179,7 @@ watch(() => route.query.explore, (exploreTarget) => {
 })
 
 watch(selectedCommunityId, (id) => {
-  if (!id || route.query.id === id) return
+  if (props.managementOnly || !id || route.query.id === id) return
   router.replace({ path: route.path, query: { ...route.query, id } })
 })
 
@@ -2321,13 +2338,22 @@ onUnmounted(() => {
 
 <template>
   <div class="community-panel">
+    <p v-if="managementError" role="alert">{{ managementError }}</p>
+    <section v-if="props.managementOnly && isAdmin" class="community-management">
+      <div class="management-row"><input v-model="managementSearch" type="search" aria-label="Buscar comunidades" placeholder="Buscar comunidades" /><button type="button" @click="openCreateCommunity">Crear comunidad</button></div>
+      <article v-for="community in managedCommunities" :key="community.id" class="management-row">
+        <div><h3>{{ community.name }}</h3><p>{{ community.description }}</p><small>{{ community.membersCount || 0 }} miembros <span v-if="community.isOfficial"> ? Oficial</span></small></div>
+        <div><button type="button" @click="startEditCommunity(community)">Editar</button><button v-if="!community.isOfficial && community.id !== OFFICIAL_COMMUNITY_ID" type="button" :disabled="isDeleting" @click="triggerDeleteCommunity(community)">Eliminar</button></div>
+      </article>
+      <p v-if="!isCommunitiesLoading && !managedCommunities.length">No hay comunidades que coincidan.</p>
+    </section>
     <ContentLoading v-if="isCommunitiesLoading" variant="inline" />
 
     <div v-else-if="!communities.length" class="community-empty">
       Todavia no hay comunidades creadas.
     </div>
 
-    <template v-else>
+    <template v-else-if="!props.managementOnly">
     <section v-if="props.showRail" class="community-switcher-shell">
       <CommunityRailNav
         :communities="joinedCommunities"
@@ -2883,6 +2909,8 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.management-row{display:flex;gap:16px;justify-content:space-between;align-items:center;padding:16px 0;flex-wrap:wrap;border-bottom:1px solid var(--border)}.management-row p,.management-row small{color:var(--text-muted)}.management-row input{padding:10px;border:1px solid var(--border);border-radius:10px;color:var(--text-primary);background:var(--admin-surface)}.community-management button{padding:10px 16px;border-radius:10px;background:var(--accent,#9333ea);color:white;margin-right:8px}
+
 :global(body.community-player-expanded .public-bottom-nav),
 :global(body.community-player-expanded .direct-chat-fab),
 :global(body.community-player-expanded .direct-chat-panel),

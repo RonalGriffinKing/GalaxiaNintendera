@@ -1,5 +1,7 @@
 <template>
   <div class="space-y-5">
+    <label class="check-row"><input type="checkbox" :checked="data.clickToToggle!==false" @change="data.clickToToggle=$event.target.checked" /> Mostrar u ocultar al pulsar en OBS</label>
+    <p class="editor-hint">En OBS → Interactuar: pulsa la meta para ocultarla y la misma zona para mostrarla. Es local en OBS; no cambia los seguidores ni lo guardado.</p>
     <div><label class="app-label">Diseno</label><div class="layout-grid"><button :class="{active:data.layout==='card'}" @click="setLayout('card')"><i class="fas fa-rectangle-list"></i><span>Tarjeta</span></button><button :class="{active:data.layout==='starbar'}" @click="setLayout('starbar')"><i class="fas fa-star"></i><span>Meta estelar</span></button></div></div>
     <div><label class="app-label">Nombre de la meta</label><input v-model="data.title" class="app-input" placeholder="Meta de la comunidad" /></div>
     <div class="grid grid-cols-2 gap-3"><div><label class="app-label">Progreso actual</label><input v-model.number="data.current" min="0" type="number" class="app-input" /></div><div><label class="app-label">Objetivo</label><input v-model.number="data.goal" min="1" type="number" class="app-input" /></div></div>

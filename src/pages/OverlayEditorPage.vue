@@ -61,6 +61,8 @@
       </button>
 
       <button class="btn-widget now-playing-button" @click="addNowPlayingWidget"><i class="fas fa-gamepad"></i> Jugando ahora</button>
+      <button class="btn-widget camera-frame-button" @click="addCameraFrameWidget"><i class="fas fa-video"></i> Marco de cámara</button>
+      <button class="btn-widget now-playing-button" @click="addCameraFrameWidget('background')"><i class="fas fa-wand-magic-sparkles"></i> Fondo animado</button>
 
       <div class="format-summary">
         <i :class="format === 'horizontal' ? 'fas fa-display' : 'fas fa-mobile-screen-button'"></i>
@@ -147,6 +149,7 @@ import WidgetRenderer from '@/components/widgets/WidgetRenderer.vue'
 import WidgetEditor from '@/components/widgets/WidgetEditor.vue'
 import { snapAxis, resizeCorner } from '@/services/overlayGeometry'
 import { NOW_PLAYING_DEFAULTS, nowPlayingSettings } from '@/services/nowPlaying'
+import { CAMERA_FRAME_DEFAULTS, cameraFrameSettings } from '@/services/cameraFrame'
 
 const route = useRoute()
 const overlayId = route.query.id
@@ -237,6 +240,7 @@ const naturalWidgetSize = (widget) => {
   const actual=measured.value[widget.id];if(actual?.width&&actual?.height)return actual
   const data = widget?.data || {}
   if (widget?.type === 'nowPlaying') return nowPlayingSettings(data)
+  if (widget?.type === 'cameraFrame') return cameraFrameSettings(data)
   if (widget?.type === 'todo' && data.minimized) return { width: Number(data.bubbleSize) || 70, height: Number(data.bubbleSize) || 70 }
   const defaults = { goal: [430, 170], todo: [340, 230], chat: [400, 115], timer: [420, 190] }
   const fallback = defaults[widget?.type] || [200, 100]
@@ -338,6 +342,13 @@ const addTimerWidget = () => {
   selected.value = timer
 }
 
+const addCameraFrameWidget = (mode = 'frame') => {
+  const data = { ...CAMERA_FRAME_DEFAULTS, mode: mode === 'background' ? 'background' : 'frame' }
+  const widget = { id: Date.now(), type: 'cameraFrame', x: Math.round((canvasWidth.value-data.width)/2), y: Math.round((canvasHeight.value-data.height)/2), data }
+  widgets.value.push(widget)
+  selected.value = widget
+}
+
 const addNowPlayingWidget = () => {
   const data = { ...NOW_PLAYING_DEFAULTS }
   const widget = { id: Date.now(), type: 'nowPlaying', x: Math.round((canvasWidth.value - data.width) / 2), y: Math.max(40, canvasHeight.value - data.height - 60), data }
@@ -434,6 +445,7 @@ onUnmounted(() => {
 }
 
 .now-playing-button { background:linear-gradient(120deg,#7c3aed,#2563eb); }
+.camera-frame-button { background:linear-gradient(120deg,#7c3aed,#db2777); }
 .timer-button { background: linear-gradient(135deg, #6d28d9, #db2777); box-shadow: 0 8px 20px rgba(126,34,206,.2); }
 .format-switch { display: flex; gap: 4px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; }
 .format-switch button { min-width: 112px; padding: 5px 9px; border-radius: 7px; color: #64748b; display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 6px; text-align: left; font-size: 11px; font-weight: 900; }

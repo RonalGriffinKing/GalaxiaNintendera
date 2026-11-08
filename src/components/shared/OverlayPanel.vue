@@ -45,7 +45,9 @@
             {{ overlay.name || 'Sin nombre' }}
           </h3>
 
-          <div class="flex gap-1.5 border-t border-gray-100 pt-2 mt-2">
+          <div class="flex flex-wrap gap-1.5 border-t border-gray-100 pt-2 mt-2">
+            <button type="button" @click="copyOverlayLink(overlay)" class="mini-btn-xs btn-edit overlay-text-action" title="Copiar enlace para OBS" aria-label="Copiar enlace para OBS"><i class="fas fa-link" aria-hidden="true"></i> Copiar enlace</button>
+            <button type="button" @click="duplicateOverlay(overlay)" :disabled="Boolean(duplicatingId)" class="mini-btn-xs btn-edit overlay-text-action" title="Duplicar overlay" aria-label="Duplicar overlay"><i class="fas fa-copy" aria-hidden="true"></i> {{ duplicatingId===overlay.id?'Duplicando...':'Duplicar' }}</button>
             <button
               @click="goToEditor(overlay.id)"
               class="mini-btn-xs btn-success"
@@ -179,7 +181,7 @@
 import { vSoftReveal } from '@/directives/softReveal'
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, query, orderBy, limit, getDocs, deleteDoc, doc, setDoc, updateDoc } from "firebase/firestore"
+import { collection, query, orderBy, limit, getDoc, getDocs, deleteDoc, doc, setDoc, updateDoc } from "firebase/firestore"
 import { db, auth } from "@/firebase"
 import WidgetRenderer from '@/components/widgets/WidgetRenderer.vue'
 
@@ -195,6 +197,7 @@ const showPanel = ref(false)
 const isEditing = ref(false)
 const isSaving = ref(false)
 const isDeleting = ref(false)
+const duplicatingId = ref('')
 
 const form = ref({ id: null, name: '' })
 const toast = ref({ show: false, message: '', type: 'success' })
@@ -327,6 +330,43 @@ const goToEditor = (id) => {
   router.push(`/editor?id=${id}`)
 }
 
+const copyOverlayLink = async (overlay) => {
+  const user = auth.currentUser
+  if (!user || !overlay?.id) return
+  try {
+    await navigator.clipboard.writeText(`${window.location.origin}/overlay/${user.uid}_${overlay.id}`)
+    showToast('Enlace de OBS copiado')
+  } catch {
+    showToast('No se pudo copiar el enlace. Revisa el permiso del portapapeles.', 'delete')
+  }
+}
+
+const duplicateOverlay = async (overlay) => {
+  const user = auth.currentUser
+  if (!user || !overlay?.id || duplicatingId.value) return
+  duplicatingId.value = overlay.id
+  try {
+    const source = await getDoc(doc(db, 'overlays', user.uid, 'items', overlay.id))
+    if (!source.exists()) throw new Error('El overlay ya no existe')
+    const original = source.data()
+    const now = Date.now()
+    const id = crypto.randomUUID()
+    await setDoc(doc(db, 'overlays', user.uid, 'items', id), {
+      ...original,
+      name: `${original.name || 'Sin nombre'} (copia)`,
+      createdAt: now,
+      updatedAt: now
+    })
+    await loadOverlays()
+    showToast('Overlay duplicado con todos sus widgets')
+  } catch (error) {
+    console.error(error)
+    showToast('No se pudo duplicar el overlay. Vuelve a intentarlo.', 'delete')
+  } finally {
+    duplicatingId.value = ''
+  }
+}
+
 const overlayDimensions = overlay => ({ width: overlay.width || 1080, height: overlay.height || 1920 })
 const previewCanvasStyle = overlay => {
   const size = overlayDimensions(overlay)
@@ -340,6 +380,7 @@ const overlayFormatLabel = overlay => {
 </script>
 
 <style scoped>
+.overlay-text-action{width:auto!important;min-width:0;padding:0 8px;gap:5px;font-size:10px}.overlay-text-action:disabled{opacity:.5;cursor:wait}
 .preview-box {
   background: #000;
   border-radius: 12px 12px 0 0;

@@ -14,6 +14,7 @@ import TodoEditor from '@/components/widgets/editors/TodoEditor.vue'
 import ChatEditor from '@/components/widgets/editors/ChatEditor.vue'
 import TimerEditor from '@/components/widgets/editors/TimerEditor.vue'
 import NowPlayingEditor from '@/components/widgets/editors/NowPlayingEditor.vue'
+import CameraFrameEditor from '@/components/widgets/editors/CameraFrameEditor.vue'
 
 const props = defineProps({
   widget: Object,
@@ -25,7 +26,8 @@ const map = {
   todo: TodoEditor,
   chat: ChatEditor,
   timer: TimerEditor,
-  nowPlaying: NowPlayingEditor
+  nowPlaying: NowPlayingEditor,
+  cameraFrame: CameraFrameEditor
 }
 
 const component = computed(() => map[props.widget?.type] || null)

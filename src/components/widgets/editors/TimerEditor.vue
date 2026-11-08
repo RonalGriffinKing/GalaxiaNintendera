@@ -21,6 +21,8 @@
         <button @click="reset"><i class="fas fa-rotate-left"></i> Reiniciar</button>
       </div>
       <p class="editor-hint">Guarda el overlay despues de iniciar para sincronizarlo en OBS.</p>
+      <label class="check-row"><input type="checkbox" :checked="data.clickToStart!==false" @change="data.clickToStart=$event.target.checked" /> Iniciar al pulsar el temporizador en OBS</label>
+      <p class="editor-hint">En OBS: clic derecho en la fuente de navegador → Interactuar. Un clic inicia el temporizador; otro clic mientras cuenta lo finaliza y lo oculta. Pulsa la misma zona para repetir con la duración configurada. El control es local en OBS y se pierde al recargar la fuente. Un cambio del contador desde el editor sustituye el estado local.</p>
     </template>
 
     <label v-else class="check-row"><input v-model="data.showSeconds" type="checkbox" /> Mostrar segundos</label>

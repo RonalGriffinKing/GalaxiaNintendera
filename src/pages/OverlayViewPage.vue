@@ -6,7 +6,7 @@
       class="absolute"
       :style="{ top: widget.y + 'px', left: widget.x + 'px',transform:'scale('+Math.max(.1,Math.min(5,Number(widget.scale)||1))+')',transformOrigin:'top left' }"
     >
-      <WidgetRenderer :widget="widget" :owner-id="ownerId" />
+      <WidgetRenderer :widget="widget" :owner-id="ownerId" interactive />
     </div>
   </div>
 </template>

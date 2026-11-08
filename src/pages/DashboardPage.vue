@@ -52,6 +52,7 @@
               :is="activeComponent"
               :user-role="currentRole"
               :show-embedded-tools="activeTab !== 'posts'"
+              :management-only="activeTab === 'communities'"
               embedded
               @loading="handleModuleLoading"
               @ready="handleModuleReady"
@@ -93,6 +94,7 @@ const SitePagesPanel = defineAsyncComponent(() => import('@/components/sitePages
 const UserPanel = defineAsyncComponent(() => import('@/components/shared/UserPanel.vue'))
 const OverlayPanel = defineAsyncComponent(() => import('@/components/shared/OverlayPanel.vue'))
 const VisualThemesPanel = defineAsyncComponent(() => import('@/components/posts/VisualThemesPanel.vue'))
+const CommunityPanel = defineAsyncComponent(() => import('@/components/community/CommunityPanel.vue'))
 const activeModule=ref(null)
 
 const route = useRoute()
@@ -139,6 +141,9 @@ const tabs = computed(() => [
     kicker: 'CMS del sitio',
     title: 'Gestion de paginas',
     description: 'Footer, legales, guias, landings y secciones dinamicas del sitio.'
+  },
+  {
+    id: 'communities', label: 'Gestionar comunidades', icon: 'fas fa-people-group', component: CommunityPanel, admin: true, kicker: 'Comunidades', title: 'Gestion de comunidades', description: 'Crea, edita y elimina comunidades y configura sus imagenes y categorias.'
   },
   {
     id: 'users',

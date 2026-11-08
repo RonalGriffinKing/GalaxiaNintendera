@@ -1,4 +1,5 @@
 <template>
+  <div class="timer-shell" :style="cardStyle" :class="{'click-to-start':clickEnabled}" :role="clickEnabled?'button':undefined" :tabindex="clickEnabled?0:undefined" :aria-label="clickEnabled?(isCounting?'Finalizar y ocultar temporizador en OBS':'Iniciar temporizador en OBS'):undefined" @click="startLocally" @keydown.enter.prevent="startLocally" @keydown.space.prevent="startLocally">
   <div class="timer-card" :class="[`theme-${data.theme}`,{'no-background':data.showBackground===false,'timer-finished':isFinished}]" :style="cardStyle">
     <HalloweenDecor v-if="data.theme === 'halloween'" />
     <span v-if="data.theme === 'zelda'" class="timer-relic" aria-hidden="true"><TriforceSymbol /></span>
@@ -13,6 +14,7 @@
       <div v-else class="timer-dots" aria-hidden="true"><i></i><i></i><i></i></div>
     </div>
   </div>
+  </div>
 </template>
 
 <script setup>
@@ -20,13 +22,28 @@ import HalloweenDecor from '../HalloweenDecor.vue'
 import TriforceSymbol from '../TriforceSymbol.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
-const props = defineProps({ widget: { type: Object, required: true } })
+const props = defineProps({ widget: { type: Object, required: true }, interactive: Boolean })
 const now = ref(Date.now())
 const timerValue = ref(null)
 let interval
-let lastLocalTick = 0
+const localRun = ref(null)
 
-const data = computed(() => props.widget.data)
+const data = computed(() => ({ ...props.widget.data, ...localRun.value }))
+const clickEnabled = computed(() => props.interactive && data.value.mode === 'countdown' && data.value.clickToStart !== false)
+const isCounting = computed(() => data.value.running && actualRemaining.value > 0)
+const startLocally = () => {
+  if (!clickEnabled.value) return
+  if (isCounting.value) {
+    localRun.value = { running: false, endAt: 0, remainingSeconds: 0 }
+    return
+  }
+  const current = actualRemaining.value
+  const seconds = current > 0 ? current : Math.max(0, Number(data.value.durationSeconds) || 0)
+  if (!seconds) return
+  now.value = Date.now()
+  localRun.value = { running: true, endAt: now.value + seconds * 1000, remainingSeconds: seconds }
+}
+watch([() => props.widget.data.mode, () => props.widget.data.running, () => props.widget.data.endAt, () => props.widget.data.remainingSeconds, () => props.widget.data.durationSeconds], () => { localRun.value = null })
 const actualRemaining = computed(() => {
   if (data.value.mode === 'clock') return 0
   if (!data.value.running || !data.value.endAt) return Math.max(0, Number(data.value.remainingSeconds) || 0)
@@ -95,7 +112,6 @@ const finishStars = [
 
 const syncShownRemaining = () => {
   shownRemaining.value = actualRemaining.value
-  lastLocalTick = window.performance.now()
 }
 watch(
   [() => data.value.mode, () => data.value.running, () => data.value.endAt, () => data.value.remainingSeconds],
@@ -117,16 +133,14 @@ onMounted(() => {
     now.value = Date.now()
     if (data.value.mode !== 'countdown') return
     if (!data.value.running || shownRemaining.value <= 0) return
-    const localNow = window.performance.now()
-    if (localNow - lastLocalTick < 1000) return
-    shownRemaining.value = Math.max(0, shownRemaining.value - 1)
-    lastLocalTick = localNow
+    shownRemaining.value = actualRemaining.value
   }, 100)
 })
 onUnmounted(() => window.clearInterval(interval))
 </script>
 
 <style scoped>
+.timer-shell{position:relative}.timer-shell.click-to-start{cursor:pointer}.timer-shell:focus-visible{outline:2px solid #e8bd55;outline-offset:4px}
 .timer-card { position: relative; overflow: hidden; border-radius: 28px; color: white; box-shadow: 0 18px 48px rgba(42, 18, 93, .34); font-family: inherit; }
 .theme-galaxy { background: radial-gradient(circle at 78% 18%, rgba(245, 91, 211, .54), transparent 32%), linear-gradient(145deg, #281252, #6d28d9 56%, #c026d3); border: 2px solid rgba(255,255,255,.34); }
 .theme-nebula { background: radial-gradient(circle at 16% 78%, rgba(34,211,238,.52), transparent 34%), linear-gradient(145deg, #071a3d, #283593 58%, #7c3aed); border: 2px solid rgba(125,211,252,.5); }

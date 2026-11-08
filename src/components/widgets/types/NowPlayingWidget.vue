@@ -5,18 +5,31 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { nowPlayingCard, nowPlayingSettings, eventNowPlayingCard, eventStartInfo } from '@/services/nowPlaying'
 import { fetchOverlayEvent } from '@/services/overlayEventClient'
 import { fetchOverlayGamer } from '@/services/overlayGamerClient'
-const props = defineProps({ widget: { type: Object, required: true }, ownerId: String, preview: Boolean })
+const props = defineProps({ widget: { type: Object, required: true }, ownerId: String, preview: Boolean, interactive: Boolean })
 const settings = computed(() => nowPlayingSettings(props.widget.data))
 const particles = Array.from({length:14},(_,index)=>({left:((index*37+11)%100)+'%',top:((index*23+17)%100)+'%',width:(index%4===0?3:2)+'px',height:(index%4===0?3:2)+'px',animationDelay:-(index*.67)+'s',animationDuration:(6+index%5)+'s'}))
 const eventData=ref(null)
 const identities = ref([]), visible = ref(false), loading = ref(false)
+const manualVisibility = ref(null)
+const clickEnabled = computed(() => props.interactive && props.widget.data?.clickToToggle !== false && settings.value.enabled)
+const isShown = computed(() => manualVisibility.value ?? visible.value)
+function toggleLocally() {
+  if (!clickEnabled.value) return
+  if (isShown.value) {
+    manualVisibility.value = false
+    clearAnimation()
+  } else {
+    manualVisibility.value = null
+    reveal()
+  }
+}
 const card = computed(() => settings.value.source==='event'?eventNowPlayingCard(eventData.value,settings.value.eventId):nowPlayingCard(identities.value, settings.value))
 const eventStart=computed(()=>settings.value.eventShowStart?eventStartInfo(card.value?.eventStartsAt,settings.value.eventTimeZone):null)
 let polling, hiding, repeating, sequence = 0
 function clearAnimation() { clearTimeout(hiding); clearTimeout(repeating); visible.value = false }
 function reveal() {
   clearAnimation()
-  if (!settings.value.enabled || !card.value) return
+  if (!settings.value.enabled || !card.value || manualVisibility.value === false) return
   visible.value = true
   hiding = setTimeout(() => { visible.value = false }, settings.value.visibleSeconds * 1000)
   repeating = setTimeout(reveal, settings.value.repeatSeconds * 1000)
@@ -41,9 +54,9 @@ onUnmounted(() => { sequence++; clearTimeout(polling); clearAnimation() })
 const style = computed(() => ({ width: settings.value.width + 'px', height: settings.value.height + 'px', '--cover-position': settings.value.coverPositionX+'% '+settings.value.coverPositionY+'%', '--cover-zoom': settings.value.coverZoom/100, '--cover-fit': settings.value.coverFit, '--cover-width': settings.value.coverWidth+'px', '--badge-space': Math.max(0,settings.value.labelSize-12)*1.2+'px', '--label-size': settings.value.labelSize+'px', '--title-size': settings.value.titleSize+'px', '--platform-size': settings.value.platformSize+'px', '--stats-size': settings.value.statsSize+'px', '--slide': settings.value.direction === 'right' ? '60px' : '-60px' }))
 </script>
 <template>
-  <div class="now-playing-shell" :style="style">
+  <div class="now-playing-shell" :class="{'obs-interactive':clickEnabled}" :style="style" :role="clickEnabled?'button':undefined" :tabindex="clickEnabled?0:undefined" :aria-label="clickEnabled?(isShown?'Ocultar Hoy jugamos':'Mostrar Hoy jugamos'):undefined" @click="toggleLocally" @keydown.enter.prevent="toggleLocally" @keydown.space.prevent="toggleLocally">
     <Transition name="now-playing" mode="out-in" appear>
-      <article v-if="settings.enabled && visible && card" :key="card.platform + ':' + card.game.id" :class="['now-playing-card', settings.theme, card.platform, { compact: settings.width < 400 }]" aria-label="Actividad de juego">
+      <article v-if="settings.enabled && isShown && card" :key="card.platform + ':' + card.game.id" :class="['now-playing-card', settings.theme, card.platform, { compact: settings.width < 400 }]" aria-label="Actividad de juego">
         <HalloweenDecor v-if="settings.theme === 'halloween'" />
         <img v-if="card.game.imageUrl" class="now-playing-backdrop" :src="card.game.imageUrl" alt="" />
         <div v-if="settings.particles" class="now-playing-particles" aria-hidden="true"><span v-for="(particle,index) in particles" :key="index" :style="particle"></span></div>
@@ -54,10 +67,11 @@ const style = computed(() => ({ width: settings.value.width + 'px', height: sett
         <span v-if="settings.theme === 'zelda'" class="now-playing-relic" aria-hidden="true"><TriforceSymbol /></span>
       </article>
     </Transition>
-    <div v-if="preview && !visible" class="now-playing-placeholder"><i class="fas fa-gamepad" aria-hidden="true"></i><strong>{{ !settings.enabled ? 'Widget apagado' : loading ? 'Consultando tus plataformas…' : card ? 'En pausa entre apariciones' : 'Sin juego activo disponible' }}</strong><small>{{ !settings.enabled ? 'Enciende el widget desde el editor para publicarlo en OBS.' : card ? 'Usa «Probar animación» para verlo de nuevo.' : 'Conecta tus sistemas en Editar perfil o permite mostrar el último juego.' }}</small></div>
+    <div v-if="preview && !isShown" class="now-playing-placeholder"><i class="fas fa-gamepad" aria-hidden="true"></i><strong>{{ !settings.enabled ? 'Widget apagado' : loading ? 'Consultando tus plataformas…' : card ? 'En pausa entre apariciones' : 'Sin juego activo disponible' }}</strong><small>{{ !settings.enabled ? 'Enciende el widget desde el editor para publicarlo en OBS.' : card ? 'Usa «Probar animación» para verlo de nuevo.' : 'Conecta tus sistemas en Editar perfil o permite mostrar el último juego.' }}</small></div>
   </div>
 </template>
 <style scoped>
+.now-playing-shell.obs-interactive{pointer-events:auto;cursor:pointer}.now-playing-shell.obs-interactive:focus-visible{outline:2px solid #e8bd55;outline-offset:4px}
 .now-playing-shell{position:relative;box-sizing:border-box;padding:18px 10px 10px;font-family:var(--font-family-base,system-ui,sans-serif);color:#fff;pointer-events:none}
 .now-playing-card{position:relative;isolation:isolate;height:100%;box-sizing:border-box;display:flex;align-items:center;gap:18px;padding:14px 18px;border:1px solid #ae7dff99;border-radius:24px;background:linear-gradient(115deg,#15102df5,#07132ef5);box-shadow:0 0 15px #a855f733,inset 0 0 18px #7c3aed22;overflow:visible}
 .now-playing-card:before{content:'';position:absolute;inset:0;border-radius:inherit;overflow:hidden;background:linear-gradient(100deg,#1d1135e8,#07152cc4);z-index:-1}
