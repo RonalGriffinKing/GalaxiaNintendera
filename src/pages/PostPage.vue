@@ -748,7 +748,7 @@ onUnmounted(() => {
       <aside class="post-sidebar">
         <ReaderActions :read-status="readStatus" :read-badge-text="readBadgeText" :is-favorite="isFavorite" :saving-favorite="savingFavorite" @favorite="toggleFavorite" @copy="copyLink" />
         <AnalysisRatingCard v-if="isAnalysisPost && !isUpcomingPost" :analysis="post.analysis" :tier="analysisTier" />
-        <GameInfoCard v-if="!isUpcomingPost" :game="post.game || {}" />
+        <GameInfoCard v-if="!isUpcomingPost" compact :game="post.game || {}" />
         <section v-if="isAnalysisPost && !isUpcomingPost && (analysisPros.length || analysisCons.length)" class="editorial-verdict post-side-card">
           <div v-if="analysisPros.length"><h3>Lo mejor</h3><ul><li v-for="item in analysisPros" :key="item">{{ item }}</li></ul></div>
           <div v-if="analysisCons.length"><h3>A mejorar</h3><ul><li v-for="item in analysisCons" :key="item">{{ item }}</li></ul></div>

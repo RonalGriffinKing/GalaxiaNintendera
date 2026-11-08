@@ -41,9 +41,9 @@ try{
  await ev('window.dispatchEvent(new CustomEvent("open-direct-chat",{detail:{id:"local-peer",name:"Local peer"}}))');await wait(200);
  check(await ev('!!document.querySelector(".direct-chat-panel")&&!document.querySelector(".direct-live-goal-chip")'),'private chat still opens without live features');
  check(await ev('!window.themeLab.reads.includes("liveChats")'),'global tools do not subscribe to live chat');
- check(await ev('(()=>{const e=document.querySelector(".public-create-thread-desktop");return e&&getComputedStyle(e).display!=="none"&&e.getBoundingClientRect().width>0})()'),'mobile navigation exposes the create-thread button');
- await ev('document.querySelector(".public-create-thread-desktop").click()');await until('!!document.querySelector(".thread-destination")');
- check(await ev('document.documentElement.scrollWidth<=innerWidth+1'),'mobile destination picker stays inside the viewport');
+ check(await ev('(()=>{const e=document.querySelector(".public-create-thread-desktop");return e&&getComputedStyle(e).display==="none"})()'),'mobile top navigation hides the create-thread button');
+ await ev('document.querySelector(".public-account-btn").click()');await until('!!document.querySelector(".public-account-list .thread-action")');await ev('document.querySelector(".public-account-list .thread-action").click()');await until('!!document.querySelector(".thread-destination")');
+ check(await ev('document.documentElement.scrollWidth<=innerWidth+1'),'mobile profile menu still opens the destination picker');
  await ev('window.themeLab.router.push("/inline-unjoined")');await until('!!document.querySelector(".composer-empty")');
  check(await ev('!document.querySelector(".thread-composer textarea")'),'unjoined destination cannot silently fall back to another community');
  await ev('window.themeLab.router.push("/comunidad/does-not-exist")');await wait(250);check(await ev('!document.querySelector(".thread-composer textarea")'),'unknown named communities cannot open another community composer');

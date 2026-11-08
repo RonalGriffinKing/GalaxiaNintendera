@@ -2,15 +2,15 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { gameEditorialFields, safeOfficialUrl } from '@/services/articlePresentation'
 import { resolveAssetUrl } from '@/constants/assets'
-const props = defineProps({ game: { type: Object, default: () => ({}) } })
+const props = defineProps({ game: { type: Object, default: () => ({}) }, compact: Boolean })
 const fields = computed(() => gameEditorialFields(props.game))
 const failedCover = ref(false)
 const expanded = ref(false)
 let media
-const updateExpanded = event => { expanded.value = event.matches }
+const updateExpanded = event => { if (!props.compact) expanded.value = event.matches }
 onMounted(() => {
  media = window.matchMedia('(min-width:1024px)')
- expanded.value = media.matches
+ expanded.value = !props.compact && media.matches
  media.addEventListener('change', updateExpanded)
 })
 onUnmounted(() => media?.removeEventListener('change', updateExpanded))
@@ -24,12 +24,13 @@ const rows = computed(() => [
  ['Lanzamiento', props.game.releaseDate],
  ['Nota', props.game.releaseNote]
 ].filter(([,value]) => value))
+const compactSummary = computed(() => [props.game.nameEs || props.game.nameEn, rows.value.find(([label]) => label === 'Plataformas')?.[1]].filter(Boolean).join(' · '))
 const hasData = computed(() => rows.value.length || fields.value.cover || officialUrl.value)
 </script>
 
 <template>
- <details v-if="hasData" class="editorial-game" :open="expanded">
-  <summary><span class="game-heading">Información del juego</span><span class="game-toggle" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" /></svg></span></summary>
+ <details v-if="hasData" class="editorial-game" :class="{ 'is-compact': compact }" :open="expanded" @toggle="expanded = $event.target.open">
+  <summary><span class="game-heading">Información del juego<small v-if="compact && compactSummary" :title="compactSummary">{{ compactSummary }}</small></span><span class="game-toggle" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" /></svg></span></summary>
   <div class="game-details">
    <img v-if="fields.cover && !failedCover" :src="resolveAssetUrl(fields.cover)" alt="Carátula del juego" loading="lazy" decoding="async" @error="failedCover=true" />
    <dl><div v-for="[label,value] in rows" :key="label"><dt>{{ label }}</dt><dd>{{ value }}</dd></div></dl>
@@ -51,4 +52,12 @@ const hasData = computed(() => rows.value.length || fields.value.cover || offici
 .editorial-game summary:hover{background:#ffffff06}
 .editorial-game summary:focus-visible{outline:2px solid var(--visual-accent,#a855f7);outline-offset:-3px;border-radius:14px}
 @media(prefers-reduced-motion:reduce){.editorial-game summary,.game-toggle svg{transition:none}}
+</style>
+
+<style scoped>
+.game-heading{display:block;min-width:0}.game-heading small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px;font-size:11px;line-height:1.5;font-weight:400;color:var(--visual-muted,#b9b0ca)}
+</style>
+
+<style scoped>
+.editorial-game.is-compact .game-details{padding:0 16px 16px;gap:12px}.editorial-game.is-compact .game-details img{width:56px;max-height:90px}.editorial-game.is-compact .game-details dl div{padding:7px 0;gap:4px}
 </style>
