@@ -96,7 +96,7 @@ onUnmounted(() => {
 
   </div>
   <div class="hero-scrim"></div>
-  <FeaturedSheen :gold="isAnalysis" />
+  <FeaturedSheen vivid :gold="isAnalysis" />
   <div class="hero-copy">
    <span class="hero-badge">{{ slide.eyebrow }}</span>
    <h1><template v-for="(run,index) in titleRuns(slide.title,slide.highlights)" :key="index"><mark v-if="run.highlighted">{{ run.text }}</mark><template v-else>{{ run.text }}</template></template></h1>
@@ -191,4 +191,8 @@ onUnmounted(() => {
 .home-news-hero.is-analysis{--hero-edge-base:#d7ab2e;--hero-edge-light:#fff1a0;--hero-edge-shift:#b97a22}
 @keyframes hero-border-colors{0%,100%{border-color:var(--hero-edge-base)}35%{border-color:var(--hero-edge-light)}70%{border-color:var(--hero-edge-shift)}}
 @media(max-width:760px),(hover:none) and (pointer:coarse),(prefers-reduced-motion:reduce){.home-news-hero,.visual-themed.home-news-hero{animation:none;border-color:var(--hero-edge-base)}}
+</style>
+
+<style scoped>
+.home-news-hero:not(.is-analysis){border-color:transparent;box-shadow:0 0 18px #a742dc45,0 0 28px #28dcff1c}.home-news-hero:not(.is-analysis) .hero-read{background:linear-gradient(110deg,#ba20d4,#7730ef 50%,#087b99);border:1px solid #d8baff80;color:#fff;box-shadow:0 0 8px #a36fe780,0 0 18px #44d9ff35}
 </style>

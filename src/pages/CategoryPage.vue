@@ -429,7 +429,7 @@ watch(() => route.fullPath, () => {
               :class="['news-row', { analysis: isAnalysisPost(post), 'featured-latest': index === 0, 'grid-card': index > 0 }]"
               :style="cardSurfaceStyle(post, index)"
             >
-              <FeaturedSheen v-if="index===0" :gold="isAnalysisPost(post)" />
+              <FeaturedSheen vivid v-if="index===0" :gold="isAnalysisPost(post)" />
               <img v-if="post.image" :src="resolveAssetUrl(post.image)" alt="" />
               <div v-else class="post-placeholder"></div>
 
@@ -3080,4 +3080,8 @@ watch(() => route.fullPath, () => {
 <style scoped>
 .listing-filter-bar{grid-template-columns:minmax(0,1fr)}
 @media(min-width:1101px){.listing-sidebar{top:var(--listing-sticky-top)}}
+</style>
+
+<style scoped>
+.listing-shell .news-list .news-row.featured-latest:not(.analysis){border-color:transparent;box-shadow:0 0 18px #a742dc45,0 0 28px #28dcff1c}
 </style>

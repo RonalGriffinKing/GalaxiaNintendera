@@ -45,7 +45,7 @@ onUnmounted(()=>{clearTimeout(openTimer);removeNavigationError?.();removeNavigat
     <img class="deck-cover" :src="resolveAssetUrl(card.hero.image||card.slide.image,defaultBannerUrl)" :style="{objectPosition:card.hero.position}" alt="" loading="eager" fetchpriority="high" decoding="async" />
     <div class="deck-shade"></div>
     <div v-if="opening" class="deck-aurora" aria-hidden="true"><i v-for="n in 8" :key="n" class="aurora-star" :style="{'--star':n}">&#10022;</i><div class="aurora-message"><span>&#10023;</span><strong>La magia comienza...</strong><small>GALAXIA NINTENDERA</small></div></div>
-    <FeaturedSheen :gold="isAnalysis(card.slide)" />
+    <FeaturedSheen vivid :gold="isAnalysis(card.slide)" />
     <span class="deck-category"><AnalysisCrown v-if="isAnalysis(card.slide)" />{{ isAnalysis(card.slide)?'Análisis destacado':card.slide.eyebrow }}</span>
     <div class="deck-copy">
      <h1><template v-for="(run,index) in titleRuns(card.slide.title,card.slide.highlights)" :key="index"><mark v-if="run.highlighted">{{ run.text }}</mark><template v-else>{{ run.text }}</template></template></h1>
@@ -101,4 +101,8 @@ onUnmounted(()=>{clearTimeout(openTimer);removeNavigationError?.();removeNavigat
 @keyframes analysis-aura{0%,100%{box-shadow:0 0 0 1px #f3dfb155,0 0 24px #c69b5026,0 12px 42px #0006}50%{box-shadow:0 0 0 1px #f3dfb188,0 0 38px #e1c27b44,0 12px 42px #0006}}
 @media(prefers-reduced-motion:reduce),(max-width:760px){.deck-main.is-analysis{animation:none}}
 
+</style>
+
+<style scoped>
+.hero-deck-card:not(.is-analysis){border-color:transparent;box-shadow:0 0 18px #a742dc45,0 0 28px #28dcff1c}.hero-deck-card:not(.is-analysis) .deck-read{background:linear-gradient(110deg,#ba20d4,#7730ef 50%,#087b99);border:1px solid #d8baff80;color:#fff;box-shadow:0 0 8px #a36fe780,0 0 18px #44d9ff35;text-shadow:0 1px 3px #280d57}.hero-deck-card:not(.is-analysis) .deck-copy mark{background:linear-gradient(100deg,#c2a0ff,#7ceeff 40%,#fff08a 74%,#ffb5e7);background-clip:text;-webkit-background-clip:text;color:transparent}
 </style>
