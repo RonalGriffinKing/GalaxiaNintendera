@@ -57,6 +57,14 @@ superados; no mezclarlos ni conservar el antiguo `allow` general.
 
 ## Storage: preparación condicional
 
+Actualización de solo lectura del 08/11/2026: el bucket configurado devuelve 404
+y el listado del proyecto contiene cero buckets. No se encontraron referencias
+a Firebase Storage en las imágenes históricas revisadas. Los resultados y los
+límites de la comprobación están en `privacidad-lectura-2026-11-08.md`.
+Las advertencias de datos reales pendientes de este documento quedan precisadas
+por esa comprobación: 14 correos en `users.email` expuestos por la regla abierta,
+ninguno en la proyección pública; sin otras incidencias detectadas en su alcance.
+
 El código usa Storage para las nuevas imágenes administrativas de iconos. No se
 ha comprobado si el bucket real está habilitado ni se ha creado ninguno.
 `security/storage.permanent.rules` permite leer `profile-icons/` y deniega todas
