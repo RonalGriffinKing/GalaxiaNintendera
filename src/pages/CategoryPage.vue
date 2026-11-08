@@ -15,14 +15,12 @@ import { resolveAssetUrl } from '@/constants/assets'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { categoryIcon, DEFAULT_POST_CATEGORIES, uniqueCategories, loadPostCategories, normalizeCategory as normalize, postCategoryLabels, postMatchesCategory } from '@/services/postCategories'
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
-import { useVisualThemes } from '@/composables/useVisualThemes'
-import { resolvePostVisualTheme, postWebThemeCss } from '@/services/visualThemes'
+import { featuredTeaserStyle } from '@/services/featuredTeaser'
 import { peekPublicPage, isPublicPageFresh, storePublicPage } from '@/services/publicPageCache'
 
 const route = useRoute()
 const router = useRouter()
 const posts = ref([])
-const {themes:visualThemes,enabled:themeEnabled}=useVisualThemes()
 const selectedFilter = ref('Todas')
 const viewedPosts = ref([])
 const rewardedPosts = ref([])
@@ -324,7 +322,7 @@ const readState = (postId) => {
 const cardTitle = (post) => post.analysis?.hypeTitle || post.title
 const cardActionIcon = (post) => categoryIcon(post.category)
 const cardSurfaceStyle = (post, index) => {
-  if (index === 0) return themeEnabled.value.web ? postWebThemeCss(post,resolvePostVisualTheme(post,visualThemes.value)) : null
+  if (index === 0) return featuredTeaserStyle(isAnalysisPost(post))
   if (!post.image) return null
   const image = resolveAssetUrl(post.image)
   if (!image) return null

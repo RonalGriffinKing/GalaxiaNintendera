@@ -2302,7 +2302,7 @@ onUnmounted(() => {
   }
 
   .public-create-thread-desktop {
-    display: none;
+    display: inline-flex;
   }
 
   .public-create-quick-btn {

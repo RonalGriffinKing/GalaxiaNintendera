@@ -494,10 +494,10 @@ const deleteComment = (thread, comment) => {
 }
 
 .community-empty {
-  background: #ffffff;
-  border: 1px dashed #cbd5e1;
+  background: linear-gradient(135deg,#15102a,#0d1020);
+  border: 1px solid #a78bfa45;
   border-radius: 14px;
-  color: #64748b;
+  color: #b9b1cc;
   font-size: 13px;
   font-weight: 800;
   padding: 28px 18px;
@@ -926,11 +926,7 @@ const deleteComment = (thread, comment) => {
   opacity: 0.45;
 }
 
-@media (max-width: 780px) {
-  .community-thread-composer {
-    display: none;
-  }
-}
+
 
 @media (max-width: 620px) {
   .thread-card {

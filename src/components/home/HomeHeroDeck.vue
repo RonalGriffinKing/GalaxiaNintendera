@@ -1,8 +1,7 @@
 <script setup>
 import {computed,onMounted,onUnmounted,ref} from 'vue'
 import {useRouter} from 'vue-router'
-import {useVisualThemes} from '@/composables/useVisualThemes'
-import {resolvePostVisualTheme,postWebThemeCss} from '@/services/visualThemes'
+import {featuredTeaserStyle} from '@/services/featuredTeaser'
 import {normalizeHomeHero} from '@/services/homeHero'
 import {defaultBannerUrl,resolveAssetUrl} from '@/constants/assets'
 import {titleRuns} from '@/services/socialContent'
@@ -10,7 +9,6 @@ import FeaturedSheen from '@/components/shared/FeaturedSheen.vue'
 import AnalysisCrown from '@/components/shared/AnalysisCrown.vue'
 const props=defineProps({slides:{type:Array,default:()=>[]},activeIndex:{type:Number,default:0},authorIcon:Function})
 const emit=defineEmits(['select','read'])
-const {themes,enabled}=useVisualThemes()
 const opening=ref(false)
 const router=useRouter()
 let removeNavigationError,removeNavigationEnd
@@ -19,7 +17,7 @@ const isAnalysis=slide=>[slide.post?.category,...(slide.post?.categories||[])].s
 const card=computed(()=>{
  const slide=props.slides[props.activeIndex]||props.slides[0]
  if(!slide)return null
- return {slide,theme:enabled.value.web?postWebThemeCss(slide.post,resolvePostVisualTheme(slide.post,themes.value)):{},hero:normalizeHomeHero(slide.post?.hero)}
+ return {slide,theme:featuredTeaserStyle(isAnalysis(slide)),hero:normalizeHomeHero(slide.post?.hero)}
 })
 function select(index){if(!opening.value)emit('select',index)}
 function step(delta){if(props.slides.length>1)select((props.activeIndex+delta+props.slides.length)%props.slides.length)}

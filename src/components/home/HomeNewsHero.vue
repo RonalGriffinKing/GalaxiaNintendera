@@ -5,12 +5,10 @@ import { resolveAssetUrl, defaultBannerUrl } from '@/constants/assets'
 import { titleRuns } from '@/services/socialContent'
 import { homeHeroGallery } from '@/services/homeHero'
 import ReadArticleIcon from '@/components/shared/ReadArticleIcon.vue'
-import { useVisualThemes } from '@/composables/useVisualThemes'
-import { postWebThemeCss } from '@/services/visualThemes'
+import { featuredTeaserStyle } from '@/services/featuredTeaser'
 
 const props = defineProps({ slide: Object })
-const {theme,enabled}=useVisualThemes(()=>props.slide?.post)
-const themeStyle=computed(()=>enabled.value.web?postWebThemeCss(props.slide?.post,theme.value):{})
+const themeStyle=computed(()=>featuredTeaserStyle(isAnalysis.value))
 const emit = defineEmits(['read','pause','resume','next','previous'])
 const isAnalysis = computed(()=>[...(props.slide?.post?.categories || []),props.slide?.post?.category || ''].some(value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes('analisis')))
 let lastSwipeAt=0

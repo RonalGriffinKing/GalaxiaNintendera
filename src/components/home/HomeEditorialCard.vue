@@ -3,6 +3,7 @@ import { vSoftReveal } from '@/directives/softReveal'
 import { analysisRating } from '@/services/articlePresentation'
 import FeaturedSheen from '@/components/shared/FeaturedSheen.vue'
 import { computed } from 'vue'
+import { featuredTeaserStyle } from '@/services/featuredTeaser'
 import { useVisualThemes } from '@/composables/useVisualThemes'
 import { postWebThemeCss } from '@/services/visualThemes'
 import { resolveAssetUrl, defaultBannerUrl } from '@/constants/assets'
@@ -12,7 +13,7 @@ import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
 
 const props = defineProps({ post: Object, to: String, category: String, date: String, analysis: Boolean, featured: Boolean, compact: Boolean, authorIcon: String })
 const {theme,enabled}=useVisualThemes(()=>props.post)
-const cardTheme=computed(()=>enabled.value.web?postWebThemeCss(props.analysis?{...props.post,category:'Analisis'}:props.post,theme.value):{})
+const cardTheme=computed(()=>props.featured?featuredTeaserStyle(props.analysis):enabled.value.web?postWebThemeCss(props.analysis?{...props.post,category:'Analisis'}:props.post,theme.value):{})
 const headline = computed(() => socialHeadline(props.post))
 </script>
 

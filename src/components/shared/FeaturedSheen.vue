@@ -21,3 +21,8 @@ const motes=Array.from({length:28},(_,i)=>({left:((i*37+13)%100)+'%',top:((i*29+
  .foil-dot:nth-child(5n)::before,.foil-dot:nth-child(5n)::after{box-shadow:none}
 }
 </style>
+
+<style scoped>
+/* A fixed rainbow foil for news, with the existing gold identity for reviews. */
+.featured-sheen{--shine-base:#73edfa;--shine-a:#69e9ff;--shine-b:#ee83ff;--shine-c:#ffdf7a}.foil-prism{opacity:.27;background:radial-gradient(ellipse at 12% 15%,#38eaff85,transparent 44%),radial-gradient(ellipse at 65% 75%,#ff67d975,transparent 44%),radial-gradient(ellipse at 88% 8%,#ffe18480,transparent 42%)}.featured-sheen.is-gold .foil-prism{background:radial-gradient(ellipse at 15% 20%,#ffe69a80,transparent 45%),radial-gradient(ellipse at 85% 70%,#c58b3980,transparent 50%)}.foil-rim{display:block;position:absolute;inset:0;padding:2px;border-radius:inherit;background:linear-gradient(115deg,#6cecff,#9b89ff 23%,#ff80d5 45%,#ffe388 64%,#8df5c5 82%,#6cecff);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:.95}.featured-sheen.is-gold .foil-rim{background:linear-gradient(115deg,#a97922,#ffdf86 30%,#fff0bd 50%,#c58e29 75%,#ffe099)}@media(max-width:760px),(hover:none) and (pointer:coarse){.foil-prism{display:block;animation:none;opacity:.16}}
+</style>

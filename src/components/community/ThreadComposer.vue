@@ -558,11 +558,14 @@ onMounted(async () => {
   color: #f8fafc;
   display: grid;
   gap: 9px;
-  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  grid-template-columns: 28px minmax(0, 1fr);
   min-height: 42px;
   padding: 5px 14px 5px 5px;
   text-align: left;
-  width: min(330px, 100%);
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  justify-self: start;
 }
 
 .community-select span,
@@ -846,4 +849,8 @@ onMounted(async () => {
   font-size: 18px;
 }
 
+</style>
+
+<style scoped>
+.community-select{min-height:38px;padding:4px 12px 4px 4px;gap:8px}.community-select span{width:28px;height:28px}.community-select strong{font-size:12px;font-weight:750}.thread-composer{min-width:0;box-sizing:border-box}.composer-shell{box-sizing:border-box;min-width:0}.composer-textarea textarea{width:100%;min-width:0;box-sizing:border-box}@media(max-width:780px){.composer-shell{padding:14px;border-radius:20px;gap:12px}.composer-row{grid-template-columns:36px minmax(0,1fr);gap:9px}.composer-avatar{width:36px;height:36px;min-width:36px;min-height:36px}.composer-textarea textarea{font-size:16px;min-height:88px}.composer-footer{flex-wrap:wrap;gap:10px}.tool-row{gap:4px}.tool-row button{min-width:36px;width:36px;height:36px}.publish-btn{min-height:40px;padding:0 16px}.composer-sticker-overlay{padding:12px;min-height:320px}.thread-composer.sticker-open .composer-shell{min-height:420px}}
 </style>

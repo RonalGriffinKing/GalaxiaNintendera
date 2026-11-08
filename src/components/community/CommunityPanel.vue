@@ -78,13 +78,7 @@ const eventDraft = ref({
 })
 const eventImagePickerOpen=ref(false)
 function selectEventImage(image){Object.assign(eventDraft.value,eventImageSelection(eventDraft.value,image));eventImagePickerOpen.value=false}
-const liveGoalDraft = ref({
-  title: '',
-  description: '',
-  type: 'likes',
-  target: 5000,
-  checklistText: ''
-})
+
 const replyDraft = ref('')
 const selectedTopic = ref('Inicio')
 const selectedCommunityId = ref(peekPublicPage('community-panel-directory')?.length ? (props.initialCommunityId || route.query.id || peekPublicPage('community-panel-directory')[0].id) : '')
@@ -97,7 +91,7 @@ const communities = ref(peekPublicPage('community-panel-directory') || [])
 const joinedCommunityIds = ref([])
 const threads = ref([])
 const galaxyEvents = ref([])
-const liveGoals = ref([])
+
 const isLoading = ref(true)
 const isCommunitiesLoading = ref(peekPublicPage('community-panel-directory') === undefined)
 const isDeleting = ref(false)
@@ -113,9 +107,7 @@ const youtubeVideosError = ref('')
 
 const liveStageRef = ref(null)
 const eventManagerOpen = ref(false)
-const liveGoalManagerOpen = ref(false)
-const expandedLiveGoalId = ref('')
-const isSavingLiveGoal = ref(false)
+
 const editingEventId = ref('')
 const currentUserProfile = ref({ imageUrl: '' })
 const communityDraft = ref({
@@ -377,7 +369,7 @@ const canManageOfficialContent = computed(() => !currentUserBlocked.value && ['a
 const communityRef = collection(db, 'communityThreads')
 const communitiesRef = collection(db, 'communities')
 const eventsRef = collection(db, 'galaxyEvents')
-const liveGoalsRef = collection(db, 'liveGoals')
+
 const selectedCommunity = computed(() => communities.value.find(item => item.id === selectedCommunityId.value) || communities.value[0] || null)
 const normalizeThreadTopics = (items = []) => {
   const seen = new Set()
@@ -492,32 +484,7 @@ const toggleEventNotify = async (event) => {
     notifyBy: isEventNotified(event) ? arrayRemove(uid) : arrayUnion(uid)
   })
 }
-const liveGoalCards = computed(() => liveGoals.value.map(goal => {
-  const isMission = goal.type === 'mission'
-  const target = Math.max(1, Number(goal.target || 1))
-  const likesBy = goal.likesBy || {}
-  const likerProfiles = goal.likerProfiles || {}
-  const ranking = Object.entries(likesBy)
-    .map(([uid, count]) => ({
-      uid,
-      count: Number(count || 0),
-      name: likerProfiles[uid]?.name || 'Usuario',
-      imageUrl: likerProfiles[uid]?.imageUrl || ''
-    }))
-    .filter(item => item.count > 0)
-    .sort((a, b) => b.count - a.count)
-  const current = isMission
-    ? (goal.checklist || []).filter(item => item.done).length
-    : ranking.reduce((total, item) => total + item.count, 0)
-  return {
-    ...goal,
-    current,
-    target: isMission ? Math.max(1, (goal.checklist || []).length || target) : target,
-    progress: Math.min(100, Math.round((current / (isMission ? Math.max(1, (goal.checklist || []).length || target) : target)) * 100)),
-    ranking
-  }
-}))
-const currentLiveGoal = computed(() => liveGoalCards.value.find(goal => goal.progress < 100) || liveGoalCards.value[0] || null)
+
 const formatDateInputValue = (date) => {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
   return local.toISOString().slice(0, 10)
@@ -549,7 +516,6 @@ const eventTimeValue = computed({
 let unsubscribeThreads = null
 let unsubscribeCommunities = null
 let unsubscribeEvents = null
-let unsubscribeLiveGoals = null
 
 let skipNextVideoRouteScroll = false
 
@@ -1527,109 +1493,6 @@ const deleteGalaxyEvent = async (event) => {
   if (editingEventId.value === event.id) resetGalaxyEventDraft()
 }
 
-const resetLiveGoalDraft = () => {
-  liveGoalDraft.value = {
-    title: '',
-    description: '',
-    type: 'likes',
-    target: 5000,
-    checklistText: ''
-  }
-}
-
-const openLiveGoalManager = () => {
-  if (!canManageOfficialContent.value) return
-  resetLiveGoalDraft()
-  liveGoalManagerOpen.value = true
-}
-
-const closeLiveGoalManager = () => {
-  liveGoalManagerOpen.value = false
-  resetLiveGoalDraft()
-}
-
-const saveLiveGoal = async () => {
-  if (!canManageOfficialContent.value || isSavingLiveGoal.value) return
-  const title = liveGoalDraft.value.title.trim()
-  const description = liveGoalDraft.value.description.trim()
-  if (!title) return
-
-  const now = Date.now()
-  const checklist = liveGoalDraft.value.type === 'mission'
-    ? liveGoalDraft.value.checklistText
-      .split('\n')
-      .map(item => item.trim())
-      .filter(Boolean)
-      .map((label, index) => ({ id: `${now}-${index}`, label, done: false }))
-    : []
-
-  isSavingLiveGoal.value = true
-  try {
-    await addDoc(liveGoalsRef, {
-      title,
-      description,
-      type: liveGoalDraft.value.type,
-      target: liveGoalDraft.value.type === 'mission'
-        ? Math.max(1, checklist.length || 1)
-        : Math.max(1, Number(liveGoalDraft.value.target || 1)),
-      checklist,
-      likesBy: {},
-      likerProfiles: {},
-      communityId: OFFICIAL_COMMUNITY_ID,
-      createdBy: currentUserId.value,
-      createdAt: now,
-      updatedAt: now
-    })
-    resetLiveGoalDraft()
-  } finally {
-    isSavingLiveGoal.value = false
-  }
-}
-
-const deleteLiveGoal = async (goal) => {
-  if (!canManageOfficialContent.value || !goal?.id) return
-  await deleteDoc(doc(db, 'liveGoals', goal.id))
-}
-
-const toggleLiveMissionItem = async (goal, item) => {
-  if (!canManageOfficialContent.value || !goal?.id || !item?.id) return
-  const checklist = (goal.checklist || []).map(entry => (
-    entry.id === item.id ? { ...entry, done: !entry.done } : entry
-  ))
-  await updateDoc(doc(db, 'liveGoals', goal.id), {
-    checklist,
-    target: Math.max(1, checklist.length),
-    updatedAt: Date.now()
-  })
-}
-
-const addLiveGoalLike = async (goal) => {
-  const userId = currentUserId.value
-  if (currentUserBlocked.value || !userId || !goal?.id || goal.type === 'mission') return
-
-  const likesBy = {
-    ...(goal.likesBy || {}),
-    [userId]: Number(goal.likesBy?.[userId] || 0) + 1
-  }
-  const likerProfiles = {
-    ...(goal.likerProfiles || {}),
-    [userId]: {
-      name: displayName.value,
-      imageUrl: currentUserImage.value
-    }
-  }
-
-  await setDoc(doc(db, 'liveGoals', goal.id), {
-    likesBy,
-    likerProfiles,
-    updatedAt: Date.now()
-  }, { merge: true })
-}
-
-const toggleLiveGoalExpanded = (goal) => {
-  expandedLiveGoalId.value = expandedLiveGoalId.value === goal.id ? '' : goal.id
-}
-
 const publishReply = async (thread) => {
   const body = replyDraft.value.trim()
   if (currentUserBlocked.value || !body) return
@@ -1801,29 +1664,11 @@ const subscribeEvents = () => {
   })
 }
 
-const subscribeLiveGoals = () => {
-  const goalsQuery = query(liveGoalsRef, orderBy('createdAt', 'desc'), limit(12))
-  unsubscribeLiveGoals = onSnapshot(goalsQuery, (snap) => {
-    liveGoals.value = snap.docs.map(item => ({
-      id: item.id,
-      type: 'likes',
-      target: 1,
-      checklist: [],
-      likesBy: {},
-      likerProfiles: {},
-      ...item.data()
-    }))
-  }, (error) => {
-    console.error(error)
-  })
-}
-
 onMounted(() => {
   loadCurrentUserProfile()
   subscribeCommunities()
   subscribeThreads()
   subscribeEvents()
-  subscribeLiveGoals()
   if (route.query.create === 'community') {
     nextTick(openCreateCommunity)
   } else if (route.query.create === 'thread') {
@@ -1835,8 +1680,8 @@ onMounted(() => {
   }
 })
 
-watch([communityEditorOpen, discoverModalOpen, eventManagerOpen, liveGoalManagerOpen, selectedProfile, () => confirmDialog.value.show], ([isEditorOpen, isDiscoverOpen, isEventOpen, isLiveGoalOpen, profileOpen, confirmOpen]) => {
-  document.body.style.overflow = isEditorOpen || isDiscoverOpen || isEventOpen || isLiveGoalOpen || Boolean(profileOpen) || Boolean(confirmOpen) ? 'hidden' : ''
+watch([communityEditorOpen, discoverModalOpen, eventManagerOpen, selectedProfile, () => confirmDialog.value.show], ([isEditorOpen, isDiscoverOpen, isEventOpen, profileOpen, confirmOpen]) => {
+  document.body.style.overflow = isEditorOpen || isDiscoverOpen || isEventOpen || Boolean(profileOpen) || Boolean(confirmOpen) ? 'hidden' : ''
 })
 
 watch(() => route.query.create, (createTarget) => {
@@ -1916,18 +1761,6 @@ watch(filteredOfficialVideos, () => {
   }
 })
 
-watch(currentLiveGoal, (goal) => {
-  window.dispatchEvent(new CustomEvent('galaxy-live-goal-context', {
-    detail: goal ? {
-      title: goal.title,
-      current: goal.current,
-      target: goal.target,
-      type: goal.type,
-      progress: goal.progress
-    } : null
-  }))
-}, { immediate: true })
-
 watch(selectedCommunity, (community) => {
   if (!community?.id) return
   officialVideoFilter.value = (community.id === OFFICIAL_COMMUNITY_ID || community.isOfficial) ? 'all' : 'community'
@@ -1944,7 +1777,6 @@ onUnmounted(() => {
   unsubscribeThreads?.()
   unsubscribeCommunities?.()
   unsubscribeEvents?.()
-  unsubscribeLiveGoals?.()
   document.body.style.overflow = ''
 })
 </script>
@@ -2036,9 +1868,7 @@ onUnmounted(() => {
         :is-official="isOfficialSelectedCommunity"
         :is-admin="isAdmin"
         :upcoming-events="upcomingEvents"
-        :live-goal-cards="liveGoalCards"
         :can-manage-official-content="canManageOfficialContent"
-        :expanded-live-goal-id="expandedLiveGoalId"
         :active-users="activeUsers"
         :trending-topics="trendingTopics"
         :format-event-date="formatEventDate"
@@ -2047,11 +1877,6 @@ onUnmounted(() => {
         @open-events="router.push('/eventos')"
         @open-event="(event) => router.push(`/eventos?id=${event.id}`)"
         @toggle-event-notify="toggleEventNotify"
-        @open-live-goal-manager="openLiveGoalManager"
-        @toggle-live-goal="toggleLiveGoalExpanded"
-        @add-live-goal-like="addLiveGoalLike"
-        @toggle-live-mission-item="toggleLiveMissionItem"
-        @delete-live-goal="deleteLiveGoal"
         @open-profile="openUserProfile"
       />
     </div>
@@ -2312,48 +2137,6 @@ onUnmounted(() => {
     </Transition>
 
     <Transition name="fade">
-      <div v-if="liveGoalManagerOpen" class="confirm-modal event-manager-modal">
-        <div class="confirm-backdrop" @click="closeLiveGoalManager"></div>
-
-        <section class="event-manager-card live-goal-manager-card">
-          <button class="profile-view-close" type="button" aria-label="Cerrar metas" @click="closeLiveGoalManager">
-            <i class="fas fa-xmark"></i>
-          </button>
-
-          <div class="event-manager-head">
-            <span><i class="fas fa-trophy"></i> Live oficial</span>
-            <h2>Crear meta o mision</h2>
-          </div>
-
-          <form class="event-admin-form live-goal-admin-form" @submit.prevent="saveLiveGoal">
-            <select v-model="liveGoalDraft.type">
-              <option value="likes">Meta de likes</option>
-              <option value="mission">Mision con checklist</option>
-            </select>
-            <input v-model="liveGoalDraft.title" placeholder="Ej: 5000 likes o Buscar a Pikachu" />
-            <textarea v-model="liveGoalDraft.description" placeholder="Descripcion corta opcional"></textarea>
-            <input
-              v-if="liveGoalDraft.type === 'likes'"
-              v-model.number="liveGoalDraft.target"
-              type="number"
-              min="1"
-              placeholder="Meta de likes"
-            />
-            <textarea
-              v-else
-              v-model="liveGoalDraft.checklistText"
-              placeholder="Un paso por linea. Ej: Entrar al bosque&#10;Encontrar a Pikachu&#10;Completar captura"
-            ></textarea>
-            <button type="submit" :disabled="isSavingLiveGoal || !liveGoalDraft.title.trim()">
-              <i class="fas fa-sparkles"></i>
-              {{ isSavingLiveGoal ? 'Guardando...' : 'Crear' }}
-            </button>
-          </form>
-        </section>
-      </div>
-    </Transition>
-
-    <Transition name="fade">
       <div v-if="confirmDialog.show" class="confirm-modal">
         <div class="confirm-backdrop" @click="closeConfirm"></div>
 
@@ -2601,10 +2384,10 @@ onUnmounted(() => {
 }
 
 .community-empty {
-  background: #ffffff;
-  border: 1px dashed #cbd5e1;
+  background: linear-gradient(135deg,#15102a,#0d1020);
+  border: 1px solid #a78bfa45;
   border-radius: 14px;
-  color: #64748b;
+  color: #b9b1cc;
   font-size: 13px;
   font-weight: 800;
   padding: 28px 18px;
@@ -4105,10 +3888,6 @@ onUnmounted(() => {
   display: grid;
   gap: 10px;
   margin-top: 12px;
-}
-
-.live-goal-admin-form {
-  grid-template-columns: 1fr;
 }
 
 .event-admin-form input,

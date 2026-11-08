@@ -22,17 +22,9 @@ defineProps({
     type: Array,
     default: () => []
   },
-  liveGoalCards: {
-    type: Array,
-    default: () => []
-  },
   canManageOfficialContent: {
     type: Boolean,
     default: false
-  },
-  expandedLiveGoalId: {
-    type: String,
-    default: ''
   },
   activeUsers: {
     type: Array,
@@ -60,11 +52,6 @@ const emit = defineEmits([
   'open-events',
   'open-event',
   'toggle-event-notify',
-  'open-live-goal-manager',
-  'toggle-live-goal',
-  'add-live-goal-like',
-  'toggle-live-mission-item',
-  'delete-live-goal',
   'open-profile'
 ])
 </script>
@@ -111,104 +98,6 @@ const emit = defineEmits([
       </div>
 
       <p v-else>No hay eventos programados todavia.</p>
-    </div>
-
-    <div v-if="canManageOfficialContent" class="side-box live-goals-box">
-      <div class="side-box-head">
-        <div>
-          <h2>Metas del live</h2>
-          <span>{{ liveGoalCards.length }} activos</span>
-        </div>
-        <button type="button" class="event-manager-btn" @click="emit('open-live-goal-manager')">
-          <i class="fas fa-trophy"></i>
-          Crear
-        </button>
-      </div>
-
-      <div v-if="liveGoalCards.length" class="live-goal-stack">
-        <article
-          v-for="goal in liveGoalCards"
-          :key="goal.id"
-          class="live-goal-card"
-          :class="{ mission: goal.type === 'mission', complete: goal.progress >= 100 }"
-        >
-          <button class="live-goal-summary" type="button" @click="emit('toggle-live-goal', goal)">
-            <span class="live-goal-orb">
-              <i :class="goal.type === 'mission' ? 'fas fa-list-check' : 'fas fa-heart'"></i>
-            </span>
-            <span>
-              <em>{{ goal.type === 'mission' ? 'Mision' : 'Meta de likes' }}</em>
-              <strong>{{ goal.title }}</strong>
-              <small>{{ goal.current }} / {{ goal.target }} {{ goal.type === 'mission' ? 'pasos' : 'likes' }}</small>
-            </span>
-            <i class="fas fa-chevron-down"></i>
-          </button>
-
-          <div class="live-goal-progress">
-            <i :style="{ width: goal.progress + '%' }"></i>
-          </div>
-
-          <p v-if="goal.description">{{ goal.description }}</p>
-
-          <div v-if="goal.type !== 'mission'" class="live-goal-like-row">
-            <button type="button" class="live-goal-like-btn" @click="emit('add-live-goal-like', goal)">
-              <i class="fas fa-heart"></i>
-              Dar like
-            </button>
-            <div v-if="goal.ranking.length" class="live-goal-avatars">
-              <button
-                v-for="user in goal.ranking.slice(0, 4)"
-                :key="user.uid"
-                type="button"
-                :title="`${user.name}: ${user.count}`"
-                @click="emit('toggle-live-goal', goal)"
-              >
-                <img v-if="user.imageUrl" :src="user.imageUrl" alt="" />
-                <span v-else>{{ avatarInitial(user.name) }}</span>
-              </button>
-            </div>
-          </div>
-
-          <div v-if="expandedLiveGoalId === goal.id" class="live-goal-detail">
-            <div v-if="goal.type === 'mission'" class="live-mission-list">
-              <button
-                v-for="item in goal.checklist"
-                :key="item.id"
-                type="button"
-                :class="{ done: item.done }"
-                :disabled="!canManageOfficialContent"
-                @click="emit('toggle-live-mission-item', goal, item)"
-              >
-                <i :class="item.done ? 'fas fa-check' : 'far fa-circle'"></i>
-                {{ item.label }}
-              </button>
-            </div>
-
-            <div v-else class="live-like-ranking">
-              <strong>Ranking de likes</strong>
-              <button
-                v-for="user in goal.ranking"
-                :key="`rank-${goal.id}-${user.uid}`"
-                type="button"
-                @click="emit('open-profile', { uid: user.uid, name: user.name, imageUrl: user.imageUrl })"
-              >
-                <img v-if="user.imageUrl" :src="user.imageUrl" alt="" />
-                <span v-else>{{ avatarInitial(user.name) }}</span>
-                <em>{{ user.name }}</em>
-                <small>{{ user.count }}</small>
-              </button>
-              <p v-if="!goal.ranking.length">Todavia nadie ha dado like.</p>
-            </div>
-
-            <button v-if="canManageOfficialContent" class="live-goal-delete" type="button" @click="emit('delete-live-goal', goal)">
-              <i class="fas fa-trash"></i>
-              Eliminar
-            </button>
-          </div>
-        </article>
-      </div>
-
-      <p v-else>Crea metas de likes o misiones para el proximo directo.</p>
     </div>
 
     <div class="side-box">
@@ -471,158 +360,6 @@ const emit = defineEmits([
   box-shadow: 0 0 18px rgba(236, 72, 153, 0.32);
 }
 
-.live-goals-box {
-  background:
-    radial-gradient(circle at 12% 0%, rgba(168, 85, 247, 0.16), transparent 34%),
-    linear-gradient(145deg, rgba(11, 16, 38, 0.98), rgba(24, 16, 50, 0.96));
-  border-color: rgba(216, 180, 254, 0.22);
-  color: #f8fafc;
-}
-
-.live-goals-box h2 {
-  color: #ffffff;
-}
-
-.live-goals-box > p {
-  color: #b8c1d8;
-}
-
-.live-goal-stack {
-  display: grid;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.live-goal-card {
-  background: rgba(248, 250, 252, 0.94);
-  border: 1px solid rgba(168, 85, 247, 0.2);
-  border-radius: 16px;
-  color: #111827;
-  display: grid;
-  gap: 10px;
-  overflow: hidden;
-  padding: 12px;
-}
-
-.live-goal-card.complete {
-  background: linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.94));
-  border-color: rgba(245, 158, 11, 0.52);
-}
-
-.live-goal-summary {
-  align-items: center;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 42px minmax(0, 1fr) 20px;
-  text-align: left;
-}
-
-.live-goal-orb {
-  align-items: center;
-  background: linear-gradient(135deg, #9333ea, #ec4899);
-  border-radius: 999px;
-  color: #ffffff;
-  display: flex;
-  height: 42px;
-  justify-content: center;
-  width: 42px;
-}
-
-.live-goal-card.mission .live-goal-orb {
-  background: linear-gradient(135deg, #2563eb, #06b6d4);
-}
-
-.live-goal-summary em {
-  color: #7c3aed;
-  display: block;
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 950;
-  text-transform: uppercase;
-}
-
-.live-goal-summary strong {
-  color: #111827;
-  display: block;
-  font-size: 13px;
-  font-weight: 950;
-  line-height: 1.18;
-  overflow-wrap: anywhere;
-}
-
-.live-goal-summary small {
-  color: #64748b;
-  display: block;
-  font-size: 10px;
-  font-weight: 900;
-  margin-top: 2px;
-}
-
-.live-goal-progress {
-  background: #e2e8f0;
-  border-radius: 999px;
-  height: 9px;
-  overflow: hidden;
-}
-
-.live-goal-progress i {
-  background: linear-gradient(90deg, #9333ea, #ec4899, #f59e0b);
-  border-radius: inherit;
-  display: block;
-  height: 100%;
-  transition: width 0.42s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.live-goal-card > p {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.4;
-  margin: 0;
-}
-
-.live-goal-like-row {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-}
-
-.live-goal-like-btn {
-  align-items: center;
-  background: linear-gradient(135deg, #ec4899, #f43f5e);
-  border-radius: 999px;
-  box-shadow: 0 10px 24px rgba(236, 72, 153, 0.24);
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 11px;
-  font-weight: 950;
-  gap: 7px;
-  min-height: 34px;
-  padding: 0 12px;
-}
-
-.live-goal-like-btn:active {
-  transform: scale(0.96);
-}
-
-.live-goal-avatars {
-  display: flex;
-  flex-direction: row-reverse;
-  justify-content: flex-end;
-}
-
-.live-goal-avatars button {
-  border: 2px solid #ffffff;
-  border-radius: 999px;
-  height: 30px;
-  margin-left: -8px;
-  overflow: hidden;
-  width: 30px;
-}
-
-.live-goal-avatars img,
-.live-goal-avatars span,
 .live-like-ranking img,
 .live-like-ranking > button > span {
   height: 100%;
@@ -630,7 +367,6 @@ const emit = defineEmits([
   width: 100%;
 }
 
-.live-goal-avatars span,
 .live-like-ranking > button > span {
   align-items: center;
   background: linear-gradient(135deg, #7c3aed, #ec4899);
@@ -641,45 +377,9 @@ const emit = defineEmits([
   justify-content: center;
 }
 
-.live-goal-detail {
-  background: rgba(15, 23, 42, 0.05);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 14px;
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-}
-
-.live-mission-list,
 .live-like-ranking {
   display: grid;
   gap: 7px;
-}
-
-.live-mission-list button {
-  align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  color: #475569;
-  display: flex;
-  font-size: 11px;
-  font-weight: 850;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 10px;
-  text-align: left;
-}
-
-.live-mission-list button.done {
-  background: #ecfdf5;
-  border-color: #86efac;
-  color: #15803d;
-}
-
-.live-mission-list button:disabled {
-  cursor: default;
-  opacity: 1;
 }
 
 .live-like-ranking > strong {
@@ -733,19 +433,6 @@ const emit = defineEmits([
   font-size: 11px;
   font-weight: 850;
   margin: 0;
-}
-
-.live-goal-delete {
-  align-items: center;
-  background: #fff1f2;
-  border-radius: 10px;
-  color: #e11d48;
-  display: inline-flex;
-  font-size: 11px;
-  font-weight: 950;
-  gap: 7px;
-  justify-content: center;
-  min-height: 34px;
 }
 
 .user-row {

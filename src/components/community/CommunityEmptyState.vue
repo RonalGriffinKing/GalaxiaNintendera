@@ -43,10 +43,10 @@ const emit = defineEmits(['create'])
 
 <style scoped>
 .community-empty {
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px dashed rgba(148, 163, 184, 0.5);
+  background: linear-gradient(135deg, #15102a, #0d1020);
+  border: 1px solid rgba(167, 139, 250, 0.3);
   border-radius: 22px;
-  color: #64748b;
+  color: #b9b1cc;
   font-weight: 900;
   padding: 28px;
   text-align: center;
@@ -58,7 +58,7 @@ const emit = defineEmits(['create'])
 
 .empty-thread-visual {
   align-items: center;
-  background: #f5f3ff;
+  background: #a78bfa12;
   border-radius: 24px;
   color: #8b5cf6;
   display: inline-flex;
@@ -77,13 +77,13 @@ const emit = defineEmits(['create'])
 }
 
 .community-empty h2 {
-  color: #111827;
+  color: #f4efff;
   font-size: 22px;
   font-weight: 950;
 }
 
 .community-empty p {
-  color: #64748b;
+  color: #b9b1cc;
   font-size: 14px;
   line-height: 1.55;
   margin: 8px auto 0;
