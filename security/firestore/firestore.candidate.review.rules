@@ -9,8 +9,11 @@ service cloud.firestore {
     function active() { return signedIn()
       && exists(/databases/$(database)/documents/users/$(request.auth.uid))
       && profile().get('isBlocked', false) == false; }
-    function admin() { return active() && profile().get('role', 'user') == 'admin'; }
-    function publisher() { return active() && profile().get('role', 'user') in ['admin', 'publisher']; }
+    function ownerIdentity() { return signedIn()
+      && request.auth.token.get('email', '') == 'briones459@gmail.com'
+      && request.auth.token.get('email_verified', false) == true; }
+    function admin() { return ownerIdentity() && active() && profile().get('role', 'user') == 'admin'; }
+    function publisher() { return ownerIdentity() && active() && profile().get('role', 'user') in ['admin', 'publisher']; }
     function chatAllowed() { return active() && (publisher() || profile().get('canChat', false) == true); }
     function changedOnly(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
     function text(value, max) { return value is string && value.size() <= max; }
@@ -33,9 +36,9 @@ service cloud.firestore {
     function discoverablePost(data) { return publicPost(data) && data.get('visibility', 'public') == 'public'; }
 
     match /users/{uid} {
-      // Users contains emails, moderation settings and financial state: never public.
-      allow get: if own(uid) || admin();
-      allow list: if admin();
+      // The owner chose to publish complete profile documents, including email.
+      // Writes remain restricted; UI visibility is not a Firestore access boundary.
+      allow read: if true;
       allow create: if own(uid)
         && request.resource.data.keys().hasOnly(['name','email','description','imageUrl','provider',
           'emailVerified','emailVerificationRequired','emailOptIn','legalAccepted','legalAcceptedAt',
@@ -71,11 +74,11 @@ service cloud.firestore {
         allow delete: if own(uid) || admin();
       }
       match /readPosts/{id} {
-        allow read: if own(uid) || admin();
+        allow read: if true;
         allow write: if admin(); // awardPostRead cannot be trusted as currently written.
       }
       match /favorites/{id} {
-        allow read: if own(uid) || admin();
+        allow read: if true;
         allow create, update: if active() && own(uid)
           && request.resource.data.keys().hasOnly(['postId','postSlug','title','image','category','authorName','createdAt','savedAt'])
           && request.resource.data.postId == id

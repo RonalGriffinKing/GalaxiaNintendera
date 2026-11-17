@@ -19,8 +19,12 @@ const { doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, w
 let env
 const adminApp = initializeApp({ projectId }, `image-monitor-emulator-${process.pid}`)
 const adminDb = getFirestore(adminApp)
-const user = uid => env.authenticatedContext(uid,{email:`${uid}@example.test`,email_verified:true}).firestore()
+const user = uid => env.authenticatedContext(uid,{
+ email:['admin','publisher','blocked'].includes(uid) ? 'briones459@gmail.com' : `${uid}@example.test`,
+ email_verified:true
+}).firestore()
 const guest = () => env.unauthenticatedContext().firestore()
+const unverifiedOwner = () => env.authenticatedContext('admin',{email:'briones459@gmail.com',email_verified:false}).firestore()
 const ref = (db,path) => doc(db,path)
 const newUser = (uid,extra={}) => ({name:uid,email:`${uid}@example.test`,emailVerified:true,role:'user',stars:0,readPostsCount:0,unlockedIcons:['kirby-01'],selectedIcon:'kirby-01',...extra})
 before(async()=>{
@@ -34,6 +38,7 @@ beforeEach(async()=>{
    'users/alice':newUser('alice',{canChat:true}),'users/bob':newUser('bob',{canChat:true}),
    'users/admin':newUser('admin',{role:'admin'}),'users/publisher':newUser('publisher',{role:'publisher'}),
    'users/blocked':newUser('blocked',{role:'admin',isBlocked:true}),
+   'users/impostor':newUser('impostor',{role:'admin'}),
    'posts/public':{authorId:'publisher',status:'approved',visibility:'public',releaseAt:0},
    'posts/private':{authorId:'publisher',status:'approved',visibility:'private',releaseAt:0},
    'posts/draft':{authorId:'publisher',status:'draft'},
@@ -61,8 +66,12 @@ beforeEach(async()=>{
 })
 after(async()=>{await env?.cleanup();await deleteApp(adminApp)})
 
-test('visitor cannot read private users or write private data',async()=>{
- await assertFails(getDoc(ref(guest(),'users/alice')))
+test('visitor can read complete public profiles but cannot write them',async()=>{
+ const profile=await assertSucceeds(getDoc(ref(guest(),'users/alice')))
+ assert.equal(profile.data().email,'alice@example.test')
+ await assertSucceeds(getDocs(collection(guest(),'users')))
+ await assertSucceeds(getDoc(ref(guest(),'users/alice/readPosts/public')))
+ await assertFails(setDoc(ref(guest(),'users/alice/readPosts/forged'),{stars:999}))
  await assertFails(setDoc(ref(guest(),'users/alice'),{role:'admin'}))
 })
 test('only an active administrator can read monitor collections and all client writes are denied',async()=>{
@@ -134,7 +143,7 @@ test('owner cannot change financial progress, even paired with a read marker',as
 test('owner can edit safe profile fields but cannot alter another user',async()=>{
  await assertSucceeds(updateDoc(ref(user('alice'),'users/alice'),{name:'Alice edited',description:'Hello',isOnline:true}))
  await assertFails(updateDoc(ref(user('alice'),'users/bob'),{name:'Hijacked'}))
- await assertFails(getDocs(collection(user('alice'),'users')))
+ await assertSucceeds(getDocs(collection(user('alice'),'users')))
 })
 test('verified existing administrator may manage users; blocked admin may not',async()=>{
  await assertSucceeds(updateDoc(ref(user('admin'),'users/alice'),{name:'Admin edited name'}))
@@ -142,6 +151,8 @@ test('verified existing administrator may manage users; blocked admin may not',a
   await assertFails(updateDoc(ref(user('admin'),'users/alice'),data))
  await assertSucceeds(getDocs(collection(user('admin'),'users')))
  await assertFails(updateDoc(ref(user('blocked'),'users/alice'),{role:'admin'}))
+ await assertFails(updateDoc(ref(user('impostor'),'users/alice'),{name:'Forged administrator'}))
+ await assertFails(updateDoc(ref(unverifiedOwner(),'users/alice'),{name:'Unverified administrator'}))
  await assertFails(updateDoc(ref(user('publisher'),'users/alice'),{role:'admin'}))
  await assertFails(setDoc(ref(user('admin'),'users/new-admin'),newUser('new-admin',{role:'admin'})))
 })
@@ -315,7 +326,7 @@ test('public profile projection is readable but ordinary user cannot forge it',a
 test('ordinary and blocked accounts cannot use privileged role-dependent paths',async()=>{
  await assertFails(setDoc(ref(user('alice'),'siteSettings/postCategories'),{items:[]}))
  await assertFails(setDoc(ref(user('blocked'),'siteSettings/postCategories'),{items:[]}))
- await assertFails(getDocs(collection(user('blocked'),'users')))
+ await assertSucceeds(getDocs(collection(user('blocked'),'users')))
  await assertFails(setDoc(ref(user('blocked'),'posts/blocked'),{authorId:'blocked',status:'pending'}))
 })
 test('scheduled legacy post is readable by exact id but missing canonical releaseAt prevents a list query',async()=>{
@@ -325,8 +336,8 @@ test('scheduled legacy post is readable by exact id but missing canonical releas
  await assertSucceeds(getDoc(ref(guest(),'posts/legacy')))
  await assertFails(getDocs(collection(guest(),'posts')))
 })
-test('guest cannot list private users; admin direct profile projection writes stay denied',async()=>{
- await assertFails(getDocs(collection(guest(),'users')))
+test('guest can list public users; admin direct profile projection writes stay denied',async()=>{
+ await assertSucceeds(getDocs(collection(guest(),'users')))
  await assertFails(setDoc(ref(user('admin'),'publicProfiles/new'),{name:'Alice'}))
 })
 test('membership documents can be joined but community counter cannot be forged',async()=>{

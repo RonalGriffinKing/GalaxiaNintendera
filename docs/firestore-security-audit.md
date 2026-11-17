@@ -1,5 +1,32 @@
 # Auditoría de Firestore — GALAXIA NINTENDERA
 
+## Decisión posterior sobre perfiles (17 de noviembre de 2026)
+
+El titular acepta que los documentos `users/{uid}` sean públicos completos, incluido
+`email`, aunque la interfaz no lo muestre. La regla candidata ya permite `get` y
+`list` públicos de esos documentos, además del historial de lecturas y los posts
+guardados; las escrituras siguen restringidas. Esto también expone cualquier otro
+campo que se guarde en `users/{uid}` (por ejemplo, consentimientos y moderación):
+Firestore no oculta campos individuales en una lectura de documento.
+
+Los permisos de admin y publisher de la candidata exigen ahora el correo
+`briones459@gmail.com` verificado en el token de Firebase Auth, además del rol y
+la cuenta activa. El emulador aislado pasó 42/42 pruebas. **Sigue siendo una
+candidata no desplegable**: las consultas públicas de posts y páginas aún son
+incompatibles con reglas que ocultan borradores y publicaciones futuras; además
+hay flujos de escritura social pendientes de migración. La lectura pública de
+perfiles no soluciona esas incompatibilidades ni activa el backend de estrellas.
+
+El 17 de noviembre el titular publicó esta candidata en `widget-dreams`. Una
+comprobación de solo lectura confirmó que la regla activa coincide con este archivo:
+`users`, `communities` y `galaxyEvents` se listan; `posts` y `sitePages` sin filtro
+devuelven `permission-denied`; un post aprobado se obtiene por ID; la consulta
+`posts` con `status=approved`, `visibility=public` y `releaseAt<=ahora` devuelve
+`failed-precondition` porque falta el índice compuesto. El sitemap dinámico ya
+no incluye posts. No se modificaron datos, índices ni reglas de producción en
+esta revisión. La migración de consultas y el índice son necesarios para recuperar
+los listados públicos sin exponer borradores o futuros posts.
+
 Fecha: 11 de octubre de 2026. Etapa: análisis y preparación, sin despliegue.
 
 ## Resultado y límites
