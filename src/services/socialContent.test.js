@@ -2,6 +2,14 @@ import { describe, it, expect } from 'vitest'
 import { normalizeSocialContent, titleRuns } from './socialContent'
 
 describe('social JSON contract', () => {
+  it('repairs duplicate slide IDs once and preserves legacy slides', () => {
+    const saved = normalizeSocialContent({ slides: [{ mediaSlotId: 'slide_slot_001', title: 'A' }, { mediaSlotId: 'slide_slot_001', title: 'B' }, { title: 'Legacy' }] })
+    expect(saved.slides[0].mediaSlotId).toBe('slide_slot_001')
+    expect(saved.slides[1].mediaSlotId).toBeTruthy()
+    expect(saved.slides[2]).not.toHaveProperty('mediaSlotId')
+    expect(new Set(saved.slides.slice(0, 2).map(item => item.mediaSlotId)).size).toBe(2)
+    expect(normalizeSocialContent(saved)).toEqual(saved)
+  })
   it('preserves editorial punctuation and keeps it outside highlighted phrases', () => {
     const title = '¡La prensa descubre cambios que no conocíamos!'
     const result = normalizeSocialContent({ title, titleHighlights: ['cambios que no conocíamos'], eyebrow: 'BOSQUE KOKIRI', slides: [{ title: '¿Cambiarías los puzles del Ocarina original?' }] })

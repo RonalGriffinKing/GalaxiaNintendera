@@ -12,12 +12,15 @@ const props = defineProps({
   loading: { type: Boolean, default: false }
 })
 
-const imageFailed = ref(false)
-const imageSrc = computed(() => imageFailed.value ? '' : (props.src || props.fallback || ''))
+const failedSources = ref([])
+const imageSrc = computed(() => [props.src, props.fallback].find(src => src && !failedSources.value.includes(src)) || '')
+const onImageError = () => {
+  if (imageSrc.value) failedSources.value = [...failedSources.value, imageSrc.value]
+}
 const initial = () => String(props.label || props.alt || '?').trim().slice(0, 1).toUpperCase() || '?'
 
 watch(() => [props.src, props.fallback], () => {
-  imageFailed.value = false
+  failedSources.value = []
 })
 </script>
 
@@ -38,7 +41,7 @@ watch(() => [props.src, props.fallback], () => {
           :src="imageSrc"
           :alt="decorative ? '' : alt"
           :aria-hidden="decorative ? 'true' : undefined"
-          @error="imageFailed = true"
+          @error="onImageError"
         />
         <b v-else>{{ initial() }}</b>
       </span>

@@ -5,6 +5,7 @@ import { vSoftReveal } from '@/directives/softReveal'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { proxiedImageUrl } from '@/constants/assets'
+import { fetchYoutubeFeed } from '@/services/youtubeFeedClient'
 import { useTimedCarousel } from '@/composables/useTimedCarousel'
 
 
@@ -191,9 +192,8 @@ const loadYoutubeFeed = async () => {
   youtubeLoading.value = true
   youtubeError.value = ''
   try {
-    const feedResponse = await fetch(`/.netlify/functions/youtube-feed?channelId=${encodeURIComponent(channelId)}`)
-    if (feedResponse.ok) {
-      const feed = await feedResponse.json()
+    const feed = await fetchYoutubeFeed(channelId).catch(() => null)
+    if (feed) {
       youtubeVideos.value = (feed.items || []).map(mapFeedItem).slice(0, 12)
     }
 

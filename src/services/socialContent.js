@@ -1,9 +1,12 @@
 const text = value => String(value ?? '').trim()
 const list = value => Array.isArray(value) ? value : []
+const mediaSlotId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(value) ? value : undefined
+const newMediaSlotId = () => globalThis.crypto?.randomUUID?.().replace(/-/g, '') || `slot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
 
 // Shared by JSON import, post saving and the image renderer. Never contains HTML.
 export function normalizeSocialContent(source = {}) {
   const social = source && typeof source === 'object' ? source : {}
+  const seenSlideIds = new Set()
   const normalizeTitle = item => ({
     title: text(item.title || item.titulo),
     titleHighlights: [...new Set(list(item.titleHighlights).map(text).filter(Boolean))],
@@ -18,7 +21,11 @@ export function normalizeSocialContent(source = {}) {
     image: text(social.image || social.imagen),
     slides: list(social.slides || social.diapositivas || social.sections || social.secciones).map(value => {
       const item = value && typeof value === 'object' ? value : {}
+      let id = mediaSlotId(item.mediaSlotId)
+      if (id && seenSlideIds.has(id)) id = newMediaSlotId()
+      if (id) seenSlideIds.add(id)
       return {
+        ...(id ? { mediaSlotId: id } : {}),
         ...normalizeTitle(item),
         type: item.type === 'closing' ? 'closing' : 'content',
         subtitle: text(item.subtitle || item.subtitulo),

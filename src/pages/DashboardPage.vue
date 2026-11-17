@@ -117,6 +117,7 @@ const isSkeletonLoading = computed(() => contentLoading.isSkeleton.value)
 
 const isAdmin = computed(() => currentRole.value === 'admin')
 const canPublish = computed(() => ['admin', 'publisher'].includes(currentRole.value))
+const isStudioBuild = import.meta.env.VITE_GALAXIA_STUDIO_BUILD === true
 
 const tabs = computed(() => [
   {
@@ -281,10 +282,11 @@ const loadRole = async () => {
   if (!user) return
 
   const snap = await getDoc(doc(db, 'users', user.uid))
-  currentRole.value = snap.data()?.role || 'user'
+  const profile = snap.data() || {}
+  currentRole.value = profile.isBlocked ? 'user' : (profile.role || 'user')
 
   if (!['admin', 'publisher'].includes(currentRole.value)) {
-    router.replace('/')
+    router.replace(isStudioBuild ? '/login' : '/')
     return
   }
 

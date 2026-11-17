@@ -6,9 +6,12 @@ import { titleRuns } from '@/services/socialContent'
 import { homeHeroGallery } from '@/services/homeHero'
 import ReadArticleIcon from '@/components/shared/ReadArticleIcon.vue'
 import { featuredTeaserStyle } from '@/services/featuredTeaser'
+import { useVisualThemes } from '@/composables/useVisualThemes'
+import { postWebThemeCss } from '@/services/visualThemes'
 
 const props = defineProps({ slide: Object })
-const themeStyle=computed(()=>featuredTeaserStyle(isAnalysis.value))
+const {theme,enabled}=useVisualThemes(()=>props.slide?.post||{})
+const themeStyle=computed(()=>({...featuredTeaserStyle(isAnalysis.value),...(!isAnalysis.value&&enabled.value.web?postWebThemeCss(props.slide?.post,theme.value):{})}))
 const emit = defineEmits(['read','pause','resume','next','previous'])
 const isAnalysis = computed(()=>[...(props.slide?.post?.categories || []),props.slide?.post?.category || ''].some(value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes('analisis')))
 let lastSwipeAt=0
@@ -32,11 +35,11 @@ const failedLogo = ref(false)
 const failedImages = ref({})
 const focused = ref(false)
 const gallery = computed(() => props.slide.post ? homeHeroGallery(props.slide.post) : { images: [], logoUrl: '' })
-const images = computed(() => gallery.value.images.filter(item => !failedImages.value[item.url]))
+const images = computed(() => gallery.value.images.filter(item => !failedImages.value[item.mediaSlotId || item.url]))
 const image = computed(() => images.value[active.value] || images.value[0])
 const selectedImageUrl = computed(() => resolveAssetUrl(image.value?.url,defaultBannerUrl))
 watch(() => images.value.length, length => { active.value = Math.min(active.value, Math.max(0,length-1)) })
-function imageFailed() { if (image.value) failedImages.value[image.value.url] = true }
+function imageFailed() { if (image.value) failedImages.value[image.value.mediaSlotId || image.value.url] = true }
 watch(() => props.slide.id, () => { active.value=0; failedLogo.value=false; failedImages.value={}; restartImages() })
 watch(focused, value => emit(value ? 'pause' : 'resume'))
 const IMAGE_DURATION = 4500
@@ -61,7 +64,7 @@ function restartImages() {
    active.value = next
   } catch {
    if (request !== imageRequest) return
-   failedImages.value[candidate.url] = true
+   failedImages.value[candidate.mediaSlotId || candidate.url] = true
   }
   if (request === imageRequest) restartImages()
  }, IMAGE_DURATION)
@@ -69,7 +72,7 @@ function restartImages() {
 function visibilityChanged() { pageHidden.value = document.hidden }
 function motionChanged(event) { reducedMotion.value = event.matches }
 watch(canRotate, restartImages)
-watch(() => images.value.map(item => item.url).join('|'), restartImages)
+watch(() => images.value.map(item => `${item.mediaSlotId || ''}:${item.url}`).join('|'), restartImages)
 onMounted(() => {
  motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
  reducedMotion.value = motionQuery.matches
@@ -196,3 +199,4 @@ onUnmounted(() => {
 <style scoped>
 .home-news-hero:not(.is-analysis){border-color:transparent;box-shadow:0 0 18px #a742dc45,0 0 28px #28dcff1c}.home-news-hero:not(.is-analysis) .hero-read{background:linear-gradient(110deg,#ba20d4,#7730ef 50%,#087b99);border:1px solid #d8baff80;color:#fff;box-shadow:0 0 8px #a36fe780,0 0 18px #44d9ff35}
 </style>
+<style scoped src="./homeFeaturedAurora.css"></style>

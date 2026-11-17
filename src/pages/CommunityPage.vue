@@ -19,6 +19,7 @@ const selectedCommunityId = computed(() => route.query.id || '')
 const selectedCommunity = ref(null)
 const currentUser = ref(auth.currentUser)
 const currentRole = ref('user')
+const isStudioBuild = import.meta.env.VITE_GALAXIA_STUDIO_BUILD === true
 const isCheckingAuth = ref(true)
 let unsubscribeAuth = null
 
@@ -28,7 +29,7 @@ const loadRole = async (user) => {
 
   const snap = await getDoc(doc(db, 'users', user.uid))
   const profile = snap.data() || {}
-  currentRole.value = profile.isBlocked ? 'user' : (profile.role || 'user')
+  currentRole.value = !isStudioBuild || profile.isBlocked ? 'user' : (profile.role || 'user')
 }
 
 onMounted(() => {

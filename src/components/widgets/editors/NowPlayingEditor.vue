@@ -2,15 +2,17 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { listOverlayEvents } from '@/services/overlayEventClient'
 import { eventGameNames } from '@/services/eventGame'
-import { NOW_PLAYING_DEFAULTS, NOW_PLAYING_LABELS, nowPlayingSettings } from '@/services/nowPlaying'
+import { NOW_PLAYING_DEFAULTS, NOW_PLAYING_LABELS, nowPlayingSettings, selectNowPlayingEvents } from '@/services/nowPlaying'
+import NowPlayingAppearanceEditor from './NowPlayingAppearanceEditor.vue'
 const fontControls = [{ key: 'labelSize', label: 'Título del overlay', min: 10, max: 24 }, { key: 'titleSize', label: 'Nombre del juego', min: 14, max: 32 }, { key: 'platformSize', label: 'Plataforma', min: 9, max: 20 }, { key: 'statsSize', label: 'Horas y logros', min: 10, max: 24 }]
-const props = defineProps({ widget: Object, persist: Function })
+const props = defineProps({ widget: Object, persist: Function, sourceStatus: Object })
 const data = computed(() => props.widget.data)
 const saving = ref(false), notice = ref('')
 const events=ref([]),eventsLoading=ref(false),eventsError=ref('')
 const imageSettings = computed(() => nowPlayingSettings(data.value))
 const eventImage = computed(() => {
- const event = events.value.find(item => item.id === data.value.eventId)
+ const selected = selectNowPlayingEvents(events.value, data.value.eventId)
+ const event = selected.active || selected.latest
  const url = event?.backgroundUrl || event?.imageUrl || ''
  return typeof url === 'string' && (/^https:\/\//i.test(url) || /^\/(?!\/)/.test(url)) ? url : ''
 })
@@ -43,13 +45,15 @@ async function persistControl(changes) {
     <label>Título del overlay<select :value="data.label || NOW_PLAYING_DEFAULTS.label" class="app-input" @change="data.label=$event.target.value"><option v-for="label in NOW_PLAYING_LABELS" :key="label" :value="label">{{ label }}</option></select></label>
     <label>Origen del juego<select :value="data.source||'auto'" class="app-input" @change="data.source=$event.target.value"><option value="auto">Automático · juego activo</option><option value="last">Último juego disponible</option><option value="event">Juego del evento</option></select></label>
     <template v-if="data.source==='event'">
-      <label>Evento<select v-model="data.eventId" class="app-input" :disabled="eventsLoading"><option value="">Selecciona un evento</option><option v-for="event in events" :key="event.id" :value="event.id">{{eventName(event)}}</option><option v-if="data.eventId&&!events.some(event=>event.id===data.eventId)" :value="data.eventId">Evento guardado · {{data.eventId}}</option></select></label>
+      <label>Evento<select v-model="data.eventId" class="app-input" :disabled="eventsLoading"><option value="">Automático · evento vigente</option><option v-for="event in events" :key="event.id" :value="event.id">{{eventName(event)}}</option><option v-if="data.eventId&&!events.some(event=>event.id===data.eventId)" :value="data.eventId">Evento guardado · {{data.eventId}}</option></select></label>
+      <label>Consola si no hay evento vigente<select :value="data.platform||'auto'" class="app-input" @change="data.platform=$event.target.value"><option value="auto">Automático · cuentas conectadas</option><option value="nintendo">Nintendo Switch</option><option value="xbox">Xbox</option></select></label>
+      <p v-if="sourceStatus" role="status"><template v-if="sourceStatus.loading">Consultando la fuente del overlay…</template><template v-else-if="sourceStatus.source==='console'">Mostrando: {{ sourceStatus.platform || 'consola detectada' }}. {{ sourceStatus.coverSource==='event'?'Portada del evento del mismo juego.':'Portada de la consola.' }}</template><template v-else-if="sourceStatus.source==='previous-event'">Mostrando el último evento sin fecha: no se detecta una partida en la consola elegida.</template><template v-else-if="sourceStatus.source==='event'">Mostrando un evento vigente. La consola se usa si no hay evento.</template><template v-else>No hay evento ni partida disponibles.</template></p>
       <button type="button" class="test-animation" :disabled="eventsLoading" @click="loadEvents">{{eventsLoading?'Cargando eventos…':'Actualizar lista de eventos'}}</button>
       <p v-if="eventsError" role="status">{{eventsError}}</p>
       <label><input type="checkbox" :checked="data.eventShowDescription!==false" @change="data.eventShowDescription=$event.target.checked" /> Mostrar descripción del evento</label>
       <label><input type="checkbox" :checked="data.eventShowStart!==false" @change="data.eventShowStart=$event.target.checked" /> Mostrar fecha y hora de inicio</label>
       <label v-if="data.eventShowStart!==false">Zona horaria<select :value="data.eventTimeZone||'Europe/Madrid'" class="app-input" @change="data.eventTimeZone=$event.target.value"><option value="Europe/Madrid">España peninsular</option><option value="Atlantic/Canary">Canarias</option><option value="UTC">UTC</option></select></label>
-      <p>Muestra el juego y el fondo elegidos, con una descripción de hasta dos líneas y la hora del directo. Los datos vacíos se omiten. No consulta tus consolas ni utiliza el título del evento como nombre del juego.</p>
+      <p>Prioriza el evento vigente elegido o el próximo disponible. Si no hay ninguno, muestra la partida detectada en tu consola; si no hay partida, usa el último evento con su descripción y sin fecha. El nombre mostrado sigue siendo el del juego del evento.</p>
     </template>
     <label>Consulta de datos<select :value="data.refreshMode || 'manual'" class="app-input" @change="data.refreshMode=$event.target.value"><option value="manual">Solo al encender o actualizar</option><option value="auto">Actualizar automáticamente</option></select></label>
     <p>Sin consultas repetidas por defecto. Si cambias de juego, pulsa Actualizar juego. Recargar la fuente de OBS realiza una nueva lectura.</p>
@@ -61,11 +65,13 @@ async function persistControl(changes) {
     <label v-if="!data.source||data.source==='auto'"><input v-model="data.showLastGame" type="checkbox" /> Mostrar el último juego si no se detecta una partida</label>
     <p>En «Último juego» se usa la última actividad disponible, aunque no haya una partida activa.</p>
     </template>
-    <label>Estilo<select v-model="data.theme" class="app-input"><option value="galaxy">Galaxia</option><option value="minimal">Minimalista</option><option value="halloween">Halloween</option><option value="zelda">Zelda · Trifuerza</option></select></label>
-    <label>Tamaño de la portada<div class="font-adjust"><input :value="data.coverWidth ?? 88" type="range" min="60" max="120" aria-label="Ancho de la portada" @input="data.coverWidth = Number($event.target.value)"/><output>{{ data.coverWidth ?? 88 }} px</output></div></label>
+    <NowPlayingAppearanceEditor :data="data" @change="Object.assign(data,$event)" />
+    <div class="image-mode-controls" role="group" aria-label="Presentación de la imagen"><button type="button" :aria-pressed="imageSettings.imageMode==='cover'" @click="data.imageMode='cover'">Carátula lateral</button><button type="button" :aria-pressed="imageSettings.imageMode==='background'" @click="data.imageMode='background'">Imagen de fondo</button></div>
+    <p>El fondo se funde con los colores del estilo seleccionado. El encuadre se conserva al cambiar de presentación.</p>
+    <label v-if="imageSettings.imageMode==='cover'">Tamaño de la portada<div class="font-adjust"><input :value="data.coverWidth ?? 88" type="range" min="60" max="120" aria-label="Ancho de la portada" @input="data.coverWidth = Number($event.target.value)"/><output>{{ data.coverWidth ?? 88 }} px</output></div></label>
     <fieldset class="font-controls">
       <legend>Encuadre de la imagen</legend>
-      <div v-if="data.source==='event' && eventImage" class="cover-framing-preview"><img :src="eventImage" alt="Vista previa del encuadre de la portada" :style="{objectFit:imageSettings.coverFit,objectPosition:imageSettings.coverPositionX+'% '+imageSettings.coverPositionY+'%',transform:'scale('+(imageSettings.coverZoom/100)+')',transformOrigin:imageSettings.coverPositionX+'% '+imageSettings.coverPositionY+'%'}" /></div>
+      <div v-if="data.source==='event' && eventImage" class="cover-framing-preview" :class="{'background-preview':imageSettings.imageMode==='background'}"><img :src="eventImage" alt="Vista previa del encuadre de la imagen" :style="{objectFit:imageSettings.coverFit,objectPosition:imageSettings.coverPositionX+'% '+imageSettings.coverPositionY+'%',transform:'scale('+(imageSettings.coverZoom/100)+')',transformOrigin:imageSettings.coverPositionX+'% '+imageSettings.coverPositionY+'%'}" /></div>
       <label>Ajuste<select :value="data.coverFit || 'cover'" class="app-input" @change="data.coverFit=$event.target.value"><option value="cover">Rellenar portada</option><option value="contain">Ver imagen completa</option></select></label>
       <label>Posición horizontal<div class="font-adjust"><span>Izquierda</span><input :value="data.coverPositionX ?? 50" type="range" min="0" max="100" aria-label="Posición horizontal de la imagen" @input="data.coverPositionX=Number($event.target.value)"/><span>Derecha</span></div></label>
       <label>Posición vertical<div class="font-adjust"><span>Arriba</span><input :value="data.coverPositionY ?? 50" type="range" min="0" max="100" aria-label="Posición vertical de la imagen" @input="data.coverPositionY=Number($event.target.value)"/><span>Abajo</span></div></label>
@@ -73,16 +79,19 @@ async function persistControl(changes) {
       <button type="button" class="test-animation" @click="Object.assign(data,{coverPositionX:50,coverPositionY:50,coverZoom:100,coverFit:'cover'})">Restablecer encuadre</button>
       <p>Elige qué parte de la imagen debe verse en la portada. Usa «Ver imagen completa» para mostrar todo el logo. Guarda el overlay para aplicar el encuadre en OBS.</p>
     </fieldset>
-    <label><input type="checkbox" :checked="data.particles !== false" @change="data.particles = $event.target.checked"/> Partículas suaves de fondo</label>
     <p>En tarjetas estrechas la portada se ajusta para dejar espacio al texto.</p>
-    <label>Entrada y salida<select v-model="data.direction" class="app-input"><option value="left">Deslizar desde la izquierda</option><option value="right">Deslizar desde la derecha</option></select></label>
+    <fieldset class="font-controls"><legend>Comportamiento</legend>
+    <label><input type="checkbox" :checked="data.animationsEnabled!==false" @change="data.animationsEnabled=$event.target.checked" /> Activar animaciones de entrada y salida</label>
     <label>Visible durante (segundos)<input v-model.number="data.visibleSeconds" type="number" min="5" max="60" class="app-input" /></label>
     <label>Repetir cada (segundos)<input v-model.number="data.repeatSeconds" type="number" :min="Number(data.visibleSeconds || 12) + 5" max="1800" class="app-input" /></label>
+    <p>La permanencia empieza después de la entrada. El siguiente ciclo espera a que termine la salida. Con movimiento reducido, los efectos se muestran estáticos.</p>
+    </fieldset>
     <fieldset class="font-controls"><legend>Tamaño de las letras</legend><label v-for="control in fontControls" :key="control.key">{{ control.label }}<div class="font-adjust"><button type="button" :aria-label="'Reducir ' + control.label" @click="data[control.key] = Math.max(control.min, (Number(data[control.key]) || NOW_PLAYING_DEFAULTS[control.key]) - 1)">A−</button><input :value="data[control.key] ?? NOW_PLAYING_DEFAULTS[control.key]" type="range" :min="control.min" :max="control.max" :aria-label="'Tamaño de ' + control.label" @input="data[control.key] = Number($event.target.value)"/><button type="button" :aria-label="'Agrandar ' + control.label" @click="data[control.key] = Math.min(control.max, (Number(data[control.key]) || NOW_PLAYING_DEFAULTS[control.key]) + 1)">A+</button><output>{{ data[control.key] ?? NOW_PLAYING_DEFAULTS[control.key] }} px</output></div></label></fieldset>
     <p>La altura se adapta al texto para evitar recortes.</p>
     <label>Ancho (px)<input v-model.number="data.width" type="number" min="320" max="900" class="app-input" /></label>
     <label>Alto (px)<input v-model.number="data.height" type="number" min="172" max="360" class="app-input" /></label>
-    <button type="button" class="test-animation" @click="data.replayNonce = Date.now()">Probar animación</button>
+    <button type="button" class="test-animation" @click="data.replayNonce = Date.now()">Previsualizar animación</button>
+    <p>Prueba el ciclo completo con los datos ya cargados: entrada, permanencia y salida. Guarda el overlay para enviar los ajustes a OBS.</p>
     <p>Solo muestra datos disponibles. En modo automático consulta cada cinco minutos (Nintendo seleccionado: cada minuto). La animación no consulta la API. Las cachés del proveedor pueden retrasar una actualización.</p>
     <p>Guarda y usa «Copiar» para añadir el enlace como fuente de navegador en OBS, con el tamaño del lienzo. El fondo de OBS es transparente y, sin actividad, el widget queda oculto.</p>
   </div>
@@ -92,4 +101,5 @@ async function persistControl(changes) {
 .font-controls{border:1px solid #e2e8f0;border-radius:10px;padding:12px;display:grid;gap:12px}.font-controls legend{font-size:12px;font-weight:600;padding:0 5px}.font-adjust{display:flex;align-items:center;gap:7px;min-width:0}.font-adjust button{padding:5px;border-radius:6px;background:#ede9fe;color:#6d28d9;font-size:12px;flex:none}.font-adjust input{width:100%;min-width:20px;accent-color:#7c3aed}.font-adjust output{font-size:10px;min-width:30px;white-space:nowrap}
 .live-controls{display:flex;gap:8px;flex-wrap:wrap}.live-controls button{padding:10px;border-radius:9px;background:#7c3aed;color:white;font-size:12px;font-weight:600}.live-controls button.off{background:#15803d}.live-controls button:disabled{opacity:.5;cursor:wait}
 .cover-framing-preview{width:88px;height:132px;overflow:hidden;border:1px solid #c4b5fd;border-radius:12px;background:#080e1c;justify-self:center}.cover-framing-preview img{display:block;width:100%;height:100%}
+.image-mode-controls{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px;background:#f1f0f7;border:1px solid #e2e0ef;border-radius:11px}.image-mode-controls button{padding:10px 8px;border:0;border-radius:8px;background:transparent;color:#655b7b;font-size:12px;font-weight:600;cursor:pointer}.image-mode-controls button[aria-pressed=true]{background:#7c3aed;color:white;box-shadow:0 2px 6px #7c3aed26}.image-mode-controls button:focus-visible{outline:2px solid #a78bfa;outline-offset:2px}.cover-framing-preview.background-preview{width:100%;height:auto;aspect-ratio:2.6/1}
 </style>

@@ -6,7 +6,7 @@
     v-else-if="component"
     :is="component"
     :widget="widget"
-    v-bind="widget.type === 'nowPlaying' ? { ownerId, preview, interactive } : widget.type === 'timer' ? { interactive } : {}"
+    v-bind="widget.type === 'nowPlaying' ? { ownerId, preview, interactive, onSourceStatus: status => emit('source-status', status) } : widget.type === 'timer' ? { interactive } : {}"
     :key="widget.id + '-' + widget.type"
   />
 
@@ -23,6 +23,7 @@ import ChatWidget from '@/components/widgets/types/ChatWidget.vue'
 import TimerWidget from '@/components/widgets/types/TimerWidget.vue'
 import NowPlayingWidget from '@/components/widgets/types/NowPlayingWidget.vue'
 import CameraFrameWidget from '@/components/widgets/types/CameraFrameWidget.vue'
+const emit = defineEmits(['source-status'])
 
 const props = defineProps({
   ownerId: String,

@@ -75,10 +75,18 @@ export const getReadRewardDelayMs = () => READ_REWARD_DELAY_MS
 
 export const getIconById = (id) => kirbyIcons.find(icon => icon.id === id)
 
+// Build asset URLs change between deployments; resolve bundled icons from this build.
+const currentIconSource = (id, source = '') => {
+  const bundled = getIconById(id)
+  const value = String(source || '').trim()
+  const isBuildAsset = /^(?:https?:\/\/[^/]+)?\/(?:src\/iconos\/|assets\/)/i.test(value)
+  return bundled && (!value || isBuildAsset) ? bundled.src : value
+}
+
 export const normalizeProfileIcon = (id, data = {}) => ({
   id,
   name: data.name || 'Icono de comunidad',
-  src: data.imageUrl || data.src || '',
+  src: currentIconSource(id, data.imageUrl || data.src || ''),
   saga: data.saga || data.category || 'Especiales',
   special: Boolean(data.special),
   rarity: ['normal', 'rare', 'epic', 'legendary'].includes(data.rarity) ? data.rarity : data.special ? 'epic' : 'normal',
@@ -118,13 +126,13 @@ export const loadUploadedProfileIcons = async ({ includeHidden = false } = {}) =
 
 export const resolveProfileIcon = (profile = {}) => {
   const selected = getIconById(profile.selectedIcon)
-  return profile.selectedIconUrl || selected?.src || profile.imageUrl || fallbackProfileIcon
+  return currentIconSource(profile.selectedIcon, profile.selectedIconUrl) || selected?.src || profile.imageUrl || fallbackProfileIcon
 }
 
 export const resolveProfileIconMeta = (profile = {}) => {
   const selected = getIconById(profile.selectedIcon)
   const effect = profile.selectedIconEffect || {}
-  const src = profile.selectedIconUrl || selected?.src || profile.imageUrl || fallbackProfileIcon
+  const src = resolveProfileIcon(profile)
 
   return {
     src,

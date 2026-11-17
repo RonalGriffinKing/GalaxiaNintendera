@@ -157,7 +157,7 @@
               <section v-if="!isHeroMode" class="editor-info-group"><h3 class="info-group-title">Apariencia</h3><p class="info-group-help">Colores y estilo de la noticia.</p><VisualThemeSelector v-model="post.visualThemeId" /></section>
               <section v-if="!isHeroMode" class="editor-info-group"><h3 class="info-group-title">En la portada de la web</h3>
               <label v-if="!isHeroMode" class="home-pin-option"><input type="checkbox" :checked="post.homePinned !== false" @change="post.homePinned = $event.target.checked; post.homePinnedAt = Date.now()" /> Destacar en el carrusel de Inicio <small>Hasta seis publicaciones. Puedes quitar el pin desde el gestor.</small></label>
-              <details class="hero-media-settings"><summary>Personalizar imagen y galería de Inicio</summary><p>Opcional. Usa una imagen horizontal y un logo transparente. Si no añades imagen, se usará la portada del post.</p><div class="field-group"><span>Imagen del hero (URL)</span><ClipboardUrlField v-model="post.hero.image" label="Imagen del hero" /></div><div class="field-group"><span>Logo del juego (URL)</span><ClipboardUrlField v-model="post.hero.logoUrl" label="Logo del juego" /></div><label class="field-group"><span>Encuadre de la imagen (Inicio y noticia)</span><select v-model="post.hero.position"><option value="center top">Arriba</option><option value="center center">Centro</option><option value="center bottom">Abajo</option><option value="left top">Izquierda, arriba</option><option value="right top">Derecha, arriba</option></select></label><div class="field-group"><span>Galería: una URL por línea</span><ClipboardUrlField :model-value="post.hero.images.map(item=>item.url).join('\n')" label="Galería del hero" multiple @update:model-value="value => post.hero.images = value.split('\n').filter(Boolean).map(url => post.hero.images.find(item=>item.url===url) || {url,alt:'',position:'center top'})" /></div></details>
+              <details class="hero-media-settings"><summary>Personalizar imagen y galería de Inicio</summary><p>Opcional. Usa una imagen horizontal y un logo transparente. Si no añades imagen, se usará la portada del post.</p><div class="field-group"><span>Imagen del hero (URL)</span><ClipboardUrlField v-model="post.hero.image" label="Imagen del hero" /></div><div class="field-group"><span>Logo del juego (URL)</span><ClipboardUrlField v-model="post.hero.logoUrl" label="Logo del juego" /></div><label class="field-group"><span>Encuadre de la imagen (Inicio y noticia)</span><select v-model="post.hero.position"><option value="center top">Arriba</option><option value="center center">Centro</option><option value="center bottom">Abajo</option><option value="left top">Izquierda, arriba</option><option value="right top">Derecha, arriba</option></select></label><PostGalleryEditor v-model:images="post.hero.images" @media-change="trackHomeHeroMonitorChange" /></details>
               </section>
 
             </div>
@@ -481,6 +481,9 @@
                     <button type="button" title="Separador" @click.stop="applySectionFormat(index, 'divider')"><i class="fas fa-minus"></i></button>
                   </div>
                   <textarea v-model="section.content" placeholder="Contenido de esta seccion..."></textarea>
+                  <label>Frase destacada (opcional)
+                    <textarea v-model="section.highlightQuote" maxlength="280" rows="2" placeholder="Una idea clave de esta sección, sin Markdown"></textarea>
+                  </label>
 
                 </template>
 
@@ -490,7 +493,7 @@
                 </template>
                 <div v-if="section.image || activeSectionIndex === index" class="section-media-tools">
                   <div class="section-image-row">
-                    <ClipboardUrlField v-if="activeSectionIndex === index" v-model="section.image" :label="`Imagen de la sección ${index+1}`" />
+                    <ClipboardUrlField v-if="activeSectionIndex === index" v-model="section.image" :label="`Imagen de la sección ${index+1}`" @update:model-value="ensureSectionMediaSlotId(index)" />
                     <button type="button" class="section-media-picker" :aria-label="`Elegir imagen de la sección ${index+1}`" title="Elegir o cambiar imagen" @click.stop="openImagePicker(`section-${index}`)">
                       <span v-if="section.image" class="section-card-media" :data-state="sectionMediaState[section.image] || 'loading'">
                         <img @load="sectionMediaState[section.image]='loaded'" @error="sectionMediaState[section.image]='error'"
@@ -579,6 +582,7 @@
               </div>
               <p v-if="sectionSubtitle(section)" class="preview-section-subtitle">{{ sectionSubtitle(section) }}</p>
               <div class="preview-section-copy rich-content reading-prose" v-html="richText(section.content || 'El contenido de esta seccion se vera aqui cuando lo escribas.')"></div>
+              <ArticleHighlight :text="section.highlightQuote" />
             </section>
 
             </main>
@@ -590,6 +594,10 @@
       </main>
 
       <AppNotice :visible="toast.show" :message="toast.message" :type="toast.type" />
+      <div v-if="imageMonitorPending" class="image-monitor-pending" role="status">
+        El contenido se guardó; falta sincronizar el registro de imágenes.
+        <button type="button" :disabled="imageMonitorRetrying" @click="retryImageMonitor">{{ imageMonitorRetrying ? 'Reintentando…' : 'Reintentar' }}</button>
+      </div>
 
       <Transition name="fade">
         <div v-if="loading" class="editor-loading-cover">
@@ -743,13 +751,18 @@
 
 <script setup>
 import ContentLoading from "@/components/shared/ContentLoading.vue"
+import { backendRequest } from '@/services/backendClient'
 import ClipboardUrlField from '@/components/posts/ClipboardUrlField.vue'
 import VisualThemeSelector from '@/components/posts/VisualThemeSelector.vue'
 import { clearPublicPageCache } from '@/services/publicPageCache'
 import { imageSearchQuery, normalizePostSections } from '@/services/postSectionGames'
+import ArticleHighlight from '@/components/posts/ArticleHighlight.vue'
+import PostGalleryEditor from '@/components/posts/PostGalleryEditor.vue'
 import { normalizeSocialContent } from '@/services/socialContent'
 import { normalizeHomeHero } from '@/services/homeHero'
 import { gameEditorialFields } from '@/services/articlePresentation'
+import { pastePostMediaFromClipboard, replacePostSectionImage } from '@/services/postEditorMedia'
+import { changedPostImageFields, imageMonitorEnabled, syncPostImageReferences } from '@/services/imageMonitorClient'
 import { useVisualThemes } from '@/composables/useVisualThemes'
 import { postWebThemeCss, validateVisualTheme } from '@/services/visualThemes'
 import ReaderActions from './ReaderActions.vue'
@@ -817,6 +830,9 @@ function showPreview() { previewCollapsed.value = false; mobileStep.value = 'pre
 function hidePreview() { previewCollapsed.value = true; if (mobileStep.value === 'preview') mobileStep.value = 'sections' }
 function togglePreview() { previewCollapsed.value ? showPreview() : hidePreview() }
 const jsonPasteError = ref('')
+const imageMonitorPending = ref(null)
+const imageMonitorRetrying = ref(false)
+const postImageMonitorTouched = new Set()
 const imagePickerOpen = ref(false)
 const imageTargetId = ref('cover')
 const igdbQuery = ref('')
@@ -830,6 +846,7 @@ const igdbError = ref('')
 const igdbHasSearched = ref(false)
 let igdbSearchTimer = null
 let igdbSearchSequence = 0
+let igdbSearchController = null
 const igdbSearchCache = new Map()
 const releaseAtInput = ref('')
 const openAccordions = ref(['main'])
@@ -1120,7 +1137,7 @@ watch(isInitialFlowComplete, (complete) => {
 })
 
 const resetImageSearch = () => {
- clearTimeout(igdbSearchTimer);igdbSearchSequence++
+ clearTimeout(igdbSearchTimer);igdbSearchController?.abort();igdbSearchController=null;igdbSearchSequence++
  igdbImages.value=[];igdbGames.value=[];selectedIgdbImage.value=null
  igdbGameFilter.value='all';igdbTypeFilter.value='all';igdbError.value='';igdbHasSearched.value=false;igdbLoading.value=false
 }
@@ -1274,13 +1291,22 @@ const sectionTypeLabel = (index) => {
   return labels[index] || `Seccion ${index + 1}`
 }
 
+const createMediaSlotId = () => globalThis.crypto?.randomUUID?.().replace(/-/g, '') || `slot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
+const ensureSectionMediaSlotId = index => {
+  const section = post.value.sections[index]
+  if (section) {
+    replacePostSectionImage(post.value.sections, index, section.image)
+    if (section.image && section.mediaSlotId) postImageMonitorTouched.add(`sections:${section.mediaSlotId}`)
+  }
+}
+
 const addSection = async () => {
   if (!isInitialFlowComplete.value) {
     openAccordions.value = ['main']
     showEditorToast('Completa la informacion principal para crear secciones', 'delete')
     return
   }
-  post.value.sections.push({ title: '', label: sectionTypeLabel(post.value.sections.length), image: '', content: '', hidden: false })
+  post.value.sections.push({ mediaSlotId: createMediaSlotId(), title: '', label: sectionTypeLabel(post.value.sections.length), image: '', content: '', hidden: false })
   activeSectionIndex.value = post.value.sections.length - 1
   mobileStep.value = 'sections'
   await nextTick()
@@ -1309,7 +1335,9 @@ const removeSection = (index) => {
 
 const duplicateSection = (index) => {
   const source = post.value.sections[index]
-  post.value.sections.splice(index + 1, 0, { ...JSON.parse(JSON.stringify(source)), title: `${source.title || 'Seccion'} copia` })
+  const mediaSlotId = createMediaSlotId()
+  post.value.sections.splice(index + 1, 0, { ...JSON.parse(JSON.stringify(source)), mediaSlotId, title: `${source.title || 'Seccion'} copia` })
+  if (source.image) postImageMonitorTouched.add(`sections:${mediaSlotId}`)
   activeSectionIndex.value = index + 1
 }
 
@@ -1324,6 +1352,41 @@ const moveSection = (index, direction) => {
 const showEditorToast = (message, type = 'success') => {
   toast.value = { show: true, message, type }
   setTimeout(() => { toast.value.show = false }, 2500)
+}
+
+const finishPostSave = (isEditing) => {
+  showEditorToast(isEditing ? 'Cambios guardados' : successLabel.value)
+  playPublishSound()
+  if (!isEditing) {
+    window.dispatchEvent(new CustomEvent('mascot-reaction', {
+      detail: { type: isHeroMode.value ? 'heroCreated' : 'postCreated', message: isHeroMode.value ? 'Nuevo principal listo para brillar.' : 'Que gran post acaba de nacer.' }
+    }))
+  }
+  setTimeout(() => { emit('created'); emit('close') }, 900)
+}
+
+const trackHomeHeroMonitorChange = ({ mediaSlotId } = {}) => {
+  if (mediaSlotId) postImageMonitorTouched.add(`hero.images:${mediaSlotId}`)
+}
+
+const trackImportedMonitorChanges = () => {
+  for (const section of post.value.sections || []) if (section.mediaSlotId) postImageMonitorTouched.add(`sections:${section.mediaSlotId}`)
+  for (const slide of post.value.social?.slides || []) if (slide.mediaSlotId) postImageMonitorTouched.add(`social.slides:${slide.mediaSlotId}`)
+  for (const image of post.value.hero?.images || []) if (image.mediaSlotId) postImageMonitorTouched.add(`hero.images:${image.mediaSlotId}`)
+}
+
+const retryImageMonitor = async () => {
+  if (!imageMonitorPending.value || imageMonitorRetrying.value) return
+  imageMonitorRetrying.value = true
+  try {
+    await syncPostImageReferences(imageMonitorPending.value)
+    imageMonitorPending.value = null
+    finishPostSave(Boolean(props.editData))
+  } catch (error) {
+    showEditorToast(`El contenido está guardado; el monitor sigue pendiente (${error.message || 'error de conexión'}).`, 'error')
+  } finally {
+    imageMonitorRetrying.value = false
+  }
 }
 
 const normalizeSections = (sections = [], options = {}) => normalizePostSections(sections, { ...options, labelForIndex: sectionTypeLabel })
@@ -1397,31 +1460,18 @@ const copySocialJsonInstructions = async () => {
 const pasteJsonIntoPost = async () => {
   jsonPasteError.value = ''
   try {
-    const text = await navigator.clipboard.readText()
-    const parsed = parseAiJsonPost(text)
+    const parsed = await pastePostMediaFromClipboard({
+      readText: () => navigator.clipboard.readText(),
+      parseJson: parseAiJsonPost,
+      post: post.value
+    })
     post.value.title = parsed.title
     if (parsed.visualThemeId) post.value.visualThemeId = parsed.visualThemeId
     if (parsed.visualThemeSnapshot) post.value.visualThemeSnapshot = parsed.visualThemeSnapshot
     if (parsed.titleHighlights) post.value.titleHighlights = parsed.titleHighlights
-    if (parsed.hero) post.value.hero = parsed.hero
     post.value.subtitle = parsed.subtitle
     post.value.content = parsed.content
-    post.value.image = parsed.image || post.value.image
-    const currentSections = Array.isArray(post.value.sections) ? post.value.sections : []
-    post.value.sections = parsed.sections.map((section, index) => ({
-      ...section,
-      image: section.image || currentSections[index]?.image || ''
-    }))
-    const currentSocial = post.value.social || {}
-    const currentSocialSlides = Array.isArray(currentSocial.slides) ? currentSocial.slides : []
-    post.value.social = {
-      ...parsed.social,
-      image: parsed.social.image || currentSocial.image || '',
-      slides: parsed.social.slides.map((slide, index) => ({
-        ...slide,
-        image: slide.image || currentSocialSlides[index]?.image || ''
-      }))
-    }
+    trackImportedMonitorChanges()
     post.value.game = {
       ...parsed.game,
       officialUrl: parsed.game.officialUrl || ''
@@ -1464,6 +1514,8 @@ const searchIgdbImages = async (useCache = false) => {
   const query = igdbQuery.value.trim()
   if (query.length < 2) return
   clearTimeout(igdbSearchTimer)
+  igdbSearchController?.abort()
+  igdbSearchController = new AbortController()
   const requestId = ++igdbSearchSequence
   const targetId = imageTargetId.value
   igdbLoading.value = true
@@ -1472,11 +1524,7 @@ const searchIgdbImages = async (useCache = false) => {
   try {
     let data = useCache === true ? igdbSearchCache.get(query) : null
     if(!data) {
-      const response = await fetch('/.netlify/functions/igdb', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query })
-      })
-      data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data?.error || 'No se pudieron buscar imagenes')
+      data = await backendRequest('igdb', { method: 'POST', body: { query }, signal: igdbSearchController.signal })
     }
     if (requestId !== igdbSearchSequence || !imagePickerOpen.value) return
     if(igdbSearchCache.size>=30)igdbSearchCache.delete(igdbSearchCache.keys().next().value)
@@ -1488,7 +1536,7 @@ const searchIgdbImages = async (useCache = false) => {
     igdbTypeFilter.value = 'all'
     if(targetId==='cover')post.value.mediaGameName = query
   } catch (error) {
-    if (requestId !== igdbSearchSequence) return
+    if (requestId !== igdbSearchSequence || error?.name === 'AbortError') return
     console.error(error)
     igdbError.value = error.message || 'No se pudieron buscar imagenes'
   } finally {
@@ -1502,7 +1550,10 @@ const assignIgdbImage = (image) => {
     post.value.image = image.url
   } else if (imageTargetId.value.startsWith('section-')) {
     const index = Number(imageTargetId.value.replace('section-', ''))
-    if (post.value.sections[index]) post.value.sections[index].image = image.url
+    if (post.value.sections[index]) {
+      replacePostSectionImage(post.value.sections, index, image.url)
+      postImageMonitorTouched.add(`sections:${post.value.sections[index].mediaSlotId}`)
+    }
   }
   showEditorToast(`Imagen asignada a ${activeImageTarget.value?.label || 'destino'}`)
 }
@@ -1585,8 +1636,16 @@ const savePost = async (targetStatus = 'pending') => {
 
     if (isHeroMode.value) cleanPost.sections = []
 
+    const monitorFields = imageMonitorEnabled()
+      ? changedPostImageFields(cleanPost, props.editData, { forcedFields: [...postImageMonitorTouched] })
+      : []
+    const monitorOperationId = globalThis.crypto?.randomUUID?.().replace(/-/g, '') || `op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
+    let savedOwnerId = props.editData?.id || ''
+    let savedUpdatedAt = Number(cleanPost.updatedAt || 0)
+
     if (props.editData) {
       const nextUpdatedAt = Date.now()
+      savedUpdatedAt = nextUpdatedAt
       const patch = {
         ...cleanPost,
         stickers: deleteField(),
@@ -1605,7 +1664,8 @@ const savePost = async (targetStatus = 'pending') => {
       }
     } else {
       const createdAt = Date.now()
-      await addDoc(collection(db, 'posts'), {
+      savedUpdatedAt = createdAt
+      const createdPost = await addDoc(collection(db, 'posts'), {
         ...cleanPost,
         authorId: user?.uid || 'anon',
         authorName: user?.displayName || 'Admin',
@@ -1613,23 +1673,25 @@ const savePost = async (targetStatus = 'pending') => {
         createdAt,
         updatedAt: createdAt
       })
+      savedOwnerId = createdPost.id
     }
 
     clearPublicPageCache()
-    showEditorToast(props.editData ? 'Cambios guardados' : successLabel.value)
-    playPublishSound()
-    if (!props.editData) {
-      window.dispatchEvent(new CustomEvent('mascot-reaction', {
-        detail: {
-          type: isHeroMode.value ? 'heroCreated' : 'postCreated',
-          message: isHeroMode.value ? 'Nuevo principal listo para brillar.' : 'Que gran post acaba de nacer.'
-        }
-      }))
+    if (monitorFields.length) {
+      imageMonitorPending.value = {
+        ownerId: savedOwnerId, operationId: monitorOperationId,
+        expectedUpdatedAt: savedUpdatedAt, fields: monitorFields
+      }
+      try {
+        await syncPostImageReferences(imageMonitorPending.value)
+        imageMonitorPending.value = null
+      } catch {
+        showEditorToast('El contenido se guardó; falta sincronizar el registro de imágenes.', 'error')
+        loading.value = false
+        return
+      }
     }
-    setTimeout(() => {
-      emit('created')
-      emit('close')
-    }, 900)
+    finishPostSave(Boolean(props.editData))
   } catch (error) {
     console.error(error)
     showEditorToast('Error al guardar. Intentalo de nuevo.', 'error')
@@ -1642,6 +1704,7 @@ const savePost = async (targetStatus = 'pending') => {
 .home-pin-option{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:14px;border:1px solid #a855f755;border-radius:14px;background:#7c3aed12;font-weight:700;font-size:13px}
 .home-pin-option input{accent-color:#9333ea;width:18px;height:18px}
 .home-pin-option small{flex-basis:100%;font-weight:400;color:var(--text-secondary);line-height:1.5}
+.image-monitor-pending{position:fixed;z-index:10000;left:50%;bottom:20px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;max-width:min(720px,calc(100vw - 28px));padding:12px 16px;border:1px solid #f59e0b88;border-radius:12px;background:#211b10;color:#fef3c7;box-shadow:0 12px 36px #0008;font-size:13px}.image-monitor-pending button{border:0;border-radius:8px;padding:8px 12px;background:#f59e0b;color:#1c1917;font-weight:700;cursor:pointer;white-space:nowrap}
 .post-editor-page {
   background: var(--admin-bg);
   width: 100%;

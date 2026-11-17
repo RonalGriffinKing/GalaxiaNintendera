@@ -1,5 +1,6 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { backendRequest } from '@/services/backendClient'
 const props=defineProps({initialQuery:{type:String,default:''}})
 const emit=defineEmits(['close','select'])
 const query=ref(props.initialQuery),images=ref([]),games=ref([]),busy=ref(false),error=ref(''),searched=ref(false)
@@ -7,7 +8,7 @@ const gameFilter=ref('all'),typeFilter=ref('all'),selected=ref(null)
 const searchInput=ref(null)
 const previousFocus=typeof document!=='undefined'?document.activeElement:null
 onMounted(()=>searchInput.value?.focus())
-const types=[{id:'all',name:'Todas'},{id:'cover',name:'Carátulas'},{id:'screenshot',name:'Capturas'},{id:'artwork',name:'Arte'}]
+const types=[{id:'all',name:'Todas'},{id:'cover',name:'CarÃ¡tulas'},{id:'screenshot',name:'Capturas'},{id:'artwork',name:'Arte'}]
 const filtered=computed(()=>images.value.filter(image=>(gameFilter.value==='all'||String(image.gameId)===String(gameFilter.value))&&(typeFilter.value==='all'||image.type===typeFilter.value)))
 let timer,controller,sequence=0
 async function search(){
@@ -16,9 +17,7 @@ async function search(){
  if(name.length<2){busy.value=false;return}
  controller=new AbortController();busy.value=true;error.value='';searched.value=true
  try {
-  const response=await fetch('/.netlify/functions/igdb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:name}),signal:controller.signal})
-  const data=await response.json()
-  if(!response.ok)throw Error(data.error||'No se pudieron buscar imágenes.')
+  const data=await backendRequest('igdb',{method:'POST',body:{query:name},signal:controller.signal})
   if(id!==sequence)return
   images.value=Array.isArray(data.images)?data.images:[];games.value=Array.isArray(data.games)?data.games:[]
   selected.value=images.value[0]||null
@@ -31,13 +30,13 @@ onUnmounted(()=>{clearTimeout(timer);controller?.abort();sequence++;if(previousF
 </script>
 <template>
  <Teleport to="body"><div class="game-image-picker" @keydown.esc.stop="emit('close')">
-  <button class="picker-shade" aria-label="Cerrar buscador de imágenes" @click="emit('close')"></button>
+  <button class="picker-shade" aria-label="Cerrar buscador de imÃ¡genes" @click="emit('close')"></button>
   <section class="picker-dialog" role="dialog" aria-modal="true" aria-labelledby="game-image-heading">
-   <header><div><small>BIBLIOTECA DE JUEGOS · IGDB</small><h2 id="game-image-heading">Elegir imagen del evento</h2><p>Busca un juego y elige una carátula, captura o ilustración.</p></div><button type="button" aria-label="Cerrar buscador" @click="emit('close')">×</button></header>
-   <form class="picker-search" @submit.prevent="search"><input ref="searchInput" v-model="query" aria-label="Buscar juego para la imagen del evento" placeholder="Nombre del juego en inglés o español"><button type="submit" :disabled="busy||query.trim().length<2">{{busy?'Buscando…':'Buscar'}}</button></form>
+   <header><div><small>BIBLIOTECA DE JUEGOS Â· IGDB</small><h2 id="game-image-heading">Elegir imagen del evento</h2><p>Busca un juego y elige una carÃ¡tula, captura o ilustraciÃ³n.</p></div><button type="button" aria-label="Cerrar buscador" @click="emit('close')">Ã—</button></header>
+   <form class="picker-search" @submit.prevent="search"><input ref="searchInput" v-model="query" aria-label="Buscar juego para la imagen del evento" placeholder="Nombre del juego en inglÃ©s o espaÃ±ol"><button type="submit" :disabled="busy||query.trim().length<2">{{busy?'Buscandoâ€¦':'Buscar'}}</button></form>
    <div v-if="games.length" class="picker-filters"><button type="button" :aria-pressed="gameFilter==='all'" @click="gameFilter='all'">Todos los juegos</button><button v-for="game in games" :key="game.id" type="button" :aria-pressed="String(gameFilter)===String(game.id)" @click="gameFilter=game.id">{{game.name}}</button></div>
    <div class="picker-filters"><button v-for="type in types" :key="type.id" type="button" :aria-pressed="typeFilter===type.id" @click="typeFilter=type.id">{{type.name}}</button></div>
-   <p v-if="error" role="alert">{{error}}</p><p v-else-if="busy" role="status">Buscando imágenes…</p><p v-else-if="!filtered.length" role="status">{{searched?'No hay imágenes para esta búsqueda. Prueba otro nombre o filtro.':'Escribe al menos dos letras para buscar.'}}</p>
+   <p v-if="error" role="alert">{{error}}</p><p v-else-if="busy" role="status">Buscando imÃ¡genesâ€¦</p><p v-else-if="!filtered.length" role="status">{{searched?'No hay imÃ¡genes para esta bÃºsqueda. Prueba otro nombre o filtro.':'Escribe al menos dos letras para buscar.'}}</p>
    <div v-if="filtered.length&&!busy" class="picker-workspace"><div class="picker-gallery"><button v-for="image in filtered" :key="image.id" type="button" :aria-pressed="selected?.id===image.id" @click="selected=image"><img :src="image.url" :alt="image.gameName||'Imagen del juego'" loading="lazy"><span>{{image.typeLabel}}</span></button></div><aside v-if="selected"><img :src="selected.url" alt="Vista previa"><strong>{{selected.gameName}}</strong><small>{{selected.typeLabel}}</small><button type="button" class="picker-use" @click="emit('select',selected)">Usar como fondo del evento</button></aside></div>
   </section>
  </div></Teleport>

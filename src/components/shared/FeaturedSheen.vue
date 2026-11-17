@@ -30,5 +30,19 @@ const motes=Array.from({length:28},(_,i)=>({left:((i*37+13)%100)+'%',top:((i*29+
 </style>
 
 <style scoped>
-.neon-ribbons{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.86;transform-origin:center;animation:neon-ribbon-flow 18s ease-in-out infinite alternate}.is-vivid .foil-prism{opacity:.56;background:radial-gradient(ellipse at 0 8%,#a91dffb0,transparent 40%),radial-gradient(ellipse at 62% 0%,#30e8ff99,transparent 40%),radial-gradient(ellipse at 100% 90%,#cf29ffbb,transparent 45%),radial-gradient(ellipse at 2% 100%,#ff44bd70,transparent 30%)}.is-vivid .foil-rim{padding:1px;background:linear-gradient(115deg,#ff48e0,#b479ff 15%,#61f5ff 33%,#fff292 54%,#ff68ce 72%,#9f71ff 86%,#76f7ff);opacity:.65}.is-vivid .foil-dot{opacity:.8;box-shadow:0 0 9px 2px #b9f5ff70}@keyframes neon-ribbon-flow{from{transform:translate3d(-1.2%,1%,0) scale(1.04)}to{transform:translate3d(1%,-1.2%,0) scale(1.035)}}@media(max-width:760px),(hover:none) and (pointer:coarse){.neon-ribbons{opacity:.72;animation:none;transform:none}.ribbon-halo{display:none}.is-vivid .foil-prism{opacity:.38;animation:none}.is-vivid .foil-dot{box-shadow:none}}@media(prefers-reduced-motion:reduce){.neon-ribbons{animation:none;transform:none}.is-vivid .foil-prism,.is-vivid .foil-dot{animation:none}.ribbon-halo{display:none}}
+/* Static edge light keeps the photograph clear and avoids large animated paint layers. */
+.is-vivid .neon-ribbons{display:none}
+.is-vivid::before{display:none;animation:none}
+.is-vivid .foil-prism{
+ inset:0;opacity:1;animation:none;mix-blend-mode:normal;
+ background:radial-gradient(ellipse at 0 0,color-mix(in srgb,var(--visual-secondary,#ec4899) 30%,transparent),transparent 38%),radial-gradient(ellipse at 80% 0,color-mix(in srgb,var(--visual-accent,#7deaf4) 20%,transparent),transparent 35%),radial-gradient(ellipse at 100% 100%,color-mix(in srgb,var(--visual-primary,#8b35e9) 35%,transparent),transparent 35%);
+}
+.is-vivid .foil-rim{padding:1px;background:linear-gradient(115deg,var(--visual-secondary,#ec4899),var(--visual-primary,#8b35e9) 27%,var(--visual-accent,#7deaf4) 54%,var(--visual-primary,#8b35e9) 76%,var(--visual-secondary,#ec4899));opacity:.9}
+.is-vivid .foil-dot{animation:hero-edge-twinkle 5s ease-in-out var(--delay) infinite alternate;opacity:.4;background:var(--visual-accent,#7deaf4);box-shadow:0 0 6px color-mix(in srgb,var(--visual-accent,#7deaf4) 45%,transparent)}
+.is-vivid .foil-dot:nth-child(n+9){display:none}
+.is-vivid .foil-dot:nth-child(-n+4){top:8%!important}.is-vivid .foil-dot:nth-child(n+5){top:92%!important}
+@keyframes hero-edge-twinkle{from{opacity:.15}to{opacity:.65}}
+@media(prefers-reduced-motion:reduce){.is-vivid .foil-dot{animation:none;opacity:.35}}
+.is-vivid .foil-dot:nth-child(5n)::before,.is-vivid .foil-dot:nth-child(5n)::after{box-shadow:none;opacity:.5}
+@media(max-width:760px),(hover:none) and (pointer:coarse){.is-vivid .foil-prism{opacity:.65}.is-vivid .foil-dots{display:none}}
 </style>

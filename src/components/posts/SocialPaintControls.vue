@@ -1,13 +1,13 @@
 <script setup>
 defineProps({ value: Object })
-const emit = defineEmits(['change'])
+const emit = defineEmits(['change', 'preview'])
 </script>
 <template>
  <div class="paint-controls">
   <label>Tipo de color<select :value="value.gradient === false ? 'solid' : 'gradient'" @change="emit('change', { key: 'gradient', value: $event.target.value === 'gradient' })"><option value="solid">Color sólido</option><option value="gradient">Degradado</option></select></label>
   <div class="colors">
-   <label>{{ value.gradient === false ? 'Color' : 'Color de inicio' }}<input type="color" :value="value.color" @input="emit('change', { key: 'color', value: $event.target.value })" /></label>
-   <label v-if="value.gradient !== false">Color final<input type="color" :value="value.endColor || value.color" @input="emit('change', { key: 'endColor', value: $event.target.value })" /></label>
+   <label>{{ value.gradient === false ? 'Color' : 'Color de inicio' }}<input type="color" :value="value.color" @input="emit('preview', { key: 'color', value: $event.target.value })" @change="emit('change', { key: 'color', value: $event.target.value })" /></label>
+   <label v-if="value.gradient !== false">Color final<input type="color" :value="value.endColor || value.color" @input="emit('preview', { key: 'endColor', value: $event.target.value })" @change="emit('change', { key: 'endColor', value: $event.target.value })" /></label>
   </div>
  </div>
 </template>

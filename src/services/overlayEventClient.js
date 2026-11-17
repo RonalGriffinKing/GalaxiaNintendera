@@ -9,3 +9,12 @@ export async function listOverlayEvents() {
   const snapshot=await getDocs(query(collection(db,'galaxyEvents'),orderBy('startsAt','desc'),limit(100)))
   return snapshot.docs.map(item=>({...item.data(),id:item.id}))
 }
+
+export async function fetchOverlayEventCandidates(id) {
+ const [catalog, selected] = await Promise.allSettled([listOverlayEvents(), fetchOverlayEvent(id)])
+ const values = catalog.status === 'fulfilled' ? catalog.value : []
+ if (selected.status === 'fulfilled' && selected.value && !values.some(event => event.id === selected.value.id)) {
+  return [...values, selected.value]
+ }
+ return values
+}

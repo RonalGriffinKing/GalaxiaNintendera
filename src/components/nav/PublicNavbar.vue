@@ -4,10 +4,9 @@ import { createReadingNavigation } from '@/services/readingNavigation'
 import { publicChromeLoading, publicNavigationOverlayOpen, publicReadingControlsHidden, publicReadingHeaderHidden, publicSearchRequest } from '@/composables/usePublicChromeLoading'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { addDoc, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
-import { deleteApp, initializeApp } from 'firebase/app'
-import { auth, db, firebaseConfig } from '@/firebase'
+import { auth, db } from '@/firebase'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import PublicCreateSheet from '@/components/nav/PublicCreateSheet.vue'
 import NotificationDropdown from '@/components/nav/NotificationDropdown.vue'
@@ -98,7 +97,6 @@ const notificationFromProfile = ref(false)
 const notificationAnchor = computed(() => notificationFromProfile.value ? profileNotificationButton.value : notificationButton.value)
 const globalThreadLauncher = ref(null)
 const quickCommunityOpen = ref(false)
-const quickUserOpen = ref(false)
 const quickCreateSaving = ref(false)
 const navHidden = ref(false)
 const headerHidden = ref(false)
@@ -113,15 +111,6 @@ const quickCommunityDraft = ref({
   threadBackgroundUrl: '',
   threadTopics: [...DEFAULT_QUICK_THREAD_TOPICS],
   newTopic: ''
-})
-const quickUserDraft = ref({
-  name: '',
-  email: '',
-  password: '',
-  description: '',
-  imageUrl: '',
-  role: 'user',
-  canChat: false
 })
 let unsubscribeAuth = null
 let unsubscribeNotifications = null
@@ -156,9 +145,11 @@ const authLabel = computed(() => {
 })
 
 const unreadCount = computed(() => notifications.value.filter(notification => !notification.read).length)
+const isStudioBuild = import.meta.env.VITE_GALAXIA_STUDIO_BUILD === true
+const visibleRole = computed(() => isStudioBuild ? currentRole.value : 'user')
 const isCurrentUserBlocked = computed(() => Boolean(currentProfile.value?.isBlocked))
-const canPublish = computed(() => !isCurrentUserBlocked.value && ['admin', 'publisher'].includes(currentRole.value))
-const isAdmin = computed(() => currentRole.value === 'admin')
+const canPublish = computed(() => isStudioBuild && !isCurrentUserBlocked.value && ['admin', 'publisher'].includes(currentRole.value))
+const isAdmin = computed(() => isStudioBuild && currentRole.value === 'admin')
 const bottomNavItems = computed(() => PUBLIC_NAV_LINKS.filter(item => item.to !== '/comunidades'))
 const bottomNavColumns = computed(() => bottomNavItems.value.length + 2)
 const isReadingRoute = computed(() => route.path.startsWith('/post/'))
@@ -175,7 +166,6 @@ const bottomNavClass = computed(() => ({
     || searchOpen.value
     || notificationsOpen.value
     || quickCommunityOpen.value
-    || quickUserOpen.value
 }))
 const activeBottomIndex = computed(() => {
   if (route.path.startsWith('/perfil') || accountMenuOpen.value) return 4
@@ -495,7 +485,7 @@ const updateScrollNavigation = () => {
   readingProgress.value = isReadingRoute.value ? Math.min(100, Math.max(0, (nextY / maxScroll) * 100)) : 0
 
   const mobile=isMobileNav()
-  const controlsOpen=menuOpen.value || accountMenuOpen.value || searchOpen.value || notificationsOpen.value || createMenuOpen.value || quickCommunityOpen.value || quickUserOpen.value
+  const controlsOpen=menuOpen.value || accountMenuOpen.value || searchOpen.value || notificationsOpen.value || createMenuOpen.value || quickCommunityOpen.value
   // Hide the public chrome without changing the page layout.
   navCompact.value = !mobile && nextY > 28
   const mobilePublicPage=mobile && !route.meta.workspace && !/^\/(admin|login|editor|dashboard)(\/|$)/.test(route.path) && !route.query.create && route.query.mode !== 'register'
@@ -733,18 +723,6 @@ const resetQuickCommunityDraft = () => {
   }
 }
 
-const resetQuickUserDraft = () => {
-  quickUserDraft.value = {
-    name: '',
-    email: '',
-    password: '',
-    description: '',
-    imageUrl: '',
-    role: 'user',
-    canChat: false
-  }
-}
-
 const openGlobalThreadComposer = async () => {
   if (!currentUser.value) {
     await router.push('/login?mode=register')
@@ -779,11 +757,6 @@ const openCreateOption = async (item) => {
     return
   }
 
-  if (item.action === 'user') {
-    resetQuickUserDraft()
-    quickUserOpen.value = true
-    return
-  }
 
   if (item.to) {
     goTo(item.to)
@@ -816,11 +789,6 @@ const addQuickCommunityTopic = () => {
   quickCommunityDraft.value.newTopic = ''
 }
 
-const closeQuickUser = () => {
-  if (quickCreateSaving.value) return
-  quickUserOpen.value = false
-}
-
 const saveQuickCommunity = async () => {
   if (!isAdmin.value || quickCreateSaving.value) return
   const name = quickCommunityDraft.value.name.trim()
@@ -844,52 +812,6 @@ const saveQuickCommunity = async () => {
       updatedAt: now
     })
     quickCommunityOpen.value = false
-  } finally {
-    quickCreateSaving.value = false
-  }
-}
-
-const saveQuickUser = async () => {
-  if (!isAdmin.value || quickCreateSaving.value) return
-  const name = quickUserDraft.value.name.trim()
-  const email = quickUserDraft.value.email.trim()
-  const password = quickUserDraft.value.password
-  if (!name || !email || !password) return
-
-  quickCreateSaving.value = true
-  try {
-    const secondaryApp = initializeApp(firebaseConfig, `quick-user-create-${Date.now()}`)
-    const secondaryAuth = getAuth(secondaryApp)
-
-    try {
-      const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password)
-      await updateProfile(credential.user, {
-        displayName: name,
-        photoURL: quickUserDraft.value.imageUrl.trim() || null
-      })
-      await setDoc(doc(db, 'users', credential.user.uid), {
-        name,
-        email,
-        description: quickUserDraft.value.description.trim(),
-        imageUrl: quickUserDraft.value.imageUrl.trim(),
-        provider: 'password',
-        role: quickUserDraft.value.role,
-        canChat: ['admin', 'publisher'].includes(quickUserDraft.value.role) || Boolean(quickUserDraft.value.canChat),
-        adminCreated: true,
-        emailVerified: true,
-        emailVerificationRequired: false,
-        isBlocked: false,
-        blockReason: '',
-        emailOptIn: true,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      })
-      await signOut(secondaryAuth)
-    } finally {
-      await deleteApp(secondaryApp)
-    }
-
-    quickUserOpen.value = false
   } finally {
     quickCreateSaving.value = false
   }
@@ -952,10 +874,10 @@ onMounted(() => {
   updateScrollNavigation()
 })
 
-watch([menuOpen, createMenuOpen, accountMenuOpen, quickCommunityOpen, quickUserOpen, searchOpen, notificationsOpen], ([isMenuOpen, isCreateOpen, isAccountOpen, isQuickCommunityOpen, isQuickUserOpen, isSearchOpen, isNotificationsOpen]) => {
-  document.body.style.overflow = isMenuOpen || isCreateOpen || (isAccountOpen && isMobileNav()) || isQuickCommunityOpen || isQuickUserOpen || isSearchOpen || isNotificationsOpen ? 'hidden' : ''
+watch([menuOpen, createMenuOpen, accountMenuOpen, quickCommunityOpen, searchOpen, notificationsOpen], ([isMenuOpen, isCreateOpen, isAccountOpen, isQuickCommunityOpen, isSearchOpen, isNotificationsOpen]) => {
+  document.body.style.overflow = isMenuOpen || isCreateOpen || (isAccountOpen && isMobileNav()) || isQuickCommunityOpen || isSearchOpen || isNotificationsOpen ? 'hidden' : ''
 })
-watch([menuOpen, createMenuOpen, accountMenuOpen, searchOpen, notificationsOpen, quickCommunityOpen, quickUserOpen], () => {
+watch([menuOpen, createMenuOpen, accountMenuOpen, searchOpen, notificationsOpen, quickCommunityOpen], () => {
   updateScrollNavigation()
 })
 
@@ -1154,7 +1076,7 @@ onUnmounted(() => {
           </span>
           <div>
             <strong>{{ authLabel }}</strong>
-            <p>{{ currentRole.toUpperCase() }}</p>
+            <p>{{ visibleRole.toUpperCase() }}</p>
           </div>
         </button>
 
@@ -1244,7 +1166,7 @@ onUnmounted(() => {
             />
             <div>
               <strong>{{ authLabel }}</strong>
-              <small>{{ currentRole }}</small>
+              <small>{{ visibleRole }}</small>
             </div>
             <i :class="mobileAccountOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
           </button>
@@ -1348,15 +1270,11 @@ onUnmounted(() => {
 
     <PublicQuickAdminModals
       v-model:community-draft="quickCommunityDraft"
-      v-model:user-draft="quickUserDraft"
       :community-open="quickCommunityOpen"
-      :user-open="quickUserOpen"
       :saving="quickCreateSaving"
       :get-topic-icon="getQuickTopicIcon"
       @close-community="closeQuickCommunity"
-      @close-user="closeQuickUser"
       @save-community="saveQuickCommunity"
-      @save-user="saveQuickUser"
       @update-topic="updateQuickCommunityTopic"
       @remove-topic="removeQuickCommunityTopic"
       @add-topic="addQuickCommunityTopic"
@@ -1364,7 +1282,7 @@ onUnmounted(() => {
 
     <GlobalThreadComposerLauncher
       ref="globalThreadLauncher"
-      :user-role="currentRole"
+      :user-role="visibleRole"
     />
 
   </nav>

@@ -4,6 +4,7 @@ import { eventGameNames, eventImageSelection } from '@/services/eventGame'
 import GameImagePicker from '@/components/shared/GameImagePicker.vue'
 import EventJsonImport from '@/components/events/EventJsonImport.vue'
 import { EVENT_TYPES } from '@/services/eventJson'
+import { fetchYoutubeFeed } from '@/services/youtubeFeedClient'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { peekPublicPage, storePublicPage } from '@/services/publicPageCache'
 import { useRoute, useRouter } from 'vue-router'
@@ -1294,10 +1295,8 @@ const hydrateYoutubeVideos = async (videos) => {
 const loadYoutubeFeedFallback = async () => {
   if (!youtubeChannelId.value?.startsWith('UC')) return false
 
-  const response = await fetch(`/.netlify/functions/youtube-feed?channelId=${encodeURIComponent(youtubeChannelId.value)}`)
-  if (!response.ok) return false
-
-  const data = await response.json()
+  const data = await fetchYoutubeFeed(youtubeChannelId.value).catch(() => null)
+  if (!data) return false
   const feedVideos = (data.items || []).map(item => ({
     ...item,
     duration: '',

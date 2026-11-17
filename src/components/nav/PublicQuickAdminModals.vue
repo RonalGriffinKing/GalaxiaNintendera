@@ -6,10 +6,6 @@ defineProps({
     type: Boolean,
     default: false
   },
-  userOpen: {
-    type: Boolean,
-    default: false
-  },
   saving: {
     type: Boolean,
     default: false
@@ -24,16 +20,10 @@ const communityDraft = defineModel('communityDraft', {
   type: Object,
   required: true
 })
-const userDraft = defineModel('userDraft', {
-  type: Object,
-  required: true
-})
 
 const emit = defineEmits([
   'close-community',
-  'close-user',
   'save-community',
-  'save-user',
   'update-topic',
   'remove-topic',
   'add-topic'
@@ -159,70 +149,6 @@ const emit = defineEmits([
     </Transition>
   </Teleport>
 
-  <Teleport to="body">
-    <Transition name="fade">
-      <div v-if="userOpen" class="quick-create-modal">
-        <button class="quick-create-backdrop" type="button" @click="emit('close-user')"></button>
-        <section class="quick-create-card">
-          <div class="quick-create-head">
-            <strong>Crear usuario</strong>
-            <button type="button" @click="emit('close-user')">
-              <i class="fas fa-xmark"></i>
-            </button>
-          </div>
-
-          <label>
-            Nombre
-            <input v-model="userDraft.name" placeholder="Ej: Marta" />
-          </label>
-          <label>
-            Email
-            <input v-model="userDraft.email" type="email" placeholder="persona@email.com" />
-          </label>
-          <label>
-            Password temporal
-            <input v-model="userDraft.password" type="password" placeholder="Minimo 6 caracteres" />
-          </label>
-          <label>
-            Descripcion
-            <textarea v-model="userDraft.description" rows="3" placeholder="Rol o presentacion"></textarea>
-          </label>
-          <label>
-            Icono (URL)
-            <input v-model="userDraft.imageUrl" placeholder="https://..." />
-          </label>
-          <label>
-            Rol
-            <select v-model="userDraft.role">
-              <option value="user">Usuario</option>
-              <option value="publisher">Publicador</option>
-              <option value="admin">Admin</option>
-            </select>
-          </label>
-
-          <label class="quick-create-check">
-            <input v-model="userDraft.canChat" type="checkbox" />
-            Permitir chat
-          </label>
-
-          <button
-            class="quick-create-submit"
-            type="button"
-            :disabled="saving || !userDraft.name.trim() || !userDraft.email.trim() || !userDraft.password"
-            @click="emit('save-user')"
-          >
-            {{ saving ? 'Guardando...' : 'Crear usuario' }}
-          </button>
-
-          <Transition name="fade">
-            <div v-if="saving" class="quick-loading-cover">
-              <GalaxyLoader compact title="Creando usuario" text="Preparando el perfil antes de cerrar..." />
-            </div>
-          </Transition>
-        </section>
-      </div>
-    </Transition>
-  </Teleport>
 </template>
 
 <style scoped>

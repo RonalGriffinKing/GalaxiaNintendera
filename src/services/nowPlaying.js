@@ -1,9 +1,23 @@
 import { GAMER_PLATFORMS } from './gamerIdentity'
 import { eventGameNames } from './eventGame'
+import { NOW_PLAYING_VISUAL_DEFAULTS, nowPlayingVisualSettings } from './nowPlayingAppearance'
 
 export const NOW_PLAYING_LABELS = Object.freeze(['Hoy jugamos', 'Hoy reaccionamos', 'Hoy vemos'])
 
-export const NOW_PLAYING_DEFAULTS = Object.freeze({ label: 'Hoy jugamos', source:'auto', eventId:'', eventShowDescription:true,eventShowStart:true,eventTimeZone:'Europe/Madrid', platform: 'auto', width: 520, height: 172, visibleSeconds: 12, repeatSeconds: 180, direction: 'left', showLastGame: false, theme: 'galaxy', labelSize: 12, titleSize: 20, platformSize: 11, statsSize: 12, coverWidth: 88, coverPositionX: 50, coverPositionY: 50, coverZoom: 100, coverFit: 'cover', particles: true, xboxPlatform: 'Xbox', nintendoPlatform: 'auto', enabled: true, refreshMode: 'manual' })
+export function nowPlayingPalette(game = {}, theme = 'galaxy') {
+ const title = String(game?.title || '').toLowerCase()
+ let palette
+ if (/zelda|hyrule|ocarina|tears of the kingdom|breath of the wild/.test(title)) palette = ['#f5ce69','#173c2d','#fff0bb']
+ else if (/kirby/.test(title)) palette = ['#ffb0dd','#482540','#fff0f8']
+ else if (/mario|yoshi|donkey kong/.test(title)) palette = ['#ffd777','#66342a','#fff0d1']
+ else if (/pok[eé]mon/.test(title)) palette = ['#ffe17d','#293b60','#fff4c7']
+ else if (/animal crossing/.test(title)) palette = ['#a9e6bc','#1b483e','#e0ffe9']
+ else if (/metroid/.test(title)) palette = ['#9fe5ed','#1c3941','#e0fbff']
+ else palette = theme === 'zelda' ? ['#f5ce69','#173c2d','#fff0bb'] : theme === 'halloween' ? ['#ffc080','#4d2938','#fff1db'] : theme === 'minimal' ? ['#cbd5e1','#1e293b','#f8fafc'] : ['#cfb2ff','#31234b','#f1e7ff']
+ return { '--game-accent':palette[0], '--game-pill':palette[1], '--game-ink':palette[2] }
+}
+
+export const NOW_PLAYING_DEFAULTS = Object.freeze({ ...NOW_PLAYING_VISUAL_DEFAULTS, label: 'Hoy jugamos', source:'auto', eventId:'', eventShowDescription:true,eventShowStart:true,eventTimeZone:'Europe/Madrid', platform: 'auto', width: 520, height: 172, visibleSeconds: 12, repeatSeconds: 180, direction: 'left', showLastGame: false, theme: 'galaxy', imageMode: 'cover', labelSize: 12, titleSize: 20, platformSize: 11, statsSize: 12, coverWidth: 88, coverPositionX: 50, coverPositionY: 50, coverZoom: 100, coverFit: 'cover', particles: true, xboxPlatform: 'Xbox', nintendoPlatform: 'auto', enabled: true, refreshMode: 'manual' })
 const bounded = (value, fallback, min, max) => Number.isFinite(Number(value)) ? Math.min(max, Math.max(min, Number(value))) : fallback
 export function nowPlayingSettings(data = {}) {
   const label = NOW_PLAYING_LABELS.includes(data.label) ? data.label : NOW_PLAYING_LABELS[0]
@@ -17,10 +31,11 @@ export function nowPlayingSettings(data = {}) {
   const coverWidth = Math.min(bounded(data.coverWidth, 88, 60, 120), Math.floor(width * .23))
   const coverPositionX = bounded(data.coverPositionX, 50, 0, 100), coverPositionY = bounded(data.coverPositionY, 50, 0, 100), coverZoom = bounded(data.coverZoom, 100, 100, 250)
   const coverFit = data.coverFit === 'contain' ? 'contain' : 'cover'
+  const imageMode = data.imageMode === 'background' ? 'background' : 'cover'
   const coverHeight = coverWidth * 1.5 + 56 + Math.max(0,labelSize-12)*1.2
   const textHeight = 172 + Math.max(0,titleSize-20)*2.4 + Math.max(0,platformSize-11)*1.4 + Math.max(0,statsSize-12)*2.8 + Math.max(0,labelSize-12)*1.3
   const eventTextHeight=source==='event'?80+titleSize*2.4+(eventShowDescription?statsSize*2.8:0)+(eventShowStart?statsSize*2.8:0)+Math.max(0,labelSize-12)*1.3:0
-  return { label, eventShowDescription,eventShowStart,eventTimeZone,source, eventId, enabled: data.enabled !== false, refreshMode: data.refreshMode === 'auto' ? 'auto' : 'manual', nintendoPlatform: ['auto', 'Nintendo Switch', 'Nintendo Switch 2'].includes(data.nintendoPlatform) ? data.nintendoPlatform : 'auto', coverPositionX, coverPositionY, coverZoom, coverFit, xboxPlatform: ['Xbox', 'Xbox Series', 'Xbox One', 'PC'].includes(data.xboxPlatform) ? data.xboxPlatform : 'Xbox', coverWidth, particles: data.particles !== false, labelSize, titleSize, platformSize, statsSize, platform: ['auto', 'nintendo', 'xbox'].includes(data.platform) ? data.platform : 'auto', width, height: Math.max(Math.ceil(coverHeight), Math.ceil(textHeight),Math.ceil(eventTextHeight), bounded(data.height, 172, 172, 360)), visibleSeconds, repeatSeconds: bounded(data.repeatSeconds, 180, visibleSeconds + 5, 1800), direction: data.direction === 'right' ? 'right' : 'left', showLastGame: data.showLastGame === true, theme: ['galaxy', 'minimal', 'halloween', 'zelda'].includes(data.theme) ? data.theme : 'galaxy' }
+  return { ...nowPlayingVisualSettings(data), label, eventShowDescription,eventShowStart,eventTimeZone,source, eventId, enabled: data.enabled !== false, refreshMode: data.refreshMode === 'auto' ? 'auto' : 'manual', nintendoPlatform: ['auto', 'Nintendo Switch', 'Nintendo Switch 2'].includes(data.nintendoPlatform) ? data.nintendoPlatform : 'auto', coverPositionX, coverPositionY, coverZoom, coverFit, imageMode, xboxPlatform: ['Xbox', 'Xbox Series', 'Xbox One', 'PC'].includes(data.xboxPlatform) ? data.xboxPlatform : 'Xbox', coverWidth, particles: data.particles !== false, labelSize, titleSize, platformSize, statsSize, platform: ['auto', 'nintendo', 'xbox'].includes(data.platform) ? data.platform : 'auto', width, height: Math.max(Math.ceil(coverHeight), Math.ceil(textHeight),Math.ceil(eventTextHeight), bounded(data.height, 172, 172, 360)), visibleSeconds, repeatSeconds: bounded(data.repeatSeconds, 180, visibleSeconds + 5, 1800), direction: data.direction === 'right' ? 'right' : 'left', showLastGame: data.showLastGame === true, theme: ['galaxy', 'minimal', 'halloween', 'zelda'].includes(data.theme) ? data.theme : 'galaxy' }
 }
 export function nowPlayingCard(identities, settings) {
   if(settings.source==='event')return null
@@ -47,6 +62,49 @@ export function eventNowPlayingCard(event, eventId) {
  const image=event.backgroundUrl||event.imageUrl||''
  const imageUrl=typeof image==='string'&&(/^https:\/\//i.test(image)||/^\/(?!\/)/.test(image))?image:''
  return {eventDescription:typeof event.description==='string'?event.description.replace(/\s+/g,' ').trim().slice(0,300):'',eventStartsAt:eventTimestamp(event.startsAt),game:{id:'event:'+eventId,title,imageUrl},platform:'event',platformLabel:'',playing:false,stats:[],at:Number(event.updatedAt)||0}
+}
+
+// Upcoming/in-progress events keep their date; expired events become evergreen cards.
+export function selectNowPlayingEvents(events = [], selectedId = '', now = Date.now()) {
+ const usable = events.filter(event => eventNowPlayingCard(event, event.id))
+ const start = event => eventTimestamp(event.startsAt)
+ const ongoing = event => {
+  const at = start(event)
+  const minutes = Number(event.durationMinutes)
+  return at !== null && at + (Number.isFinite(minutes) && minutes > 0 ? minutes : 60) * 60000 > now
+ }
+ const active = usable.filter(ongoing).sort((a,b) => {
+  const aLive = start(a) <= now, bLive = start(b) <= now
+  return Number(bLive) - Number(aLive) || (aLive ? start(b)-start(a) : start(a)-start(b))
+ })
+ const selected = active.find(event => event.id === selectedId)
+ const latest = usable.filter(event => !ongoing(event)).sort((a,b) =>
+  (start(b) || eventTimestamp(b.updatedAt) || 0) - (start(a) || eventTimestamp(a.updatedAt) || 0)
+ )[0] || null
+ return { active: selected || active[0] || null, latest }
+}
+
+export function overlayNowPlayingCard(events, identities, settings, now = Date.now()) {
+ if (settings.source !== 'event') return nowPlayingCard(identities, settings)
+ const { active, latest } = selectNowPlayingEvents(events, settings.eventId, now)
+ if (active) return { ...eventNowPlayingCard(active, active.id), contentSource: 'event', coverSource: 'event' }
+ const live = nowPlayingCard(identities, { ...settings, source: 'auto', showLastGame: false })
+ if (live) {
+  const matching = events.filter(event => eventMatchesPlayingGame(event, live.game))
+   .sort((a,b) => Number(b.id === settings.eventId) - Number(a.id === settings.eventId) || (eventTimestamp(b.startsAt) || 0) - (eventTimestamp(a.startsAt) || 0))
+   .map(event => eventNowPlayingCard(event,event.id)).find(card => card?.game.imageUrl)
+  return { ...live, game: matching ? { ...live.game, imageUrl: matching.game.imageUrl } : live.game, contentSource: 'console', coverSource: matching ? 'event' : 'console' }
+ }
+ if (!latest) return null
+ return { ...eventNowPlayingCard(latest, latest.id), eventStartsAt: null, contentSource: 'previous-event', coverSource: 'event' }
+}
+
+export function eventMatchesPlayingGame(event, game) {
+ const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .toLowerCase().replace(/[™®]/g,'').replace(/\b(remake|remastered|remaster|hd)\s*$/,'').replace(/[^a-z0-9]/g,'')
+ const title = normalize(game?.title)
+ const names = eventGameNames(event)
+ return Boolean(title) && [names.nameEs,names.nameEn].some(name => normalize(name) === title)
 }
 
 function eventTimestamp(value){

@@ -3,7 +3,7 @@
     v-if="component"
     :is="component"
     :widget="widget"
-    v-bind="widget.type === 'nowPlaying' ? { persist } : {}"
+    v-bind="widget.type === 'nowPlaying' ? { persist, sourceStatus } : {}"
   />
 </template>
 
@@ -18,7 +18,8 @@ import CameraFrameEditor from '@/components/widgets/editors/CameraFrameEditor.vu
 
 const props = defineProps({
   widget: Object,
-  persist: Function
+  persist: Function,
+  sourceStatus: Object
 })
 
 const map = {

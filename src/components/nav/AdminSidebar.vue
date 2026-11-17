@@ -256,7 +256,8 @@ const navItems = [
   { view: 'community', label: 'Comunidades', icon: '💬' },
   { view: 'overlays', label: 'Overlays', icon: '📺', adminOnly: true },
   { view: 'posts', label: 'Posts', icon: '📝', publisherOnly: true },
-  { view: 'users', label: 'Usuarios', icon: '👤', adminOnly: true }
+  { view: 'users', label: 'Usuarios', icon: '👤', adminOnly: true },
+  ...(import.meta.env.VITE_IMAGE_MONITOR_ADMIN_BUILD === true ? [{ view: 'image-monitor', label: 'Monitor de imágenes', icon: '🖼️', adminOnly: true }] : [])
 ]
 
 const displayName = computed(() => auth.currentUser?.displayName || auth.currentUser?.email || 'Admin')
@@ -271,6 +272,11 @@ const visibleNavItems = computed(() => navItems.filter(item => {
 const isMobile = () => window.matchMedia('(max-width: 760px)').matches
 
 const change = (view) => {
+  if (view === 'image-monitor') {
+    router.push('/admin/image-monitor')
+    if (isMobile()) emit('close-mobile')
+    return
+  }
   active.value = view
   emit('change', view)
 

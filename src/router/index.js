@@ -3,13 +3,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { managementDestination } from '@/services/managementNavigation'
 import Home from '@/pages/Home2Page.vue'
 import PublicLayout from '@/components/shared/PublicLayout.vue'
-import Editor from '@/pages/OverlayEditorPage.vue'
 import OverlayView from '@/pages/OverlayViewPage.vue'
-import Login from '@/pages/LoginPage.vue'
-import Dashboard from '@/pages/DashboardPage.vue'
 import { auth, db } from '@/firebase'
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
+
+const isStudioBuild = import.meta.env.VITE_GALAXIA_STUDIO_BUILD === true
 
 const routes = [
   {
@@ -17,18 +16,17 @@ const routes = [
     name: 'ruzafa-vacations',
     component: () => import('@/pages/RuzafaVacationsPage.vue')
   },
-  {
+  ...(isStudioBuild ? [{
     path: '/admin/posts/new',
     name: 'post-create',
     component: () => import('@/pages/PostEditorPage.vue'),
     meta: { publisherOnly: true, workspace: true }
-  },
-  {
+  }, {
     path: '/admin/posts/:id/edit',
     name: 'post-edit',
     component: () => import('@/pages/PostEditorPage.vue'),
     meta: { publisherOnly: true, workspace: true }
-  },
+  }] : []),
   {
     path: '/ruzafa-impresora',
     name: 'ruzafa-printer',
@@ -112,58 +110,62 @@ const routes = [
         component: () => import('@/pages/WorkspacePage.vue'),
         props: { panel: 'favorites' }
       },
-      {
+      ...(isStudioBuild ? [{
         path: 'admin',
         redirect: '/admin/dashboard',
         meta: { publisherOnly: true, workspace: true }
-      },
-      {
+      }, {
         path: 'admin/dashboard',
-        component: Dashboard,
+        component: () => import('@/pages/DashboardPage.vue'),
         meta: { publisherOnly: true, workspace: true }
-      },
-      {
+      }, {
+        path: 'admin/image-monitor',
+        name: 'image-monitor',
+        component: () => import('@/pages/ImageMonitorPage.vue'),
+        meta: { adminOnly: true }
+      }, {
         path: 'admin/posts',
         redirect: to => managementDestination('posts', to.query),
         meta: { publisherOnly: true, workspace: true }
-      },
-      {
+      }, {
         path: 'admin/event-share/:id',
         component: () => import('@/pages/EventSharePage.vue'),
         meta: { publisherOnly: true }
-      },
-      {
+      }, {
         path: 'admin/post-share/:id',
         component: () => import('@/pages/PostSharePage.vue'),
         meta: { publisherOnly: true }
-      },
-      {
+      }, {
         path: 'admin/users',
         redirect: to => managementDestination('users', to.query),
         meta: { adminOnly: true, workspace: true }
-      },
-      {
+      }, {
         path: 'admin/recompensas',
         redirect: to => managementDestination('rewards', to.query),
         meta: { adminOnly: true, workspace: true }
-      },
-      {
+      }, {
         path: 'admin/eventos',
         redirect: to => managementDestination('events', to.query),
         meta: { adminOnly: true, workspace: true }
-      },
-      {
+      }, {
         path: 'admin/overlays',
         redirect: to => managementDestination('overlays', to.query),
         meta: { adminOnly: true, workspace: true }
-      }
+      }] : [])
     ]
   },
 
-  { path: '/dashboard', redirect: '/admin/dashboard', meta: { publisherOnly: true } },
-  { path: '/editor', component: Editor, meta: { adminOnly: true } },
+  ...(isStudioBuild ? [
+    { path: '/dashboard', redirect: '/admin/dashboard', meta: { publisherOnly: true } },
+    { path: '/editor', component: () => import('@/pages/OverlayEditorPage.vue'), meta: { adminOnly: true } }
+  ] : [
+    { path: '/admin/:pathMatch(.*)*', redirect: '/' },
+    { path: '/dashboard', redirect: '/' },
+    { path: '/editor', redirect: '/' }
+  ]),
   { path: '/overlay/:id', component: OverlayView },
-  { path: '/login', component: Login },
+  { path: '/login', component: isStudioBuild ? () => import('@/pages/StudioLoginPage.vue') : () => import('@/pages/LoginPage.vue') },
+  { path: '/:pathMatch(.*)*', redirect: isStudioBuild ? '/admin/dashboard' : '/' }
 ]
 
 const router = createRouter({
@@ -190,7 +192,7 @@ const router = createRouter({
   }
 })
 
-const publicRoutes = ['/', '/login']
+const publicRoutes = isStudioBuild ? ['/login'] : ['/', '/login']
 const publicPrefixes = ['/ruzafa-impresora', '/home2', '/overlay', '/post', '/p', '/politica-privacidad', '/terminos-condiciones', '/normas-comunidad', '/politica-cookies', '/contacto-reportes', '/aviso-legal', '/perfil', '/categoria', '/noticias', '/buscar', '/rumores', '/guias', '/comunidad', '/eventos']
 let authReady = false
 let authUser = null
@@ -216,9 +218,11 @@ const getAuthUser = async () => {
 }
 
 router.beforeEach(async (to) => {
+  if (isStudioBuild && to.path === '/') return '/admin/dashboard'
+
   if (to.path === '/login') {
     const user = await getAuthUser()
-    return user ? '/admin/dashboard' : true
+    return user ? (isStudioBuild ? '/admin/dashboard' : '/') : true
   }
 
   if (
@@ -236,7 +240,8 @@ router.beforeEach(async (to) => {
 
   if (to.meta.adminOnly) {
     const snap = await getDoc(doc(db, 'users', user.uid))
-    const role = snap.data()?.role || 'user'
+    const profile = snap.data() || {}
+    const role = profile.isBlocked ? 'user' : (profile.role || 'user')
 
     if (role !== 'admin') {
       return '/'

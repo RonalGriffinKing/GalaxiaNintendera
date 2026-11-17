@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:node:roles": "node --test netlify/functions/lib/role-management.test.mjs",
+    "test:node:image-monitor": "node --test netlify/functions/lib/image-monitor-model.test.mjs netlify/functions/lib/image-monitor.test.mjs",
+    "test:firestore:emulator": "firebase emulators:exec --project demo-galaxia-security --config security/firestore/firebase.emulator.candidate.json \"node security/firestore/rules.candidate.emulator.mjs\""
   },
   "dependencies": {
     "@netlify/blobs": "^11.1.5",
@@ -26,11 +30,14 @@
     "@storybook/vue3-vite": "^10.4.0",
     "@tailwindcss/postcss": "^4.2.4",
     "@vitejs/plugin-vue": "^6.0.6",
-    "@vitest/coverage-v8": "^4.1.6",
+    "@vitest/coverage-v8": "^4.1.12",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.10",
     "tailwindcss": "^4.2.4",
     "vite": "^8.0.10",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.5"
   }
 }

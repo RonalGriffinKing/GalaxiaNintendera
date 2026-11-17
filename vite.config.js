@@ -1,4 +1,5 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vitest/config'
+import { loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 import { handler as xboxProfileHandler } from './netlify/functions/xbox-profile.js'
@@ -7,6 +8,7 @@ import { handler as igdbHandler } from './netlify/functions/igdb.js'
 import { handler as imageProxyHandler } from './netlify/functions/image-proxy.js'
 import { handler as youtubeFeedHandler } from './netlify/functions/youtube-feed.js'
 import { handler as progressHandler } from './netlify/functions/profile-progress.js'
+import { handler as imageMonitorHandler } from './netlify/functions/image-monitor.js'
 import { createVacationHandler } from './netlify/functions/vacations.js'
 import { createVacationDevStore } from './scripts/vacation-dev-store.mjs'
 
@@ -56,6 +58,16 @@ const netlifyFunctionsDev = () => ({
 
     server.middlewares.use('/.netlify/functions/profile-progress', async (req,res) => {
       try { await runFunction(progressHandler,req,res) } catch { res.statusCode=503; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({error:'progress-not-configured'})) }
+    })
+
+    server.middlewares.use('/.netlify/functions/image-monitor', async (req, res) => {
+      try { await runFunction(imageMonitorHandler, req, res) }
+      catch (error) {
+        server.config.logger.error(error)
+        res.statusCode = 500
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'image-monitor-unavailable' }))
+      }
     })
 
     server.middlewares.use('/.netlify/functions/vacations', async (req, res) => {
@@ -141,7 +153,20 @@ export default defineConfig(({ command, mode }) => {
     if (OPENXBL_API_KEY) process.env.OPENXBL_API_KEY = OPENXBL_API_KEY
   }
   return {
-    define: firebaseDefines,
+    define: {
+      ...firebaseDefines,
+      'import.meta.env.VITE_GALAXIA_STUDIO_BUILD': JSON.stringify(false)
+    },
+    test: {
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/.restore-backups/**',
+        'netlify/functions/lib/role-management.test.mjs',
+        'netlify/functions/lib/image-monitor*.test.mjs',
+        '**/security/firestore/**/*.mjs'
+      ]
+    },
     optimizeDeps: { include: ['mediabunny'] },
     plugins: [
       netlifyFunctionsDev(),
@@ -150,7 +175,7 @@ export default defineConfig(({ command, mode }) => {
 
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src')
+        '@': path.resolve(import.meta.dirname, './src')
       }
     }
   }

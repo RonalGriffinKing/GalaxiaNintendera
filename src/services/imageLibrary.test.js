@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 vi.mock('@/firebase',()=>({auth:{currentUser:{uid:'admin'}},db:{}}))
 vi.mock('firebase/firestore',()=>({collection:vi.fn((_,name)=>name),getDocs:vi.fn(),limit:vi.fn(n=>({limit:n})),orderBy:vi.fn((...v)=>({orderBy:v})),query:vi.fn((...v)=>v),startAfter:vi.fn(v=>({after:v.id}))}))
-import {extractPostImages,loadWebImageLibrary,searchIgdbMedia} from './imageLibrary'
+import {extractPostImages,loadWebImageLibrary,searchIgdbMedia,imageSearchPreview} from './imageLibrary'
 import {getDocs} from 'firebase/firestore'
 import {auth} from '@/firebase'
 import {parseEventJson,eventCreatePayload,parseEventsJson} from './eventJson'
@@ -35,5 +35,15 @@ describe('image library',()=>{
  it('reuses IGDB results without another API request',async()=>{
   const fetchMock=vi.fn().mockResolvedValue({ok:true,json:async()=>({images:[{id:'a',url:'https://img.test/a.png'}],games:[]})});vi.stubGlobal('fetch',fetchMock)
   await searchIgdbMedia('Unique test game');await searchIgdbMedia('Unique test game');expect(fetchMock).toHaveBeenCalledTimes(1);vi.unstubAllGlobals()
+ })
+ it('builds public proxy image URLs through the configured backend origin',()=>{
+  vi.stubEnv('VITE_BACKEND_ORIGIN','https://backend.example.test')
+  vi.stubGlobal('location',{origin:'http://localhost:5173'})
+  const source='https://images.example.test/a.png?size=large&theme=2'
+  const result=new URL(imageSearchPreview(source))
+  expect(result.origin).toBe('https://backend.example.test')
+  expect(result.pathname).toBe('/.netlify/functions/image-proxy')
+  expect(result.searchParams.get('url')).toBe(source)
+  vi.unstubAllEnvs()
  })
 })

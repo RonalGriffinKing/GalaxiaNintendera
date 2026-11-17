@@ -95,7 +95,7 @@
               x
             </button>
 
-            <div :ref="el=>observeWidget(widget,el)" class="widget-artwork" :style="{transform:'scale('+widgetScale(widget)+')'}"><WidgetRenderer :widget="widget" :owner-id="auth.currentUser?.uid" preview /></div>
+            <div :ref="el=>observeWidget(widget,el)" class="widget-artwork" :style="{transform:'scale('+widgetScale(widget)+')'}"><WidgetRenderer :widget="widget" :owner-id="auth.currentUser?.uid" preview @source-status="nowPlayingStatus[widget.id]=$event" /></div>
             <template v-if="selected?.id===widget.id"><button v-for="corner in ['nw','ne','sw','se']" :key="corner" :class="['resize-handle',corner]" :aria-label="'Cambiar tamaño '+corner" @pointerdown.stop="beginGesture(widget,$event,corner)" @click.stop></button><span class="widget-size">{{ Math.round(widgetSize(widget).width) }} × {{ Math.round(widgetSize(widget).height) }} px</span></template>
           </div>
           <div v-for="guide in guides" :key="guide.axis" :class="['alignment-guide',guide.axis]" :style="guide.axis==='x'?{left:guide.value+'px'}:{top:guide.value+'px'}"></div>
@@ -119,7 +119,7 @@
             <button @click="alignAxis('vertical')"><i class="fas fa-arrows-up-down-to-line"></i> Centrar vertical</button>
           </div>
         </div>
-        <WidgetEditor :widget="selected" :persist="saveOverlay" />
+        <WidgetEditor :widget="selected" :persist="saveOverlay" :source-status="nowPlayingStatus[selected.id]" />
       </div>
 
       <div v-else class="text-gray-400 text-sm">
@@ -141,6 +141,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+const nowPlayingStatus = ref({})
 import { useRoute } from 'vue-router'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'

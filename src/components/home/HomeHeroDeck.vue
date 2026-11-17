@@ -2,6 +2,8 @@
 import {computed,onMounted,onUnmounted,ref} from 'vue'
 import {useRouter} from 'vue-router'
 import {featuredTeaserStyle} from '@/services/featuredTeaser'
+import {useVisualThemes} from '@/composables/useVisualThemes'
+import {postWebThemeCss} from '@/services/visualThemes'
 import {normalizeHomeHero} from '@/services/homeHero'
 import {defaultBannerUrl,resolveAssetUrl} from '@/constants/assets'
 import {titleRuns} from '@/services/socialContent'
@@ -14,10 +16,12 @@ const router=useRouter()
 let removeNavigationError,removeNavigationEnd
 let openTimer,motion,startTouch,lastSwipe=0
 const isAnalysis=slide=>[slide.post?.category,...(slide.post?.categories||[])].some(v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes('analisis'))
+const {theme,enabled}=useVisualThemes(()=>props.slides[props.activeIndex]?.post||props.slides[0]?.post||{})
 const card=computed(()=>{
  const slide=props.slides[props.activeIndex]||props.slides[0]
  if(!slide)return null
- return {slide,theme:featuredTeaserStyle(isAnalysis(slide)),hero:normalizeHomeHero(slide.post?.hero)}
+ const palette={...featuredTeaserStyle(isAnalysis(slide)),...(!isAnalysis(slide)&&enabled.value.web?postWebThemeCss(slide.post,theme.value):{})}
+ return {slide,theme:palette,hero:normalizeHomeHero(slide.post?.hero)}
 })
 function select(index){if(!opening.value)emit('select',index)}
 function step(delta){if(props.slides.length>1)select((props.activeIndex+delta+props.slides.length)%props.slides.length)}
@@ -106,3 +110,4 @@ onUnmounted(()=>{clearTimeout(openTimer);removeNavigationError?.();removeNavigat
 <style scoped>
 .hero-deck-card:not(.is-analysis){border-color:transparent;box-shadow:0 0 18px #a742dc45,0 0 28px #28dcff1c}.hero-deck-card:not(.is-analysis) .deck-read{background:linear-gradient(110deg,#ba20d4,#7730ef 50%,#087b99);border:1px solid #d8baff80;color:#fff;box-shadow:0 0 8px #a36fe780,0 0 18px #44d9ff35;text-shadow:0 1px 3px #280d57}.hero-deck-card:not(.is-analysis) .deck-copy mark{background:linear-gradient(100deg,#c2a0ff,#7ceeff 40%,#fff08a 74%,#ffb5e7);background-clip:text;-webkit-background-clip:text;color:transparent}
 </style>
+<style scoped src="./homeFeaturedAurora.css"></style>

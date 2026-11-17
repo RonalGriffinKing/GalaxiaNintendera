@@ -17,6 +17,7 @@ import { tiktokPreset } from '@/services/invitationLayers'
 import { eventGameNames } from '@/services/eventGame'
 import EventInvitationIcon from '@/components/events/EventInvitationIcon.vue'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
+import { backendFunctionUrl } from '@/services/backendClient'
 const imageSearchOpen=ref(false),imageSearchTarget=ref('image'),imageSearchEvent=ref('')
 let returnToInspector=false
 const selectedElement=ref(''),isMobile=ref(window.innerWidth<=760),viewportHeight=ref(window.innerHeight),previewTop=ref(420),mobileInspectorOpen=ref(false),mobileSheet=ref(null)
@@ -74,7 +75,7 @@ function applyStyleToAll(){
 function imageUrl(source){
  if(!source)return ''
  if(/^(data:|blob:|\/)/.test(source))return source
- try{const url=new URL(source,location.origin);if(url.origin===location.origin)return source;return '/.netlify/functions/image-proxy?url='+encodeURIComponent(source)}catch{return ''}
+ try{const url=new URL(source,location.origin);if(url.origin===location.origin)return source;return backendFunctionUrl('image-proxy',{url:source})}catch{return ''}
 }
 function renderedOptions(event){const value=options.value[event.id];return {...value,logo:imageUrl(value.logo)}}
 async function upload(event,key){

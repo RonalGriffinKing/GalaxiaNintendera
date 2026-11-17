@@ -168,14 +168,6 @@
             <input v-model="form.imageUrl" placeholder="https://..." />
           </label>
 
-          <label class="field">
-            Rol
-            <select v-model="form.role">
-              <option value="user">Usuario</option>
-              <option value="publisher">Publicador</option>
-              <option value="admin">Admin</option>
-            </select>
-          </label>
 
           <label class="chat-toggle">
             <input v-model="form.canChat" type="checkbox" />
@@ -398,26 +390,6 @@ const loadUsers = async () => {
 
     const currentSnap = await getDoc(doc(db, 'users', user.uid))
 
-    if (!currentSnap.exists() && users.value.length === 0) {
-      currentRole.value = 'admin'
-      await setDoc(doc(db, 'users', user.uid), {
-        name: user.displayName || 'Admin',
-        email: user.email || '',
-        description: 'admin',
-        imageUrl: user.photoURL || '',
-        role: 'admin',
-        canChat: true,
-        adminCreated: true,
-        emailVerified: true,
-        emailVerificationRequired: false,
-        emailOptIn: true,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      }, { merge: true })
-      await loadUsers()
-      return
-    }
-
     const currentProfile = currentSnap.data() || {}
     currentRole.value = currentProfile.isBlocked ? 'user' : (currentProfile.role || 'user')
   } catch (error) {
@@ -554,14 +526,6 @@ const userPayload = (source) => ({
   name: source.name.trim(),
   description: source.description.trim(),
   imageUrl: source.imageUrl.trim(),
-  role: source.role,
-  canChat: !source.isBlocked && (['admin', 'publisher'].includes(source.role) || Boolean(source.canChat)),
-  emailVerified: Boolean(source.emailVerified),
-  emailVerificationRequired: !source.emailVerified,
-  isBlocked: Boolean(source.isBlocked),
-  blockReason: source.isBlocked ? source.blockReason.trim() : '',
-  blockedAt: source.isBlocked ? Date.now() : null,
-  emailOptIn: true,
   updatedAt: Date.now()
 })
 

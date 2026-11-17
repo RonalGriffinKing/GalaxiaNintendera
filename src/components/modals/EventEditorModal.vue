@@ -7,6 +7,7 @@ import { computed, ref, watch } from 'vue'
 import { addDoc, collection, doc, updateDoc } from 'firebase/firestore'
 import { auth, db } from '@/firebase'
 import { resolveAssetUrl } from '@/constants/assets'
+import { changedEventImageFields, imageMonitorEnabled, syncEventImageReferences } from '@/services/imageMonitorClient'
 
 const props = defineProps({
   reactivating: Boolean,
@@ -37,6 +38,8 @@ const emptyForm = () => ({
 const form = ref(emptyForm())
 const isSaving = ref(false)
 const saveError = ref('')
+const monitorPending = ref(null)
+const monitorRetrying = ref(false)
 const imagePickerOpen=ref(false)
 function selectGameImage(image){Object.assign(form.value,eventImageSelection(form.value,image));imagePickerOpen.value=false}
 const showAllCommunities = ref(false)
@@ -102,16 +105,30 @@ const saveEvent = async () => {
     communityName: selectedCommunities[0]?.name || '',
     updatedAt: now
   }
+  const monitorFields = imageMonitorEnabled() ? changedEventImageFields(payload, props.event) : []
+  const operationId = globalThis.crypto?.randomUUID?.().replace(/-/g, '') || `op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
 
   try {
+    let ownerId = props.event?.id || ''
     if (isEditing.value) {
       await updateDoc(doc(db, 'galaxyEvents', props.event.id), payload)
     } else {
-      await addDoc(collection(db, 'galaxyEvents'), {
+      const created = await addDoc(collection(db, 'galaxyEvents'), {
         ...payload,
         createdAt: now,
         createdBy: auth.currentUser?.uid || ''
       })
+      ownerId = created.id
+    }
+    if (monitorFields.length) {
+      monitorPending.value = { ownerId, operationId, expectedUpdatedAt: now, fields: monitorFields }
+      try {
+        await syncEventImageReferences(monitorPending.value)
+        monitorPending.value = null
+      } catch {
+        saveError.value = 'El evento se guardó; falta sincronizar el registro de imágenes. Puedes reintentar.'
+        return
+      }
     }
     emit('saved')
     emit('close')
@@ -119,6 +136,21 @@ const saveEvent = async () => {
     saveError.value = 'No se pudo guardar el evento en el servidor. Vuelve a intentarlo.'
   } finally {
     isSaving.value = false
+  }
+}
+
+const retryImageMonitor = async () => {
+  if (!monitorPending.value || monitorRetrying.value) return
+  monitorRetrying.value = true
+  try {
+    await syncEventImageReferences(monitorPending.value)
+    monitorPending.value = null
+    emit('saved')
+    emit('close')
+  } catch {
+    saveError.value = 'El evento sigue guardado y la sincronización continúa pendiente.'
+  } finally {
+    monitorRetrying.value = false
   }
 }
 </script>
@@ -140,6 +172,7 @@ const saveEvent = async () => {
           <button v-if="!isEditing" type="button" class="event-image-search" @click="emit('history')"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Ver eventos anteriores</button>
           <p v-if="reactivating">Elige una nueva fecha y hora. Se actualizará este mismo evento conservando su configuración.</p>
           <p v-if="saveError" role="alert">{{ saveError }}</p>
+          <button v-if="monitorPending" type="button" :disabled="monitorRetrying" @click="retryImageMonitor">{{ monitorRetrying ? 'Reintentando…' : 'Reintentar sincronización de imágenes' }}</button>
 
           <EventJsonImport :communities="communities" @apply="values => Object.assign(form, values)" />
           <form @submit.prevent="saveEvent">

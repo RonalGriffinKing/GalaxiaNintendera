@@ -1,8 +1,70 @@
 import { describe, it, expect } from 'vitest'
-import { nowPlayingCard, nowPlayingSettings, eventNowPlayingCard, eventStartInfo } from './nowPlaying'
+import { nowPlayingCard, nowPlayingSettings, eventNowPlayingCard, eventStartInfo, overlayNowPlayingCard, selectNowPlayingEvents } from './nowPlaying'
 const game = { id: '1', title: 'Juego de prueba' }
 const identity = (platform, presence, extra = {}) => ({ platform, connectionState: 'connected', visibility: 'public', presence, ...extra })
+
+describe('event overlay fallback', () => {
+ const now = Date.parse('2026-11-13T19:00:00Z')
+ const old = { id:'old', game:{nameEs:'Juego anterior'}, description:'Una aventura', startsAt:now-86400000, durationMinutes:60 }
+ const older = {...old,id:'older',startsAt:now-172800000}
+ const current = {...old,id:'current',startsAt:now-1800000}
+ const future = {...old,id:'future',startsAt:now+86400000}
+ const settings = nowPlayingSettings({source:'event',eventId:'old'})
+ const live = identity('nintendo',{state:'online',currentGame:game})
+ it('uses an ongoing event or the nearest upcoming event and retains its date', () => {
+  expect(overlayNowPlayingCard([old,current,future],[live],settings,now).game.id).toBe('event:current')
+  expect(overlayNowPlayingCard([old,future],[],settings,now).eventStartsAt).toBe(future.startsAt)
+ })
+ it('uses the detected Switch game when events have expired, without event details', () => {
+  const card = overlayNowPlayingCard([old],[live],settings,now)
+  expect(card.game).toEqual(game)
+  expect(card.eventDescription).toBeUndefined()
+  expect(card.eventStartsAt).toBeUndefined()
+ })
+ it('reuses the latest past event without a date when there is no live game', () => {
+  const card = overlayNowPlayingCard([older,old],[],settings,now)
+  expect(card.game.title).toBe('Juego anterior')
+  expect(card.eventDescription).toBe('Una aventura')
+  expect(card.eventStartsAt).toBeNull()
+  expect(old.startsAt).toBe(now-86400000)
+ })
+ it('detects expiry at the end of the duration without reloading event data', () => {
+  const end = current.startsAt+3600000
+  expect(overlayNowPlayingCard([current],[],settings,end-1).eventStartsAt).toBe(current.startsAt)
+  expect(overlayNowPlayingCard([current],[],settings,end).eventStartsAt).toBeNull()
+ })
+ it('falls back to live play even when there are no usable events', () => {
+  expect(overlayNowPlayingCard([],[live],settings,now).game).toEqual(game)
+  expect(overlayNowPlayingCard([{title:'Sin juego'}],[],settings,now)).toBeNull()
+  expect(overlayNowPlayingCard([old],[{...live,visibility:'private'}],settings,now).game.id).toBe('event:old')
+ })
+ it('keeps the chosen valid event and ignores invalid dates for scheduling', () => {
+  expect(selectNowPlayingEvents([current,future],future.id,now).active.id).toBe(future.id)
+  expect(selectNowPlayingEvents([{...old,startsAt:'bad'}],'',now).active).toBeNull()
+ })
+ it('keeps the event artwork for the same detected game without losing live platform or stats', () => {
+  const event={...old,game:{nameEs:'The Legend of Zelda: Ocarina of Time Remake'},backgroundUrl:'https://example.com/event.jpg'}
+  const nintendo=identity('nintendo',{state:'online',currentGame:{id:'zelda',title:'The Legend of Zelda: Ocarina of Time',imageUrl:'https://example.com/switch.jpg'}})
+  const card=overlayNowPlayingCard([event],[nintendo],settings,now)
+  expect(card.game.imageUrl).toBe(event.backgroundUrl)
+  expect(card.game.id).toBe('zelda')
+  expect(card).toMatchObject({playing:true,platform:'nintendo',contentSource:'console',coverSource:'event'})
+  expect(overlayNowPlayingCard([event],[],settings,now).game.imageUrl).toBe(card.game.imageUrl)
+ })
+ it('never reuses the previous event artwork for a different game', () => {
+  const event={...old,game:{nameEn:'Zelda: Breath of the Wild'},backgroundUrl:'https://example.com/event.jpg'}
+  const playing=identity('nintendo',{state:'online',currentGame:{id:'totk',title:'Zelda: Tears of the Kingdom',imageUrl:'https://example.com/new.jpg'}})
+  expect(overlayNowPlayingCard([event],[playing],settings,now)).toMatchObject({game:{imageUrl:'https://example.com/new.jpg'},coverSource:'console'})
+ })
+})
 describe('OBS now-playing presentation', () => {
+  it('changes image presentation independently of theme and keeps old widgets on lateral covers', () => {
+    expect(nowPlayingSettings().imageMode).toBe('cover')
+    expect(nowPlayingSettings({imageMode:'invalid'}).imageMode).toBe('cover')
+    const value=nowPlayingSettings({theme:'zelda',imageMode:'background',coverZoom:130,coverPositionX:75})
+    expect(value).toMatchObject({theme:'zelda',imageMode:'background',coverZoom:130,coverPositionX:75})
+    expect(nowPlayingSettings({...value,imageMode:'cover'})).toMatchObject({theme:'zelda',imageMode:'cover',coverZoom:130,coverPositionX:75})
+  })
   it('supports activity titles and preserves the legacy default', () => {
     for (const label of ['Hoy jugamos', 'Hoy reaccionamos', 'Hoy vemos']) expect(nowPlayingSettings({ label }).label).toBe(label)
     for (const label of [undefined, null, '', 'invalid', {}]) expect(nowPlayingSettings({ label }).label).toBe('Hoy jugamos')

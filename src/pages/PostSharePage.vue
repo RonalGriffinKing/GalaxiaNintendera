@@ -1,5 +1,6 @@
 <script setup>
 import ContentLoading from "@/components/shared/ContentLoading.vue"
+import { backendFunctionUrl } from '@/services/backendClient'
 import { computed, nextTick, onBeforeUpdate, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getFontEmbedCSS, toPng } from 'html-to-image'
@@ -21,6 +22,7 @@ import { imageDragOffset, imagePanLimits, constrainImagePan } from '@/services/s
 import { useVisualThemes } from '@/composables/useVisualThemes'
 import { pngWithThemeMetadata } from '@/services/visualThemePng'
 import SeasonalThemeDecor from '@/components/posts/SeasonalThemeDecor.vue'
+import SocialThemeBackground from '@/components/posts/SocialThemeBackground.vue'
 import { themeDecoration, DEFAULT_VISUAL_THEME, isLegacyTheme, socialThemeSettings, socialThemeCss, visualThemeExportManifest } from '@/services/visualThemes'
 
 const route = useRoute()
@@ -54,6 +56,46 @@ const exportProgress = ref({ current: 0, total: 0, label: '' })
 const editorViewport = ref({ width: window.innerWidth, height: window.innerHeight })
 const updateEditorViewport = () => { editorViewport.value = { width: window.innerWidth, height: window.innerHeight } }
 const editorOpen = ref(false)
+const studioZoom = ref(1)
+const studioGuides = ref(false)
+const studioPreview = ref(false)
+const studioPanel = ref('')
+const studioOptionsOpen = ref(false)
+const studioOptions = ref(null)
+function openStudioPanel(panel) {
+ studioPanel.value = studioPanel.value === panel ? '' : panel
+ studioOptionsOpen.value = false
+ studioPreview.value = false
+}
+function selectStudioElement(key) {
+ selectedElement.value = key
+ studioPanel.value = 'element'
+ studioPreview.value = false
+}
+function toggleStudioPreview() {
+ studioPreview.value = !studioPreview.value
+ studioPanel.value = ''
+ studioOptionsOpen.value = false
+}
+function dismissStudioOptions(event) {
+ if (!studioOptions.value?.contains(event.target)) studioOptionsOpen.value = false
+}
+function studioKeys(event) {
+ if (!editorOpen.value || event.key !== 'Escape' || animationOpen.value) return
+ if (studioOptionsOpen.value) studioOptionsOpen.value = false
+ else if (studioPanel.value) studioPanel.value = ''
+ else studioPreview.value = false
+}
+watch(editorOpen, () => {
+ studioPanel.value = ''
+ studioOptionsOpen.value = false
+ studioPreview.value = false
+ studioZoom.value = 1
+}, { flush: 'sync' })
+onMounted(() => { document.addEventListener('pointerdown', dismissStudioOptions); document.addEventListener('keydown', studioKeys) })
+onUnmounted(() => { document.removeEventListener('pointerdown', dismissStudioOptions); document.removeEventListener('keydown', studioKeys) })
+function changeStudioZoom(delta) { studioZoom.value = Math.max(.5, Math.min(3, Math.round((studioZoom.value + delta) * 10) / 10)) }
+function fitStudioCanvas() { studioZoom.value = 1 }
 const selectedElement = ref('title')
 const selectionHandle = ref(null)
 const textWidthHandles = ref(null)
@@ -281,10 +323,9 @@ const selectedSlide = computed(() => carouselSlides.value[selectedSlideIndex.val
 const editingScale = computed(() => {
  if (!editorOpen.value) return activeFormat.value.scale
  const mobile = editorViewport.value.width <= 800
- const desktop = editorViewport.value.width >= 1100
- const width = Math.max(200, editorViewport.value.width - (mobile ? 50 : desktop ? 720 : 420))
- const height = Math.max(120, editorViewport.value.height - (mobile ? Math.min(350, editorViewport.value.height * .45) + 200 : 430))
- return Math.min(.5, width / exportSize.value.width, height / exportSize.value.height)
+ const width = Math.max(200, editorViewport.value.width - (mobile ? 32 : studioPanel.value ? 372 : 64))
+ const height = Math.max(120, editorViewport.value.height - (mobile && studioPanel.value ? Math.min(380, editorViewport.value.height * .48) + 178 : 192))
+ return Math.min(1, width / exportSize.value.width, height / exportSize.value.height) * studioZoom.value
 })
 const previewStyle = computed(() => ({
   width: `${exportSize.value.width * editingScale.value}px`,
@@ -405,17 +446,21 @@ function restoreHistory(redo) {
 function resetSingleDesign() { rememberDesign(); const next = { ...slideTemplateOverrides.value }; delete next[selectedSlideIndex.value]; slideTemplateOverrides.value = next }
 function visualElementStyle(index, key) {
  const settings = settingsForSlide(index); const savedLayout = settings['visual_' + key] || {}; const layout=key==='image'?{x:0,y:0}:savedLayout; const typography = settings[key] || {}
- return { translate: ((layout.x || 0) * exportSize.value.width / 100) + 'px ' + ((layout.y || 0) * exportSize.value.height / 100) + 'px', textAlign: typography.align || undefined, width: ['title','description','points'].includes(key) && typography.customWidth ? typography.width + 'px' : undefined, maxWidth: ['title','description','points'].includes(key) && typography.customWidth ? 'none' : undefined, scale: ['button','score'].includes(key) && typography.size ? typography.size / 100 : undefined, fontWeight: typography.weight || undefined, fontFamily: typography.family || undefined, lineHeight: typography.line || undefined, WebkitLineClamp: key === 'title' && typography.lines > 0 ? String(typography.lines) : undefined, display: key === 'title' && typography.lines > 0 ? '-webkit-box' : undefined, WebkitBoxOrient: key === 'title' && typography.lines > 0 ? 'vertical' : undefined, overflow: key === 'title' && typography.lines > 0 ? 'hidden' : undefined, color: ['title','description','points','number'].includes(key) ? typography.color || undefined : undefined, outline: editorOpen.value && !isDownloading.value && selectedSlideIndex.value === index && selectedElement.value === key ? 'var(--selection-outline, 4px solid #c084fc)' : undefined, outlineOffset: '6px', position: key === 'title' ? 'relative' : undefined }
+ return { translate: ((layout.x || 0) * exportSize.value.width / 100) + 'px ' + ((layout.y || 0) * exportSize.value.height / 100) + 'px', textAlign: typography.align || undefined, width: ['title','description','points'].includes(key) && typography.customWidth ? typography.width + 'px' : undefined, maxWidth: ['title','description','points'].includes(key) && typography.customWidth ? 'none' : undefined, scale: ['button','score'].includes(key) && typography.size ? typography.size / 100 : undefined, fontWeight: typography.weight || undefined, fontFamily: typography.family || undefined, lineHeight: typography.line || undefined, WebkitLineClamp: key === 'title' && typography.lines > 0 ? String(typography.lines) : undefined, display: key === 'title' && typography.lines > 0 ? '-webkit-box' : undefined, WebkitBoxOrient: key === 'title' && typography.lines > 0 ? 'vertical' : undefined, overflow: key === 'title' && typography.lines > 0 ? 'hidden' : undefined, color: ['title','description','points','number'].includes(key) ? typography.color || undefined : undefined, outline: editorOpen.value && studioPanel.value === 'element' && !isDownloading.value && selectedSlideIndex.value === index && selectedElement.value === key ? 'var(--selection-outline, 4px solid #c084fc)' : undefined, outlineOffset: '6px', position: key === 'title' ? 'relative' : undefined }
 }
 function startVisualDrag(event, index, resize = false) {
- if (isDownloading.value || event.button !== 0) return
+ if (isDownloading.value || studioPreview.value || event.button !== 0) return
+ const inspectorWasOpen = editorOpen.value && studioPanel.value === 'element'
  selectedSlideIndex.value = index
  editorOpen.value = true
  const cardElement = cardRefs.value[index]
  let element = resize ? cardElement?.querySelector('[data-edit="' + selectedElement.value + '"]') : event.target.closest('[data-edit]')
  if (!element || element.dataset.edit === 'image') element = cardElement?.querySelector('.social-card-bg')
- if (!element) { selectedSlideIndex.value = index; selectedElement.value = 'overlay'; return }
- event.preventDefault(); selectedSlideIndex.value = index; selectedElement.value = element.dataset.edit || 'image'; rememberDesign()
+ if (!element) { selectStudioElement('image'); return }
+ selectedSlideIndex.value = index; selectStudioElement(element.dataset.edit || 'image')
+ // Opening the inspector resizes the canvas; start dragging on the next gesture.
+ if (!inspectorWasOpen && !resize) return
+ event.preventDefault(); rememberDesign()
  const card = cardElement.getBoundingClientRect(); const box = element.getBoundingClientRect(); const layout = selectedElement.value==='image'?{x:settingsForSlide(index).image.panX||0,y:0}:settingsForSlide(index)['visual_' + selectedElement.value] || {}
  visualDrag = { pointerId:event.pointerId, panLimits:panLimitsFor(index), key: selectedElement.value, startX: event.clientX, startY: event.clientY, x: selectedElement.value==='image'?constrainImagePan(layout.x,panLimitsFor(index)):layout.x || 0, y: layout.y || 0, card, box, resize, size: selectedElement.value === 'gameLogo' && selectedStyle.value === 'impact' && index === 0 ? settingsForSlide(index).coverGameLogo.size : settingsForSlide(index)[selectedElement.value]?.size || 100, width: box.width * exportSize.value.width / card.width }
  event.currentTarget.setPointerCapture(event.pointerId)
@@ -447,7 +492,7 @@ function moveVisualDrag(event) {
  setSetting('visual_' + d.key + '.x', d.x + x / d.card.width * 100); setSetting('visual_' + d.key + '.y', d.y + y / d.card.height * 100)
 }
 function stopVisualDrag() { visualDrag = null; centerGuide.value = false }
-watch([globalTemplateSettings, slideTemplateOverrides, slideTextOverrides, slideHighlightOverrides, slideCtaOverrides, slideDescriptionOverrides, slidePointsOverrides, selectedSlideIndex, selectedElement, selectedFormat, socialMargins, editorOpen, editorViewport], async () => {
+watch([globalTemplateSettings, slideTemplateOverrides, slideTextOverrides, slideHighlightOverrides, slideCtaOverrides, slideDescriptionOverrides, slidePointsOverrides, selectedSlideIndex, selectedElement, selectedFormat, socialMargins, editorOpen, editorViewport, studioZoom, studioPanel], async () => {
  await nextTick()
  const card = cardRefs.value[selectedSlideIndex.value]; const element = card?.querySelector('[data-edit="' + selectedElement.value + '"]'); const viewport = card?.closest('.share-card-viewport')
  const copy = card?.querySelector('.social-card-copy')
@@ -547,8 +592,49 @@ function switchStyle(key) {
   stylePickerOpen.value = false
 }
 
+// The template reads settings many times per card. Merge once per slide/update.
+const resolvedSlideSettings = computed(() => carouselSlides.value.map((_, index) =>
+  mergeSettings(globalTemplateSettings.value, slideTemplateOverrides.value[index] || {})
+))
+const colorPreview = ref(null)
+let colorPreviewFrame = 0
+let pendingColorPreview = null
+function previewColorSetting(setting) {
+  pendingColorPreview = { ...setting, index: selectedSlideIndex.value }
+  if (colorPreviewFrame) return
+  colorPreviewFrame = requestAnimationFrame(() => {
+    colorPreviewFrame = 0
+    colorPreview.value = pendingColorPreview
+  })
+}
+function commitInspectorSetting(setting) {
+  cancelAnimationFrame(colorPreviewFrame)
+  colorPreviewFrame = 0
+  pendingColorPreview = null
+  colorPreview.value = null
+  setVisualInspectorSetting(setting)
+}
+const previewSlideSettings = computed(() => {
+  const preview = colorPreview.value
+  if (!preview) return null
+  const base = resolvedSlideSettings.value[preview.index]
+  if (!base) return null
+  let next = updateSocialSetting(base, {}, preview.index, 'all', preview.path, preview.value)
+  if (/^(part|arrow|button|progress)\.(color|endColor)$/.test(preview.path)) {
+    next = updateSocialSetting(next.global, {}, preview.index, 'all', preview.path.split('.')[0] + '.customPaint', true)
+  }
+  return next.global
+})
+watch([selectedSlideIndex, selectedElement, applyScope, selectedStyle, editorOpen, studioPanel], () => {
+  cancelAnimationFrame(colorPreviewFrame)
+  colorPreviewFrame = 0
+  pendingColorPreview = null
+  colorPreview.value = null
+})
+onUnmounted(() => cancelAnimationFrame(colorPreviewFrame))
 function settingsForSlide(index) {
-  return mergeSettings(globalTemplateSettings.value, slideTemplateOverrides.value[index] || {})
+  if (colorPreview.value?.index === index && previewSlideSettings.value) return previewSlideSettings.value
+  return resolvedSlideSettings.value[index] || globalTemplateSettings.value
 }
 
 function settingValue(path) {
@@ -558,6 +644,7 @@ function settingValue(path) {
 }
 
 function setSetting(path, value) {
+  if (Object.is(settingValue(path), value)) return
   if (!visualDrag) rememberDesign()
   let next = updateSocialSetting(globalTemplateSettings.value, slideTemplateOverrides.value, selectedSlideIndex.value, applyScope.value, path, value)
   if (/^(part|arrow|button|progress)\.(color|endColor|gradient)$/.test(path)) next = updateSocialSetting(next.global, next.overrides, selectedSlideIndex.value, applyScope.value, path.split('.')[0] + '.customPaint', true)
@@ -942,7 +1029,7 @@ function proxiedImageUrl(value) {
   if (!value || typeof window === 'undefined') return value || fallbackCover
   if (isLocalOrInlineImage(value)) return value
 
-  return `/.netlify/functions/image-proxy?url=${encodeURIComponent(value)}&cb=${imageCacheNonce.value}`
+  return backendFunctionUrl('image-proxy', { url: value, cb: imageCacheNonce.value })
 }
 
 function isLocalOrInlineImage(value) {
@@ -1134,7 +1221,25 @@ function slugify(value) {
 </script>
 
 <template>
-  <main class="post-share-page" :class="{ 'visual-editing': editorOpen }">
+  <main class="post-share-page" :class="{ 'visual-editing': editorOpen, 'studio-clean-preview': studioPreview && editorOpen, 'studio-panel-open': editorOpen && studioPanel }">
+    <header v-if="editorOpen" class="studio-toolbar">
+      <button class="studio-back" aria-label="Salir del editor" title="Volver al carrusel" @click="editorOpen=false"><i class="fas fa-arrow-left" aria-hidden="true"></i></button>
+      <div class="studio-heading"><strong>Editor de imágenes</strong><small>{{ selectedSlideIndex + 1 }} / {{ carouselSlides.length }}</small></div>
+      <div class="studio-history"><button :disabled="!undoStack.length || isDownloading" aria-label="Deshacer" title="Deshacer" @click="restoreHistory(false)"><i class="fas fa-rotate-left"></i></button><button :disabled="!redoStack.length || isDownloading" aria-label="Rehacer" title="Rehacer" @click="restoreHistory(true)"><i class="fas fa-rotate-right"></i></button></div>
+      <div class="studio-actions">
+        <button :aria-pressed="studioPanel==='layers'" aria-controls="studio-side-panel" @click="openStudioPanel('layers')"><i class="fas fa-layer-group" aria-hidden="true"></i> Capas</button>
+        <div ref="studioOptions" class="studio-options">
+          <button :aria-expanded="studioOptionsOpen" aria-controls="studio-options-menu" aria-label="Más opciones del editor" title="Más opciones" @click="studioOptionsOpen=!studioOptionsOpen"><i class="fas fa-ellipsis" aria-hidden="true"></i></button>
+          <section v-if="studioOptionsOpen" id="studio-options-menu" class="studio-options-menu" aria-label="Más opciones">
+            <label>Formato<select v-model="selectedFormat"><option v-for="(format,key) in formats" :key="key" :value="key">{{ format.label }} · {{ format.detail }}</option></select></label>
+            <label class="studio-check"><input type="checkbox" :checked="socialMargins" @change="rememberDesign(); socialMargins=$event.target.checked" /> Márgenes de TikTok</label>
+            <div class="studio-option-actions"><button :aria-pressed="studioGuides" @click="studioGuides=!studioGuides"><i class="fas fa-border-all" aria-hidden="true"></i> Guías</button><button :aria-pressed="studioPreview" @click="toggleStudioPreview"><i class="fas fa-eye" aria-hidden="true"></i> Vista previa</button><button @click="openStudioPanel('templates')"><i class="fas fa-swatchbook" aria-hidden="true"></i> Plantillas</button><button :disabled="isDownloading" @click="animationOpen=true; studioOptionsOpen=false"><i class="fas fa-star" aria-hidden="true"></i> Animar</button></div>
+            <div class="studio-zoom" aria-label="Zoom del lienzo"><button aria-label="Alejar lienzo" :disabled="studioZoom<=.5" @click="changeStudioZoom(-.1)">−</button><span>{{ Math.round(editingScale*100) }} %</span><button aria-label="Acercar lienzo" :disabled="studioZoom>=3" @click="changeStudioZoom(.1)">+</button><button @click="fitStudioCanvas">Ajustar</button></div>
+          </section>
+        </div>
+        <button class="studio-export" :disabled="isDownloading || !carouselSlides.length" @click="downloadCarousel"><i class="fas fa-download" aria-hidden="true"></i><span>Descargar</span></button>
+      </div>
+    </header>
     <GalaxyLoader
       v-if="isDownloading"
       class="share-export-loader"
@@ -1142,7 +1247,7 @@ function slugify(value) {
       :text="exportProgress.label || 'Preparando imagenes sociales.'"
     />
 
-    <header class="share-toolbar">
+    <header v-if="!editorOpen" class="share-toolbar">
       <div>
         <span>Imagen social</span>
         <h1>Generar imagen social</h1>
@@ -1189,7 +1294,7 @@ function slugify(value) {
         </button>
       </div>
 
-      <div ref="sharePreview" class="share-preview">
+      <div ref="sharePreview" class="share-preview" @pointerdown.self="editorOpen && (studioPanel = '')">
         <div
           v-for="(slide, index) in carouselSlides"
           :key="`${post?.id || 'post'}-${selectedStyle}-${selectedFormat}-${slide.id}-${slide.image}`"
@@ -1197,6 +1302,7 @@ function slugify(value) {
           :class="{ active: selectedSlideIndex === index }"
         >
           <div class="share-card-viewport" :style="previewStyle">
+            <div v-if="editorOpen && studioGuides && !studioPreview && !isDownloading" class="studio-guides" data-editor-ui aria-hidden="true"><i></i><i></i></div>
             <div class="share-card-scale" :style="previewScaleStyle">
               <article
                 :ref="(el) => setCardRef(el, index)"
@@ -1225,6 +1331,7 @@ function slugify(value) {
                 />
                 <div class="social-card-scrim" data-edit="image"></div>
                 <div class="social-card-glow" data-edit="image"></div>
+                <SocialThemeBackground v-if="settingsForSlide(index).image.visible === false" :theme="renderedTheme" :index="index" />
                 <SeasonalThemeDecor :season="themeDecoration(renderedTheme)" />
                 <div v-if="isAnalysisPost" class="analysis-gold-pattern" aria-hidden="true">
                   <span v-for="tile in 24" :key="tile">GOLD</span>
@@ -1284,28 +1391,34 @@ function slugify(value) {
               </article>
             </div>
             <div v-if="editorOpen && centerGuide" class="visual-center-guide" data-editor-ui></div>
-            <template v-if="editorOpen && !isDownloading && selectedSlideIndex === index && textWidthHandles"><button v-for="side in ['left','right']" :key="side" data-editor-ui class="visual-width-handle" :style="textWidthHandles[side]" :aria-label="side === 'left' ? 'Cambiar ancho desde la izquierda' : 'Cambiar ancho desde la derecha'" title="Arrastra para cambiar el ancho del texto" @pointerdown.stop="startVisualDrag($event, index, 'width-' + side)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag" @lostpointercapture="stopVisualDrag"></button></template>
-            <button v-if="editorOpen && !isDownloading && selectedSlideIndex === index && selectionHandle" data-editor-ui class="visual-selection-handle" :style="selectionHandle" :aria-label="['title','description','points'].includes(selectedElement) ? 'Cambiar tama?o de letra' : 'Redimensionar elemento'" @pointerdown.stop="startVisualDrag($event, index, true)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag" @lostpointercapture="stopVisualDrag"></button>
+            <template v-if="editorOpen && studioPanel === 'element' && !isDownloading && selectedSlideIndex === index && textWidthHandles"><button v-for="side in ['left','right']" :key="side" data-editor-ui class="visual-width-handle" :style="textWidthHandles[side]" :aria-label="side === 'left' ? 'Cambiar ancho desde la izquierda' : 'Cambiar ancho desde la derecha'" title="Arrastra para cambiar el ancho del texto" @pointerdown.stop="startVisualDrag($event, index, 'width-' + side)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag" @lostpointercapture="stopVisualDrag"></button></template>
+            <button v-if="editorOpen && studioPanel === 'element' && !isDownloading && selectedSlideIndex === index && selectionHandle" data-editor-ui class="visual-selection-handle" :style="selectionHandle" :aria-label="['title','description','points'].includes(selectedElement) ? 'Cambiar tama?o de letra' : 'Redimensionar elemento'" @pointerdown.stop="startVisualDrag($event, index, true)" @pointermove="moveVisualDrag" @pointerup="stopVisualDrag" @pointercancel="stopVisualDrag" @lostpointercapture="stopVisualDrag"></button>
           </div>
         </div>
       </div>
 
       <div class="share-filmstrip" aria-label="Seleccion de diapositiva">
+        <button v-if="editorOpen" class="studio-step" :disabled="selectedSlideIndex===0" aria-label="Imagen anterior" @click="selectSlide(selectedSlideIndex-1)"><i class="fas fa-chevron-left"></i></button>
         <button
           v-for="(slide, index) in carouselSlides"
           :key="`thumb-${slide.id}`"
           type="button"
+          :aria-label="'Editar imagen ' + (index + 1)"
+          :aria-current="selectedSlideIndex === index ? 'true' : undefined"
           :class="{ active: selectedSlideIndex === index }"
           @click="selectSlide(index)"
         >
-          <img :src="slideImage(slide)" alt="" />
+          <img v-if="settingsForSlide(index).image.visible !== false" :src="slideImage(slide)" alt="" />
+          <i v-else class="studio-theme-thumb fas fa-star" aria-hidden="true"></i>
           <span>{{ index + 1 }}</span>
         </button>
+        <button v-if="editorOpen" class="studio-step" :disabled="selectedSlideIndex===carouselSlides.length-1" aria-label="Imagen siguiente" @click="selectSlide(selectedSlideIndex+1)"><i class="fas fa-chevron-right"></i></button>
       </div>
+      <p v-if="editorOpen && !studioPanel" class="studio-canvas-hint">{{ studioPreview ? 'Vista previa · Sin controles de edición' : 'Toca un texto o una imagen para editar. Usa Capas para encontrar elementos ocultos.' }}<button v-if="studioPreview" @click="studioPreview=false">Volver a editar</button></p>
     </section>
 
     <PublicationAnimationModal v-if="animationOpen" :get-element="animationElement" :get-elements="() => cardRefs.filter(Boolean)" :initial-index="selectedSlideIndex" :name="title" @close="animationOpen=false"/>
-    <SocialVisualInspector v-if="editorOpen" :templates="savedTemplates" :template-notice="templateNotice" @save-template="saveNamedTemplate" @load-template="loadNamedTemplate" @reset="resetVisualElement" :image-pan-limits="panLimitsFor(selectedSlideIndex)" :element="selectedElement" :scope="applyScope" :number="selectedSlide?.number || 1" :settings="settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :has-score="Boolean(selectedSlide?.showScore)" :slide-type="selectedSlide?.type" :slide-accent="selectedSlide?.accent" :cta="selectedSlide ? displaySlideCta(selectedSlide) : ''" :title-highlights="selectedSlide ? displayTitleHighlights(selectedSlide) : []" :points="selectedSlide ? displaySlidePoints(selectedSlide) : []" :image="selectedSlide ? slideImage(selectedSlide) : fallbackCover" :image-url="selectedTemporaryImage()" :fonts="fontOptions" :overflow="textOverflow" :notice="fitNotice" :inert="isDownloading" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectedElement = $event" @scope="applyScope = $event" @setting="setVisualInspectorSetting" @cta="setSlideCta" @title-highlights="setTitleHighlights" @title="updateTextContent('title', $event)" @description="updateTextContent('subtitle', $event)" @points="updateTextContent('points', $event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @fit="fitSlideText" @download="downloadCarousel" @center="centerVisualElement" @image-url="handleTemporaryImageUrl" @upload="handleTemporaryImageUpload" @original="clearTemporaryImage" @close="editorOpen = false" />
+    <SocialVisualInspector v-if="editorOpen && studioPanel" :panel="studioPanel" :templates="savedTemplates" :template-notice="templateNotice" @save-template="saveNamedTemplate" @load-template="loadNamedTemplate" @reset="resetVisualElement" :image-pan-limits="panLimitsFor(selectedSlideIndex)" :element="selectedElement" :scope="applyScope" :number="selectedSlide?.number || 1" :settings="settingsForSlide(selectedSlideIndex)" :title="selectedSlide ? displaySlideTitle(selectedSlide) : ''" :description="selectedSlide ? displaySlideDescription(selectedSlide) : ''" :has-score="Boolean(selectedSlide?.showScore)" :slide-type="selectedSlide?.type" :slide-accent="selectedSlide?.accent" :cta="selectedSlide ? displaySlideCta(selectedSlide) : ''" :title-highlights="selectedSlide ? displayTitleHighlights(selectedSlide) : []" :points="selectedSlide ? displaySlidePoints(selectedSlide) : []" :image="selectedSlide ? slideImage(selectedSlide) : fallbackCover" :image-url="selectedTemporaryImage()" :fonts="fontOptions" :overflow="textOverflow" :notice="fitNotice" :inert="isDownloading" :can-undo="undoStack.length > 0" :can-redo="redoStack.length > 0" @select="selectStudioElement" @scope="applyScope = $event" @preview-setting="previewColorSetting" @setting="commitInspectorSetting" @cta="setSlideCta" @title-highlights="setTitleHighlights" @title="updateTextContent('title', $event)" @description="updateTextContent('subtitle', $event)" @points="updateTextContent('points', $event)" @undo="restoreHistory(false)" @redo="restoreHistory(true)" @fit="fitSlideText" @download="downloadCarousel" @center="centerVisualElement" @image-url="handleTemporaryImageUrl" @upload="handleTemporaryImageUpload" @original="clearTemporaryImage" @close-panel="studioPanel = ''" />
   </main>
 </template>
 
@@ -2675,3 +2788,5 @@ function slugify(value) {
 .social-card.analysis .social-score strong{color:#ffe17a;text-shadow:0 2px 12px #eab30844}
 .social-card.analysis .social-score span{font-size:18px;letter-spacing:1.5px}
 </style>
+
+<style scoped src="../components/posts/socialStudio.css"></style>

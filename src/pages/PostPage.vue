@@ -1,12 +1,13 @@
 <script setup>
 import ScrollTabRail from "@/components/shared/ScrollTabRail.vue"
+import ArticleHighlight from '@/components/posts/ArticleHighlight.vue'
+import SectionImageGallery from '@/components/posts/SectionImageGallery.vue'
 import { vSoftReveal } from '@/directives/softReveal'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from "firebase/firestore"
 import { auth, db } from "@/firebase"
 import { resolveAssetUrl } from '@/constants/assets'
-import { isVideoMedia, mediaFromUrl } from '@/services/mediaLinks'
 import { beginPostRead, awardPostRead, getReadRewardDelayMs, resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
 import { renderRichText } from '@/services/richText'
 import AnalysisRatingCard from '@/components/posts/AnalysisRatingCard.vue'
@@ -82,7 +83,6 @@ async function tabKeydown(event) {
  if(tab && tab.offsetLeft<nav.scrollLeft)nav.scrollLeft=tab.offsetLeft
  else if(tab && tab.offsetLeft+tab.offsetWidth>nav.scrollLeft+nav.clientWidth)nav.scrollLeft=tab.offsetLeft+tab.offsetWidth-nav.clientWidth
 }
-const mediaFor = (url) => mediaFromUrl(url)
 const richText = (value) => renderRichText(value)
 const sectionSubtitle = (section = {}) => String(section.subtitle || '').trim()
 const postReleaseTime = computed(() => getTime(post.value.releaseAt || post.value.scheduledAt))
@@ -716,28 +716,14 @@ onUnmounted(() => {
               {{ section.title }}
             </h2>
 
-            <div
-              v-if="section.image"
-              class="post-section-image post-section-media post-content-image"
-              :class="{ video: isVideoMedia(mediaFor(section.image)) }"
-            >
-              <iframe
-                v-if="mediaFor(section.image).type === 'youtube'"
-                :src="mediaFor(section.image).embedUrl"
-                :title="section.title || `Seccion ${section.articleIndex + 1}`"
-                loading="lazy"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowfullscreen
-              ></iframe>
-              <video v-else-if="mediaFor(section.image).type === 'video'" :src="mediaFor(section.image).url" controls playsinline></video>
-              <img v-else :src="mediaFor(section.image).url" alt="" loading="lazy" decoding="async" />
-            </div>
+            <SectionImageGallery :section="section" />
 
             <p v-if="sectionSubtitle(section)" class="post-section-subtitle">
               {{ sectionSubtitle(section) }}
             </p>
 
             <div class="post-paragraph rich-content reading-prose" v-html="richText(section.content)"></div>
+            <ArticleHighlight :text="section.highlightQuote" />
           </section>
         </template>
 
@@ -985,32 +971,6 @@ onUnmounted(() => {
   margin: 0;
 }
 
-.post-section-image,
-.post-section-media {
-  aspect-ratio: 21 / 9;
-  background:
-    radial-gradient(circle at 20% 10%, rgba(168, 85, 247, 0.16), transparent 34%),
-    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(3, 7, 18, 0.98));
-  border-radius: 14px;
-  justify-self: center;
-  margin: 8px 0 4px;
-  max-height: 430px;
-  max-width: 100%;
-  overflow: hidden;
-  width: 100%;
-}
-
-.post-section-media img,
-.post-section-media iframe,
-.post-section-media video {
-  border: 0;
-  display: block;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  width: 100%;
-}
-
 .upcoming-post-lock {
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(49, 20, 85, 0.9));
   border: 1px solid rgba(168, 85, 247, 0.28);
@@ -1139,23 +1099,6 @@ onUnmounted(() => {
   .post-cinematic-hero + .post-paragraph + .post-content-section {
     padding-top: 20px;
   }
-  .post-section-image,
-  .post-section-media {
-    aspect-ratio: 16 / 9;
-    max-width: 100%;
-  }
-
-  .post-section-media img {
-    height: 100%;
-    object-fit: cover;
-    width: 100%;
-  }
-
-  .post-section-media iframe,
-  .post-section-media video {
-    aspect-ratio: 16 / 9;
-    height: auto;
-  }
   .analysis-pattern-field { display: none; }
   .post-sidebar { display: none; }
   .analysis-summary-mobile { display: grid; margin-top: 6px; }
@@ -1263,8 +1206,6 @@ onUnmounted(() => {
 .editorial-page{--analysis-tail:clamp(180px,22vw,280px)}
 .editorial-page .post-content-section{min-width:0;max-width:100%}
 .editorial-page .post-content-section h2,.analysis-introduction,.editorial-page .post-paragraph{overflow-wrap:anywhere;min-width:0;max-width:100%}
-.editorial-page .post-section-media{width:100%;min-width:0;max-width:100%;overflow:hidden}
-.editorial-page .post-section-media :is(img,video,iframe){max-width:100%;box-sizing:border-box}
 .editorial-page .post-layout>.post-cinematic-hero{padding-bottom:var(--analysis-tail);margin-bottom:calc(-1 * var(--analysis-tail));mask-image:linear-gradient(to bottom,#000 calc(100% - var(--analysis-tail)),#000b calc(100% - var(--analysis-tail)/2),transparent);-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - var(--analysis-tail)),#000b calc(100% - var(--analysis-tail)/2),transparent)}
 @media(max-width:1199px){
  .editorial-page .post-layout{width:100%;max-width:none;grid-template-columns:clamp(14px,3vw,28px) minmax(0,1fr) clamp(14px,3vw,28px);column-gap:0}

@@ -1,5 +1,6 @@
 import defaultBannerUrl from '@/iconos/Banner.png'
 import defaultLogoUrl from '@/iconos/logo.png'
+import { backendFunctionUrl } from '@/services/backendClient'
 
 
 const LEGACY_ASSET_URLS = {
@@ -45,7 +46,7 @@ export const shouldProxyImageUrl = (url = '') => {
 export const proxiedImageUrl = (url, fallback = '') => {
   const resolved = resolveAssetUrl(url, fallback, { proxy: false })
   if (!shouldProxyImageUrl(resolved)) return resolved
-  return `${IMAGE_PROXY_PATH}?src=${encodeProxySource(resolved)}`
+  return backendFunctionUrl('image-proxy', { src: encodeProxySource(resolved) })
 }
 
 export const resolveAssetUrl = (url, fallback = '', options = {}) => {

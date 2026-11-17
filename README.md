@@ -2,6 +2,8 @@
 
 Sitio Vue 3 + Vite para Galaxia Nintendera, listo para desplegar el frontend en Netlify.
 
+La estructura y los contratos vigentes están en [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md). Las instrucciones de trabajo para agentes están en [AGENTS.md](AGENTS.md). El gestor Galaxia Studio vive en otro repositorio; este build publica la web de lectores.
+
 ## Desarrollo
 
 ```bash

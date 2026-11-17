@@ -1,5 +1,6 @@
 <script setup>
 import ProfileAvatar from '@/components/profile/ProfileAvatar.vue'
+import { fallbackProfileIcon } from '@/services/profileProgress'
 
 defineProps({
   profile: {
@@ -92,6 +93,7 @@ const emit = defineEmits([
       <ProfileAvatar
         class="profile-avatar-circle"
         :src="profileIcon"
+        :fallback="fallbackProfileIcon"
         :alt="profile.name || profile.email || 'Usuario'"
         :effect="profileIconMeta"
         :role-badge="profile.role || 'user'"
