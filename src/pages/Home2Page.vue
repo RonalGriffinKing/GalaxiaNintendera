@@ -141,7 +141,6 @@ const loadData = async () => {
       collection(db,'posts'),
       where('status','==','approved'),
       where('visibility','==','public'),
-      where('releaseAt','<=',Date.now()),
       orderBy('releaseAt','desc'),
       limit(100)
     ))

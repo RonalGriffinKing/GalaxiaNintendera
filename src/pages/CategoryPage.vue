@@ -202,7 +202,6 @@ const loadMorePosts = async ({ requestId = loadRequestId, fillPage = false, repl
       const constraints = [
         where('status', '==', 'approved'),
         where('visibility', '==', 'public'),
-        where('releaseAt', '<=', Date.now()),
         orderBy('releaseAt', direction),
         limit(FETCH_BATCH_SIZE)
       ]
@@ -217,6 +216,7 @@ const loadMorePosts = async ({ requestId = loadRequestId, fillPage = false, repl
       const nextPosts = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(p => p.status === 'approved' && p.visibility !== 'private' && p.visibility !== 'unlisted')
+        .filter(isReleased)
         .filter(p => p.placement !== 'hero' && !p.isMainEntry)
 
       const existing = new Set(replaceFirst?[]:posts.value.map(post => post.id))
