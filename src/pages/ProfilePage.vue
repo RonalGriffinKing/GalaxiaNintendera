@@ -204,7 +204,12 @@ const readCount = computed(() => Number(profile.value?.readPostsCount || 0))
 watch([() => profile.value?.id, () => viewerUid.value], async ([uid, viewer]) => {
   if (!uid || uid !== viewer) return
   try { const progress = await ensureUserProgress(auth.currentUser); if (profile.value?.id === uid) profile.value = { ...profile.value, ...progress } }
-  catch { message.value = 'El progreso seguro no esta disponible. Tus datos anteriores se conservan.' }
+  catch (error) {
+    // A disabled rewards backend is expected during rollout; keep the saved profile visible.
+    if (error?.message !== 'progress-not-configured') {
+      message.value = 'No se pudo sincronizar el progreso. Los datos guardados siguen visibles.'
+    }
+  }
 })
 const stars = computed(() => progressStars(profile.value || {}))
 const unlockedIcons = computed(() => profile.value?.unlockedIcons?.length ? profile.value.unlockedIcons : ['kirby-01'])
