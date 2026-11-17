@@ -148,6 +148,10 @@ const unreadCount = computed(() => notifications.value.filter(notification => !n
 const isStudioBuild = import.meta.env.VITE_GALAXIA_STUDIO_BUILD === true
 const visibleRole = computed(() => isStudioBuild ? currentRole.value : 'user')
 const isCurrentUserBlocked = computed(() => Boolean(currentProfile.value?.isBlocked))
+const isStudioOwner = computed(() => {
+  const email = String(currentUser.value?.email || '').trim().toLowerCase()
+  return Boolean(currentUser.value && !isCurrentUserBlocked.value && email === 'briones459@gmail.com')
+})
 const canPublish = computed(() => isStudioBuild && !isCurrentUserBlocked.value && ['admin', 'publisher'].includes(currentRole.value))
 const isAdmin = computed(() => isStudioBuild && currentRole.value === 'admin')
 const bottomNavItems = computed(() => PUBLIC_NAV_LINKS.filter(item => item.to !== '/comunidades'))
@@ -199,8 +203,8 @@ const accountMenuItems = computed(() => {
   ]
 })
 const accountAdminItems = computed(() => currentUser.value && canPublish.value
-  ? [{ label: 'Gestor global', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' }]
-  : [])
+  ? [{ label: 'Gestor global', icon: 'fas fa-table-cells-large', to: '/admin/dashboard' }, ...(isStudioOwner.value ? [{ label: 'Galaxia Studio', icon: 'fas fa-sparkles', to: 'https://galaxianintenderastudio.netlify.app/', external: true }] : [])]
+  : (isStudioOwner.value ? [{ label: 'Galaxia Studio', icon: 'fas fa-sparkles', to: 'https://galaxianintenderastudio.netlify.app/', external: true }] : []))
 const accountAdminLabel = computed(() => (isAdmin.value ? 'ADMINISTRACIÓN' : canPublish.value ? 'PUBLICACIÓN' : ''))
 
 const searchPreview = computed(() => {
@@ -550,6 +554,10 @@ const openAccountOption = async (item) => {
   }
 
   if (item.to) {
+    if (item.external) {
+      window.open(item.to, '_blank', 'noopener,noreferrer')
+      return
+    }
     goAccountItem(item.to)
   }
 }
