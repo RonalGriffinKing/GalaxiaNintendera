@@ -9,7 +9,7 @@ import FeaturedSheen from '@/components/shared/FeaturedSheen.vue'
 import GalaxyAtmosphere from '@/components/shared/GalaxyAtmosphere.vue'
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter } from "firebase/firestore"
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter, where } from "firebase/firestore"
 import { auth, db } from "@/firebase"
 import { resolveAssetUrl } from '@/constants/assets'
 import { resolveProfileIcon, resolveProfileIconMeta } from '@/services/profileProgress'
@@ -200,7 +200,10 @@ const loadMorePosts = async ({ requestId = loadRequestId, fillPage = false, repl
     while (hasMorePosts.value && requestId === loadRequestId) {
       const direction = 'desc'
       const constraints = [
-        orderBy('createdAt', direction),
+        where('status', '==', 'approved'),
+        where('visibility', '==', 'public'),
+        where('releaseAt', '<=', Date.now()),
+        orderBy('releaseAt', direction),
         limit(FETCH_BATCH_SIZE)
       ]
       if (lastPostDoc.value) constraints.splice(1, 0, startAfter(lastPostDoc.value))

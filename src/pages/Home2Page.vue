@@ -11,7 +11,7 @@ import HomeEditorialCard from '@/components/home/HomeEditorialCard.vue'
 import HomeHeroDeck from '@/components/home/HomeHeroDeck.vue'
 import HomeContentCarousel from '@/components/home/HomeContentCarousel.vue'
 import { useRouter } from 'vue-router'
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { resolveAssetUrl } from '@/constants/assets'
 import { useTimedCarousel } from '@/composables/useTimedCarousel'
@@ -137,8 +137,15 @@ const liveItems = computed(() => {
 
 const loadData = async () => {
   const postRequest = requestPublicPage('home-posts',async()=>{
-    const snapshot=await getDocs(collection(db,'posts'))
-    return snapshot.docs.map(item=>({id:item.id,...item.data()})).filter(post=>post.status==='approved'&&post.visibility!=='private'&&post.visibility!=='unlisted')
+    const snapshot=await getDocs(query(
+      collection(db,'posts'),
+      where('status','==','approved'),
+      where('visibility','==','public'),
+      where('releaseAt','<=',Date.now()),
+      orderBy('releaseAt','desc'),
+      limit(100)
+    ))
+    return snapshot.docs.map(item=>({id:item.id,...item.data()}))
   })
   loadCommunities()
   loadCommunityThreads()
